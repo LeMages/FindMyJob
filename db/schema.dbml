@@ -1,0 +1,256 @@
+// ============================================
+// FindMyJob - Schéma de base de données (SQLite)
+// ============================================
+
+Table users {
+  id integer [pk, increment]
+  nom varchar
+  prenom varchar
+  email varchar
+  telephone varchar
+  ville varchar
+  linkedin varchar
+  github varchar
+  portfolio varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
+// ============================================
+// Profil : projets, expériences, skills
+// ============================================
+
+Table projets {
+  id integer [pk, increment]
+  user_id integer [ref: > users.id, not null]
+  titre varchar [not null]
+  description text
+  stack text          // technologies utilisées, texte libre
+  url varchar         // repo ou démo
+  date_debut date
+  date_fin date
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table experiences {
+  id integer [pk, increment]
+  user_id integer [ref: > users.id, not null]
+  poste varchar [not null]
+  entreprise varchar
+  lieu varchar
+  description text
+  date_debut date
+  date_fin date
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table skills {
+  id integer [pk, increment]
+  user_id integer [ref: > users.id, not null]
+  domaine varchar [not null]   // "Langages", "Data & ML", "Data Engineering"...
+  nom varchar [not null]       // "Python", "PyTorch"...
+  created_at timestamp
+  updated_at timestamp
+}
+
+// ============================================
+// Entreprises & sites
+// ============================================
+
+Table companies {
+  id integer [pk, increment]
+  nom varchar [not null]
+  secteur varchar
+  site_web varchar
+  notes text
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table company_locations {
+  id integer [pk, increment]
+  company_id integer [ref: > companies.id, not null]
+  label varchar        // "Orange Paris", "Google Zurich"
+  adresse varchar
+  ville varchar
+  pays varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
+// ============================================
+// Candidatures (cœur)
+// ============================================
+
+Enum candidature_type {
+  stage
+  alternance
+  cdi
+  cdd
+  freelance
+}
+
+Enum candidature_status {
+  a_postuler
+  postule
+  relance
+  entretien
+  offre
+  refus
+  abandon
+}
+
+Table candidatures {
+  id integer [pk, increment]
+  user_id integer [ref: > users.id, not null]
+  company_id integer [ref: > companies.id]
+  company_location_id integer [ref: > company_locations.id]
+  poste varchar [not null]
+  type candidature_type
+  status candidature_status [not null, default: 'a_postuler']
+  source varchar              // LinkedIn, site carrière, cooptation...
+  url_offre varchar
+  description_offre text      // texte brut de l'annonce (sert à l'extraction IA)
+  localisation varchar
+  remuneration varchar
+  date_limite date
+  date_candidature date
+  next_relance date
+  last_relance date
+  notes text
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table status_history {
+  id integer [pk, increment]
+  candidature_id integer [ref: > candidatures.id, not null]
+  ancien_status candidature_status
+  nouveau_status candidature_status [not null]
+  changed_at timestamp
+}
+
+// ============================================
+// Contacts & entretiens
+// ============================================
+
+Table contacts {
+  id integer [pk, increment]
+  candidature_id integer [ref: > candidatures.id, not null]
+  nom varchar
+  role varchar         // "RH", "Manager", "Lead Tech"
+  email varchar
+  telephone varchar
+  notes text
+  created_at timestamp
+  updated_at timestamp
+}
+
+Enum interview_type {
+  rh
+  technique
+  manager
+  final
+  autre
+}
+
+Enum interview_issue {
+  en_attente
+  positif
+  negatif
+}
+
+Table interviews {
+  id integer [pk, increment]
+  candidature_id integer [ref: > candidatures.id, not null]
+  type interview_type
+  date_entretien timestamp
+  lieu varchar         // visio, sur site, téléphone
+  issue interview_issue [default: 'en_attente']
+  notes text
+  created_at timestamp
+  updated_at timestamp
+}
+
+// ============================================
+// Documents (CV / LM) — fichiers sur disque
+// ============================================
+
+Enum document_type {
+  cv
+  lettre_motivation
+}
+
+Table documents {
+  id integer [pk, increment]
+  user_id integer [ref: > users.id, not null]
+  source_document_id integer [ref: > documents.id]  // NULL = document de référence
+  candidature_id integer [ref: > candidatures.id]    // NULL pour une référence
+  type document_type [not null]
+  label varchar
+  file_path varchar [not null]
+  is_reference boolean [not null, default: false]    // true = CV/LM de référence
+  created_at timestamp
+  updated_at timestamp
+}
+
+// ============================================
+// Emails envoyés depuis l'app
+// ============================================
+
+Enum email_type {
+  candidature
+  relance
+  remerciement
+  reponse
+  autre
+}
+
+Table emails {
+  id integer [pk, increment]
+  candidature_id integer [ref: > candidatures.id, not null]
+  contact_id integer [ref: > contacts.id]
+  type email_type
+  sujet varchar
+  corps text
+  destinataire varchar
+  sent_at timestamp
+  created_at timestamp
+}
+
+Table email_attachments {
+  id integer [pk, increment]
+  email_id integer [ref: > emails.id, not null]
+  document_id integer [ref: > documents.id, not null]
+}
+
+// ============================================
+// Embeddings (matching) — table polymorphe
+// ============================================
+
+Table embeddings {
+  id integer [pk, increment]
+  entity_type varchar [not null]   // "projet", "experience", "candidature"
+  entity_id integer [not null]     // FK logique (pas de contrainte stricte)
+  model varchar [not null]         // "bge-m3"
+  dimensions integer
+  vector blob [not null]           // vecteur sérialisé
+  created_at timestamp
+
+  indexes {
+    (entity_type, entity_id)
+  }
+}
+
+// ============================================
+// Paramètres de l'app (clé-valeur)
+// ============================================
+
+Table settings {
+  id integer [pk, increment]
+  cle varchar [not null, unique]   // "ia_mode", "ia_model", "theme"...
+  valeur varchar
+  updated_at timestamp
+}

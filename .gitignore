@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Dev database (debug builds only)
+dev-data/
+
 # Build output
 dist/
 

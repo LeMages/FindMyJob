@@ -38,6 +38,30 @@ La couche IA est construite sur une base URL configurable : aujourd'hui Ollama C
 
 Recherche d'offres en ligne · mode IA local · synchronisation multi-appareils.
 
+## Base de données
+
+Les données sont stockées localement dans un fichier SQLite. Le schéma est versionné dans `db/migrations/`.
+
+| Table | Rôle |
+|---|---|
+| `users` | Profil de l'utilisateur (nom, contact, liens LinkedIn/GitHub) |
+| `projets` | Projets personnels associés au profil |
+| `experiences` | Expériences professionnelles du profil |
+| `skills` | Compétences classées par domaine |
+| `companies` | Entreprises connues (référentiel partagé entre candidatures) |
+| `company_locations` | Sites géographiques d'une entreprise |
+| `candidatures` | Cœur de l'app — une ligne par candidature, avec statut et métadonnées |
+| `status_history` | Historique des changements de statut d'une candidature |
+| `contacts` | Interlocuteurs associés à une candidature (RH, manager…) |
+| `interviews` | Entretiens planifiés ou passés pour une candidature |
+| `documents` | CV et lettres de motivation (références et versions adaptées par candidature) |
+| `emails` | Emails envoyés depuis l'app (candidature, relance, remerciement…) |
+| `email_attachments` | Documents joints à un email |
+| `embeddings` | Vecteurs sémantiques pour le matching profil ↔ offre (table polymorphe) |
+| `settings` | Paramètres de l'app en clé-valeur (modèle IA, thème…) |
+
+![Schéma de la base de données](db/schema.png)
+
 ## Installation
 
 ### Prérequis
