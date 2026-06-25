@@ -38,6 +38,31 @@ La couche IA est construite sur une base URL configurable : aujourd'hui Ollama C
 
 Recherche d'offres en ligne · mode IA local · synchronisation multi-appareils.
 
+## Installation
+
+### Prérequis
+
+- [Node.js](https://nodejs.org/) 18+
+- [Rust](https://rustup.rs/) (stable)
+- Dépendances système Tauri : [guide officiel](https://tauri.app/start/prerequisites/)
+
+### Développement
+
+```bash
+git clone https://github.com/KanASon/FindMyJob.git
+cd FindMyJob
+npm install
+npm run tauri dev
+```
+
+### Build de production
+
+```bash
+npm run tauri build
+```
+
+L'installeur est généré dans `src-tauri/target/release/bundle/`.
+
 ## À propos
 
 Je suis étudiant en ingénierie informatique et, comme beaucoup, je galére à trouver un stage. Entre les dizaines de candidatures à suivre, les relances à ne pas oublier et les fiches à remplir à la main, j'ai fini par construire mon propre outil pour m'y retrouver. J'ai décidé de le rendre open source pour aider les gens qui sont dans la même situation.
