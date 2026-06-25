@@ -1,0 +1,43 @@
+# FindMyJob
+
+Logiciel open source pour suivre ses candidatures.
+
+FindMyJob aide les étudiants à organiser leur recherche de stage, d'alternance ou de CDI, de la première offre repérée jusqu'à la réponse finale. Au-delà du simple suivi, l'app intègre de l'IA pour supprimer les tâches pénibles : remplir une fiche d'offre, écrire une relance, adapter sa candidature.
+
+Les données restent locales sur ta machine (SQLite). Seule l'inférence IA passe par le cloud.
+
+## Stack utilisé
+
+| Couche | Technologie |
+|--------|-------------|
+| Application desktop | Tauri 2 (Windows / macOS / Linux) |
+| Frontend | Vue 3 + TypeScript + Tailwind CSS |
+| Backend | Rust |
+| Base de données | SQLite (locale, mono-utilisateur) |
+| IA | Couche compatible OpenAI → Ollama Cloud (free tier), modèle configurable dans les paramètres |
+
+La couche IA est construite sur une base URL configurable : aujourd'hui Ollama Cloud, demain un runtime local sans réécriture.
+
+## Les features
+
+### Suivi des candidatures
+
+- Gestion des candidatures : entreprise, poste, type (stage / alternance / CDI), contact, notes, version du CV associée
+- Pipeline de statut : à postuler → postulé → relancé → entretien → offre / refus
+- Vues kanban et liste
+- Rappels de relance automatiques
+
+### Assistance IA
+
+- **Extraction d'offre** : colle le texte d'une annonce, l'IA remplit la fiche (entreprise, intitulé, type, lieu, stack, date limite, rémunération)
+- **Relances intelligentes** : détection des candidatures en attente et génération du mail de relance adapté au statut
+- **Tailoring CV / lettre de motivation** : à partir de ton profil et de l'offre, ce qu'il faut mettre en avant
+- **Matching profil ↔ offre** : pour une offre donnée, classement de tes projets par pertinence *(en cours de développement)*
+
+### À venir
+
+Recherche d'offres en ligne · mode IA local · synchronisation multi-appareils.
+
+## À propos
+
+Je suis étudiant en ingénierie informatique et, comme beaucoup, je galére à trouver un stage. Entre les dizaines de candidatures à suivre, les relances à ne pas oublier et les fiches à remplir à la main, j'ai fini par construire mon propre outil pour m'y retrouver. J'ai décidé de le rendre open source pour aider les gens qui sont dans la même situation.
