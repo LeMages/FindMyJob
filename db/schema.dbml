@@ -9,11 +9,20 @@ Table users {
   email varchar
   telephone varchar
   ville varchar
+  permis boolean
+  description text
   linkedin varchar
   github varchar
   portfolio varchar
   created_at timestamp
   updated_at timestamp
+}
+
+Table lang{
+  id integer [pk, increment]
+  user_id integer [ref: > users.id, not null]
+  nom text
+  level text
 }
 
 // ============================================
@@ -56,31 +65,6 @@ Table skills {
 }
 
 // ============================================
-// Entreprises & sites
-// ============================================
-
-Table companies {
-  id integer [pk, increment]
-  nom varchar [not null]
-  secteur varchar
-  site_web varchar
-  notes text
-  created_at timestamp
-  updated_at timestamp
-}
-
-Table company_locations {
-  id integer [pk, increment]
-  company_id integer [ref: > companies.id, not null]
-  label varchar        // "Orange Paris", "Google Zurich"
-  adresse varchar
-  ville varchar
-  pays varchar
-  created_at timestamp
-  updated_at timestamp
-}
-
-// ============================================
 // Candidatures (cœur)
 // ============================================
 
@@ -105,17 +89,15 @@ Enum candidature_status {
 Table candidatures {
   id integer [pk, increment]
   user_id integer [ref: > users.id, not null]
-  company_id integer [ref: > companies.id]
-  company_location_id integer [ref: > company_locations.id]
   poste varchar [not null]
   type candidature_type
   status candidature_status [not null, default: 'a_postuler']
   source varchar              // LinkedIn, site carrière, cooptation...
   url_offre varchar
   description_offre text      // texte brut de l'annonce (sert à l'extraction IA)
+  entreprise text
   localisation varchar
   remuneration varchar
-  date_limite date
   date_candidature date
   next_relance date
   last_relance date

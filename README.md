@@ -44,13 +44,12 @@ Les données sont stockées localement dans un fichier SQLite. Le schéma est ve
 
 | Table | Rôle |
 |---|---|
-| `users` | Profil de l'utilisateur (nom, contact, liens LinkedIn/GitHub) |
+| `users` | Profil de l'utilisateur (nom, contact, permis, liens LinkedIn/GitHub) |
+| `lang` | Langues parlées par l'utilisateur et niveau associé |
 | `projets` | Projets personnels associés au profil |
 | `experiences` | Expériences professionnelles du profil |
 | `skills` | Compétences classées par domaine |
-| `companies` | Entreprises connues (référentiel partagé entre candidatures) |
-| `company_locations` | Sites géographiques d'une entreprise |
-| `candidatures` | Cœur de l'app — une ligne par candidature, avec statut et métadonnées |
+| `candidatures` | Cœur de l'app — une ligne par candidature (entreprise, statut et métadonnées) |
 | `status_history` | Historique des changements de statut d'une candidature |
 | `contacts` | Interlocuteurs associés à une candidature (RH, manager…) |
 | `interviews` | Entretiens planifiés ou passés pour une candidature |
