@@ -1,4 +1,33 @@
 export type Screen = 'tracking' | 'detail' | 'new' | 'profile' | 'settings'
+
+export interface CreateUserInput {
+  nom: string
+  prenom: string
+  email: string
+  telephone: string | null
+  ville: string | null
+  permis: boolean | null
+  description: string | null
+  linkedin: string | null
+  github: string | null
+  portfolio: string | null
+}
+
+export interface UserView {
+  id: number
+  nom: string | null
+  prenom: string | null
+  email: string | null
+  telephone: string | null
+  ville: string | null
+  permis: boolean | null
+  description: string | null
+  linkedin: string | null
+  github: string | null
+  portfolio: string | null
+  created_at: string
+  updated_at: string
+}
 export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'addEvent' | null
 export type EventType = 'mail_relance' | 'mail_reponse' | 'entretien'
 
