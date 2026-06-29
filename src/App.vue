@@ -9,15 +9,25 @@ import ProfileView from '@/components/views/ProfileView.vue'
 import SettingsView from '@/components/views/SettingsView.vue'
 import DeleteSessionPopup from '@/components/popups/DeleteSessionPopup.vue'
 import OnboardingWizard from '@/components/OnboardingWizard.vue'
-import { state } from '@/stores/app'
+import { state, setUserInfo } from '@/stores/app'
 import type { UserView } from '@/types/index'
 
 const needsOnboarding = ref<boolean | null>(null)
 const startupError = ref<string | null>(null)
 
+function applyUserInfo(u: UserView) {
+  const name = [u.prenom, u.nom].filter(Boolean).join(' ')
+  const initials = ((u.prenom?.[0] ?? '') + (u.nom?.[0] ?? '')).toUpperCase()
+  setUserInfo(name, initials || '?')
+}
+
 onMounted(async () => {
   try {
     const exists = await invoke<boolean>('user_exists')
+    if (exists) {
+      const user = await invoke<UserView>('get_user')
+      applyUserInfo(user)
+    }
     needsOnboarding.value = !exists
   } catch (e: unknown) {
     startupError.value =
@@ -29,7 +39,8 @@ onMounted(async () => {
   }
 })
 
-function handleOnboardingCompleted(_user: UserView) {
+function handleOnboardingCompleted(user: UserView) {
+  applyUserInfo(user)
   needsOnboarding.value = false
 }
 </script>

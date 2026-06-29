@@ -52,11 +52,17 @@ import {
     <!-- User bar -->
     <div class="userbar">
       <button class="userbtn" @click="navigate('profile')">
-        <div class="avatar">AM</div>
+        <div class="avatar">{{ state.userInitials || '…' }}</div>
         <div>
-          <div class="uname">Alex Martin</div>
+          <div class="uname">{{ state.userDisplayName || '…' }}</div>
           <div class="usub">Voir le profil</div>
         </div>
+      </button>
+      <button class="iconbtn" title="Notifications">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M9 2a5 5 0 0 0-5 5v3l-1.5 2.5h13L14 10V7a5 5 0 0 0-5-5Z" stroke="#56564f" stroke-width="1.4" stroke-linejoin="round" />
+          <path d="M7.5 14.5a1.5 1.5 0 0 0 3 0" stroke="#56564f" stroke-width="1.4" stroke-linecap="round" />
+        </svg>
       </button>
       <button class="iconbtn" @click="navigate('settings')" title="Paramètres">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">

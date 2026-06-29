@@ -123,6 +123,10 @@ const state = reactive({
   // Navigation
   screen: 'tracking' as Screen,
 
+  // User identity (populated after profile load)
+  userDisplayName: '',
+  userInitials: '',
+
   // Sessions
   sessionId: 0,
   deletedSessionIds: [] as number[],
@@ -232,6 +236,11 @@ export const selectedCardColumn = computed<string>(() => {
 // ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
+
+export function setUserInfo(displayName: string, initials: string) {
+  state.userDisplayName = displayName
+  state.userInitials = initials
+}
 
 export function navigate(screen: Screen) {
   state.screen = screen

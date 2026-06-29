@@ -1,5 +1,13 @@
 export type Screen = 'tracking' | 'detail' | 'new' | 'profile' | 'settings'
 
+export interface UpdateUserInfoInput {
+  prenom: string | null
+  nom: string | null
+  email: string | null
+  telephone: string | null
+  permis: boolean | null
+}
+
 export interface CreateUserInput {
   nom: string
   prenom: string
@@ -68,6 +76,102 @@ export interface NewContact {
 export interface DragState {
   fromColIndex: number
   cardIndex: number
+}
+
+export interface ExperienceView {
+  id: number
+  poste: string
+  entreprise: string | null
+  lieu: string | null
+  description: string | null
+  date_debut: string | null
+  date_fin: string | null
+  type_contrat: string | null
+}
+
+export interface CreateExperienceInput {
+  poste: string
+  entreprise: string | null
+  lieu: string | null
+  description: string | null
+  date_debut: string | null
+  date_fin: string | null
+  type_contrat: string | null
+}
+
+export interface SkillView {
+  id: number
+  domaine: string
+  nom: string
+}
+
+export interface CreateSkillInput {
+  nom: string
+  domaine: string
+}
+
+export interface LangView {
+  id: number
+  nom: string | null
+  level: string | null
+}
+
+export interface CreateLangInput {
+  nom: string
+  level: string | null
+}
+
+export interface FormationView {
+  id: number
+  titre: string
+  ecole: string | null
+  date_debut: string | null
+  date_fin: string | null
+}
+
+export interface CreateFormationInput {
+  titre: string
+  ecole: string | null
+  date_debut: string | null
+  date_fin: string | null
+}
+
+export interface ProjetView {
+  id: number
+  titre: string
+  description: string | null
+  stack: string | null
+  url: string | null
+  pour_qui: string | null
+  date_debut: string | null
+  date_fin: string | null
+}
+
+export interface CreateProjetInput {
+  titre: string
+  description: string | null
+  stack: string | null
+  url: string | null
+  pour_qui: string | null
+  date_debut: string | null
+  date_fin: string | null
+}
+
+export interface CvView {
+  id: number
+  label: string | null
+  file_path: string
+  created_at: string
+}
+
+export interface ProfileDto {
+  user: UserView
+  experiences: ExperienceView[]
+  formations: FormationView[]
+  projets: ProjetView[]
+  skills: SkillView[]
+  langues: LangView[]
+  cv_reference: CvView | null
 }
 
 export interface DragPopupState {
