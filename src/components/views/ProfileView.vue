@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import type { ProfileDto, UserView, UpdateUserInfoInput, ExperienceView, CreateExperienceInput, FormationView, CreateFormationInput, ProjetView, CreateProjetInput, LangView, CreateLangInput, SkillView, CreateSkillInput, CvView } from '@/types/index'
 import { setUserInfo } from '@/stores/app'
+import { parseBulletDescription } from '@/composables/parseBulletDescription'
+import { insertBullet } from '@/composables/insertBullet'
 
 const profile = ref<ProfileDto | null>(null)
 const loading = ref(true)
@@ -341,6 +343,7 @@ const editedExps = ref<Record<number, ExpDraft>>({})
 
 const expModal = ref(false)
 const expDraft = ref<ExpDraft>(defaultExpDraft())
+const expDescTextarea = ref<HTMLTextAreaElement | null>(null)
 const expEditTarget = ref<ExpEditTarget>({ kind: 'new' })
 
 // Vue unifiée : nouvelles (en tête) + sauvegardées (filtrées + modifiées)
@@ -648,6 +651,7 @@ const editedProjets = ref<Record<number, ProjetDraft>>({})
 
 const projetModal = ref(false)
 const projetDraft = ref<ProjetDraft>(defaultProjetDraft())
+const projetDescTextarea = ref<HTMLTextAreaElement | null>(null)
 const projetEditTarget = ref<ProjetEditTarget>({ kind: 'new' })
 
 const allProjets = computed<ProjetDisplayItem[]>(() => {
@@ -1279,7 +1283,12 @@ function fmtYearRange(start: string | null, end: string | null): string {
                   {{ [exp.entreprise, exp.lieu].filter(Boolean).join(' — ') || '—' }}
                 </div>
                 <div class="expmeta">{{ fmtRange(exp.date_debut, exp.date_fin) }}</div>
-                <div v-if="exp.description" class="expd">{{ exp.description }}</div>
+                <template v-if="exp.description">
+                  <ul v-if="exp.description.includes('•')" class="expd-bullets">
+                    <li v-for="(b, i) in parseBulletDescription(exp.description)" :key="i">{{ b }}</li>
+                  </ul>
+                  <div v-else class="expd">{{ exp.description }}</div>
+                </template>
               </div>
               <!-- Boutons édition (visibles uniquement en mode édition) -->
               <div v-if="editMode" class="exp-actions">
@@ -1432,7 +1441,12 @@ function fmtYearRange(start: string | null, end: string | null): string {
                 </div>
                 <div v-if="proj.stack" class="expco proj-stack">{{ proj.stack }}</div>
                 <div class="expmeta">{{ fmtYearRange(proj.date_debut, proj.date_fin) }}</div>
-                <div v-if="proj.description" class="exp-desc">{{ proj.description }}</div>
+                <template v-if="proj.description">
+                  <ul v-if="proj.description.includes('•')" class="expd-bullets">
+                    <li v-for="(b, i) in parseBulletDescription(proj.description)" :key="i">{{ b }}</li>
+                  </ul>
+                  <div v-else class="expd">{{ proj.description }}</div>
+                </template>
                 <button v-if="proj.url" class="proj-link" type="button" @click="invoke('open_url', { url: proj.url })">{{ proj.url }}</button>
               </div>
               <div v-if="editMode" class="exp-actions">
@@ -1508,8 +1522,16 @@ function fmtYearRange(start: string | null, end: string | null): string {
             </div>
 
             <div class="field">
-              <label class="flabel">Description</label>
-              <textarea v-model="projetDraft.description" class="input" rows="3" placeholder="Ce projet consiste à..."></textarea>
+              <div class="desc-field-hd">
+                <label class="flabel" style="margin-bottom:0">Description</label>
+                <button
+                  type="button"
+                  class="bullet-btn"
+                  aria-label="Ajouter une puce"
+                  @click="projetDescTextarea && insertBullet(projetDescTextarea, projetDraft.description, v => projetDraft.description = v)"
+                ><span aria-hidden="true">•</span> Puce</button>
+              </div>
+              <textarea ref="projetDescTextarea" v-model="projetDraft.description" class="input" rows="3" placeholder="Ce projet consiste à..."></textarea>
             </div>
 
             <div class="popup-foot">
@@ -1595,8 +1617,17 @@ function fmtYearRange(start: string | null, end: string | null): string {
             </div>
 
             <div class="field" style="margin-bottom:0">
-              <label class="flabel">Description</label>
+              <div class="desc-field-hd">
+                <label class="flabel" style="margin-bottom:0">Description</label>
+                <button
+                  type="button"
+                  class="bullet-btn"
+                  aria-label="Ajouter une puce"
+                  @click="expDescTextarea && insertBullet(expDescTextarea, expDraft.description, v => expDraft.description = v)"
+                ><span aria-hidden="true">•</span> Puce</button>
+              </div>
               <textarea
+                ref="expDescTextarea"
                 v-model="expDraft.description"
                 class="input"
                 style="height:100px"
@@ -2134,4 +2165,29 @@ function fmtYearRange(start: string | null, end: string | null): string {
   font-family: 'IBM Plex Mono', monospace;
   cursor: default;
 }
+
+/* ── Bullet insert toolbar ── */
+.desc-field-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.bullet-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  font-size: 12px;
+  border-radius: 5px;
+  border: 1px solid #d4d4ce;
+  background: #fafaf8;
+  color: #56564f;
+  cursor: pointer;
+  line-height: 1;
+  transition: background .12s, border-color .12s;
+}
+.bullet-btn:hover { background: #f1f1ec; border-color: #b4b4aa; color: #1d1d1b; }
 </style>

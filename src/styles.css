@@ -616,6 +616,16 @@ select.input {
 .expco { font-size: 13px; color: #83837e; margin-top: 1px; }
 .expmeta { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #9b9b95; margin-top: 3px; }
 .expd { font-size: 13px; color: #56564f; margin-top: 7px; line-height: 1.55; }
+.expd-bullets {
+  font-size: 13px;
+  color: #56564f;
+  margin-top: 7px;
+  line-height: 1.6;
+  padding-left: 1.15em;
+  list-style: disc;
+  margin-bottom: 0;
+}
+.expd-bullets > li + li { margin-top: 5px; }
 
 /* ===== SETTINGS ===== */
 .setrow {
