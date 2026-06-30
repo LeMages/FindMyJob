@@ -784,6 +784,11 @@ const cvError = ref<string | null>(null)
 const cvFileInput = ref<HTMLInputElement | null>(null)
 const cvJustSaved = ref(false)
 
+const cvPreviewVisible = ref(false)
+const cvPreviewLoading = ref(false)
+const cvPreviewError = ref<string | null>(null)
+const cvPreviewData = ref<string | null>(null)
+
 function initCvFromProfile() {
   cvReference.value = profile.value?.cv_reference ?? null
 }
@@ -824,6 +829,25 @@ async function onCvFileSelected(event: Event) {
   } finally {
     cvSaving.value = false
     input.value = ''
+  }
+}
+
+async function previewCv() {
+  if (!cvReference.value) return
+  cvPreviewVisible.value = true
+  cvPreviewLoading.value = true
+  cvPreviewError.value = null
+  cvPreviewData.value = null
+  try {
+    const b64 = await invoke<string>('compile_cv')
+    cvPreviewData.value = b64
+  } catch (e: unknown) {
+    cvPreviewError.value =
+      e && typeof e === 'object' && 'message' in e
+        ? (e as { message: string }).message
+        : 'Erreur lors de la compilation du CV.'
+  } finally {
+    cvPreviewLoading.value = false
   }
 }
 
@@ -1873,6 +1897,12 @@ function fmtYearRange(start: string | null, end: string | null): string {
               <div class="cv-label">{{ cvReference.label ?? 'cv_reference.typ' }}</div>
               <div class="cv-meta">Enregistré le {{ new Date(cvReference.created_at).toLocaleDateString('fr-FR') }}</div>
             </div>
+            <button class="cv-preview-btn" type="button" title="Visualiser le CV compilé" @click="previewCv">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
           </div>
           <div v-else class="cempty">Aucun CV renseigné</div>
 
@@ -1904,6 +1934,45 @@ function fmtYearRange(start: string | null, end: string | null): string {
 
       </div>
     </div>
+
+    <!-- Modale prévisualisation CV -->
+    <Teleport to="body">
+      <div v-if="cvPreviewVisible" class="cv-modal-overlay" @click.self="cvPreviewVisible = false">
+        <div class="cv-modal">
+          <div class="cv-modal-header">
+            <span class="cv-modal-title">Aperçu du CV</span>
+            <button class="cv-modal-close" type="button" @click="cvPreviewVisible = false">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div class="cv-modal-body">
+            <div v-if="cvPreviewLoading" class="cv-modal-loading">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cv-spinner">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+              Compilation en cours…
+            </div>
+            <div v-else-if="cvPreviewError" class="cv-modal-error">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              {{ cvPreviewError }}
+            </div>
+            <iframe
+              v-else-if="cvPreviewData"
+              :src="`data:application/pdf;base64,${cvPreviewData}`"
+              class="cv-modal-iframe"
+              title="Aperçu PDF du CV"
+            />
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Edit footer -->
     <div v-if="editMode" class="edit-footer">
@@ -2084,6 +2153,121 @@ function fmtYearRange(start: string | null, end: string | null): string {
 .cv-error {
   font-size: 12px;
   color: #c53a3a;
+}
+
+.cv-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid #d0d8f0;
+  background: #f0f4ff;
+  color: #4a70d9;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.cv-preview-btn:hover { background: #e4ecff; border-color: #a0b4e8; }
+
+/* ── Modale aperçu CV ── */
+.cv-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cv-modal {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.22);
+  width: min(860px, calc(100vw - 48px));
+  height: min(92vh, 1000px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cv-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e6e6e1;
+  flex: none;
+}
+
+.cv-modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d1d1b;
+}
+
+.cv-modal-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid #e2e2dc;
+  background: #fafaf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #76766f;
+}
+.cv-modal-close:hover { background: #f1f1ec; color: #1d1d1b; }
+
+.cv-modal-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cv-modal-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.cv-modal-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: #666;
+  font-size: 13.5px;
+}
+
+.cv-spinner {
+  animation: spin 1s linear infinite;
+  color: #4a70d9;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.cv-modal-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #c53a3a;
+  font-size: 13px;
+  max-width: 480px;
+  padding: 20px;
+  background: #fdf6f6;
+  border: 1px solid #f0d0d0;
+  border-radius: 8px;
+  line-height: 1.5;
 }
 
 /* ── Projets ── */

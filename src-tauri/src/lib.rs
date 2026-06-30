@@ -819,6 +819,63 @@ fn open_url(url: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
+async fn compile_cv(state: tauri::State<'_, DbState>) -> Result<String, AppError> {
+    let user = fetch_first_user(&state.pool).await?;
+
+    let row = sqlx::query(
+        "SELECT file_path FROM documents \
+         WHERE user_id = ? AND type = 'cv' AND is_reference = 1 \
+         ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(user.id)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let row = row
+        .ok_or_else(|| AppError::NotFound("Aucun CV de référence trouvé.".to_string()))?;
+    let file_path: String = row.try_get("file_path").map_err(AppError::from)?;
+
+    let path = std::path::PathBuf::from(&file_path);
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| AppError::Validation(format!("Impossible de lire le fichier CV : {}", e)))?;
+
+    let root = path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let pdf_bytes = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<u8>, String> {
+        use typst_as_lib::{typst_kit_options::TypstKitFontOptions, TypstEngine};
+
+        let engine = TypstEngine::builder()
+            .main_file(content.as_str())
+            .with_file_system_resolver(root)
+            .search_fonts_with(
+                TypstKitFontOptions::default()
+                    .include_system_fonts(true)
+                    .include_embedded_fonts(true),
+            )
+            .build();
+
+        let doc = engine
+            .compile()
+            .output
+            .map_err(|e| format!("Erreur de compilation Typst : {:?}", e))?;
+
+        let pdf = typst_pdf::pdf(&doc, &Default::default())
+            .map_err(|e| format!("Erreur de génération PDF : {:?}", e))?;
+
+        Ok(pdf)
+    })
+    .await
+    .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
+    .map_err(AppError::Validation)?;
+
+    use base64::Engine as _;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&pdf_bytes))
+}
+
+#[tauri::command]
 async fn update_user_info(
     state: tauri::State<'_, DbState>,
     input: UpdateUserInfoInput,
@@ -1242,6 +1299,7 @@ pub fn run() {
             update_lang,
             get_cv_reference,
             save_cv,
+            compile_cv,
             open_url,
             update_user_info,
             add_projet,
