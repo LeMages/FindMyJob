@@ -37,11 +37,11 @@ import {
         @click="selectSession(s.id)"
       >
         <div class="sdot" :class="{ grn: s.hasAccepted }" />
-        <span class="f1">{{ s.name }}</span>
+        <span class="f1">{{ s.nom }}</span>
         <span class="scount">{{ s.count }}</span>
         <button
           class="sdel"
-          @click.stop="openDeleteSessionPopup(s.id, s.name)"
+          @click.stop="openDeleteSessionPopup(s.id, s.nom)"
           title="Supprimer"
         >×</button>
       </div>

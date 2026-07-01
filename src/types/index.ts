@@ -54,7 +54,10 @@ export interface BoardColumn {
 
 export interface Session {
   id: number
-  name: string
+  nom: string
+  candidature_count: number
+  has_accepted: boolean
+  created_at: string
 }
 
 export interface Recruiter {
@@ -161,6 +164,7 @@ export interface CvView {
   id: number
   label: string | null
   file_path: string
+  pdf_path: string | null
   created_at: string
 }
 
@@ -172,6 +176,34 @@ export interface ProfileDto {
   skills: SkillView[]
   langues: LangView[]
   cv_reference: CvView | null
+}
+
+export interface CandidatureView {
+  id: number
+  session_id: number | null
+  poste: string
+  entreprise: string | null
+  localisation: string | null
+  status: string
+  source: string | null
+  type_contrat: string | null
+  date_candidature: string | null
+  next_relance: string | null
+  created_at: string
+}
+
+export interface CreateCandidatureInput {
+  poste: string
+  entreprise: string | null
+  localisation: string | null
+  type_contrat: string | null
+  source: string | null
+  remuneration: string | null
+  url_offre: string | null
+  description_offre: string | null
+  notes: string | null
+  cv_id: number | null
+  session_id: number | null
 }
 
 export interface DragPopupState {

@@ -8,8 +8,9 @@ import NewApplicationView from '@/components/views/NewApplicationView.vue'
 import ProfileView from '@/components/views/ProfileView.vue'
 import SettingsView from '@/components/views/SettingsView.vue'
 import DeleteSessionPopup from '@/components/popups/DeleteSessionPopup.vue'
+import CreateSessionPopup from '@/components/popups/CreateSessionPopup.vue'
 import OnboardingWizard from '@/components/OnboardingWizard.vue'
-import { state, setUserInfo } from '@/stores/app'
+import { state, setUserInfo, loadSessions } from '@/stores/app'
 import type { UserView } from '@/types/index'
 
 const needsOnboarding = ref<boolean | null>(null)
@@ -27,6 +28,7 @@ onMounted(async () => {
     if (exists) {
       const user = await invoke<UserView>('get_user')
       applyUserInfo(user)
+      await loadSessions()
     }
     needsOnboarding.value = !exists
   } catch (e: unknown) {
@@ -39,8 +41,9 @@ onMounted(async () => {
   }
 })
 
-function handleOnboardingCompleted(user: UserView) {
+async function handleOnboardingCompleted(user: UserView) {
   applyUserInfo(user)
+  await loadSessions()
   needsOnboarding.value = false
 }
 </script>
@@ -76,6 +79,7 @@ function handleOnboardingCompleted(user: UserView) {
       </main>
     </div>
     <DeleteSessionPopup />
+    <CreateSessionPopup />
   </template>
 </template>
 

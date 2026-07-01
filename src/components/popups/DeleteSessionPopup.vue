@@ -12,7 +12,7 @@ import { state, confirmDeleteSession, cancelDeleteSession } from '@/stores/app'
 
       <div class="sub" style="margin:-4px 0 6px">Cette action est irréversible.</div>
       <div style="background:#f8f8f6;border:1px solid #e6e6e1;border-radius:9px;padding:12px 14px;margin-bottom:20px;font-size:13.5px">
-        <strong>{{ state.deleteSessionPopup.name }}</strong> et toutes ses candidatures seront supprimées définitivement.
+        <strong>{{ state.deleteSessionPopup.nom }}</strong> et toutes ses candidatures seront supprimées définitivement.
       </div>
 
       <div class="popup-foot">

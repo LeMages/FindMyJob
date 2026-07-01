@@ -456,6 +456,14 @@ select.input {
   margin-bottom: 8px;
 }
 .docicon { width: 28px; height: 36px; border-radius: 4px; flex: none; }
+.docicon-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f1ec;
+  border: 1px solid #e2e2dc;
+  color: #83837e;
+}
 .eyebtn {
   background: none;
   border: none;
