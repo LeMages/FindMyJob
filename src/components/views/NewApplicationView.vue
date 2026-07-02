@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
-import type { CandidatureView, CreateCandidatureInput, CvView } from '@/types'
+import type { CandidatureView, CreateCandidatureInput } from '@/types'
 import {
   state,
   currentSession,
@@ -33,8 +33,20 @@ const isValid = computed(() =>
 const saving = ref(false)
 const saveError = ref<string | null>(null)
 
+function basename(path: string): string {
+  return path.split(/[\\/]/).pop() ?? path
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  const uint8 = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i])
+  return btoa(binary)
+}
+
 // CV selection
-const selectedCv = ref<CvView | null>(null)
+const selectedCvPath = ref<string | null>(null)
 const cvLoading = ref(false)
 const cvError = ref<string | null>(null)
 const cvDragOver = ref(false)
@@ -47,12 +59,8 @@ async function handleCvFile(file: File) {
   cvLoading.value = true
   cvError.value = null
   try {
-    const buffer = await file.arrayBuffer()
-    const uint8 = new Uint8Array(buffer)
-    let binary = ''
-    for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i])
-    const content = btoa(binary)
-    selectedCv.value = await invoke<CvView>('upload_candidature_cv', { filename: file.name, content })
+    const content = await fileToBase64(file)
+    selectedCvPath.value = await invoke<string>('upload_candidature_cv', { filename: file.name, content })
   } catch (e: unknown) {
     cvError.value =
       e && typeof e === 'object' && 'message' in e
@@ -81,7 +89,7 @@ async function browseCv() {
     })
     if (!path || Array.isArray(path)) return
     cvLoading.value = true
-    selectedCv.value = await invoke<CvView>('select_candidature_cv', { path })
+    selectedCvPath.value = await invoke<string>('select_candidature_cv', { path })
   } catch (e: unknown) {
     cvError.value =
       e && typeof e === 'object' && 'message' in e
@@ -93,8 +101,71 @@ async function browseCv() {
 }
 
 function clearSelectedCv() {
-  selectedCv.value = null
+  selectedCvPath.value = null
   cvError.value = null
+}
+
+// Lettre de motivation selection
+const selectedLettrePath = ref<string | null>(null)
+const lettreLoading = ref(false)
+const lettreError = ref<string | null>(null)
+const lettreDragOver = ref(false)
+
+async function handleLettreFile(file: File) {
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    lettreError.value = 'Seuls les fichiers PDF sont acceptés.'
+    return
+  }
+  lettreLoading.value = true
+  lettreError.value = null
+  try {
+    const content = await fileToBase64(file)
+    selectedLettrePath.value = await invoke<string>('upload_candidature_lettre_motivation', {
+      filename: file.name,
+      content,
+    })
+  } catch (e: unknown) {
+    lettreError.value =
+      e && typeof e === 'object' && 'message' in e
+        ? (e as { message: string }).message
+        : 'Erreur lors du téléversement de la lettre.'
+  } finally {
+    lettreLoading.value = false
+  }
+}
+
+function onLettreDrop(event: DragEvent) {
+  lettreDragOver.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (file) handleLettreFile(file)
+}
+
+async function browseLettre() {
+  lettreError.value = null
+  try {
+    const dir = await invoke<string>('get_lettre_motivation_reference_dir')
+    const path = await openDialog({
+      title: 'Choisir une lettre de motivation',
+      defaultPath: dir,
+      multiple: false,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    })
+    if (!path || Array.isArray(path)) return
+    lettreLoading.value = true
+    selectedLettrePath.value = await invoke<string>('select_candidature_lettre_motivation', { path })
+  } catch (e: unknown) {
+    lettreError.value =
+      e && typeof e === 'object' && 'message' in e
+        ? (e as { message: string }).message
+        : 'Erreur lors de la sélection de la lettre.'
+  } finally {
+    lettreLoading.value = false
+  }
+}
+
+function clearSelectedLettre() {
+  selectedLettrePath.value = null
+  lettreError.value = null
 }
 
 async function submit() {
@@ -112,7 +183,8 @@ async function submit() {
       url_offre: urlOffreRef.value.trim() || null,
       description_offre: descriptionOffreRef.value.trim() || null,
       notes: notesRef.value.trim() || null,
-      cv_id: selectedCv.value?.id ?? null,
+      cv_path: selectedCvPath.value,
+      lettre_motivation_path: selectedLettrePath.value,
       session_id: currentSession.value?.id ?? null,
     }
     await invoke<CandidatureView>('create_candidature', { input })
@@ -125,7 +197,8 @@ async function submit() {
     urlOffreRef.value = ''
     descriptionOffreRef.value = ''
     notesRef.value = ''
-    selectedCv.value = null
+    selectedCvPath.value = null
+    selectedLettrePath.value = null
     navigate('tracking')
   } catch (e: unknown) {
     saveError.value =
@@ -247,7 +320,7 @@ async function submit() {
       <div class="docgrid">
         <div>
           <div class="doczonetitle">Curriculum Vitae</div>
-          <div v-if="selectedCv" class="doc">
+          <div v-if="selectedCvPath" class="doc">
             <div class="docicon docicon-file">
               <svg width="14" height="17" viewBox="0 0 14 17" fill="none">
                 <path d="M1.5 1.5h7l4 4v9.5a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-12.5a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
@@ -255,7 +328,7 @@ async function submit() {
               </svg>
             </div>
             <div class="f1">
-              <div class="crole">{{ selectedCv.label ?? 'CV sélectionné' }}</div>
+              <div class="crole">{{ basename(selectedCvPath) }}</div>
               <div class="cmeta">Joint</div>
             </div>
             <button class="eyebtn" type="button" title="Retirer" @click="clearSelectedCv">✕</button>
@@ -281,13 +354,37 @@ async function submit() {
         </div>
         <div>
           <div class="doczonetitle">Lettre de motivation</div>
-          <div class="doczone">
-            <div class="droptext">→ Glisser le PDF ici</div>
-            <button class="btn">Parcourir</button>
+          <div v-if="selectedLettrePath" class="doc">
+            <div class="docicon docicon-file">
+              <svg width="14" height="17" viewBox="0 0 14 17" fill="none">
+                <path d="M1.5 1.5h7l4 4v9.5a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-12.5a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+                <path d="M8.5 1.5v4h4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="f1">
+              <div class="crole">{{ basename(selectedLettrePath) }}</div>
+              <div class="cmeta">Jointe</div>
+            </div>
+            <button class="eyebtn" type="button" title="Retirer" @click="clearSelectedLettre">✕</button>
           </div>
-          <button class="btn" style="width:100%;justify-content:center;margin-top:8px">
-            ✦ Générer ma lettre
-          </button>
+          <template v-else>
+            <div
+              class="doczone"
+              :style="lettreDragOver ? 'border-color:#539bf5' : ''"
+              @dragover.prevent="lettreDragOver = true"
+              @dragleave.prevent="lettreDragOver = false"
+              @drop.prevent="onLettreDrop"
+            >
+              <div class="droptext">→ Glisser le PDF ici</div>
+              <button class="btn" type="button" :disabled="lettreLoading" @click="browseLettre">
+                {{ lettreLoading ? 'Chargement…' : 'Parcourir' }}
+              </button>
+            </div>
+            <button class="btn" type="button" style="width:100%;justify-content:center;margin-top:8px">
+              ✦ Générer ma lettre
+            </button>
+          </template>
+          <div v-if="lettreError" style="color:#b94a48;font-size:12px;margin-top:4px">{{ lettreError }}</div>
         </div>
       </div>
     </div>

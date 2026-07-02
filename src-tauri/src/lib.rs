@@ -10,12 +10,10 @@ pub struct DbState {
 }
 
 #[derive(serde::Serialize, Clone)]
-pub struct CvView {
-    pub id: i64,
-    pub label: Option<String>,
+pub struct DocumentReferenceView {
     pub file_path: String,
-    pub pdf_path: Option<String>,
-    pub created_at: String,
+    pub pdf_path: String,
+    pub updated_at: String,
 }
 
 #[derive(serde::Serialize)]
@@ -52,25 +50,6 @@ fn resolve_db_path(app: &tauri::AppHandle) -> PathBuf {
 }
 
 #[cfg_attr(debug_assertions, allow(unused_variables))]
-fn resolve_cv_dir(app: &tauri::AppHandle) -> PathBuf {
-    #[cfg(debug_assertions)]
-    {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join("dev-data")
-            .join("cv")
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        app.path()
-            .app_data_dir()
-            .expect("failed to resolve app data dir")
-            .join("cv")
-    }
-}
-
-#[cfg_attr(debug_assertions, allow(unused_variables))]
 fn resolve_data_dir(app: &tauri::AppHandle) -> PathBuf {
     #[cfg(debug_assertions)]
     {
@@ -87,13 +66,52 @@ fn resolve_data_dir(app: &tauri::AppHandle) -> PathBuf {
     }
 }
 
+// Document kinds are always one of "cv" or "lettre_motivation" — the folder
+// name under documents/ matches the kind exactly.
+fn resolve_doc_dir(app: &tauri::AppHandle, doc_type: &str) -> PathBuf {
+    resolve_data_dir(app).join("documents").join(doc_type)
+}
+
+fn doc_backup_basename(doc_type: &str) -> &'static str {
+    if doc_type == "lettre_motivation" { "lettre" } else { "cv" }
+}
+
+fn updated_at_millis(path: &std::path::Path) -> String {
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .map(|t| {
+            t.duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+                .to_string()
+        })
+        .unwrap_or_default()
+}
+
+fn get_reference(app: &tauri::AppHandle, doc_type: &str) -> Option<DocumentReferenceView> {
+    let doc_dir = resolve_doc_dir(app, doc_type);
+    let typ_path = doc_dir.join("reference.typ");
+    if !typ_path.exists() {
+        return None;
+    }
+    let pdf_path = doc_dir.join("reference.pdf");
+    Some(DocumentReferenceView {
+        file_path: typ_path.to_string_lossy().to_string(),
+        pdf_path: pdf_path.to_string_lossy().to_string(),
+        updated_at: updated_at_millis(&typ_path),
+    })
+}
+
 async fn init_db(
     db_path: &PathBuf,
 ) -> Result<SqlitePool, Box<dyn std::error::Error + Send + Sync>> {
     if let Some(data_dir) = db_path.parent() {
         std::fs::create_dir_all(data_dir)?;
-        std::fs::create_dir_all(data_dir.join("documents").join("references"))?;
-        std::fs::create_dir_all(data_dir.join("documents").join("generated"))?;
+        for doc_type in ["cv", "lettre_motivation"] {
+            let dir = data_dir.join("documents").join(doc_type);
+            std::fs::create_dir_all(dir.join("backup"))?;
+            std::fs::create_dir_all(dir.join("artefact"))?;
+        }
     }
 
     let options = SqliteConnectOptions::new()
@@ -153,6 +171,8 @@ pub struct CandidatureView {
     pub type_contrat: Option<String>,
     pub date_candidature: Option<String>,
     pub next_relance: Option<String>,
+    pub cv_path: Option<String>,
+    pub lettre_motivation_path: Option<String>,
     pub created_at: String,
 }
 
@@ -167,7 +187,8 @@ pub struct CreateCandidatureInput {
     pub url_offre: Option<String>,
     pub description_offre: Option<String>,
     pub notes: Option<String>,
-    pub cv_id: Option<i64>,
+    pub cv_path: Option<String>,
+    pub lettre_motivation_path: Option<String>,
     pub session_id: Option<i64>,
 }
 
@@ -308,7 +329,8 @@ pub struct ProfileDto {
     pub projets: Vec<ProjetView>,
     pub skills: Vec<SkillView>,
     pub langues: Vec<LangView>,
-    pub cv_reference: Option<CvView>,
+    pub cv_reference: Option<DocumentReferenceView>,
+    pub lettre_motivation_reference: Option<DocumentReferenceView>,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -444,7 +466,10 @@ async fn get_user(state: tauri::State<'_, DbState>) -> Result<UserView, AppError
 }
 
 #[tauri::command]
-async fn get_profile(state: tauri::State<'_, DbState>) -> Result<ProfileDto, AppError> {
+async fn get_profile(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DbState>,
+) -> Result<ProfileDto, AppError> {
     let user = fetch_first_user(&state.pool).await?;
     let uid = user.id;
 
@@ -560,28 +585,19 @@ async fn get_profile(state: tauri::State<'_, DbState>) -> Result<ProfileDto, App
         })
         .collect::<Result<_, _>>()?;
 
-    let cv_row = sqlx::query(
-        "SELECT id, label, file_path, pdf_path, created_at FROM documents \
-         WHERE user_id = ? AND type = 'cv' AND is_reference = 1 \
-         ORDER BY created_at DESC LIMIT 1",
-    )
-    .bind(uid)
-    .fetch_optional(&state.pool)
-    .await?;
+    let cv_reference = get_reference(&app, "cv");
+    let lettre_motivation_reference = get_reference(&app, "lettre_motivation");
 
-    let cv_reference: Option<CvView> = cv_row
-        .map(|r| -> Result<CvView, sqlx::Error> {
-            Ok(CvView {
-                id: r.try_get("id")?,
-                label: r.try_get("label")?,
-                file_path: r.try_get("file_path")?,
-                pdf_path: r.try_get("pdf_path")?,
-                created_at: r.try_get("created_at")?,
-            })
-        })
-        .transpose()?;
-
-    Ok(ProfileDto { user, experiences, formations, projets, skills, langues, cv_reference })
+    Ok(ProfileDto {
+        user,
+        experiences,
+        formations,
+        projets,
+        skills,
+        langues,
+        cv_reference,
+        lettre_motivation_reference,
+    })
 }
 
 #[tauri::command]
@@ -767,163 +783,92 @@ async fn update_projet(
 }
 
 #[tauri::command]
-async fn get_cv_reference(
-    state: tauri::State<'_, DbState>,
-) -> Result<Option<CvView>, AppError> {
-    let user = fetch_first_user(&state.pool).await?;
-    let row = sqlx::query(
-        "SELECT id, label, file_path, pdf_path, created_at FROM documents \
-         WHERE user_id = ? AND type = 'cv' AND is_reference = 1 \
-         ORDER BY created_at DESC LIMIT 1",
-    )
-    .bind(user.id)
-    .fetch_optional(&state.pool)
-    .await?;
-
-    row.map(|r| -> Result<CvView, AppError> {
-        Ok(CvView {
-            id: r.try_get("id").map_err(AppError::from)?,
-            label: r.try_get("label").map_err(AppError::from)?,
-            file_path: r.try_get("file_path").map_err(AppError::from)?,
-            pdf_path: r.try_get("pdf_path").map_err(AppError::from)?,
-            created_at: r.try_get("created_at").map_err(AppError::from)?,
-        })
-    })
-    .transpose()
+async fn get_cv_reference(app: tauri::AppHandle) -> Result<Option<DocumentReferenceView>, AppError> {
+    Ok(get_reference(&app, "cv"))
 }
 
 #[tauri::command]
-async fn save_cv(
+async fn get_lettre_motivation_reference(
     app: tauri::AppHandle,
-    state: tauri::State<'_, DbState>,
+) -> Result<Option<DocumentReferenceView>, AppError> {
+    Ok(get_reference(&app, "lettre_motivation"))
+}
+
+async fn save_reference(
+    app: tauri::AppHandle,
+    doc_type: &'static str,
     filename: String,
     content: String,
-) -> Result<CvView, AppError> {
+) -> Result<DocumentReferenceView, AppError> {
     if !filename.to_lowercase().ends_with(".typ") {
         return Err(AppError::Validation(
             "Seuls les fichiers .typ sont acceptés.".to_string(),
         ));
     }
 
-    let user = fetch_first_user(&state.pool).await?;
-    let uid = user.id;
+    let doc_dir = resolve_doc_dir(&app, doc_type);
+    std::fs::create_dir_all(&doc_dir)
+        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
 
-    let cv_dir = resolve_cv_dir(&app);
-    let refs_dir = cv_dir.join("references");
-    std::fs::create_dir_all(&refs_dir)
-        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier cv : {}", e)))?;
+    let typ_path = doc_dir.join("reference.typ");
+    let pdf_path = doc_dir.join("reference.pdf");
 
-    // Backup the existing reference CV (if any)
-    let existing = sqlx::query(
-        "SELECT id, label, file_path, pdf_path FROM documents \
-         WHERE user_id = ? AND type = 'cv' AND is_reference = 1 \
-         ORDER BY created_at DESC LIMIT 1",
-    )
-    .bind(uid)
-    .fetch_optional(&state.pool)
-    .await?;
-
-    if let Some(ref row) = existing {
-        let old_id: i64 = row.try_get("id").map_err(AppError::from)?;
-        let old_file_path: String = row.try_get("file_path").map_err(AppError::from)?;
-        let old_pdf_path: Option<String> = row.try_get("pdf_path").map_err(AppError::from)?;
-        let old_label: Option<String> = row.try_get("label").map_err(AppError::from)?;
-
+    // Backup the existing reference (if any) into backup/<timestamp>/
+    if typ_path.exists() {
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-
-        // Copy .typ to backup location
-        let backup_typ_path = refs_dir.join(format!("cv_backup_{}.typ", ts));
-        if std::path::Path::new(&old_file_path).exists() {
-            std::fs::copy(&old_file_path, &backup_typ_path).map_err(|e| {
-                AppError::Validation(format!("Sauvegarde de l'ancien CV échouée : {}", e))
-            })?;
+        let backup_dir = doc_dir.join("backup").join(ts.to_string());
+        std::fs::create_dir_all(&backup_dir).map_err(|e| {
+            AppError::Validation(format!("Impossible de créer le dossier de sauvegarde : {}", e))
+        })?;
+        let basename = doc_backup_basename(doc_type);
+        std::fs::copy(&typ_path, backup_dir.join(format!("{}.typ", basename))).map_err(|e| {
+            AppError::Validation(format!("Sauvegarde de l'ancien fichier échouée : {}", e))
+        })?;
+        if pdf_path.exists() {
+            std::fs::copy(&pdf_path, backup_dir.join(format!("{}.pdf", basename))).ok();
         }
-        let backup_typ_str = backup_typ_path.to_string_lossy().to_string();
-
-        // Copy PDF to backup location (non-fatal if absent)
-        let backup_pdf_str: Option<String> = if let Some(ref opdf) = old_pdf_path {
-            let backup_pdf_path = refs_dir.join(format!("cv_backup_{}.pdf", ts));
-            if std::path::Path::new(opdf).exists() {
-                std::fs::copy(opdf, &backup_pdf_path).ok();
-            }
-            Some(backup_pdf_path.to_string_lossy().to_string())
-        } else {
-            None
-        };
-
-        // Create the backup document row
-        let backup_row = sqlx::query(
-            "INSERT INTO documents (user_id, type, label, file_path, pdf_path, is_reference) \
-             VALUES (?, 'cv', ?, ?, ?, 0) \
-             RETURNING id",
-        )
-        .bind(uid)
-        .bind(&old_label)
-        .bind(&backup_typ_str)
-        .bind(&backup_pdf_str)
-        .fetch_one(&state.pool)
-        .await?;
-        let backup_id: i64 = backup_row.try_get("id").map_err(AppError::from)?;
-
-        // Redirect every candidature that linked to the old reference → backup
-        sqlx::query(
-            "UPDATE candidatures SET cv_id = ? WHERE cv_id = ? AND user_id = ?",
-        )
-        .bind(backup_id)
-        .bind(old_id)
-        .bind(uid)
-        .execute(&state.pool)
-        .await?;
-
-        // Remove the superseded reference row
-        sqlx::query("DELETE FROM documents WHERE id = ?")
-            .bind(old_id)
-            .execute(&state.pool)
-            .await?;
     }
 
     // Write the new .typ file
-    let dest_path = cv_dir.join("cv_reference.typ");
-    std::fs::write(&dest_path, content.as_bytes()).map_err(|e| {
-        AppError::Validation(format!("Écriture du fichier impossible : {}", e))
-    })?;
-    let dest_str = dest_path.to_string_lossy().to_string();
+    std::fs::write(&typ_path, content.as_bytes())
+        .map_err(|e| AppError::Validation(format!("Écriture du fichier impossible : {}", e)))?;
 
     // Compile to PDF
-    let root = cv_dir.clone();
+    let root = doc_dir.clone();
     let pdf_bytes = tauri::async_runtime::spawn_blocking(move || compile_to_pdf(content, root))
         .await
         .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
         .map_err(AppError::Validation)?;
 
-    let pdf_dest = cv_dir.join("cv_reference.pdf");
-    std::fs::write(&pdf_dest, &pdf_bytes).map_err(|e| {
-        AppError::Validation(format!("Écriture du PDF impossible : {}", e))
-    })?;
-    let pdf_str = pdf_dest.to_string_lossy().to_string();
+    std::fs::write(&pdf_path, &pdf_bytes)
+        .map_err(|e| AppError::Validation(format!("Écriture du PDF impossible : {}", e)))?;
 
-    let row = sqlx::query(
-        "INSERT INTO documents (user_id, type, label, file_path, pdf_path, is_reference) \
-         VALUES (?, 'cv', ?, ?, ?, 1) \
-         RETURNING id, label, file_path, pdf_path, created_at",
-    )
-    .bind(uid)
-    .bind(&filename)
-    .bind(&dest_str)
-    .bind(&pdf_str)
-    .fetch_one(&state.pool)
-    .await?;
-
-    Ok(CvView {
-        id: row.try_get("id").map_err(AppError::from)?,
-        label: row.try_get("label").map_err(AppError::from)?,
-        file_path: row.try_get("file_path").map_err(AppError::from)?,
-        pdf_path: row.try_get("pdf_path").map_err(AppError::from)?,
-        created_at: row.try_get("created_at").map_err(AppError::from)?,
+    Ok(DocumentReferenceView {
+        file_path: typ_path.to_string_lossy().to_string(),
+        pdf_path: pdf_path.to_string_lossy().to_string(),
+        updated_at: updated_at_millis(&typ_path),
     })
+}
+
+#[tauri::command]
+async fn save_cv(
+    app: tauri::AppHandle,
+    filename: String,
+    content: String,
+) -> Result<DocumentReferenceView, AppError> {
+    save_reference(app, "cv", filename, content).await
+}
+
+#[tauri::command]
+async fn save_lettre_motivation(
+    app: tauri::AppHandle,
+    filename: String,
+    content: String,
+) -> Result<DocumentReferenceView, AppError> {
+    save_reference(app, "lettre_motivation", filename, content).await
 }
 
 #[tauri::command]
@@ -953,26 +898,16 @@ fn compile_to_pdf(content: String, root: PathBuf) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("Erreur de génération PDF : {:?}", e))
 }
 
-#[tauri::command]
-async fn compile_cv(state: tauri::State<'_, DbState>) -> Result<String, AppError> {
-    let user = fetch_first_user(&state.pool).await?;
+async fn compile_reference(app: tauri::AppHandle, doc_type: &'static str) -> Result<String, AppError> {
+    let doc_dir = resolve_doc_dir(&app, doc_type);
+    let typ_path = doc_dir.join("reference.typ");
+    if !typ_path.exists() {
+        return Err(AppError::NotFound("Aucun fichier de référence trouvé.".to_string()));
+    }
 
-    let row = sqlx::query(
-        "SELECT file_path FROM documents \
-         WHERE user_id = ? AND type = 'cv' AND is_reference = 1 \
-         ORDER BY created_at DESC LIMIT 1",
-    )
-    .bind(user.id)
-    .fetch_optional(&state.pool)
-    .await?;
-
-    let row = row.ok_or_else(|| AppError::NotFound("Aucun CV de référence trouvé.".to_string()))?;
-    let file_path: String = row.try_get("file_path").map_err(AppError::from)?;
-
-    let path = std::path::PathBuf::from(&file_path);
-    let content = std::fs::read_to_string(&path)
-        .map_err(|e| AppError::Validation(format!("Impossible de lire le fichier CV : {}", e)))?;
-    let root = path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."));
+    let content = std::fs::read_to_string(&typ_path)
+        .map_err(|e| AppError::Validation(format!("Impossible de lire le fichier : {}", e)))?;
+    let root = doc_dir;
 
     let pdf_bytes = tauri::async_runtime::spawn_blocking(move || compile_to_pdf(content, root))
         .await
@@ -981,6 +916,16 @@ async fn compile_cv(state: tauri::State<'_, DbState>) -> Result<String, AppError
 
     use base64::Engine as _;
     Ok(base64::engine::general_purpose::STANDARD.encode(&pdf_bytes))
+}
+
+#[tauri::command]
+async fn compile_cv(app: tauri::AppHandle) -> Result<String, AppError> {
+    compile_reference(app, "cv").await
+}
+
+#[tauri::command]
+async fn compile_lettre_motivation(app: tauri::AppHandle) -> Result<String, AppError> {
+    compile_reference(app, "lettre_motivation").await
 }
 
 #[tauri::command]
@@ -1379,8 +1324,33 @@ async fn update_experience(
     })
 }
 
+fn finalize_candidature_document(
+    app: &tauri::AppHandle,
+    doc_type: &str,
+    staged_path: Option<String>,
+    candidature_id: i64,
+) -> Result<Option<String>, AppError> {
+    let Some(staged) = staged_path else {
+        return Ok(None);
+    };
+    let staged_pb = PathBuf::from(&staged);
+    if !staged_pb.exists() {
+        return Err(AppError::Validation(
+            "Le document sélectionné est introuvable.".to_string(),
+        ));
+    }
+    let artefact_dir = resolve_doc_dir(app, doc_type).join("artefact");
+    std::fs::create_dir_all(&artefact_dir)
+        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
+    let dest = artefact_dir.join(format!("{}.pdf", candidature_id));
+    std::fs::rename(&staged_pb, &dest)
+        .map_err(|e| AppError::Validation(format!("Impossible de finaliser le document : {}", e)))?;
+    Ok(Some(dest.to_string_lossy().to_string()))
+}
+
 #[tauri::command]
 async fn create_candidature(
+    app: tauri::AppHandle,
     state: tauri::State<'_, DbState>,
     input: CreateCandidatureInput,
 ) -> Result<CandidatureView, AppError> {
@@ -1413,8 +1383,8 @@ async fn create_candidature(
     let row = sqlx::query(
         "INSERT INTO candidatures \
            (user_id, poste, entreprise, localisation, type, source, remuneration, \
-            url_offre, description_offre, notes, cv_id, session_id) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+            url_offre, description_offre, notes, session_id) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
          RETURNING id, session_id, poste, entreprise, localisation, status, source, \
                    type AS type_contrat, \
                    CAST(date_candidature AS TEXT) AS date_candidature, \
@@ -1431,13 +1401,29 @@ async fn create_candidature(
     .bind(normalize(input.url_offre))
     .bind(&description_offre)
     .bind(normalize(input.notes))
-    .bind(input.cv_id)
     .bind(input.session_id)
     .fetch_one(&state.pool)
     .await?;
 
+    let id: i64 = row.try_get("id").map_err(AppError::from)?;
+
+    let cv_path = finalize_candidature_document(&app, "cv", input.cv_path, id)?;
+    let lettre_motivation_path =
+        finalize_candidature_document(&app, "lettre_motivation", input.lettre_motivation_path, id)?;
+
+    if cv_path.is_some() || lettre_motivation_path.is_some() {
+        sqlx::query(
+            "UPDATE candidatures SET cv_path = ?, lettre_motivation_path = ? WHERE id = ?",
+        )
+        .bind(&cv_path)
+        .bind(&lettre_motivation_path)
+        .bind(id)
+        .execute(&state.pool)
+        .await?;
+    }
+
     Ok(CandidatureView {
-        id: row.try_get("id").map_err(AppError::from)?,
+        id,
         session_id: row.try_get("session_id").map_err(AppError::from)?,
         poste: row.try_get("poste").map_err(AppError::from)?,
         entreprise: row.try_get("entreprise").map_err(AppError::from)?,
@@ -1447,17 +1433,33 @@ async fn create_candidature(
         type_contrat: row.try_get("type_contrat").map_err(AppError::from)?,
         date_candidature: row.try_get("date_candidature").map_err(AppError::from)?,
         next_relance: row.try_get("next_relance").map_err(AppError::from)?,
+        cv_path,
+        lettre_motivation_path,
         created_at: row.try_get("created_at").map_err(AppError::from)?,
     })
 }
 
-#[tauri::command]
-async fn upload_candidature_cv(
+fn next_staged_path(
+    app: &tauri::AppHandle,
+    doc_type: &str,
+    filename: &str,
+) -> Result<PathBuf, AppError> {
+    let artefact_dir = resolve_doc_dir(app, doc_type).join("artefact");
+    std::fs::create_dir_all(&artefact_dir)
+        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    Ok(artefact_dir.join(format!("pending_{}_{}", ts, filename)))
+}
+
+async fn upload_candidature_document(
     app: tauri::AppHandle,
-    state: tauri::State<'_, DbState>,
+    doc_type: &'static str,
     filename: String,
     content: String,
-) -> Result<CvView, AppError> {
+) -> Result<String, AppError> {
     if !filename.to_lowercase().ends_with(".pdf") {
         return Err(AppError::Validation(
             "Seuls les fichiers PDF sont acceptés.".to_string(),
@@ -1469,99 +1471,80 @@ async fn upload_candidature_cv(
         .decode(&content)
         .map_err(|e| AppError::Validation(format!("Contenu invalide : {}", e)))?;
 
-    let user = fetch_first_user(&state.pool).await?;
-
-    let gen_dir = resolve_data_dir(&app).join("documents").join("generated");
-    std::fs::create_dir_all(&gen_dir)
-        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
-
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    let dest_path = gen_dir.join(format!("cv_{}_{}", ts, filename));
-    std::fs::write(&dest_path, &pdf_bytes)
+    let dest = next_staged_path(&app, doc_type, &filename)?;
+    std::fs::write(&dest, &pdf_bytes)
         .map_err(|e| AppError::Validation(format!("Écriture impossible : {}", e)))?;
-    let dest_str = dest_path.to_string_lossy().to_string();
+    Ok(dest.to_string_lossy().to_string())
+}
 
-    let row = sqlx::query(
-        "INSERT INTO documents (user_id, type, label, file_path, is_reference) \
-         VALUES (?, 'cv', ?, ?, 0) \
-         RETURNING id, label, file_path, pdf_path, created_at",
-    )
-    .bind(user.id)
-    .bind(&filename)
-    .bind(&dest_str)
-    .fetch_one(&state.pool)
-    .await?;
+#[tauri::command]
+async fn upload_candidature_cv(
+    app: tauri::AppHandle,
+    filename: String,
+    content: String,
+) -> Result<String, AppError> {
+    upload_candidature_document(app, "cv", filename, content).await
+}
 
-    Ok(CvView {
-        id: row.try_get("id").map_err(AppError::from)?,
-        label: row.try_get("label").map_err(AppError::from)?,
-        file_path: row.try_get("file_path").map_err(AppError::from)?,
-        pdf_path: row.try_get("pdf_path").map_err(AppError::from)?,
-        created_at: row.try_get("created_at").map_err(AppError::from)?,
-    })
+#[tauri::command]
+async fn upload_candidature_lettre_motivation(
+    app: tauri::AppHandle,
+    filename: String,
+    content: String,
+) -> Result<String, AppError> {
+    upload_candidature_document(app, "lettre_motivation", filename, content).await
+}
+
+fn resolve_reference_dir(app: &tauri::AppHandle, doc_type: &str) -> Result<String, AppError> {
+    let dir = resolve_doc_dir(app, doc_type);
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
+    Ok(dir.to_string_lossy().to_string())
 }
 
 #[tauri::command]
 async fn get_cv_reference_dir(app: tauri::AppHandle) -> Result<String, AppError> {
-    let cv_dir = resolve_cv_dir(&app);
-    std::fs::create_dir_all(&cv_dir)
-        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier cv : {}", e)))?;
-    Ok(cv_dir.to_string_lossy().to_string())
+    resolve_reference_dir(&app, "cv")
 }
 
 #[tauri::command]
-async fn select_candidature_cv(
+async fn get_lettre_motivation_reference_dir(app: tauri::AppHandle) -> Result<String, AppError> {
+    resolve_reference_dir(&app, "lettre_motivation")
+}
+
+async fn select_candidature_document(
     app: tauri::AppHandle,
-    state: tauri::State<'_, DbState>,
+    doc_type: &'static str,
     path: String,
-) -> Result<CvView, AppError> {
+) -> Result<String, AppError> {
     if !path.to_lowercase().ends_with(".pdf") {
         return Err(AppError::Validation(
             "Seuls les fichiers PDF sont acceptés.".to_string(),
         ));
     }
 
-    let user = fetch_first_user(&state.pool).await?;
-
-    let gen_dir = resolve_data_dir(&app).join("documents").join("generated");
-    std::fs::create_dir_all(&gen_dir)
-        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
-
     let filename = std::path::Path::new(&path)
         .file_name()
         .map(|f| f.to_string_lossy().to_string())
-        .unwrap_or_else(|| "cv.pdf".to_string());
+        .unwrap_or_else(|| "document.pdf".to_string());
 
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    let dest_path = gen_dir.join(format!("cv_{}_{}", ts, filename));
-    std::fs::copy(&path, &dest_path)
+    let dest = next_staged_path(&app, doc_type, &filename)?;
+    std::fs::copy(&path, &dest)
         .map_err(|e| AppError::Validation(format!("Copie du fichier impossible : {}", e)))?;
-    let dest_str = dest_path.to_string_lossy().to_string();
+    Ok(dest.to_string_lossy().to_string())
+}
 
-    let row = sqlx::query(
-        "INSERT INTO documents (user_id, type, label, file_path, is_reference) \
-         VALUES (?, 'cv', ?, ?, 0) \
-         RETURNING id, label, file_path, pdf_path, created_at",
-    )
-    .bind(user.id)
-    .bind(&filename)
-    .bind(&dest_str)
-    .fetch_one(&state.pool)
-    .await?;
+#[tauri::command]
+async fn select_candidature_cv(app: tauri::AppHandle, path: String) -> Result<String, AppError> {
+    select_candidature_document(app, "cv", path).await
+}
 
-    Ok(CvView {
-        id: row.try_get("id").map_err(AppError::from)?,
-        label: row.try_get("label").map_err(AppError::from)?,
-        file_path: row.try_get("file_path").map_err(AppError::from)?,
-        pdf_path: row.try_get("pdf_path").map_err(AppError::from)?,
-        created_at: row.try_get("created_at").map_err(AppError::from)?,
-    })
+#[tauri::command]
+async fn select_candidature_lettre_motivation(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<String, AppError> {
+    select_candidature_document(app, "lettre_motivation", path).await
 }
 
 #[tauri::command]
@@ -1576,6 +1559,7 @@ async fn get_candidatures(
                 type AS type_contrat, \
                 CAST(date_candidature AS TEXT) AS date_candidature, \
                 CAST(next_relance     AS TEXT) AS next_relance, \
+                cv_path, lettre_motivation_path, \
                 created_at \
          FROM candidatures \
          WHERE user_id = ? AND session_id = ? \
@@ -1599,6 +1583,8 @@ async fn get_candidatures(
                 type_contrat: r.try_get("type_contrat")?,
                 date_candidature: r.try_get("date_candidature")?,
                 next_relance: r.try_get("next_relance")?,
+                cv_path: r.try_get("cv_path")?,
+                lettre_motivation_path: r.try_get("lettre_motivation_path")?,
                 created_at: r.try_get("created_at")?,
             })
         })
@@ -1684,15 +1670,6 @@ async fn delete_session(state: tauri::State<'_, DbState>, id: i64) -> Result<(),
     let mut tx = state.pool.begin().await?;
 
     sqlx::query(
-        "DELETE FROM email_attachments \
-         WHERE email_id IN (SELECT id FROM emails \
-           WHERE candidature_id IN (SELECT id FROM candidatures WHERE session_id = ?))",
-    )
-    .bind(id)
-    .execute(&mut *tx)
-    .await?;
-
-    sqlx::query(
         "DELETE FROM emails \
          WHERE candidature_id IN (SELECT id FROM candidatures WHERE session_id = ?)",
     )
@@ -1767,8 +1744,11 @@ pub fn run() {
             delete_lang,
             update_lang,
             get_cv_reference,
+            get_lettre_motivation_reference,
             save_cv,
+            save_lettre_motivation,
             compile_cv,
+            compile_lettre_motivation,
             open_url,
             update_user_info,
             add_projet,
@@ -1780,8 +1760,11 @@ pub fn run() {
             create_candidature,
             get_candidatures,
             upload_candidature_cv,
+            upload_candidature_lettre_motivation,
             get_cv_reference_dir,
+            get_lettre_motivation_reference_dir,
             select_candidature_cv,
+            select_candidature_lettre_motivation,
             create_session,
             get_sessions,
             delete_session,

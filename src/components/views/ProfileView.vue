@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import type { ProfileDto, UserView, UpdateUserInfoInput, ExperienceView, CreateExperienceInput, FormationView, CreateFormationInput, ProjetView, CreateProjetInput, LangView, CreateLangInput, SkillView, CreateSkillInput, CvView } from '@/types/index'
+import type { ProfileDto, UserView, UpdateUserInfoInput, ExperienceView, CreateExperienceInput, FormationView, CreateFormationInput, ProjetView, CreateProjetInput, LangView, CreateLangInput, SkillView, CreateSkillInput, DocumentReferenceView } from '@/types/index'
 import { setUserInfo } from '@/stores/app'
 import { parseBulletDescription } from '@/composables/parseBulletDescription'
 import { insertBullet } from '@/composables/insertBullet'
@@ -42,6 +42,7 @@ function isUserInfoDirty(): boolean {
 const isDirty = computed(() =>
   isUserInfoDirty() ||
   cvJustSaved.value ||
+  lettreJustSaved.value ||
   draftDescription.value !== (profile.value?.user.description ?? '') ||
   pendingExperiences.value.length > 0 ||
   deletedExpIds.value.length > 0 ||
@@ -71,7 +72,9 @@ function enterEditMode() {
   }
   draftDescription.value = u?.description ?? ''
   initCvFromProfile()
+  initLettreFromProfile()
   cvError.value = null
+  lettreError.value = null
   saveError.value = null
   editMode.value = true
 }
@@ -94,6 +97,8 @@ function cancelEdit() {
   editedLangs.value = {}
   cvJustSaved.value = false
   cvError.value = null
+  lettreJustSaved.value = false
+  lettreError.value = null
   editMode.value = false
   saveError.value = null
 }
@@ -298,6 +303,7 @@ async function saveDescription() {
     pendingLangs.value = []
 
     cvJustSaved.value = false
+    lettreJustSaved.value = false
     editMode.value = false
   } catch (e: unknown) {
     saveError.value =
@@ -778,7 +784,7 @@ function deleteProjet(item: ProjetDisplayItem) {
 
 // ── CV ────────────────────────────────────────────────────────────────────────
 
-const cvReference = ref<CvView | null>(null)
+const cvReference = ref<DocumentReferenceView | null>(null)
 const cvSaving = ref(false)
 const cvError = ref<string | null>(null)
 const cvFileInput = ref<HTMLInputElement | null>(null)
@@ -814,7 +820,7 @@ async function onCvFileSelected(event: Event) {
 
   try {
     const content = await file.text()
-    const saved = await invoke<CvView>('save_cv', {
+    const saved = await invoke<DocumentReferenceView>('save_cv', {
       filename: file.name,
       content,
     })
@@ -849,6 +855,87 @@ async function previewCv() {
   } finally {
     cvPreviewLoading.value = false
   }
+}
+
+// ── Lettre de motivation ────────────────────────────────────────────────────
+
+const lettreReference = ref<DocumentReferenceView | null>(null)
+const lettreSaving = ref(false)
+const lettreError = ref<string | null>(null)
+const lettreFileInput = ref<HTMLInputElement | null>(null)
+const lettreJustSaved = ref(false)
+
+const lettrePreviewVisible = ref(false)
+const lettrePreviewLoading = ref(false)
+const lettrePreviewError = ref<string | null>(null)
+const lettrePreviewData = ref<string | null>(null)
+
+function initLettreFromProfile() {
+  lettreReference.value = profile.value?.lettre_motivation_reference ?? null
+}
+
+function triggerLettrePicker() {
+  lettreError.value = null
+  lettreFileInput.value?.click()
+}
+
+async function onLettreFileSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  if (!file.name.toLowerCase().endsWith('.typ')) {
+    lettreError.value = 'Seuls les fichiers .typ sont acceptés.'
+    input.value = ''
+    return
+  }
+
+  lettreSaving.value = true
+  lettreError.value = null
+
+  try {
+    const content = await file.text()
+    const saved = await invoke<DocumentReferenceView>('save_lettre_motivation', {
+      filename: file.name,
+      content,
+    })
+    lettreReference.value = saved
+    if (profile.value) profile.value.lettre_motivation_reference = saved
+    lettreJustSaved.value = true
+  } catch (e: unknown) {
+    lettreError.value =
+      e && typeof e === 'object' && 'message' in e
+        ? (e as { message: string }).message
+        : 'Erreur lors de la sauvegarde de la lettre de motivation.'
+  } finally {
+    lettreSaving.value = false
+    input.value = ''
+  }
+}
+
+async function previewLettre() {
+  if (!lettreReference.value) return
+  lettrePreviewVisible.value = true
+  lettrePreviewLoading.value = true
+  lettrePreviewError.value = null
+  lettrePreviewData.value = null
+  try {
+    const b64 = await invoke<string>('compile_lettre_motivation')
+    lettrePreviewData.value = b64
+  } catch (e: unknown) {
+    lettrePreviewError.value =
+      e && typeof e === 'object' && 'message' in e
+        ? (e as { message: string }).message
+        : 'Erreur lors de la compilation de la lettre de motivation.'
+  } finally {
+    lettrePreviewLoading.value = false
+  }
+}
+
+function fmtReferenceDate(updatedAt: string): string {
+  const ms = Number(updatedAt)
+  if (!ms) return '?'
+  return new Date(ms).toLocaleDateString('fr-FR')
 }
 
 // ── Compétences ───────────────────────────────────────────────────────────────
@@ -1137,6 +1224,7 @@ onMounted(async () => {
     profile.value = data
     syncUserInfo(data.user)
     cvReference.value = data.cv_reference ?? null
+    lettreReference.value = data.lettre_motivation_reference ?? null
   } catch (e: unknown) {
     loadError.value =
       e && typeof e === 'object' && 'message' in e
@@ -1894,8 +1982,8 @@ function fmtYearRange(start: string | null, end: string | null): string {
               </svg>
             </div>
             <div class="cv-info">
-              <div class="cv-label">{{ cvReference.label ?? 'cv_reference.typ' }}</div>
-              <div class="cv-meta">Enregistré le {{ new Date(cvReference.created_at).toLocaleDateString('fr-FR') }}</div>
+              <div class="cv-label">reference.typ</div>
+              <div class="cv-meta">Enregistré le {{ fmtReferenceDate(cvReference.updated_at) }}</div>
             </div>
             <button class="cv-preview-btn" type="button" title="Visualiser le CV compilé" @click="previewCv">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1929,6 +2017,60 @@ function fmtYearRange(start: string | null, end: string | null): string {
               {{ cvSaving ? 'Sauvegarde…' : cvReference ? 'Remplacer le CV' : 'Ajouter un CV' }}
             </button>
             <span v-if="cvError" class="cv-error">{{ cvError }}</span>
+          </div>
+        </div>
+
+        <!-- Lettre de motivation Typst -->
+        <div class="fieldset">
+          <div class="fstitle">LETTRE DE MOTIVATION (TYPST)</div>
+
+          <!-- Affichage de la lettre actuelle -->
+          <div v-if="lettreReference" class="cv-current">
+            <div class="cv-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+            </div>
+            <div class="cv-info">
+              <div class="cv-label">reference.typ</div>
+              <div class="cv-meta">Enregistrée le {{ fmtReferenceDate(lettreReference.updated_at) }}</div>
+            </div>
+            <button class="cv-preview-btn" type="button" title="Visualiser la lettre compilée" @click="previewLettre">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+          <div v-else class="cempty">Aucune lettre de motivation renseignée</div>
+
+          <!-- Bouton en mode édition -->
+          <div v-if="editMode" class="cv-actions">
+            <input
+              ref="lettreFileInput"
+              type="file"
+              accept=".typ"
+              style="display:none"
+              @change="onLettreFileSelected"
+            />
+            <button
+              class="btn cv-upload-btn"
+              type="button"
+              :disabled="lettreSaving"
+              @click="triggerLettrePicker"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              {{ lettreSaving ? 'Sauvegarde…' : lettreReference ? 'Remplacer la lettre' : 'Ajouter une lettre' }}
+            </button>
+            <span v-if="lettreError" class="cv-error">{{ lettreError }}</span>
           </div>
         </div>
 
@@ -1968,6 +2110,45 @@ function fmtYearRange(start: string | null, end: string | null): string {
               :src="`data:application/pdf;base64,${cvPreviewData}`"
               class="cv-modal-iframe"
               title="Aperçu PDF du CV"
+            />
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Modale prévisualisation lettre de motivation -->
+    <Teleport to="body">
+      <div v-if="lettrePreviewVisible" class="cv-modal-overlay" @click.self="lettrePreviewVisible = false">
+        <div class="cv-modal">
+          <div class="cv-modal-header">
+            <span class="cv-modal-title">Aperçu de la lettre de motivation</span>
+            <button class="cv-modal-close" type="button" @click="lettrePreviewVisible = false">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div class="cv-modal-body">
+            <div v-if="lettrePreviewLoading" class="cv-modal-loading">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cv-spinner">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+              Compilation en cours…
+            </div>
+            <div v-else-if="lettrePreviewError" class="cv-modal-error">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              {{ lettrePreviewError }}
+            </div>
+            <iframe
+              v-else-if="lettrePreviewData"
+              :src="`data:application/pdf;base64,${lettrePreviewData}`"
+              class="cv-modal-iframe"
+              title="Aperçu PDF de la lettre de motivation"
             />
           </div>
         </div>

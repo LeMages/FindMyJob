@@ -160,12 +160,10 @@ export interface CreateProjetInput {
   date_fin: string | null
 }
 
-export interface CvView {
-  id: number
-  label: string | null
+export interface DocumentReferenceView {
   file_path: string
-  pdf_path: string | null
-  created_at: string
+  pdf_path: string
+  updated_at: string
 }
 
 export interface ProfileDto {
@@ -175,7 +173,8 @@ export interface ProfileDto {
   projets: ProjetView[]
   skills: SkillView[]
   langues: LangView[]
-  cv_reference: CvView | null
+  cv_reference: DocumentReferenceView | null
+  lettre_motivation_reference: DocumentReferenceView | null
 }
 
 export interface CandidatureView {
@@ -189,6 +188,8 @@ export interface CandidatureView {
   type_contrat: string | null
   date_candidature: string | null
   next_relance: string | null
+  cv_path: string | null
+  lettre_motivation_path: string | null
   created_at: string
 }
 
@@ -202,7 +203,8 @@ export interface CreateCandidatureInput {
   url_offre: string | null
   description_offre: string | null
   notes: string | null
-  cv_id: number | null
+  cv_path: string | null
+  lettre_motivation_path: string | null
   session_id: number | null
 }
 
