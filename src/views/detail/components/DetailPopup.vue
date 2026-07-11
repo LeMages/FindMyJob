@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * Popups du détail de candidature : rédaction du mail, ajout de recruteur,
+ * contenu de l'offre, ajout d'événement (voir `state.detailPopup`).
+ * Propre à `DetailView`.
+ */
+
+// Importation des modules internes
 import { state, closeDetailPopup, addEvent, addRecruiter } from '@/stores/app'
 </script>
 

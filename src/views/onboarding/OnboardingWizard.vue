@@ -1,6 +1,16 @@
 <script setup lang="ts">
+/**
+ * Assistant de première configuration (onboarding) : recueille les
+ * informations du profil en plusieurs étapes puis crée l'utilisateur unique
+ * de l'application.
+ */
+
+// Importation des modules Vue / framework
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+
+// Importation des modules internes
+import { extractErrorMessage } from '@/composables/useErrorMessage'
 import type { CreateUserInput, UserView } from '@/types/index'
 
 const emit = defineEmits<{
@@ -38,6 +48,7 @@ const canNext = computed(() => {
 
 const isLastStep = computed(() => currentStep.value === STEPS.length - 1)
 
+/** Avance à l'étape suivante si l'étape courante est valide. */
 function goNext() {
   if (canNext.value && !isLastStep.value) {
     currentStep.value++
@@ -45,6 +56,7 @@ function goNext() {
   }
 }
 
+/** Revient à l'étape précédente. */
 function goPrev() {
   if (currentStep.value > 0) {
     currentStep.value--
@@ -52,6 +64,7 @@ function goPrev() {
   }
 }
 
+/** Crée l'utilisateur à partir du formulaire et notifie le parent (`completed`). */
 async function finish() {
   submitting.value = true
   errorMessage.value = null
@@ -71,13 +84,7 @@ async function finish() {
     const user = await invoke<UserView>('create_user', { input })
     emit('completed', user)
   } catch (e: unknown) {
-    if (e && typeof e === 'object' && 'message' in e) {
-      errorMessage.value = (e as { message: string }).message
-    } else if (typeof e === 'string') {
-      errorMessage.value = e
-    } else {
-      errorMessage.value = 'Une erreur inattendue est survenue.'
-    }
+    errorMessage.value = extractErrorMessage(e, 'Une erreur inattendue est survenue.')
   } finally {
     submitting.value = false
   }

@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * Popup de confirmation de déplacement d'une candidature entre colonnes du
+ * kanban (voir `state.dragPopup`), propre à `TrackingView`.
+ */
+
+// Importation des modules internes
 import { state, confirmDrag, cancelDrag } from '@/stores/app'
 </script>
 

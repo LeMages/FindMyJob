@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * Vue « Paramètres » : configuration de l'IA, des relances, de l'apparence,
+ * de la signature et du stockage. Interface de maquette — les champs ne sont
+ * pas encore persistés (aucune commande Tauri branchée).
+ */
+
+// Importation des modules Vue / framework
 import { ref } from 'vue'
 
 const showApiKey = ref(false)

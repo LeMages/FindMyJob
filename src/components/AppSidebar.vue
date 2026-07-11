@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * Barre latérale globale : recherche, liste des sessions et accès au profil
+ * et aux paramètres. Composant partagé, monté une seule fois par `App.vue`.
+ */
+
+// Importation des modules internes
 import {
   state,
   allSessions,

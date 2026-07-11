@@ -1,9 +1,16 @@
 <script setup lang="ts">
+/**
+ * Vue « Suivi » : tableau kanban des candidatures de la session courante,
+ * avec statistiques, glisser-déposer entre colonnes et corbeille.
+ */
+
+// Importation des modules Vue / framework
 import { ref, computed, onMounted, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+
+// Importation des modules internes
 import type { CandidatureView, BoardColumn } from '@/types'
 import {
-  state,
   currentSession,
   currentTrashedList,
   navigate,
@@ -14,8 +21,9 @@ import {
   closeTrashPopup,
   addSession,
 } from '@/stores/app'
-import DragPopup from '@/components/popups/DragPopup.vue'
-import TrashPopup from '@/components/popups/TrashPopup.vue'
+import { extractErrorMessage } from '@/composables/useErrorMessage'
+import DragPopup from '@/views/tracking/components/DragPopup.vue'
+import TrashPopup from '@/views/tracking/components/TrashPopup.vue'
 
 const TYPE_LABELS: Record<string, string> = {
   stage: 'Stage',
@@ -71,6 +79,7 @@ const kanbanStats = computed(() => {
   return { total, sent, interviews, accepted }
 })
 
+/** Charge les candidatures de la session courante depuis le backend. */
 async function loadCandidatures() {
   const sid = currentSession.value?.id
   if (!sid) {
@@ -85,12 +94,7 @@ async function loadCandidatures() {
       sessionId: sid,
     })
   } catch (e: unknown) {
-    loadError.value =
-      e && typeof e === 'object' && 'message' in e
-        ? (e as { message: string }).message
-        : typeof e === 'string'
-          ? e
-          : 'Impossible de charger les candidatures.'
+    loadError.value = extractErrorMessage(e, 'Impossible de charger les candidatures.')
   } finally {
     loading.value = false
   }

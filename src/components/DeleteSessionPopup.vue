@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * Popup globale de confirmation de suppression de session (voir
+ * `state.deleteSessionPopup`).
+ */
+
+// Importation des modules internes
 import { state, confirmDeleteSession, cancelDeleteSession } from '@/stores/app'
 </script>
 

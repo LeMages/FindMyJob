@@ -1,21 +1,36 @@
 <script setup lang="ts">
+/**
+ * Composant racine : détermine l'écran de démarrage (chargement, erreur,
+ * onboarding ou application principale) et route entre les vues selon
+ * `state.screen`.
+ */
+
+// Importation des modules Vue / framework
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+
+// Importation des modules internes
 import AppSidebar from '@/components/AppSidebar.vue'
-import TrackingView from '@/components/views/TrackingView.vue'
-import DetailView from '@/components/views/DetailView.vue'
-import NewApplicationView from '@/components/views/NewApplicationView.vue'
-import ProfileView from '@/components/views/ProfileView.vue'
-import SettingsView from '@/components/views/SettingsView.vue'
-import DeleteSessionPopup from '@/components/popups/DeleteSessionPopup.vue'
-import CreateSessionPopup from '@/components/popups/CreateSessionPopup.vue'
-import OnboardingWizard from '@/components/OnboardingWizard.vue'
+import TrackingView from '@/views/tracking/TrackingView.vue'
+import DetailView from '@/views/detail/DetailView.vue'
+import NewApplicationView from '@/views/new_application/NewApplicationView.vue'
+import ProfileView from '@/views/profile/ProfileView.vue'
+import SettingsView from '@/views/settings/SettingsView.vue'
+import DeleteSessionPopup from '@/components/DeleteSessionPopup.vue'
+import CreateSessionPopup from '@/components/CreateSessionPopup.vue'
+import OnboardingWizard from '@/views/onboarding/OnboardingWizard.vue'
 import { state, setUserInfo, loadSessions } from '@/stores/app'
+import { extractErrorMessage } from '@/composables/useErrorMessage'
 import type { UserView } from '@/types/index'
 
 const needsOnboarding = ref<boolean | null>(null)
 const startupError = ref<string | null>(null)
 
+/**
+ * Synchronise le nom d'affichage et les initiales de l'utilisateur dans le store global.
+ *
+ * @param u - Utilisateur dont dériver le nom et les initiales.
+ */
 function applyUserInfo(u: UserView) {
   const name = [u.prenom, u.nom].filter(Boolean).join(' ')
   const initials = ((u.prenom?.[0] ?? '') + (u.nom?.[0] ?? '')).toUpperCase()
@@ -32,15 +47,16 @@ onMounted(async () => {
     }
     needsOnboarding.value = !exists
   } catch (e: unknown) {
-    startupError.value =
-      e && typeof e === 'object' && 'message' in e
-        ? (e as { message: string }).message
-        : typeof e === 'string'
-          ? e
-          : "Impossible de démarrer l'application."
+    startupError.value = extractErrorMessage(e, "Impossible de démarrer l'application.")
   }
 })
 
+/**
+ * Termine l'onboarding : applique l'identité utilisateur, charge les
+ * sessions puis bascule vers l'application principale.
+ *
+ * @param user - Utilisateur fraîchement créé.
+ */
 async function handleOnboardingCompleted(user: UserView) {
   applyUserInfo(user)
   await loadSessions()

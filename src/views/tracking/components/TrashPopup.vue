@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * Corbeille de la session courante : liste des candidatures refusées ou
+ * abandonnées (voir `state.trashPopup`), propre à `TrackingView`.
+ */
+
+// Importation des modules internes
 import { state } from '@/stores/app'
 import type { BoardCard } from '@/types'
 

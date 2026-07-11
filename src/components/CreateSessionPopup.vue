@@ -1,17 +1,28 @@
 <script setup lang="ts">
+/**
+ * Popup globale de création de session, ouverte depuis la barre latérale ou
+ * l'écran de suivi (voir `state.createSessionPopup`).
+ */
+
+// Importation des modules Vue / framework
 import { ref } from 'vue'
+
+// Importation des modules internes
 import { state, cancelCreateSession, confirmCreateSession } from '@/stores/app'
+import { extractErrorMessage } from '@/composables/useErrorMessage'
 
 const nom = ref('')
 const saving = ref(false)
 const error = ref<string | null>(null)
 
+/** Réinitialise le formulaire à chaque ouverture de la popup. */
 function onOpen() {
   nom.value = ''
   error.value = null
   saving.value = false
 }
 
+/** Crée la session saisie via le store applicatif. */
 async function submit() {
   const trimmed = nom.value.trim()
   if (!trimmed) return
@@ -21,15 +32,13 @@ async function submit() {
     await confirmCreateSession(trimmed)
     nom.value = ''
   } catch (e: unknown) {
-    error.value =
-      e && typeof e === 'object' && 'message' in e
-        ? (e as { message: string }).message
-        : 'Impossible de créer la session.'
+    error.value = extractErrorMessage(e, 'Impossible de créer la session.')
   } finally {
     saving.value = false
   }
 }
 
+/** Raccourcis clavier : Entrée pour valider, Échap pour annuler. */
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter') submit()
   if (e.key === 'Escape') cancelCreateSession()

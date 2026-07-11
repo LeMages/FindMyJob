@@ -1,20 +1,23 @@
 <script setup lang="ts">
+/**
+ * Vue « Détail » d'une candidature : informations du poste, statut et suivi
+ * (événements), documents joints, contacts recruteur et historique.
+ */
+
+// Importation des modules internes
 import {
   state,
-  currentSession,
   selectedCardColumn,
   navigate,
   openDetailPopup,
-  closeDetailPopup,
-  addEvent,
   removeEvent,
-  addRecruiter,
   trashCard,
   acceptCard,
   cancelAcceptation,
 } from '@/stores/app'
-import DetailPopup from '@/components/popups/DetailPopup.vue'
+import DetailPopup from '@/views/detail/components/DetailPopup.vue'
 
+// Libellés d'affichage des événements de suivi
 const eventLabel = (type: string) => {
   if (type === 'mail_relance') return 'Mail de relance'
   if (type === 'mail_reponse') return 'Mail de réponse'
