@@ -154,10 +154,15 @@ defineExpose({ hasChanges, reset, save })
 </script>
 
 <template>
-  <div class="fieldset">
-    <div :class="editMode ? 'fstitle-row' : ''">
-      <div class="fstitle">COMPÉTENCES</div>
-      <button v-if="editMode" class="btn exp-add-btn" type="button" @click="openAdd">
+  <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div :class="editMode ? 'flex items-center justify-between mb-[14px]' : ''">
+      <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">COMPÉTENCES</div>
+      <button
+        v-if="editMode"
+        class="h-[30px] px-3 text-[12px] rounded-lg border border-neutral-300 bg-white font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        type="button"
+        @click="openAdd"
+      >
         + Ajouter
       </button>
     </div>
@@ -166,38 +171,48 @@ defineExpose({ hasChanges, reset, save })
     <template v-if="!editMode">
       <template v-if="allItems.length">
         <template v-for="(items, domaine) in skillsByDomain" :key="domaine">
-          <div class="cmeta" style="margin-bottom:6px;margin-top:10px">{{ domaine }}</div>
-          <div class="chips" style="margin-bottom:4px">
-            <span v-for="s in items" :key="s.id" class="chip">{{ s.nom }}</span>
+          <div class="font-mono text-[11px] text-neutral-500 mb-[6px] mt-[10px]">{{ domaine }}</div>
+          <div class="flex flex-wrap gap-2 mb-1">
+            <span v-for="s in items" :key="s.id" class="border border-neutral-300 rounded-full px-3 py-[5px] text-[12.5px] text-neutral-800 bg-neutral-50">{{ s.nom }}</span>
           </div>
         </template>
       </template>
-      <div v-else class="cempty">Aucune compétence renseignée</div>
+      <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune compétence renseignée</div>
     </template>
 
     <!-- Vue édition : liste avec boutons édition/suppression -->
     <template v-else>
       <template v-if="allItems.length">
         <template v-for="(items, domaine) in skillsByDomain" :key="domaine">
-          <div class="cmeta" style="margin-top:12px;margin-bottom:4px">{{ domaine }}</div>
+          <div class="font-mono text-[11px] text-neutral-500 mt-3 mb-1">{{ domaine }}</div>
           <div
             v-for="s in items"
             :key="s.id"
-            class="skill-edit-row"
-            :class="{ 'exp-pending': s.isPending }"
+            class="flex items-center gap-2 py-[7px] border-b border-neutral-50 last:border-b-0"
+            :class="{ 'opacity-[0.72]': s.isPending }"
           >
-            <span class="skill-nom">{{ s.nom }}</span>
-            <span v-if="s.isPending" class="tag exp-pending-tag" style="flex:none">
+            <span class="flex-1 text-[13px] text-neutral-950">{{ s.nom }}</span>
+            <span v-if="s.isPending" class="inline-block font-mono text-[10.5px] rounded-5 px-[7px] py-0.5 border border-amber-300 text-amber-700 bg-amber-50 flex-none">
               {{ s.pendingKind === 'edited' ? 'Modifié' : 'Non enregistré' }}
             </span>
-            <div class="exp-actions">
-              <button class="exp-btn exp-btn-edit" type="button" title="Modifier" @click="openEdit(s)">
+            <div class="flex flex-row gap-[5px] flex-none self-center ml-[6px]">
+              <button
+                class="w-[30px] h-[30px] rounded-7 border border-neutral-200 bg-neutral-50 flex items-center justify-center cursor-pointer flex-none text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950 hover:border-neutral-300"
+                type="button"
+                title="Modifier"
+                @click="openEdit(s)"
+              >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                 </svg>
               </button>
-              <button class="exp-btn exp-btn-delete" type="button" title="Supprimer" @click="deleteItem(s)">
+              <button
+                class="w-[30px] h-[30px] rounded-7 flex items-center justify-center cursor-pointer flex-none text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
+                type="button"
+                title="Supprimer"
+                @click="deleteItem(s)"
+              >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"/>
                   <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -209,31 +224,31 @@ defineExpose({ hasChanges, reset, save })
           </div>
         </template>
       </template>
-      <div v-else class="cempty">Aucune compétence renseignée</div>
+      <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune compétence renseignée</div>
     </template>
   </div>
 
   <!-- Popup ajout/modification de compétence -->
-  <div v-if="modalOpen" class="popup-backdrop">
-    <div class="popup-box" style="width:440px">
-      <div class="popup-hd">
-        <div class="popup-title">
+  <div v-if="modalOpen" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]">
+    <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[440px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6">
+      <div class="flex items-center justify-between mb-5">
+        <div class="text-[17px] font-semibold">
           {{ editTarget.kind === 'new' ? 'Ajouter une compétence' : 'Modifier une compétence' }}
         </div>
-        <button class="popup-close" type="button" @click="close">×</button>
+        <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" type="button" @click="close">×</button>
       </div>
 
-      <div class="field">
-        <label class="flabel">Nom de la compétence *</label>
-        <input v-model="draft.nom" class="input" placeholder="Python, Vue.js, Figma…" />
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom de la compétence *</label>
+        <input v-model="draft.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Python, Vue.js, Figma…" />
       </div>
 
-      <div class="field" style="margin-bottom:0">
-        <label class="flabel">Domaine *</label>
-        <div class="domain-combo-wrap">
+      <div class="mb-0">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Domaine *</label>
+        <div class="relative">
           <input
             v-model="draft.domaine"
-            class="input"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             placeholder="Langages, Frameworks, Outils…"
             autocomplete="off"
             @focus="domainDropdownOpen = true"
@@ -242,35 +257,39 @@ defineExpose({ hasChanges, reset, save })
           />
           <div
             v-if="domainDropdownOpen && (filteredDomains.length > 0 || draft.domaine.trim())"
-            class="domain-dropdown"
+            class="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-neutral-300 rounded-lg shadow-[0_4px_20px_rgba(0,0,0,.12)] z-[200] overflow-hidden max-h-[200px] overflow-y-auto"
           >
             <div
               v-for="d in filteredDomains"
               :key="d"
-              class="domain-opt"
+              class="px-[13px] py-[9px] text-[13.5px] cursor-pointer text-neutral-950 hover:bg-neutral-50"
               @mousedown.prevent="pickDomain(d)"
             >{{ d }}</div>
             <div
               v-if="draft.domaine.trim() && !exactDomainMatch"
-              class="domain-opt domain-opt-new"
+              class="px-[13px] py-[9px] text-[13.5px] cursor-pointer border-t border-neutral-100 text-green-500 flex gap-1 hover:bg-green-50"
               @mousedown.prevent="domainDropdownOpen = false"
             >
               Créer <strong>« {{ draft.domaine.trim() }} »</strong>
             </div>
             <div
               v-if="!filteredDomains.length && !draft.domaine.trim()"
-              class="domain-opt-empty"
+              class="px-[13px] py-[9px] text-[12px] text-neutral-400 font-mono cursor-default"
             >Aucun domaine existant</div>
           </div>
         </div>
       </div>
 
-      <div class="popup-foot">
-        <button class="btn" type="button" @click="close">Annuler</button>
+      <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
         <button
-          class="btn edit-save"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
           type="button"
-          :class="{ disabled: !draft.nom.trim() || !draft.domaine.trim() }"
+          @click="close"
+        >Annuler</button>
+        <button
+          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600"
+          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !draft.nom.trim() || !draft.domaine.trim() }"
+          type="button"
           :disabled="!draft.nom.trim() || !draft.domaine.trim()"
           @click="saveModal"
         >Valider</button>
@@ -278,61 +297,3 @@ defineExpose({ hasChanges, reset, save })
     </div>
   </div>
 </template>
-
-<style scoped>
-.skill-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid #f5f5f2;
-}
-.skill-edit-row:last-child { border-bottom: none; }
-
-.skill-nom {
-  flex: 1;
-  font-size: 13px;
-  color: #1d1d1b;
-}
-
-.domain-combo-wrap { position: relative; }
-
-.domain-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: #fff;
-  border: 1px solid #d4d4ce;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0,0,0,.12);
-  z-index: 200;
-  overflow: hidden;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.domain-opt {
-  padding: 9px 13px;
-  font-size: 13.5px;
-  cursor: pointer;
-  color: #1d1d1b;
-}
-.domain-opt:hover { background: #f5f5f2; }
-
-.domain-opt-new {
-  border-top: 1px solid #f0f0ed;
-  color: #2a9e5f;
-  display: flex;
-  gap: 4px;
-}
-.domain-opt-new:hover { background: #f0faf4; }
-
-.domain-opt-empty {
-  padding: 9px 13px;
-  font-size: 12px;
-  color: #aeaea7;
-  font-family: 'IBM Plex Mono', monospace;
-  cursor: default;
-}
-</style>

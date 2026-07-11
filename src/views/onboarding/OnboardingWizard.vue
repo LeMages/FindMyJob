@@ -92,47 +92,47 @@ async function finish() {
 </script>
 
 <template>
-  <div class="wiz-screen">
-    <div class="wiz-card">
+  <div class="fixed inset-0 bg-neutral-50 flex items-center justify-center">
+    <div class="bg-white border border-neutral-200 rounded-2xl py-9 px-10 w-full max-w-[480px] shadow-[0_4px_24px_rgba(0,0,0,0.07)]">
 
       <!-- Header -->
-      <div class="wiz-header">
-        <div class="wiz-brandmark">F</div>
-        <div class="wiz-title">Bienvenue dans FindMyJob</div>
-        <div class="wiz-sub">Configurons ton profil pour commencer.</div>
+      <div class="text-center mb-7">
+        <div class="w-[38px] h-[38px] rounded-10 bg-neutral-950 text-white inline-flex items-center justify-center font-bold text-[17px] mb-[14px]">F</div>
+        <div class="text-[20px] font-bold text-neutral-950 mb-[6px]">Bienvenue dans FindMyJob</div>
+        <div class="text-[13.5px] text-neutral-600">Configurons ton profil pour commencer.</div>
       </div>
 
       <!-- Progress dots -->
-      <div class="wiz-progress">
+      <div class="flex items-center justify-center gap-[6px] mb-[6px]">
         <div
           v-for="(_, i) in STEPS"
           :key="i"
-          class="wiz-dot"
-          :class="{ 'wiz-dot--active': i === currentStep, 'wiz-dot--done': i < currentStep }"
+          class="h-2 transition-all duration-200"
+          :class="i === currentStep ? 'w-6 rounded bg-neutral-950' : (i < currentStep ? 'w-2 rounded-full bg-neutral-400' : 'w-2 rounded-full bg-neutral-200')"
         />
       </div>
-      <div class="wiz-step-label">
+      <div class="font-mono text-[11px] text-neutral-400 text-center mb-6 tracking-[0.04em]">
         Étape {{ currentStep + 1 }} sur {{ STEPS.length }} — {{ STEPS[currentStep] }}
       </div>
 
       <!-- Step 0: Identité -->
-      <div v-if="currentStep === 0" class="wiz-fields">
-        <div class="frow">
-          <div class="field">
-            <label class="flabel">Prénom <span class="wiz-req">*</span></label>
+      <div v-if="currentStep === 0" class="mb-4 min-h-[160px]">
+        <div class="flex gap-[14px]">
+          <div class="mb-[14px] flex-1">
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">Prénom <span class="text-red-500">*</span></label>
             <input
               v-model="formRaw.prenom"
-              class="input"
+              class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
               type="text"
               placeholder="Jean"
               autocomplete="given-name"
             />
           </div>
-          <div class="field">
-            <label class="flabel">Nom <span class="wiz-req">*</span></label>
+          <div class="mb-[14px] flex-1">
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom <span class="text-red-500">*</span></label>
             <input
               v-model="formRaw.nom"
-              class="input"
+              class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
               type="text"
               placeholder="Dupont"
               autocomplete="family-name"
@@ -142,22 +142,22 @@ async function finish() {
       </div>
 
       <!-- Step 1: Contact -->
-      <div v-else-if="currentStep === 1" class="wiz-fields">
-        <div class="field">
-          <label class="flabel">E-mail <span class="wiz-req">*</span></label>
+      <div v-else-if="currentStep === 1" class="mb-4 min-h-[160px]">
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">E-mail <span class="text-red-500">*</span></label>
           <input
             v-model="formRaw.email"
-            class="input"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="email"
             placeholder="jean.dupont@email.com"
             autocomplete="email"
           />
         </div>
-        <div class="field">
-          <label class="flabel">Téléphone</label>
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Téléphone</label>
           <input
             v-model="formRaw.telephone"
-            class="input"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="tel"
             placeholder="+33 6 12 34 56 78"
             autocomplete="tel"
@@ -166,28 +166,28 @@ async function finish() {
       </div>
 
       <!-- Step 2: Localisation -->
-      <div v-else-if="currentStep === 2" class="wiz-fields">
-        <div class="field">
-          <label class="flabel">Ville</label>
+      <div v-else-if="currentStep === 2" class="mb-4 min-h-[160px]">
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Ville</label>
           <input
             v-model="formRaw.ville"
-            class="input"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="text"
             placeholder="Paris"
           />
         </div>
-        <div class="field">
-          <label class="flabel">Permis de conduire</label>
-          <div class="wiz-toggle">
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Permis de conduire</label>
+          <div class="flex gap-2">
             <button
-              class="btn"
-              :class="{ pri: formRaw.permis === true }"
+              class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap"
+              :class="formRaw.permis === true ? 'border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800' : 'border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100'"
               type="button"
               @click="formRaw.permis = formRaw.permis === true ? null : true"
             >Oui</button>
             <button
-              class="btn"
-              :class="{ pri: formRaw.permis === false }"
+              class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap"
+              :class="formRaw.permis === false ? 'border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800' : 'border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100'"
               type="button"
               @click="formRaw.permis = formRaw.permis === false ? null : false"
             >Non</button>
@@ -196,43 +196,42 @@ async function finish() {
       </div>
 
       <!-- Step 3: Description -->
-      <div v-else-if="currentStep === 3" class="wiz-fields">
-        <div class="field">
-          <label class="flabel">À propos de toi</label>
+      <div v-else-if="currentStep === 3" class="mb-4 min-h-[160px]">
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">À propos de toi</label>
           <textarea
             v-model="formRaw.description"
-            class="input"
-            style="height: 140px"
+            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
             placeholder="Étudiant·e en M2 Data Science à la recherche d'un stage…"
           />
         </div>
       </div>
 
       <!-- Step 4: Liens -->
-      <div v-else-if="currentStep === 4" class="wiz-fields">
-        <div class="field">
-          <label class="flabel">LinkedIn</label>
+      <div v-else-if="currentStep === 4" class="mb-4 min-h-[160px]">
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">LinkedIn</label>
           <input
             v-model="formRaw.linkedin"
-            class="input"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="url"
             placeholder="linkedin.com/in/jean-dupont"
           />
         </div>
-        <div class="field">
-          <label class="flabel">GitHub</label>
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">GitHub</label>
           <input
             v-model="formRaw.github"
-            class="input"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="url"
             placeholder="github.com/jeandupont"
           />
         </div>
-        <div class="field">
-          <label class="flabel">Portfolio</label>
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Portfolio</label>
           <input
             v-model="formRaw.portfolio"
-            class="input"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="url"
             placeholder="jeandupont.dev"
           />
@@ -240,30 +239,30 @@ async function finish() {
       </div>
 
       <!-- Error -->
-      <div v-if="errorMessage" class="wiz-error">{{ errorMessage }}</div>
+      <div v-if="errorMessage" class="text-[12.5px] text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{{ errorMessage }}</div>
 
       <!-- Navigation -->
-      <div class="wiz-nav">
+      <div class="flex items-center gap-[10px] mt-2">
         <button
           v-if="currentStep > 0"
-          class="btn"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
           type="button"
           @click="goPrev"
         >← Précédent</button>
-        <div class="f1" />
+        <div class="flex-1 min-w-0" />
         <button
           v-if="!isLastStep"
-          class="btn pri"
+          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !canNext }"
           type="button"
-          :class="{ disabled: !canNext }"
           :disabled="!canNext"
           @click="goNext"
         >Suivant →</button>
         <button
           v-else
-          class="btn pri"
+          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !canNext || submitting }"
           type="button"
-          :class="{ disabled: !canNext || submitting }"
           :disabled="!canNext || submitting"
           @click="finish"
         >{{ submitting ? 'Création…' : 'Terminer' }}</button>
@@ -272,123 +271,3 @@ async function finish() {
     </div>
   </div>
 </template>
-
-<style scoped>
-.wiz-screen {
-  position: fixed;
-  inset: 0;
-  background: #f8f8f6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.wiz-card {
-  background: #fff;
-  border: 1px solid #e6e6e1;
-  border-radius: 16px;
-  padding: 36px 40px;
-  width: 100%;
-  max-width: 480px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.07);
-}
-
-.wiz-header {
-  text-align: center;
-  margin-bottom: 28px;
-}
-
-.wiz-brandmark {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: #1d1d1b;
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 17px;
-  margin-bottom: 14px;
-}
-
-.wiz-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1d1d1b;
-  margin-bottom: 6px;
-}
-
-.wiz-sub {
-  font-size: 13.5px;
-  color: #76766f;
-}
-
-.wiz-progress {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.wiz-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ddddd8;
-  transition: all 0.2s;
-}
-.wiz-dot--done {
-  background: #9b9b93;
-}
-.wiz-dot--active {
-  background: #1d1d1b;
-  width: 24px;
-  border-radius: 4px;
-}
-
-.wiz-step-label {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
-  color: #9b9b95;
-  text-align: center;
-  margin-bottom: 24px;
-  letter-spacing: 0.04em;
-}
-
-.wiz-fields {
-  margin-bottom: 16px;
-  min-height: 160px;
-}
-
-.wiz-fields .field {
-  margin-bottom: 14px;
-}
-
-.wiz-toggle {
-  display: flex;
-  gap: 8px;
-}
-
-.wiz-error {
-  font-size: 12.5px;
-  color: #b94a48;
-  background: #fff5f5;
-  border: 1px solid #f5c6cb;
-  border-radius: 8px;
-  padding: 8px 12px;
-  margin-bottom: 16px;
-}
-
-.wiz-nav {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.wiz-req {
-  color: #b94a48;
-}
-</style>

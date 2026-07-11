@@ -238,12 +238,12 @@ function clearAttachment() {
 
 <template>
   <!-- Mode "reference" (profil) : document persistant, compilation + aperçu -->
-  <div v-if="!isAttachment" class="fieldset">
-    <div class="fstitle">{{ fieldsetTitle }}</div>
+  <div v-if="!isAttachment" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ fieldsetTitle }}</div>
 
     <!-- Affichage du document actuel -->
-    <div v-if="reference" class="cv-current">
-      <div class="cv-icon">
+    <div v-if="reference" class="flex items-center gap-3 pt-[10px] pb-[6px]">
+      <div class="w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-500 flex-none">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
@@ -252,104 +252,126 @@ function clearAttachment() {
           <polyline points="10 9 9 9 8 9"/>
         </svg>
       </div>
-      <div class="cv-info">
-        <div class="cv-label">reference.typ</div>
-        <div class="cv-meta">{{ savedLabel }} {{ fmtReferenceDate(reference.updated_at) }}</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-[13px] font-semibold text-neutral-950 whitespace-nowrap overflow-hidden text-ellipsis">reference.typ</div>
+        <div class="text-[11px] text-neutral-500 mt-px">{{ savedLabel }} {{ fmtReferenceDate(reference.updated_at) }}</div>
       </div>
-      <button class="cv-preview-btn" type="button" :title="previewTitle" @click="preview">
+      <button
+        class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-blue-200 bg-blue-50 text-blue-500 cursor-pointer transition-colors duration-150 hover:bg-blue-100 hover:border-blue-300"
+        type="button"
+        :title="previewTitle"
+        @click="preview"
+      >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
           <circle cx="12" cy="12" r="3"/>
         </svg>
       </button>
     </div>
-    <div v-else class="cempty">{{ emptyLabel }}</div>
+    <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ emptyLabel }}</div>
 
     <!-- Bouton en mode édition -->
-    <div v-if="editMode" class="cv-actions">
+    <div v-if="editMode" class="mt-[10px] flex items-center gap-[10px] flex-wrap">
       <input
         ref="fileInput"
         type="file"
         accept=".typ"
-        style="display:none"
+        class="hidden"
         @change="onFileSelected"
       />
       <button
-        class="btn cv-upload-btn"
+        class="h-9 px-[14px] rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] font-sans whitespace-nowrap bg-neutral-50 border border-neutral-300 text-neutral-950 cursor-pointer transition-colors duration-150 hover:bg-neutral-100 disabled:opacity-60 disabled:cursor-default"
         type="button"
         :disabled="saving"
         @click="triggerPicker"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-[6px]">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="17 8 12 3 7 8"/>
           <line x1="12" y1="3" x2="12" y2="15"/>
         </svg>
         {{ saving ? 'Sauvegarde…' : uploadLabel }}
       </button>
-      <span v-if="error" class="cv-error">{{ error }}</span>
+      <span v-if="error" class="text-[12px] text-red-600">{{ error }}</span>
     </div>
   </div>
 
   <!-- Mode "attachment" (nouvelle candidature) : document ponctuellement joint -->
   <div v-else>
-    <div class="doczonetitle">{{ attachmentTitle }}</div>
+    <div class="text-[13px] font-semibold mb-2 text-neutral-800">{{ attachmentTitle }}</div>
 
-    <div v-if="modelValue" class="doc">
-      <div class="docicon docicon-file">
+    <div v-if="modelValue" class="flex items-center gap-[10px] border border-neutral-200 rounded-lg p-[10px] mb-2">
+      <div class="w-7 h-9 rounded-md flex-none flex items-center justify-center bg-neutral-100 border border-neutral-200 text-neutral-500">
         <svg width="14" height="17" viewBox="0 0 14 17" fill="none">
           <path d="M1.5 1.5h7l4 4v9.5a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-12.5a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
           <path d="M8.5 1.5v4h4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
         </svg>
       </div>
-      <div class="f1">
-        <div class="crole">{{ basename(modelValue) }}</div>
-        <div class="cmeta">{{ attachedLabel }}</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-[13.5px] font-semibold leading-[1.25]">{{ basename(modelValue) }}</div>
+        <div class="font-mono text-[11px] text-neutral-500">{{ attachedLabel }}</div>
       </div>
-      <button class="eyebtn" type="button" title="Retirer" @click="clearAttachment">✕</button>
+      <button
+        class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-neutral-100"
+        type="button"
+        title="Retirer"
+        @click="clearAttachment"
+      >✕</button>
     </div>
     <template v-else>
       <div
-        class="doczone"
-        :style="dragOver ? 'border-color:#539bf5' : ''"
+        class="border-2 border-dashed rounded-10 py-7 px-4 flex flex-col items-center gap-3 bg-neutral-50"
+        :class="dragOver ? 'border-blue-400' : 'border-neutral-300'"
         @dragover.prevent="dragOver = true"
         @dragleave.prevent="dragOver = false"
         @drop.prevent="onDrop"
       >
-        <div class="droptext">→ Glisser le PDF ici</div>
-        <button class="btn" type="button" :disabled="saving" @click="browse">
+        <div class="text-[13px] text-neutral-500 text-center font-mono">→ Glisser le PDF ici</div>
+        <button
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          type="button"
+          :disabled="saving"
+          @click="browse"
+        >
           {{ saving ? 'Chargement…' : 'Parcourir' }}
         </button>
       </div>
-      <button class="btn" type="button" style="width:100%;justify-content:center;margin-top:8px">
+      <button
+        class="w-full justify-center mt-2 h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        type="button"
+      >
         ✦ {{ generateLabel }}
       </button>
     </template>
-    <div v-if="error" style="color:#b94a48;font-size:12px;margin-top:4px">{{ error }}</div>
+    <div v-if="error" class="text-red-500 text-[12px] mt-1">{{ error }}</div>
   </div>
 
   <!-- Modale prévisualisation (mode "reference" uniquement) -->
   <Teleport to="body">
-    <div v-if="previewVisible" class="cv-modal-overlay" @click.self="previewVisible = false">
-      <div class="cv-modal">
-        <div class="cv-modal-header">
-          <span class="cv-modal-title">{{ modalTitle }}</span>
-          <button class="cv-modal-close" type="button" @click="previewVisible = false">
+    <div v-if="previewVisible" class="fixed inset-0 bg-black/45 z-[1000] flex items-center justify-center" @click.self="previewVisible = false">
+      <div class="bg-white rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.22)] w-[min(860px,calc(100vw-48px))] h-[min(92vh,1000px)] flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-[14px] border-b border-neutral-200 flex-none">
+          <span class="text-[14px] font-semibold text-neutral-950">{{ modalTitle }}</span>
+          <button
+            class="w-7 h-7 rounded-7 border border-neutral-200 bg-neutral-50 flex items-center justify-center cursor-pointer text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950"
+            type="button"
+            @click="previewVisible = false"
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/>
               <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
         </div>
-        <div class="cv-modal-body">
-          <div v-if="previewLoading" class="cv-modal-loading">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cv-spinner">
+        <div class="flex-1 overflow-hidden flex items-center justify-center">
+          <div v-if="previewLoading" class="flex flex-col items-center gap-[14px] text-neutral-500 text-[13.5px]">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-blue-500">
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
             Compilation en cours…
           </div>
-          <div v-else-if="previewError" class="cv-modal-error">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+          <div v-else-if="previewError" class="flex items-start gap-[10px] text-red-600 text-[13px] max-w-[480px] p-5 bg-red-50 border border-red-200 rounded-lg leading-[1.5]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
               <circle cx="12" cy="12" r="10"/>
               <line x1="12" y1="8" x2="12" y2="12"/>
               <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -359,7 +381,7 @@ function clearAttachment() {
           <iframe
             v-else-if="previewData"
             :src="`data:application/pdf;base64,${previewData}`"
-            class="cv-modal-iframe"
+            class="w-full h-full border-none block"
             :title="iframeTitle"
           />
         </div>
@@ -367,185 +389,3 @@ function clearAttachment() {
     </div>
   </Teleport>
 </template>
-
-<style scoped>
-.cv-current {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0 6px;
-}
-
-.cv-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #f0f4ff;
-  border: 1px solid #d0d8f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #4a70d9;
-  flex: none;
-}
-
-.cv-info { flex: 1; min-width: 0; }
-
-.cv-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1d1d1b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cv-meta {
-  font-size: 11px;
-  color: #888;
-  margin-top: 1px;
-}
-
-.cv-actions {
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.cv-upload-btn {
-  display: flex;
-  align-items: center;
-  font-size: 13px;
-  padding: 7px 14px;
-  border-radius: 8px;
-  background: #f5f5f2;
-  border: 1px solid #d4d4ce;
-  color: #1d1d1b;
-  cursor: pointer;
-  transition: background .15s;
-}
-.cv-upload-btn:hover:not(:disabled) { background: #eaeae6; border-color: #b4b4aa; }
-.cv-upload-btn:disabled { opacity: 0.6; cursor: default; }
-
-.cv-error {
-  font-size: 12px;
-  color: #c53a3a;
-}
-
-.cv-preview-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  border: 1px solid #d0d8f0;
-  background: #f0f4ff;
-  color: #4a70d9;
-  cursor: pointer;
-  transition: background .15s, border-color .15s;
-}
-.cv-preview-btn:hover { background: #e4ecff; border-color: #a0b4e8; }
-
-/* ── Modale aperçu ── */
-.cv-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cv-modal {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.22);
-  width: min(860px, calc(100vw - 48px));
-  height: min(92vh, 1000px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.cv-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid #e6e6e1;
-  flex: none;
-}
-
-.cv-modal-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1d1d1b;
-}
-
-.cv-modal-close {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  border: 1px solid #e2e2dc;
-  background: #fafaf8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #76766f;
-}
-.cv-modal-close:hover { background: #f1f1ec; color: #1d1d1b; }
-
-.cv-modal-body {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cv-modal-iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  display: block;
-}
-
-.cv-modal-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  color: #666;
-  font-size: 13.5px;
-}
-
-.cv-spinner {
-  animation: spin 1s linear infinite;
-  color: #4a70d9;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
-.cv-modal-error {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  color: #c53a3a;
-  font-size: 13px;
-  max-width: 480px;
-  padding: 20px;
-  background: #fdf6f6;
-  border: 1px solid #f0d0d0;
-  border-radius: 8px;
-  line-height: 1.5;
-}
-</style>

@@ -66,13 +66,13 @@ async function handleOnboardingCompleted(user: UserView) {
 
 <template>
   <!-- Checking user -->
-  <div v-if="needsOnboarding === null && !startupError" class="startup-screen" />
+  <div v-if="needsOnboarding === null && !startupError" class="fixed inset-0 bg-neutral-50 flex items-center justify-center" />
 
   <!-- Startup error — fail fast, do not assume absence of user -->
-  <div v-else-if="startupError" class="startup-screen startup-error">
-    <div class="startup-error-box">
-      <div class="startup-error-title">Impossible de démarrer</div>
-      <div class="startup-error-msg">{{ startupError }}</div>
+  <div v-else-if="startupError" class="fixed inset-0 bg-neutral-50 flex items-center justify-center">
+    <div class="bg-white border border-neutral-200 rounded-xl py-8 px-9 max-w-[400px] text-center">
+      <div class="text-[16px] font-semibold text-neutral-950 mb-2">Impossible de démarrer</div>
+      <div class="text-[13px] text-neutral-600 font-mono">{{ startupError }}</div>
     </div>
   </div>
 
@@ -84,9 +84,9 @@ async function handleOnboardingCompleted(user: UserView) {
 
   <!-- Main app -->
   <template v-else>
-    <div class="app">
+    <div class="flex h-screen overflow-hidden">
       <AppSidebar />
-      <main class="main">
+      <main class="flex-1 overflow-y-auto bg-neutral-50 min-w-0">
         <TrackingView v-if="state.screen === 'tracking'" />
         <DetailView v-else-if="state.screen === 'detail'" />
         <NewApplicationView v-else-if="state.screen === 'new'" />
@@ -98,42 +98,3 @@ async function handleOnboardingCompleted(user: UserView) {
     <CreateSessionPopup />
   </template>
 </template>
-
-<style scoped>
-.startup-screen {
-  position: fixed;
-  inset: 0;
-  background: #f8f8f6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.startup-error {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.startup-error-box {
-  background: #fff;
-  border: 1px solid #e6e6e1;
-  border-radius: 12px;
-  padding: 32px 36px;
-  max-width: 400px;
-  text-align: center;
-}
-
-.startup-error-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1d1d1b;
-  margin-bottom: 8px;
-}
-
-.startup-error-msg {
-  font-size: 13px;
-  color: #76766f;
-  font-family: 'IBM Plex Mono', monospace;
-}
-</style>

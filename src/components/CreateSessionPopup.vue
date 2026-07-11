@@ -46,36 +46,43 @@ function onKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div v-if="state.createSessionPopup" class="popup-backdrop" @click="cancelCreateSession">
-    <div class="popup-box" style="width:420px" @click.stop @vue:mounted="onOpen">
-      <div class="popup-hd">
-        <div class="popup-title">Nouvelle session</div>
-        <button class="popup-close" @click="cancelCreateSession">×</button>
+  <div
+    v-if="state.createSessionPopup"
+    class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]"
+    @click="cancelCreateSession"
+  >
+    <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[420px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop @vue:mounted="onOpen">
+      <div class="flex items-center justify-between mb-5">
+        <div class="text-[17px] font-semibold">Nouvelle session</div>
+        <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="cancelCreateSession">×</button>
       </div>
 
-      <div class="sub" style="margin:-4px 0 18px">
+      <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[18px]">
         Une session regroupe un ensemble de candidatures (ex : « Stage M2 – 2025 »).
       </div>
 
-      <div class="field">
-        <label class="flabel">Nom de la session</label>
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom de la session</label>
         <input
           v-model="nom"
-          class="input"
+          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
           placeholder="Ex. Stage M2 – 2025"
           autofocus
           @keydown="onKeydown"
         />
       </div>
 
-      <div v-if="error" style="color:#b94a48;font-size:12px;margin-top:6px">{{ error }}</div>
+      <div v-if="error" class="text-red-500 text-[12px] mt-[6px]">{{ error }}</div>
 
-      <div class="popup-foot" style="margin-top:20px">
-        <button class="btn" @click="cancelCreateSession">Annuler</button>
+      <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
         <button
-          class="btn pri"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          @click="cancelCreateSession"
+        >Annuler</button>
+        <button
+          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': saving || !nom.trim() }"
           :disabled="saving || !nom.trim()"
-          :class="{ disabled: saving || !nom.trim() }"
           @click="submit"
         >
           {{ saving ? 'Création…' : 'Créer la session' }}

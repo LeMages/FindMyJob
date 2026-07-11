@@ -225,30 +225,30 @@ const initials = computed(() => {
 
 <template>
   <!-- Loading -->
-  <div v-if="loading" class="page">
-    <div class="cempty" style="margin-top:60px">Chargement…</div>
+  <div v-if="loading" class="px-9 pt-[26px] pb-11">
+    <div class="text-[12px] text-neutral-400 text-center py-6 font-mono mt-[60px]">Chargement…</div>
   </div>
 
   <!-- Load error -->
-  <div v-else-if="loadError" class="page">
-    <div class="cempty" style="margin-top:60px;color:#b94a48">{{ loadError }}</div>
+  <div v-else-if="loadError" class="px-9 pt-[26px] pb-11">
+    <div class="text-[12px] text-red-500 text-center py-6 font-mono mt-[60px]">{{ loadError }}</div>
   </div>
 
   <!-- Profile -->
-  <div v-else-if="profile" class="page" :style="editMode ? 'padding-bottom:90px' : ''">
-    <h1 class="h1">Mon profil</h1>
-    <div class="sub" style="margin-bottom:18px">Ces informations pré-remplissent tes candidatures.</div>
+  <div v-else-if="profile" class="px-9 pt-[26px]" :class="editMode ? 'pb-[90px]' : 'pb-11'">
+    <h1 class="text-2xl font-semibold leading-tight">Mon profil</h1>
+    <div class="text-[13px] text-neutral-500 mt-[5px] font-mono mb-[18px]">Ces informations pré-remplissent tes candidatures.</div>
 
     <!-- Header -->
-    <div class="phead">
-      <div class="avatar pavatar" style="width:84px;height:84px;font-size:26px;border-radius:50%">
+    <div class="flex items-center gap-5 bg-white border border-neutral-200 rounded-xl p-6">
+      <div class="w-[84px] h-[84px] rounded-full flex-none flex items-center justify-center font-semibold text-[26px] bg-neutral-200 text-neutral-700">
         {{ initials }}
       </div>
-      <div class="f1">
-        <div class="pname">
+      <div class="flex-1 min-w-0">
+        <div class="text-[22px] font-semibold">
           {{ [profile.user.prenom, profile.user.nom].filter(Boolean).join(' ') || '—' }}
         </div>
-        <div class="pcontact">
+        <div class="flex gap-[18px] mt-[11px] font-mono text-[12px] text-neutral-600 flex-wrap">
           <span v-if="profile.user.email">{{ profile.user.email }}</span>
           <span v-if="profile.user.telephone">{{ profile.user.telephone }}</span>
           <span v-if="profile.user.ville">{{ profile.user.ville }}</span>
@@ -257,53 +257,56 @@ const initials = computed(() => {
           <span v-if="profile.user.permis === true">Permis B</span>
         </div>
       </div>
-      <button v-if="!editMode" class="btn" @click="enterEditMode">Modifier</button>
+      <button
+        v-if="!editMode"
+        class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        @click="enterEditMode"
+      >Modifier</button>
     </div>
 
     <!-- Section infos de base (visible uniquement en mode édition) -->
-    <div v-if="editMode" class="fieldset" style="margin-top:18px">
-      <div class="fstitle">INFORMATIONS</div>
-      <div class="frow">
-        <div class="field">
-          <label class="flabel">Prénom</label>
-          <input v-model="draftUserInfo.prenom" class="input" placeholder="Prénom" />
+    <div v-if="editMode" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px] mt-[18px]">
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">INFORMATIONS</div>
+      <div class="flex gap-[14px]">
+        <div class="flex-1 mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Prénom</label>
+          <input v-model="draftUserInfo.prenom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom" />
         </div>
-        <div class="field">
-          <label class="flabel">Nom</label>
-          <input v-model="draftUserInfo.nom" class="input" placeholder="Nom" />
-        </div>
-      </div>
-      <div class="frow">
-        <div class="field">
-          <label class="flabel">Adresse e-mail</label>
-          <input v-model="draftUserInfo.email" class="input" type="email" placeholder="prenom.nom@email.com" />
-        </div>
-        <div class="field">
-          <label class="flabel">Téléphone</label>
-          <input v-model="draftUserInfo.telephone" class="input" placeholder="+33 6 00 00 00 00" />
+        <div class="flex-1 mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom</label>
+          <input v-model="draftUserInfo.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom" />
         </div>
       </div>
-      <label class="permis-label">
+      <div class="flex gap-[14px]">
+        <div class="flex-1 mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse e-mail</label>
+          <input v-model="draftUserInfo.email" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" type="email" placeholder="prenom.nom@email.com" />
+        </div>
+        <div class="flex-1 mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Téléphone</label>
+          <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
+        </div>
+      </div>
+      <label class="inline-flex items-center gap-2 text-[13.5px] cursor-pointer select-none mt-0.5">
         <input type="checkbox" v-model="draftUserInfo.permis" />
         Permis B
       </label>
     </div>
 
-    <div class="dgrid" style="grid-template-columns:1fr 300px; margin-top:18px">
+    <div class="grid grid-cols-[1fr_300px] gap-6 mt-[18px] items-start">
       <!-- ── Colonne gauche ── -->
       <div>
         <!-- À propos -->
-        <div class="fieldset">
-          <div class="fstitle">À PROPOS</div>
+        <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+          <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">À PROPOS</div>
           <template v-if="!editMode">
-            <div v-if="profile.user.description" class="expd">{{ profile.user.description }}</div>
-            <div v-else class="cempty">Non renseigné</div>
+            <div v-if="profile.user.description" class="text-[13px] text-neutral-700 mt-[7px] leading-[1.55]">{{ profile.user.description }}</div>
+            <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">Non renseigné</div>
           </template>
           <textarea
             v-else
             v-model="draftDescription"
-            class="input"
-            style="height:140px"
+            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
             placeholder="Décris ton parcours, tes objectifs…"
           />
         </div>
@@ -336,57 +339,21 @@ const initials = computed(() => {
     </div>
 
     <!-- Edit footer -->
-    <div v-if="editMode" class="edit-footer">
-      <span v-if="saveError" class="edit-error">{{ saveError }}</span>
-      <div class="f1" />
-      <button class="btn edit-cancel" type="button" @click="cancelEdit">Annuler</button>
+    <div v-if="editMode" class="fixed bottom-0 left-[264px] right-0 h-[60px] bg-white border-t border-neutral-200 flex items-center gap-[10px] px-9 z-10">
+      <span v-if="saveError" class="font-mono text-[12px] text-red-500">{{ saveError }}</span>
+      <div class="flex-1 min-w-0" />
       <button
-        class="btn edit-save"
+        class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-red-400 text-white border-red-400 hover:bg-red-600 hover:border-red-600"
         type="button"
-        :class="{ disabled: !isDirty || saving }"
+        @click="cancelEdit"
+      >Annuler</button>
+      <button
+        class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600"
+        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !isDirty || saving }"
+        type="button"
         :disabled="!isDirty || saving"
         @click="saveAll"
       >{{ saving ? 'Sauvegarde…' : 'Valider' }}</button>
     </div>
   </div>
 </template>
-
-<style scoped>
-.edit-footer {
-  position: fixed;
-  bottom: 0;
-  left: 264px;
-  right: 0;
-  height: 60px;
-  background: #fff;
-  border-top: 1px solid #e6e6e1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 36px;
-  z-index: 10;
-}
-
-.edit-error {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px;
-  color: #b94a48;
-}
-
-.edit-cancel {
-  background: #e03e3e;
-  color: #fff;
-  border-color: #e03e3e;
-}
-.edit-cancel:hover { background: #c93333; border-color: #c93333; }
-
-.permis-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
-  cursor: pointer;
-  user-select: none;
-  margin-top: 2px;
-}
-</style>

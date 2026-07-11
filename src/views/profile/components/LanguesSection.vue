@@ -110,10 +110,15 @@ defineExpose({ hasChanges, reset, save })
 </script>
 
 <template>
-  <div class="fieldset">
-    <div :class="editMode ? 'fstitle-row' : ''">
-      <div class="fstitle">LANGUES</div>
-      <button v-if="editMode" class="btn exp-add-btn" type="button" @click="openAddModal">
+  <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div :class="editMode ? 'flex items-center justify-between mb-[14px]' : ''">
+      <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">LANGUES</div>
+      <button
+        v-if="editMode"
+        class="h-[30px] px-3 text-[12px] rounded-lg border border-neutral-300 bg-white font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        type="button"
+        @click="openAddModal"
+      >
         + Ajouter
       </button>
     </div>
@@ -121,23 +126,32 @@ defineExpose({ hasChanges, reset, save })
       <div
         v-for="(lang, i) in allItems"
         :key="lang.id"
-        class="setrow lang-row"
-        :class="{ 'exp-pending': lang.isPending }"
-        :style="i === allItems.length - 1 ? 'border-bottom:none' : ''"
+        class="flex items-center justify-between gap-5 py-[14px] border-b border-neutral-100"
+        :class="[lang.isPending ? 'opacity-[0.72]' : '', i === allItems.length - 1 ? 'border-b-0' : '']"
       >
-        <span class="setl">{{ lang.nom ?? '—' }}</span>
-        <span class="cmeta" style="flex:1;text-align:right">{{ lang.level ?? '' }}</span>
-        <span v-if="lang.isPending" class="tag exp-pending-tag" style="flex:none">
+        <span class="text-[14px] font-medium">{{ lang.nom ?? '—' }}</span>
+        <span class="font-mono text-[11px] text-neutral-500 flex-1 text-right">{{ lang.level ?? '' }}</span>
+        <span v-if="lang.isPending" class="inline-block font-mono text-[10.5px] rounded-5 px-[7px] py-0.5 border border-amber-300 text-amber-700 bg-amber-50 flex-none">
           {{ lang.pendingKind === 'edited' ? 'Modifié' : 'Non enregistré' }}
         </span>
-        <div v-if="editMode" class="exp-actions" style="margin-left:8px">
-          <button class="exp-btn exp-btn-edit" type="button" title="Modifier" @click="openEditModal(lang)">
+        <div v-if="editMode" class="flex flex-row gap-[5px] flex-none self-center ml-2">
+          <button
+            class="w-[30px] h-[30px] rounded-7 border border-neutral-200 bg-neutral-50 flex items-center justify-center cursor-pointer flex-none text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950 hover:border-neutral-300"
+            type="button"
+            title="Modifier"
+            @click="openEditModal(lang)"
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
             </svg>
           </button>
-          <button class="exp-btn exp-btn-delete" type="button" title="Supprimer" @click="deleteItem(lang)">
+          <button
+            class="w-[30px] h-[30px] rounded-7 flex items-center justify-center cursor-pointer flex-none text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
+            type="button"
+            title="Supprimer"
+            @click="deleteItem(lang)"
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"/>
               <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -148,38 +162,45 @@ defineExpose({ hasChanges, reset, save })
         </div>
       </div>
     </template>
-    <div v-else class="cempty">Aucune langue renseignée</div>
+    <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune langue renseignée</div>
   </div>
 
   <!-- Popup ajout/modification de langue -->
-  <div v-if="modalOpen" class="popup-backdrop">
-    <div class="popup-box" style="width:420px">
-      <div class="popup-hd">
-        <div class="popup-title">
+  <div v-if="modalOpen" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]">
+    <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[420px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6">
+      <div class="flex items-center justify-between mb-5">
+        <div class="text-[17px] font-semibold">
           {{ editTarget.kind === 'new' ? 'Ajouter une langue' : 'Modifier une langue' }}
         </div>
-        <button class="popup-close" type="button" @click="closeModal">×</button>
+        <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" type="button" @click="closeModal">×</button>
       </div>
 
-      <div class="field">
-        <label class="flabel">Langue *</label>
-        <input v-model="draft.nom" class="input" placeholder="Anglais, Espagnol…" />
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Langue *</label>
+        <input v-model="draft.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Anglais, Espagnol…" />
       </div>
 
-      <div class="field" style="margin-bottom:0">
-        <label class="flabel">Niveau</label>
-        <select v-model="draft.level" class="input">
+      <div class="mb-0">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Niveau</label>
+        <select
+          v-model="draft.level"
+          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
+        >
           <option value="">-- Sélectionner --</option>
           <option v-for="lvl in LANG_LEVELS" :key="lvl" :value="lvl">{{ lvl }}</option>
         </select>
       </div>
 
-      <div class="popup-foot">
-        <button class="btn" type="button" @click="closeModal">Annuler</button>
+      <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
         <button
-          class="btn edit-save"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
           type="button"
-          :class="{ disabled: !draft.nom.trim() }"
+          @click="closeModal"
+        >Annuler</button>
+        <button
+          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600"
+          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !draft.nom.trim() }"
+          type="button"
           :disabled="!draft.nom.trim()"
           @click="saveModal"
         >Valider</button>

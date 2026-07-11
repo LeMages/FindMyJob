@@ -10,102 +10,117 @@ import { state, closeDetailPopup, addEvent, addRecruiter } from '@/stores/app'
 </script>
 
 <template>
-  <div v-if="state.detailPopup" class="popup-backdrop" @click="closeDetailPopup">
-    <div class="popup-box" @click.stop>
+  <div v-if="state.detailPopup" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]" @click="closeDetailPopup">
+    <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
 
       <!-- Mail popup -->
       <template v-if="state.detailPopup === 'mail'">
-        <div class="popup-hd">
-          <div class="popup-title">Rédiger le mail de candidature</div>
-          <button class="popup-close" @click="closeDetailPopup">×</button>
+        <div class="flex items-center justify-between mb-5">
+          <div class="text-[17px] font-semibold">Rédiger le mail de candidature</div>
+          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
-        <div class="field">
-          <label class="flabel">Objet</label>
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Objet</label>
           <input
-            class="input"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             :value="`Candidature — ${state.selectedCard?.role ?? ''} — Alex Martin`"
           />
         </div>
-        <div class="field">
-          <label class="flabel">Corps du mail</label>
-          <textarea class="input" style="height:180px" placeholder="Madame, Monsieur, ..." />
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Corps du mail</label>
+          <textarea class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[180px]" placeholder="Madame, Monsieur, ..." />
         </div>
-        <button class="btn" style="width:100%;justify-content:center;margin-bottom:4px">
+        <button class="w-full justify-center mb-1 h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100">
           ✦ Générer par IA
         </button>
-        <div class="popup-foot">
-          <button class="btn" @click="closeDetailPopup">Annuler</button>
-          <button class="btn pri" @click="closeDetailPopup">Enregistrer</button>
+        <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
+          <button
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            @click="closeDetailPopup"
+          >Annuler</button>
+          <button
+            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+            @click="closeDetailPopup"
+          >Enregistrer</button>
         </div>
       </template>
 
       <!-- Add recruiter popup -->
       <template v-else-if="state.detailPopup === 'addRecruiter'">
-        <div class="popup-hd">
-          <div class="popup-title">Ajouter un recruteur</div>
-          <button class="popup-close" @click="closeDetailPopup">×</button>
+        <div class="flex items-center justify-between mb-5">
+          <div class="text-[17px] font-semibold">Ajouter un recruteur</div>
+          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
-        <div class="field">
-          <label class="flabel">Nom complet</label>
-          <input class="input" placeholder="Prénom Nom" />
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom complet</label>
+          <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom Nom" />
         </div>
-        <div class="field">
-          <label class="flabel">Poste</label>
-          <input class="input" placeholder="Ex. Tech Recruiter" />
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Poste</label>
+          <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. Tech Recruiter" />
         </div>
-        <div class="field">
-          <label class="flabel">Email</label>
-          <input class="input" placeholder="contact@entreprise.com" />
+        <div class="mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Email</label>
+          <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="contact@entreprise.com" />
         </div>
-        <div class="popup-foot">
-          <button class="btn" @click="closeDetailPopup">Annuler</button>
-          <button class="btn pri" @click="addRecruiter">Confirmer</button>
+        <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
+          <button
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            @click="closeDetailPopup"
+          >Annuler</button>
+          <button
+            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+            @click="addRecruiter"
+          >Confirmer</button>
         </div>
       </template>
 
       <!-- Offer content popup -->
       <template v-else-if="state.detailPopup === 'offer'">
-        <div class="popup-hd">
-          <div class="popup-title">Contenu de l'offre</div>
-          <button class="popup-close" @click="closeDetailPopup">×</button>
+        <div class="flex items-center justify-between mb-5">
+          <div class="text-[17px] font-semibold">Contenu de l'offre</div>
+          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
-        <div style="background:#f8f8f6;border:1px solid #e6e6e1;border-radius:10px;padding:18px;font-size:13px;line-height:1.7;color:#56564f;min-height:200px;font-family:'IBM Plex Mono',monospace">
+        <div class="bg-neutral-50 border border-neutral-200 rounded-10 p-[18px] text-[13px] leading-[1.7] text-neutral-700 min-h-[200px] font-mono">
           Le contenu complet de l'offre apparaît ici, renseigné à la création de la candidature.
         </div>
-        <div class="popup-foot">
-          <button class="btn pri" @click="closeDetailPopup">Fermer</button>
+        <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
+          <button
+            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+            @click="closeDetailPopup"
+          >Fermer</button>
         </div>
       </template>
 
       <!-- Add event popup -->
       <template v-else-if="state.detailPopup === 'addEvent'">
-        <div class="popup-hd">
-          <div class="popup-title">Ajouter un événement</div>
-          <button class="popup-close" @click="closeDetailPopup">×</button>
+        <div class="flex items-center justify-between mb-5">
+          <div class="text-[17px] font-semibold">Ajouter un événement</div>
+          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
-        <div class="sub" style="margin:-4px 0 18px">Quel type d'événement veux-tu ajouter ?</div>
+        <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[18px]">Quel type d'événement veux-tu ajouter ?</div>
 
-        <div class="evt-tile" @click="addEvent('mail_relance')">
-          <div class="evt-tile-icon">ML</div>
+        <div class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100" @click="addEvent('mail_relance')">
+          <div class="text-[13px] w-[38px] text-center font-mono font-bold text-neutral-700 bg-neutral-100 rounded-7 py-[6px] flex-none">ML</div>
           <div>
-            <div class="evt-tile-title">Mail de relance</div>
-            <div class="evt-tile-desc">Relancer le recruteur après un délai sans réponse.</div>
+            <div class="text-[14px] font-semibold">Mail de relance</div>
+            <div class="text-[12px] text-neutral-500 mt-0.5">Relancer le recruteur après un délai sans réponse.</div>
           </div>
         </div>
 
-        <div class="evt-tile" @click="addEvent('mail_reponse')">
-          <div class="evt-tile-icon">MR</div>
+        <div class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100" @click="addEvent('mail_reponse')">
+          <div class="text-[13px] w-[38px] text-center font-mono font-bold text-neutral-700 bg-neutral-100 rounded-7 py-[6px] flex-none">MR</div>
           <div>
-            <div class="evt-tile-title">Mail de réponse</div>
-            <div class="evt-tile-desc">Enregistrer une réponse reçue du recruteur.</div>
+            <div class="text-[14px] font-semibold">Mail de réponse</div>
+            <div class="text-[12px] text-neutral-500 mt-0.5">Enregistrer une réponse reçue du recruteur.</div>
           </div>
         </div>
 
-        <div class="evt-tile" @click="addEvent('entretien')">
-          <div class="evt-tile-icon">RV</div>
+        <div class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100" @click="addEvent('entretien')">
+          <div class="text-[13px] w-[38px] text-center font-mono font-bold text-neutral-700 bg-neutral-100 rounded-7 py-[6px] flex-none">RV</div>
           <div>
-            <div class="evt-tile-title">Entretien</div>
-            <div class="evt-tile-desc">Planifier et préparer un entretien téléphonique ou visio.</div>
+            <div class="text-[14px] font-semibold">Entretien</div>
+            <div class="text-[12px] text-neutral-500 mt-0.5">Planifier et préparer un entretien téléphonique ou visio.</div>
           </div>
         </div>
       </template>

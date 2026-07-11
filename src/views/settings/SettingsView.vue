@@ -15,100 +15,97 @@ const relanceDelay = ref(7)
 </script>
 
 <template>
-  <div class="page">
-    <h1 class="h1">Paramètres</h1>
-    <div class="sub" style="margin-bottom:22px">Configuration de l'application FindMyJob.</div>
+  <div class="px-9 pt-[26px] pb-11">
+    <h1 class="text-2xl font-semibold leading-tight">Paramètres</h1>
+    <div class="text-[13px] text-neutral-500 mt-[5px] font-mono mb-[22px]">Configuration de l'application FindMyJob.</div>
 
     <!-- IA -->
-    <div class="fieldset">
-      <div class="fstitle">INTELLIGENCE ARTIFICIELLE</div>
+    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">INTELLIGENCE ARTIFICIELLE</div>
 
-      <div class="field">
-        <label class="flabel">Clé API Ollama Cloud</label>
-        <div style="display:flex;gap:8px">
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Clé API Ollama Cloud</label>
+        <div class="flex gap-2">
           <input
-            class="input"
+            class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1 font-mono"
             :type="showApiKey ? 'text' : 'password'"
             value="sk-ollama-xxxxxxxxxxxxxxxxxxx"
-            style="flex:1;font-family:'IBM Plex Mono',monospace"
           />
-          <button class="btn" @click="showApiKey = !showApiKey">
+          <button
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            @click="showApiKey = !showApiKey"
+          >
             {{ showApiKey ? 'Masquer' : 'Afficher' }}
           </button>
         </div>
-        <div class="cmeta" style="margin-top:6px">Stockée dans le trousseau de l'OS — jamais en base de données.</div>
+        <div class="font-mono text-[11px] text-neutral-500 mt-[6px]">Stockée dans le trousseau de l'OS — jamais en base de données.</div>
       </div>
 
-      <div class="frow">
-        <div class="field">
-          <label class="flabel">Modèle</label>
-          <div class="select">
+      <div class="flex gap-[14px]">
+        <div class="flex-1 mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Modèle</label>
+          <div class="h-[38px] border border-neutral-300 rounded-lg px-3 flex items-center justify-between text-[13.5px] bg-neutral-50 text-neutral-950 cursor-pointer">
             <span>llama3.2</span>
-            <span class="cmeta">▾</span>
+            <span class="font-mono text-[11px] text-neutral-500">▾</span>
           </div>
         </div>
 
-        <div class="field">
-          <label class="flabel">Mode IA</label>
-          <div style="display:flex;gap:8px">
+        <div class="flex-1 mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Mode IA</label>
+          <div class="flex gap-2">
             <div
-              style="flex:1;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer"
-              :style="iaMode === 'cloud'
-                ? 'border:2px solid #1d1d1b;background:#1d1d1b;color:#fff'
-                : 'border:1px solid #e2e2dc;color:#bcbcb5'"
+              class="flex-1 h-[38px] rounded-lg flex items-center justify-center text-[13px] font-semibold cursor-pointer"
+              :class="iaMode === 'cloud' ? 'border-2 border-neutral-950 bg-neutral-950 text-white' : 'border border-neutral-200 text-neutral-300'"
               @click="iaMode = 'cloud'"
             >
               Cloud
             </div>
-            <div
-              style="flex:1;height:38px;border:1px solid #e2e2dc;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#bcbcb5;cursor:not-allowed;gap:6px"
-            >
+            <div class="flex-1 h-[38px] border border-neutral-200 rounded-lg flex items-center justify-center text-[13px] text-neutral-300 cursor-not-allowed gap-[6px]">
               Local
-              <span style="font-size:10px;font-family:'IBM Plex Mono',monospace;background:#f1f1ee;padding:2px 6px;border-radius:4px">bientôt</span>
+              <span class="text-[10px] font-mono bg-neutral-100 px-[6px] py-0.5 rounded">bientôt</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="setrow" style="border-bottom:none;padding:8px 0 0">
+      <div class="flex items-center justify-between gap-5 pt-2">
         <div>
-          <div class="setl">Tester la connexion</div>
-          <div class="setd">Vérifie que la clé et le modèle sélectionné répondent correctement.</div>
+          <div class="text-[14px] font-medium">Tester la connexion</div>
+          <div class="text-[12.5px] text-neutral-500 mt-[3px] max-w-[520px] leading-[1.45]">Vérifie que la clé et le modèle sélectionné répondent correctement.</div>
         </div>
-        <button class="btn">Tester →</button>
+        <button
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        >Tester →</button>
       </div>
     </div>
 
     <!-- Relances -->
-    <div class="fieldset">
-      <div class="fstitle">RELANCES</div>
-      <div class="field" style="margin-bottom:0">
-        <label class="flabel">Délai avant relance suggérée</label>
-        <div style="display:flex;align-items:center;gap:12px">
+    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">RELANCES</div>
+      <div class="mb-0">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Délai avant relance suggérée</label>
+        <div class="flex items-center gap-3">
           <input
             v-model="relanceDelay"
-            class="input"
+            class="w-[90px] h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="number"
-            style="width:90px"
           />
-          <span class="sub" style="margin:0">jours sans réponse avant d'afficher une suggestion de relance.</span>
+          <span class="text-[13px] text-neutral-500 font-mono m-0">jours sans réponse avant d'afficher une suggestion de relance.</span>
         </div>
       </div>
     </div>
 
     <!-- Apparence -->
-    <div class="fieldset">
-      <div class="fstitle">APPARENCE</div>
-      <div class="field" style="margin-bottom:0">
-        <label class="flabel">Thème</label>
-        <div style="display:flex;gap:8px">
+    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">APPARENCE</div>
+      <div class="mb-0">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Thème</label>
+        <div class="flex gap-2">
           <div
             v-for="t in (['clair', 'sombre', 'systeme'] as const)"
             :key="t"
-            style="flex:1;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;text-transform:capitalize"
-            :style="theme === t
-              ? 'border:2px solid #1d1d1b;font-weight:600'
-              : 'border:1px solid #d4d4ce'"
+            class="flex-1 h-[38px] rounded-lg flex items-center justify-center text-[13px] cursor-pointer capitalize"
+            :class="theme === t ? 'border-2 border-neutral-950 font-semibold' : 'border border-neutral-300'"
             @click="theme = t"
           >
             {{ t.charAt(0).toUpperCase() + t.slice(1) }}
@@ -118,58 +115,64 @@ const relanceDelay = ref(7)
     </div>
 
     <!-- Signature -->
-    <div class="fieldset">
-      <div class="fstitle">SIGNATURE DE CANDIDATURE</div>
-      <div class="field" style="margin-bottom:0">
-        <label class="flabel">Texte de clôture des mails</label>
-        <textarea class="input">Cordialement, Alex Martin</textarea>
+    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">SIGNATURE DE CANDIDATURE</div>
+      <div class="mb-0">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Texte de clôture des mails</label>
+        <textarea class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-20">Cordialement, Alex Martin</textarea>
       </div>
     </div>
 
     <!-- Données & stockage -->
-    <div class="fieldset">
-      <div class="fstitle">DONNÉES &amp; STOCKAGE</div>
+    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DONNÉES &amp; STOCKAGE</div>
 
-      <div class="field">
-        <label class="flabel">Base de données</label>
-        <div style="display:flex;gap:8px">
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Base de données</label>
+        <div class="flex gap-2">
           <input
-            class="input"
+            class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[12px] font-mono bg-neutral-50 text-neutral-500 block focus:outline-none focus:border-neutral-400 flex-1"
             value="~/Library/Application Support/FindMyJob/db.sqlite"
-            style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#83837e"
             readonly
           />
-          <button class="btn">Ouvrir le dossier</button>
+          <button
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          >Ouvrir le dossier</button>
         </div>
       </div>
 
-      <div class="field">
-        <label class="flabel">Dossier documents</label>
-        <div style="display:flex;gap:8px">
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Dossier documents</label>
+        <div class="flex gap-2">
           <input
-            class="input"
+            class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[12px] font-mono bg-neutral-50 text-neutral-500 block focus:outline-none focus:border-neutral-400 flex-1"
             value="~/Library/Application Support/FindMyJob/documents/"
-            style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#83837e"
             readonly
           />
-          <button class="btn">Ouvrir le dossier</button>
+          <button
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          >Ouvrir le dossier</button>
         </div>
       </div>
 
-      <div class="setrow" style="padding:10px 0">
+      <div class="flex items-center justify-between gap-5 py-[10px] border-b border-neutral-100">
         <div>
-          <div class="setl">Sauvegarde / Export</div>
-          <div class="setd">Exporter toutes les données en JSON pour archivage.</div>
+          <div class="text-[14px] font-medium">Sauvegarde / Export</div>
+          <div class="text-[12.5px] text-neutral-500 mt-[3px] max-w-[520px] leading-[1.45]">Exporter toutes les données en JSON pour archivage.</div>
         </div>
-        <button class="btn">Exporter</button>
+        <button
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        >Exporter</button>
       </div>
 
-      <div class="setrow" style="border-bottom:none;padding:10px 0">
+      <div class="flex items-center justify-between gap-5 py-[10px]">
         <div>
-          <div class="setl">Réinitialiser l'application</div>
-          <div class="setd">Supprimer toutes les données locales. Action irréversible.</div>
+          <div class="text-[14px] font-medium">Réinitialiser l'application</div>
+          <div class="text-[12.5px] text-neutral-500 mt-[3px] max-w-[520px] leading-[1.45]">Supprimer toutes les données locales. Action irréversible.</div>
         </div>
-        <button class="btn-refuse">Réinitialiser</button>
+        <button
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-neutral-100 hover:text-neutral-800"
+        >Réinitialiser</button>
       </div>
     </div>
   </div>
