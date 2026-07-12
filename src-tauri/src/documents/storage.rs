@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use crate::db::resolve_data_dir;
 use crate::documents::typst::compile_to_pdf;
 use crate::error::AppError;
-use crate::models::DocumentReferenceView;
+use crate::models::{DocumentFileInfo, DocumentReferenceView};
 
 /// Résout le dossier d'un type de document (`cv` ou `lettre_motivation`).
 ///
@@ -300,6 +300,50 @@ pub async fn select_candidature_document(
     std::fs::copy(&path, &dest)
         .map_err(|e| AppError::Validation(format!("Copie du fichier impossible : {}", e)))?;
     Ok(dest.to_string_lossy().to_string())
+}
+
+/// Inspecte l'état sur disque d'un document joint à une candidature (CV ou
+/// lettre de motivation), pour affichage honnête dans la page de détail —
+/// le chemin enregistré en base peut pointer vers un fichier déplacé ou supprimé.
+///
+/// # Arguments
+///
+/// * `path` - Chemin absolu du document (`candidatures.cv_path` ou `lettre_motivation_path`).
+///
+/// # Returns
+///
+/// `DocumentFileInfo` avec `exists = false` et `size = 0` si le fichier est introuvable.
+pub fn document_info(path: &str) -> DocumentFileInfo {
+    match std::fs::metadata(path) {
+        Ok(meta) => DocumentFileInfo {
+            exists: true,
+            size: meta.len() as i64,
+        },
+        Err(_) => DocumentFileInfo {
+            exists: false,
+            size: 0,
+        },
+    }
+}
+
+/// Lit un document PDF joint à une candidature et l'encode en base64, pour
+/// affichage dans un aperçu (iframe) côté frontend — même mécanique que
+/// `compile_reference`, sans étape de compilation puisque le fichier est déjà
+/// un PDF finalisé.
+///
+/// # Arguments
+///
+/// * `path` - Chemin absolu du document PDF.
+///
+/// # Returns
+///
+/// Contenu du PDF encodé en base64.
+pub fn read_document_base64(path: &str) -> Result<String, AppError> {
+    let bytes = std::fs::read(path)
+        .map_err(|e| AppError::Validation(format!("Impossible de lire le document : {}", e)))?;
+
+    use base64::Engine as _;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
 }
 
 /// Finalise un document mis en scène en le déplaçant vers son emplacement

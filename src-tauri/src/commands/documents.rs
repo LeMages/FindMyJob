@@ -4,7 +4,7 @@
 // Importation des modules internes
 use crate::documents;
 use crate::error::AppError;
-use crate::models::DocumentReferenceView;
+use crate::models::{DocumentFileInfo, DocumentReferenceView};
 
 /// Récupère la référence de CV sauvegardée, si elle existe.
 ///
@@ -203,4 +203,47 @@ pub async fn select_candidature_lettre_motivation(
     path: String,
 ) -> Result<String, AppError> {
     documents::select_candidature_document(app, "lettre_motivation", path).await
+}
+
+/// Inspecte l'état sur disque d'un document joint à une candidature (existence, taille).
+///
+/// # Arguments
+///
+/// * `path` - Chemin absolu du document.
+///
+/// # Returns
+///
+/// `DocumentFileInfo` reflétant l'état réel du fichier sur disque.
+#[tauri::command]
+pub fn get_document_info(path: String) -> Result<DocumentFileInfo, AppError> {
+    Ok(documents::document_info(&path))
+}
+
+/// Lit un document joint à une candidature (CV, lettre de motivation) et
+/// retourne son contenu PDF encodé en base64, pour un aperçu inline dans une iframe.
+///
+/// # Arguments
+///
+/// * `path` - Chemin absolu du document PDF.
+///
+/// # Returns
+///
+/// Contenu du PDF encodé en base64.
+#[tauri::command]
+pub fn get_document_pdf(path: String) -> Result<String, AppError> {
+    documents::read_document_base64(&path)
+}
+
+/// Ouvre un document joint à une candidature avec l'application par défaut du système.
+///
+/// # Arguments
+///
+/// * `path` - Chemin absolu du document à ouvrir.
+///
+/// # Returns
+///
+/// `Ok(())` si l'application associée a pu être lancée.
+#[tauri::command]
+pub fn open_document(path: String) -> Result<(), AppError> {
+    open::that(path).map_err(|e| AppError::Validation(e.to_string()))
 }

@@ -51,6 +51,7 @@ export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'addEvent' | null
 export type EventType = 'mail_relance' | 'mail_reponse' | 'entretien'
 
 export interface BoardCard {
+  id: number
   company: string
   role: string
   location: string
@@ -69,13 +70,6 @@ export interface Session {
   candidature_count: number
   has_accepted: boolean
   created_at: string
-}
-
-export interface Recruiter {
-  id: number
-  nom: string
-  poste: string
-  email: string
 }
 
 export interface AppEvent {
@@ -223,6 +217,61 @@ export interface CreateCandidatureInput {
   cv_path: string | null
   lettre_motivation_path: string | null
   session_id: number | null
+}
+
+export interface UpdateCandidatureInput {
+  poste: string
+  entreprise: string | null
+  localisation: string | null
+  type_contrat: string | null
+  source: string | null
+  remuneration: string | null
+  url_offre: string | null
+  notes: string | null
+}
+
+export interface CandidatureDetail {
+  id: number
+  session_id: number | null
+  poste: string
+  entreprise: string | null
+  localisation: string | null
+  status: string
+  source: string | null
+  type_contrat: string | null
+  remuneration: string | null
+  url_offre: string | null
+  description_offre: string | null
+  notes: string | null
+  date_candidature: string | null
+  next_relance: string | null
+  cv_path: string | null
+  lettre_motivation_path: string | null
+  created_at: string
+}
+
+export interface ContactView {
+  id: number
+  candidature_id: number
+  nom: string | null
+  role: string | null
+  email: string | null
+  telephone: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface StatusHistoryView {
+  id: number
+  candidature_id: number
+  ancien_status: string | null
+  nouveau_status: string
+  changed_at: string
+}
+
+export interface DocumentFileInfo {
+  exists: boolean
+  size: number
 }
 
 export interface DragPopupState {

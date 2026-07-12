@@ -3,6 +3,7 @@
 //! aucune requête SQL directe ici.
 
 pub mod candidatures;
+pub mod contacts;
 pub mod documents;
 pub mod experiences;
 pub mod formations;
@@ -10,6 +11,7 @@ pub mod langues;
 pub mod projets;
 pub mod sessions;
 pub mod skills;
+pub mod status_history;
 pub mod system;
 pub mod users;
 
@@ -17,6 +19,7 @@ pub mod users;
 // la macro #[tauri::command] génère des items cachés (__cmd__xxx) à côté de
 // chaque fonction, que seul un ré-export glob propage jusqu'à `generate_handler!`.
 pub use candidatures::*;
+pub use contacts::*;
 pub use documents::*;
 pub use experiences::*;
 pub use formations::*;
@@ -24,5 +27,6 @@ pub use langues::*;
 pub use projets::*;
 pub use sessions::*;
 pub use skills::*;
+pub use status_history::*;
 pub use system::*;
 pub use users::*;

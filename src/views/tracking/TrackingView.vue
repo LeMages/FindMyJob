@@ -22,24 +22,9 @@ import {
   addSession,
 } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { KANBAN_COLUMNS, TYPE_CONTRAT_LABELS } from '@/composables/candidature_display'
 import DragPopup from '@/views/tracking/components/DragPopup.vue'
 import TrashPopup from '@/views/tracking/components/TrashPopup.vue'
-
-const TYPE_LABELS: Record<string, string> = {
-  stage: 'Stage',
-  alternance: 'Alternance',
-  cdi: 'CDI',
-  cdd: 'CDD',
-  freelance: 'Freelance',
-}
-
-const KANBAN_COLUMNS: { title: string; statuses: string[] }[] = [
-  { title: 'À postuler',          statuses: ['a_postuler'] },
-  { title: 'Candidature envoyée', statuses: ['postule'] },
-  { title: 'Discussion',          statuses: ['relance'] },
-  { title: 'Entretien',           statuses: ['entretien'] },
-  { title: 'Accepté',             statuses: ['offre', 'refus', 'abandon'] },
-]
 
 const candidatures = ref<CandidatureView[]>([])
 const loading = ref(true)
@@ -57,13 +42,14 @@ const kanbanBoard = computed<BoardColumn[]>(() =>
     cards: candidatures.value
       .filter(c => col.statuses.includes(c.status))
       .map(c => ({
+        id: c.id,
         company: c.entreprise ?? '—',
         role: c.poste,
         location: c.localisation ?? '',
         date: c.date_candidature
           ? `Ajouté ${new Date(c.date_candidature).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
           : `Créé ${new Date(c.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`,
-        meta: TYPE_LABELS[c.type_contrat ?? ''] ?? '',
+        meta: TYPE_CONTRAT_LABELS[c.type_contrat ?? ''] ?? '',
       })),
   }))
 )
@@ -196,7 +182,7 @@ watch(sessionId, loadCandidatures)
 
           <div
             v-for="(card, cardIndex) in col.cards"
-            :key="card.company + card.role"
+            :key="card.id"
             class="bg-white border border-neutral-200 rounded-9 p-3 cursor-pointer flex flex-col gap-2 hover:border-neutral-300 hover:shadow-[0_2px_10px_rgba(0,0,0,.06)]"
             draggable="true"
             @dragstart="startDrag(colIndex, cardIndex)"

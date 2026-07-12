@@ -81,8 +81,8 @@ import { state, closeDetailPopup, addEvent, addRecruiter } from '@/stores/app'
           <div class="text-[17px] font-semibold">Contenu de l'offre</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
-        <div class="bg-neutral-50 border border-neutral-200 rounded-10 p-[18px] text-[13px] leading-[1.7] text-neutral-700 min-h-[200px] font-mono">
-          Le contenu complet de l'offre apparaît ici, renseigné à la création de la candidature.
+        <div class="bg-neutral-50 border border-neutral-200 rounded-10 p-[18px] text-[13px] leading-[1.7] text-neutral-700 min-h-[200px] font-mono whitespace-pre-wrap">
+          {{ state.detailCandidature?.description_offre || 'Aucun contenu d\'offre renseigné.' }}
         </div>
         <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
           <button
