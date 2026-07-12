@@ -15,7 +15,7 @@ use tauri::Manager;
 use db::init::{init_db, resolve_db_path, DbState};
 
 /// Configure et lance l'application Tauri : initialise la base de données,
-/// l'injecte comme état partagé, puis enregistre toutes les commandes IPC.
+/// l'injecte comme état partagé, puis enregistre toutes les commandes IPC .
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
