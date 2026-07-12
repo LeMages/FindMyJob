@@ -1,4 +1,13 @@
+/**
+ * Types partagés du frontend : navigation, DTOs miroir des commandes Tauri
+ * (`src-tauri/src/models/`), et état d'UI (kanban, popups).
+ */
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+
 export type Screen = 'tracking' | 'detail' | 'new' | 'profile' | 'settings'
+
+// ── Utilisateur / profil ─────────────────────────────────────────────────────
 
 export interface UpdateUserInfoInput {
   prenom: string | null
@@ -36,6 +45,8 @@ export interface UserView {
   created_at: string
   updated_at: string
 }
+// ── Suivi de candidatures (kanban) ───────────────────────────────────────────
+
 export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'addEvent' | null
 export type EventType = 'mail_relance' | 'mail_reponse' | 'entretien'
 
@@ -80,6 +91,8 @@ export interface DragState {
   fromColIndex: number
   cardIndex: number
 }
+
+// ── Profil : expériences, compétences, langues, formations, projets ──────────
 
 export interface ExperienceView {
   id: number
@@ -160,6 +173,8 @@ export interface CreateProjetInput {
   date_fin: string | null
 }
 
+// ── Documents (CV / lettre de motivation) ────────────────────────────────────
+
 export interface DocumentReferenceView {
   file_path: string
   pdf_path: string
@@ -176,6 +191,8 @@ export interface ProfileDto {
   cv_reference: DocumentReferenceView | null
   lettre_motivation_reference: DocumentReferenceView | null
 }
+
+// ── Candidatures ──────────────────────────────────────────────────────────────
 
 export interface CandidatureView {
   id: number

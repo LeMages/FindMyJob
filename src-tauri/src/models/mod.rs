@@ -1,0 +1,23 @@
+//! Ré-exports publics des DTOs utilisés par les commandes Tauri.
+
+pub mod candidature;
+pub mod document;
+pub mod experience;
+pub mod formation;
+pub mod lang;
+pub mod profile;
+pub mod projet;
+pub mod session;
+pub mod skill;
+pub mod user;
+
+pub use candidature::{CandidatureView, CreateCandidatureInput};
+pub use document::DocumentReferenceView;
+pub use experience::{CreateExperienceInput, ExperienceView};
+pub use formation::{CreateFormationInput, FormationView};
+pub use lang::{CreateLangInput, LangView};
+pub use profile::ProfileDto;
+pub use projet::{CreateProjetInput, ProjetView};
+pub use session::{CreateSessionInput, SessionView};
+pub use skill::{CreateSkillInput, SkillView};
+pub use user::{CreateUserInput, UpdateUserInfoInput, UserView};
