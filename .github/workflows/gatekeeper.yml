@@ -1,0 +1,24 @@
+name: Gatekeeper
+
+on:
+  pull_request:
+    branches: [main, staging]
+
+jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier la branche source
+        run: |
+          if [ "${{ github.base_ref }}" = "main" ]; then
+            if [ "${{ github.head_ref }}" != "staging" ]; then
+              echo "Seule la branche staging peut être fusionnée dans main."
+              exit 1
+            fi
+          elif [ "${{ github.base_ref }}" = "staging" ]; then
+            if [ "${{ github.head_ref }}" != "dev" ]; then
+              echo "Seule la branche dev peut être fusionnée dans staging."
+              exit 1
+            fi
+          fi
+          echo "Source de la PR valide."

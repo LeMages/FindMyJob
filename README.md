@@ -86,6 +86,41 @@ npm run tauri build
 
 L'installeur est généré dans `src-tauri/target/release/bundle/`.
 
+## Convention de commits
+
+Le projet utilise les **Conventional Commits** pour automatiser le versioning.
+
+Format : `<type>(<scope optionnel>): <description>`
+
+**Types principaux :**
+- `feat:` — nouvelle fonctionnalité → incrémente la version **mineure** (0.1.0 → 0.2.0)
+- `fix:` — correction de bug → incrémente le **patch** (0.1.0 → 0.1.1)
+- `feat!:` ou `fix!:` ou `BREAKING CHANGE` dans le body → incrémente la version **majeure** (0.1.0 → 1.0.0)
+
+**Autres types** (ne déclenchent PAS de release) :
+- `docs:` — documentation uniquement
+- `style:` — formatage, pas de changement de logique
+- `refactor:` — refactoring sans ajout ni correction
+- `test:` — ajout ou modification de tests
+- `chore:` — maintenance (CI, dépendances, config)
+
+**Exemples concrets :**
+```
+feat: ajout du drag & drop sur le kanban
+fix: correction du crash au redimensionnement de la sidebar
+feat(profile): ajout de l'upload de lettre de motivation
+refactor: découpage de ProfileView en sous-composants
+docs: mise à jour du README avec la convention de commits
+chore: mise à jour des dépendances npm
+feat!: refonte complète de l'API backend
+```
+
+## Flux de branches
+
+- `feature/*` → PR vers `dev` (CI : lint + clippy + tests)
+- `dev` → PR vers `staging` (pré-production, tests manuels)
+- `staging` → PR vers `main` (déclenche la release automatique)
+
 ## À propos
 
 Je suis étudiant en ingénierie informatique et, comme beaucoup, je galére à trouver un stage. Entre les dizaines de candidatures à suivre, les relances à ne pas oublier et les fiches à remplir à la main, j'ai fini par construire mon propre outil pour m'y retrouver. J'ai décidé de le rendre open source pour aider les gens qui sont dans la même situation.
