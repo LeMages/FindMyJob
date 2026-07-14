@@ -226,7 +226,7 @@ function previewDocument(path: string, label: string) {
       </div>
 
       <!-- Right column -->
-      <div>
+      <div class="sticky top-[26px]">
         <!-- Documents -->
         <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DOCUMENTS</div>
