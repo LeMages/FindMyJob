@@ -5,6 +5,7 @@ use sqlx::{Row, SqlitePool};
 
 // Importation des modules internes
 use crate::db::common::normalize;
+use crate::db::status_history;
 use crate::error::AppError;
 use crate::models::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
 
@@ -51,8 +52,12 @@ pub async fn insert(
     }
 
     // ------------------------------------------------------------------
-    // 2. Insertion en base
+    // 2. Insertion en base et entrée initiale d'historique, dans une même
+    //    transaction — la candidature ne doit jamais exister sans que son
+    //    passage au statut « à postuler » soit tracé.
     // ------------------------------------------------------------------
+    let mut tx = pool.begin().await?;
+
     let row = sqlx::query(
         "INSERT INTO candidatures \
            (user_id, poste, entreprise, localisation, type, source, remuneration, \
@@ -75,15 +80,13 @@ pub async fn insert(
     .bind(&description_offre)
     .bind(normalize(input.notes.clone()))
     .bind(input.session_id)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
 
-    // ------------------------------------------------------------------
-    // 3. Reconstruction du DTO — cv_path / lettre_motivation_path ne sont pas
-    //    dans la clause RETURNING : ils sont renseignés après coup, une fois
-    //    les fichiers finalisés (voir set_documents).
-    // ------------------------------------------------------------------
-    Ok(CandidatureView {
+    // Reconstruction du DTO — cv_path / lettre_motivation_path ne sont pas
+    // dans la clause RETURNING : ils sont renseignés après coup, une fois
+    // les fichiers finalisés (voir set_documents).
+    let view = CandidatureView {
         id: row.try_get("id").map_err(AppError::from)?,
         session_id: row.try_get("session_id").map_err(AppError::from)?,
         poste: row.try_get("poste").map_err(AppError::from)?,
@@ -97,7 +100,13 @@ pub async fn insert(
         cv_path: None,
         lettre_motivation_path: None,
         created_at: row.try_get("created_at").map_err(AppError::from)?,
-    })
+    };
+
+    status_history::record(&mut tx, view.id, None, &view.status).await?;
+
+    tx.commit().await?;
+
+    Ok(view)
 }
 
 /// Met à jour les champs éditables d'une candidature (détails du poste et
