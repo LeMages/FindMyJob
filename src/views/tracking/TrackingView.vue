@@ -22,10 +22,13 @@ import {
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 import { statusLabel, statusColor } from '@/composables/candidature_display'
 import TrashPopup from '@/views/tracking/components/TrashPopup.vue'
+import CandidaturesTabs from '@/views/tracking/components/CandidaturesTabs.vue'
+import SessionParametersForm from '@/views/tracking/components/SessionParametersForm.vue'
 
 const candidatures = ref<CandidatureView[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
+const activeTab = ref<'candidatures' | 'parametres'>('candidatures')
 
 const sessionId = computed(() => currentSession.value?.id ?? null)
 
@@ -189,52 +192,61 @@ watch(sessionId, loadCandidatures)
       </div>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="text-[12px] text-neutral-400 text-center py-6 font-mono mt-[60px]">Chargement…</div>
+    <!-- Onglets -->
+    <CandidaturesTabs :active="activeTab" @select="t => (activeTab = t)" />
 
-    <!-- Load error -->
-    <div v-else-if="loadError" class="text-[12px] text-red-500 text-center py-6 font-mono mt-[60px]">{{ loadError }}</div>
+    <!-- Onglet Candidatures -->
+    <template v-if="activeTab === 'candidatures'">
+      <!-- Loading -->
+      <div v-if="loading" class="text-[12px] text-neutral-400 text-center py-6 font-mono mt-[60px]">Chargement…</div>
 
-    <!-- Content -->
-    <template v-else>
-      <!-- Pipeline -->
-      <div class="px-[30px] pt-[18px] pb-[30px]">
-        <table class="w-full text-[13px] border-collapse bg-white border border-neutral-200 rounded-10 overflow-hidden">
-          <thead>
-            <tr class="text-left bg-neutral-950">
-              <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">ENTREPRISE</th>
-              <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">POSTE</th>
-              <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">STATUT</th>
-              <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">CANDIDATÉ</th>
-              <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">INACTIVITÉ</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="c in candidatures"
-              :key="c.id"
-              class="border-b border-neutral-100 last:border-0 cursor-pointer hover:bg-neutral-50"
-              @click="openRow(c)"
-            >
-              <td class="py-2.5 px-4">
-                <div class="flex items-center gap-[10px]">
-                  <div class="w-[26px] h-[26px] rounded-7 flex-none flex items-center justify-center font-semibold text-[11px]" :class="avatarColor(c.id)">{{ initials(c.entreprise) }}</div>
-                  <span class="font-semibold">{{ c.entreprise ?? '—' }}</span>
-                </div>
-              </td>
-              <td class="py-2.5 px-4">{{ c.poste }}</td>
-              <td class="py-2.5 px-4">
-                <span class="inline-block font-medium text-[12px] rounded-5 px-[9px] py-1" :class="statusColor(c.status)">{{ statusLabel(c.status) }}</span>
-              </td>
-              <td class="py-2.5 px-4 font-mono text-neutral-500">{{ candidatedDate(c) }}</td>
-              <td class="py-2.5 px-4 font-mono" :class="inactivityColor(inactivityDays(c))">{{ inactivityDays(c) }} j</td>
-            </tr>
-          </tbody>
-        </table>
+      <!-- Load error -->
+      <div v-else-if="loadError" class="text-[12px] text-red-500 text-center py-6 font-mono mt-[60px]">{{ loadError }}</div>
 
-        <div v-if="candidatures.length === 0" class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune candidature</div>
-      </div>
+      <!-- Content -->
+      <template v-else>
+        <!-- Pipeline -->
+        <div class="px-[30px] pt-[18px] pb-[30px]">
+          <table class="w-full text-[13px] border-collapse bg-white border border-neutral-200 rounded-10 overflow-hidden">
+            <thead>
+              <tr class="text-left bg-neutral-950">
+                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">ENTREPRISE</th>
+                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">POSTE</th>
+                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">STATUT</th>
+                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">CANDIDATÉ</th>
+                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">INACTIVITÉ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="c in candidatures"
+                :key="c.id"
+                class="border-b border-neutral-100 last:border-0 cursor-pointer hover:bg-neutral-50"
+                @click="openRow(c)"
+              >
+                <td class="py-2.5 px-4">
+                  <div class="flex items-center gap-[10px]">
+                    <div class="w-[26px] h-[26px] rounded-7 flex-none flex items-center justify-center font-semibold text-[11px]" :class="avatarColor(c.id)">{{ initials(c.entreprise) }}</div>
+                    <span class="font-semibold">{{ c.entreprise ?? '—' }}</span>
+                  </div>
+                </td>
+                <td class="py-2.5 px-4">{{ c.poste }}</td>
+                <td class="py-2.5 px-4">
+                  <span class="inline-block font-medium text-[12px] rounded-5 px-[9px] py-1" :class="statusColor(c.status)">{{ statusLabel(c.status) }}</span>
+                </td>
+                <td class="py-2.5 px-4 font-mono text-neutral-500">{{ candidatedDate(c) }}</td>
+                <td class="py-2.5 px-4 font-mono" :class="inactivityColor(inactivityDays(c))">{{ inactivityDays(c) }} j</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div v-if="candidatures.length === 0" class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune candidature</div>
+        </div>
+      </template>
     </template>
+
+    <!-- Onglet Paramètres -->
+    <SessionParametersForm v-else />
   </template>
 
   <!-- Popups -->
