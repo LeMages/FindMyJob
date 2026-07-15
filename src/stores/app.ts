@@ -13,21 +13,19 @@ import { invoke } from '@tauri-apps/api/core'
 import type {
   Screen, PopupKey, EventType,
   BoardCard, Session,
-  Recruiter, AppEvent, NewContact,
+  CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
+  AppEvent, NewContact,
   DragState, DragPopupState,
+  UpdateCandidatureInput,
 } from '@/types'
+import { columnTitleForStatus } from '@/composables/candidature_display'
+import { extractErrorMessage } from '@/composables/useErrorMessage'
 
 // ---------------------------------------------------------------------------
 // Sessions — chargées depuis le backend
 // ---------------------------------------------------------------------------
 
 const backendSessions = ref<Session[]>([])
-
-// Recruteurs de démonstration — pas encore de commande Tauri dédiée, à
-// remplacer quand la gestion des contacts recruteur sera implémentée côté backend.
-const MOCK_RECRUITERS: Recruiter[] = [
-  { id: 1, nom: 'Sophie Lecomte', poste: 'Tech Recruiter', email: 's.lecomte@criteo.com' },
-]
 
 // ---------------------------------------------------------------------------
 // Reactive state — UI state always lives here; data will move to backend
@@ -49,7 +47,13 @@ const state = reactive({
 
   // Detail page state
   detailPopup: null as PopupKey,
-  detailRecruiters: [...MOCK_RECRUITERS] as Recruiter[],
+  detailCandidature: null as CandidatureDetail | null,
+  detailContacts: [] as ContactView[],
+  detailHistory: [] as StatusHistoryView[],
+  detailCvInfo: null as DocumentFileInfo | null,
+  detailLettreInfo: null as DocumentFileInfo | null,
+  detailLoading: false,
+  detailError: null as string | null,
   detailEvents: [] as AppEvent[],
   nextEventId: 1,
   nextRecruiterId: 10,
@@ -92,9 +96,11 @@ export const currentSession = computed(() =>
 // refusées/abandonnées ne sont pas encore listées séparément côté backend).
 export const currentTrashedList = computed<BoardCard[]>(() => [])
 
-// Colonne du kanban où se trouve la candidature sélectionnée : à recalculer
-// une fois le statut de candidature exposé par le backend au DetailView.
-export const selectedCardColumn = computed<string>(() => '')
+// Colonne du kanban où se trouve la candidature sélectionnée, dérivée de son
+// statut réel une fois le détail chargé depuis le backend.
+export const selectedCardColumn = computed<string>(() =>
+  state.detailCandidature ? columnTitleForStatus(state.detailCandidature.status) : ''
+)
 
 // ---------------------------------------------------------------------------
 // Actions
@@ -197,7 +203,7 @@ export async function confirmDeleteSession() {
 }
 
 /**
- * Ouvre le détail d'une candidature.
+ * Ouvre le détail d'une candidature et charge ses données depuis le backend.
  *
  * @param card - Candidature à afficher.
  */
@@ -205,7 +211,91 @@ export function openCard(card: BoardCard) {
   state.selectedCard = card
   state.screen = 'detail'
   state.detailEvents = []
-  state.detailRecruiters = [...MOCK_RECRUITERS]
+  state.detailCandidature = null
+  state.detailContacts = []
+  state.detailHistory = []
+  state.detailCvInfo = null
+  state.detailLettreInfo = null
+  state.detailError = null
+  void loadCardDetail(card.id)
+}
+
+/**
+ * Charge le détail complet d'une candidature (infos, contacts, historique,
+ * état des documents joints) depuis le backend.
+ *
+ * @param id - Identifiant de la candidature à charger.
+ */
+async function loadCardDetail(id: number) {
+  state.detailLoading = true
+  state.detailError = null
+  try {
+    const [candidature, contacts, history] = await Promise.all([
+      invoke<CandidatureDetail>('get_candidature', { id }),
+      invoke<ContactView[]>('get_contacts', { candidatureId: id }),
+      invoke<StatusHistoryView[]>('get_status_history', { candidatureId: id }),
+    ])
+    state.detailCandidature = candidature
+    state.detailContacts = contacts
+    state.detailHistory = history
+
+    const [cvInfo, lettreInfo] = await Promise.all([
+      candidature.cv_path
+        ? invoke<DocumentFileInfo>('get_document_info', { path: candidature.cv_path })
+        : Promise.resolve(null),
+      candidature.lettre_motivation_path
+        ? invoke<DocumentFileInfo>('get_document_info', { path: candidature.lettre_motivation_path })
+        : Promise.resolve(null),
+    ])
+    state.detailCvInfo = cvInfo
+    state.detailLettreInfo = lettreInfo
+  } catch (e: unknown) {
+    state.detailError = extractErrorMessage(e, 'Impossible de charger la candidature.')
+  } finally {
+    state.detailLoading = false
+  }
+}
+
+/**
+ * Met à jour un ou plusieurs champs éditables de la candidature ouverte
+ * (détails du poste, notes). Fusionne le correctif avec les valeurs actuelles
+ * avant envoi, car le backend attend le jeu complet des champs éditables.
+ * N'a d'effet que si la candidature est encore au statut « à postuler ».
+ *
+ * @param patch - Champs modifiés à envoyer au backend.
+ * @returns Message d'erreur en cas d'échec, sinon `null` (affiché par le champ appelant).
+ */
+export async function updateDetailCandidature(patch: Partial<UpdateCandidatureInput>): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  const input: UpdateCandidatureInput = {
+    poste: current.poste,
+    entreprise: current.entreprise,
+    localisation: current.localisation,
+    type_contrat: current.type_contrat,
+    source: current.source,
+    remuneration: current.remuneration,
+    url_offre: current.url_offre,
+    notes: current.notes,
+    ...patch,
+  }
+
+  try {
+    const updated = await invoke<CandidatureDetail>('update_candidature', { id: current.id, input })
+    state.detailCandidature = updated
+    if (state.selectedCard && state.selectedCard.id === updated.id) {
+      state.selectedCard = {
+        ...state.selectedCard,
+        role: updated.poste,
+        company: updated.entreprise ?? '—',
+        location: updated.localisation ?? '',
+      }
+    }
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, 'Impossible de mettre à jour la candidature.')
+  }
 }
 
 /** Ajoute un contact vide au formulaire de nouvelle candidature. */
@@ -296,13 +386,20 @@ export function removeEvent(id: number) {
   state.detailEvents = state.detailEvents.filter((e: AppEvent) => e.id !== id)
 }
 
+// Ajout de recruteur non persistant en base : la commande Tauri `create_contact`
+// reste à implémenter (voir plan de gate suivante). En attendant, on affiche le
+// contact ajouté localement pour ne pas régresser l'UI existante.
 /** Ajoute un recruteur de démonstration au suivi de la candidature ouverte. */
 export function addRecruiter() {
-  state.detailRecruiters.push({
+  state.detailContacts.push({
     id: state.nextRecruiterId++,
+    candidature_id: state.detailCandidature?.id ?? 0,
     nom: 'Nouveau Recruteur',
-    poste: 'Chargé·e RH',
+    role: 'Chargé·e RH',
     email: 'recruiter@entreprise.com',
+    telephone: null,
+    notes: null,
+    created_at: new Date().toISOString(),
   })
   state.detailPopup = null
 }

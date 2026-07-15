@@ -3,6 +3,7 @@
 
 pub mod candidatures;
 pub mod common;
+pub mod contacts;
 pub mod experiences;
 pub mod formations;
 pub mod init;
@@ -10,6 +11,7 @@ pub mod langues;
 pub mod projets;
 pub mod sessions;
 pub mod skills;
+pub mod status_history;
 pub mod users;
 
 pub use init::{list_tables, resolve_data_dir, resolve_db_path, DbState};

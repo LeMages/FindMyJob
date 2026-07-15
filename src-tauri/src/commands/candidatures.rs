@@ -5,7 +5,7 @@ use crate::db::init::DbState;
 use crate::db::{candidatures, users};
 use crate::documents::finalize_candidature_document;
 use crate::error::AppError;
-use crate::models::{CandidatureView, CreateCandidatureInput};
+use crate::models::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
 
 /// Crée une candidature et finalise les documents (CV / lettre de motivation)
 /// préalablement mis en scène par `upload_candidature_cv` / `select_candidature_cv`
@@ -65,4 +65,45 @@ pub async fn get_candidatures(
 ) -> Result<Vec<CandidatureView>, AppError> {
     let user = users::fetch_first_user(&state.pool).await?;
     candidatures::list_for_session(&state.pool, user.id, session_id).await
+}
+
+/// Récupère le détail complet d'une candidature, pour la page de détail.
+///
+/// # Arguments
+///
+/// * `state` - État partagé (pool de connexions).
+/// * `id` - Identifiant de la candidature.
+///
+/// # Returns
+///
+/// `CandidatureDetail` correspondante, ou `AppError::NotFound` si elle n'existe pas.
+#[tauri::command]
+pub async fn get_candidature(
+    state: tauri::State<'_, DbState>,
+    id: i64,
+) -> Result<CandidatureDetail, AppError> {
+    let user = users::fetch_first_user(&state.pool).await?;
+    candidatures::fetch_detail(&state.pool, user.id, id).await
+}
+
+/// Met à jour les champs éditables d'une candidature (détails du poste et
+/// notes), refusé si son statut n'est plus « à postuler ».
+///
+/// # Arguments
+///
+/// * `state` - État partagé (pool de connexions).
+/// * `id` - Identifiant de la candidature à modifier.
+/// * `input` - Nouvelles valeurs des champs éditables.
+///
+/// # Returns
+///
+/// `CandidatureDetail` mise à jour.
+#[tauri::command]
+pub async fn update_candidature(
+    state: tauri::State<'_, DbState>,
+    id: i64,
+    input: UpdateCandidatureInput,
+) -> Result<CandidatureDetail, AppError> {
+    let user = users::fetch_first_user(&state.pool).await?;
+    candidatures::update(&state.pool, user.id, id, &input).await
 }

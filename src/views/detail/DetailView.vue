@@ -4,6 +4,9 @@
  * (événements), documents joints, contacts recruteur et historique.
  */
 
+// Importation des modules Vue / framework
+import { ref, computed } from 'vue'
+
 // Importation des modules internes
 import {
   state,
@@ -14,8 +17,13 @@ import {
   trashCard,
   acceptCard,
   cancelAcceptation,
+  updateDetailCandidature,
 } from '@/stores/app'
+import { TYPE_CONTRAT_OPTIONS, SOURCE_OPTIONS, statusLabel } from '@/composables/candidature_display'
+import { formatFileSize } from '@/composables/format_file_size'
 import DetailPopup from '@/views/detail/components/DetailPopup.vue'
+import DocumentPreviewModal from '@/views/detail/components/DocumentPreviewModal.vue'
+import EditableField from '@/views/detail/components/EditableField.vue'
 
 // Libellés d'affichage des événements de suivi
 const eventLabel = (type: string) => {
@@ -29,8 +37,35 @@ const eventIcon = (type: string) => {
   return 'RV'
 }
 const eventAction = (type: string) => type === 'entretien' ? 'Préparer →' : 'Rédiger →'
-const initials = (nom: string) =>
-  nom.split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+const initials = (nom: string | null) =>
+  (nom ?? '').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+
+/** Formate une date ISO pour l'affichage court (ex. "12 juin 2025"). */
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+
+// Les détails du poste et les notes ne sont modifiables que tant que la
+// candidature n'a pas encore été engagée (statut "à postuler").
+const editable = computed(() => state.detailCandidature?.status === 'a_postuler')
+
+const cvPath = computed(() => state.detailCandidature?.cv_path ?? null)
+const cvExists = computed(() => !!cvPath.value && !!state.detailCvInfo?.exists)
+const cvSize = computed(() => state.detailCvInfo?.size ?? 0)
+const lettrePath = computed(() => state.detailCandidature?.lettre_motivation_path ?? null)
+const lettreExists = computed(() => !!lettrePath.value && !!state.detailLettreInfo?.exists)
+const lettreSize = computed(() => state.detailLettreInfo?.size ?? 0)
+
+const previewModal = ref<InstanceType<typeof DocumentPreviewModal> | null>(null)
+
+/**
+ * Ouvre l'aperçu PDF d'un document joint à la candidature.
+ *
+ * @param path - Chemin absolu du document.
+ * @param label - Titre affiché dans la modale d'aperçu.
+ */
+function previewDocument(path: string, label: string) {
+  previewModal.value?.open(path, label)
+}
 </script>
 
 <template>
@@ -42,7 +77,13 @@ const initials = (nom: string) =>
       <div class="text-[13px] text-neutral-500 mt-[5px] font-mono">{{ state.selectedCard?.company }} · {{ state.selectedCard?.location }}</div>
     </div>
 
-    <div class="grid grid-cols-[1fr_320px] gap-6 mt-[18px] items-start">
+    <!-- Loading -->
+    <div v-if="state.detailLoading" class="text-[12px] text-neutral-400 text-center py-6 font-mono mt-[40px]">Chargement…</div>
+
+    <!-- Load error -->
+    <div v-else-if="state.detailError" class="text-[12px] text-red-500 text-center py-6 font-mono mt-[40px]">{{ state.detailError }}</div>
+
+    <div v-else-if="state.detailCandidature" class="grid grid-cols-[1fr_320px] gap-6 mt-[18px] items-start">
       <!-- Left column -->
       <div>
         <!-- Détails du poste -->
@@ -56,50 +97,85 @@ const initials = (nom: string) =>
           </div>
           <div class="mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Intitulé du poste</label>
-            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" :value="state.selectedCard?.role" placeholder="Ex. Stage Data Scientist" />
+            <EditableField
+              :model-value="state.detailCandidature.poste"
+              :editable="editable"
+              placeholder="Ex. Stage Data Scientist"
+              :on-save="v => updateDetailCandidature({ poste: v })"
+            />
           </div>
           <div class="flex gap-[14px]">
             <div class="flex-1 mb-[14px]">
               <label class="text-[12px] text-neutral-600 mb-[5px] block">Entreprise</label>
-              <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" :value="state.selectedCard?.company" placeholder="Nom de l'entreprise" />
+              <EditableField
+                :model-value="state.detailCandidature.entreprise"
+                :editable="editable"
+                placeholder="Nom de l'entreprise"
+                :on-save="v => updateDetailCandidature({ entreprise: v })"
+              />
             </div>
             <div class="flex-1 mb-[14px]">
               <label class="text-[12px] text-neutral-600 mb-[5px] block">Lieu</label>
-              <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" :value="state.selectedCard?.location" placeholder="Ville" />
+              <EditableField
+                :model-value="state.detailCandidature.localisation"
+                :editable="editable"
+                placeholder="Ville"
+                :on-save="v => updateDetailCandidature({ localisation: v })"
+              />
             </div>
           </div>
           <div class="flex gap-[14px]">
             <div class="flex-1 mb-[14px]">
               <label class="text-[12px] text-neutral-600 mb-[5px] block">Type de contrat</label>
-              <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Stage / Alternance / CDI" />
+              <EditableField
+                type="select"
+                :options="TYPE_CONTRAT_OPTIONS"
+                :model-value="state.detailCandidature.type_contrat"
+                :editable="editable"
+                :on-save="v => updateDetailCandidature({ type_contrat: v })"
+              />
             </div>
             <div class="flex-1 mb-[14px]">
               <label class="text-[12px] text-neutral-600 mb-[5px] block">Gratification</label>
-              <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. 1 300 €/mois" />
+              <EditableField
+                :model-value="state.detailCandidature.remuneration"
+                :editable="editable"
+                placeholder="Ex. 1 300 €/mois"
+                :on-save="v => updateDetailCandidature({ remuneration: v })"
+              />
             </div>
           </div>
           <div class="mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Plateforme de l'offre</label>
-            <select class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]">
-              <option>Plateforme en ligne (Indeed, LinkedIn, Welcome to the Jungle...)</option>
-              <option>Site carrière de l'entreprise (formulaire sur le site)</option>
-              <option>Mail (candidature directe par email)</option>
-              <option>Cooptation / Réseau (recommandation, contact perso)</option>
-              <option>Forum / Salon emploi (rencontre physique)</option>
-              <option>École (job board, offres des profs / asso)</option>
-              <option>Autre</option>
-            </select>
+            <EditableField
+              type="select"
+              :options="SOURCE_OPTIONS"
+              :model-value="state.detailCandidature.source"
+              :editable="editable"
+              :on-save="v => updateDetailCandidature({ source: v })"
+            />
           </div>
           <div class="mb-0">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Lien de l'offre</label>
-            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://..." />
+            <EditableField
+              :model-value="state.detailCandidature.url_offre"
+              :editable="editable"
+              placeholder="https://..."
+              :on-save="v => updateDetailCandidature({ url_offre: v })"
+            />
           </div>
         </div>
 
         <!-- Notes -->
         <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">NOTES</div>
-          <textarea class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[100px]" placeholder="Notes libres, retours d'entretien, contacts..." />
+          <EditableField
+            type="textarea"
+            :model-value="state.detailCandidature.notes"
+            :editable="editable"
+            placeholder="Notes libres, retours d'entretien, contacts..."
+            :on-save="v => updateDetailCandidature({ notes: v })"
+          />
         </div>
 
         <!-- Statut & Suivi -->
@@ -150,36 +226,51 @@ const initials = (nom: string) =>
       </div>
 
       <!-- Right column -->
-      <div>
+      <div class="sticky top-[26px]">
         <!-- Documents -->
         <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DOCUMENTS</div>
+
+          <!-- CV -->
           <div class="flex items-center gap-[10px] border border-neutral-200 rounded-lg p-[10px] mb-2">
             <div class="w-7 h-9 rounded-md flex-none bg-neutral-100 bg-[repeating-linear-gradient(45deg,var(--color-neutral-200)_0,var(--color-neutral-200)_1px,transparent_1px,transparent_7px)] border border-neutral-200" />
             <div class="flex-1 min-w-0">
-              <div class="text-[13.5px] font-semibold leading-[1.25]">CV_AlexMartin_2025.pdf</div>
-              <div class="font-mono text-[11px] text-neutral-500">Joint · 184 Ko</div>
+              <div class="text-[13.5px] font-semibold leading-[1.25]">CV</div>
+              <div class="font-mono text-[11px] text-neutral-500">{{ cvExists ? `Joint · ${formatFileSize(cvSize)}` : 'Non existant' }}</div>
             </div>
-            <button class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-neutral-100" title="Visualiser">
+            <button
+              v-if="cvExists"
+              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-neutral-100"
+              title="Visualiser"
+              @click="previewDocument(cvPath!, 'Aperçu du CV')"
+            >
               <svg width="17" height="13" viewBox="0 0 17 13" fill="none">
                 <ellipse cx="8.5" cy="6.5" rx="7.5" ry="5.5" stroke="currentColor" stroke-width="1.4" />
                 <circle cx="8.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.4" />
               </svg>
             </button>
           </div>
+
+          <!-- Lettre de motivation -->
           <div class="flex items-center gap-[10px] border border-neutral-200 rounded-lg p-[10px] mb-2">
             <div class="w-7 h-9 rounded-md flex-none bg-neutral-100 bg-[repeating-linear-gradient(45deg,var(--color-neutral-200)_0,var(--color-neutral-200)_1px,transparent_1px,transparent_7px)] border border-neutral-200" />
             <div class="flex-1 min-w-0">
-              <div class="text-[13.5px] font-semibold leading-[1.25]">Lettre_motivation.pdf</div>
-              <div class="font-mono text-[11px] text-neutral-500">Joint · 92 Ko</div>
+              <div class="text-[13.5px] font-semibold leading-[1.25]">Lettre de motivation</div>
+              <div class="font-mono text-[11px] text-neutral-500">{{ lettreExists ? `Joint · ${formatFileSize(lettreSize)}` : 'Non existant' }}</div>
             </div>
-            <button class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-neutral-100" title="Visualiser">
+            <button
+              v-if="lettreExists"
+              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-neutral-100"
+              title="Visualiser"
+              @click="previewDocument(lettrePath!, 'Aperçu de la lettre de motivation')"
+            >
               <svg width="17" height="13" viewBox="0 0 17 13" fill="none">
                 <ellipse cx="8.5" cy="6.5" rx="7.5" ry="5.5" stroke="currentColor" stroke-width="1.4" />
                 <circle cx="8.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.4" />
               </svg>
             </button>
           </div>
+
         </div>
 
         <!-- Contacts recruteur -->
@@ -191,56 +282,33 @@ const initials = (nom: string) =>
               @click="openDetailPopup('addRecruiter')"
             >+ Ajouter</button>
           </div>
-          <div v-for="rec in state.detailRecruiters" :key="rec.id" class="flex items-center gap-3 py-[10px] border-b border-neutral-100">
+          <div v-for="rec in state.detailContacts" :key="rec.id" class="flex items-center gap-3 py-[10px] border-b border-neutral-100">
             <div class="w-[34px] h-[34px] rounded-full flex-none bg-neutral-200 flex items-center justify-center font-semibold text-[12px] text-neutral-700">{{ initials(rec.nom) }}</div>
             <div class="flex-1 min-w-0">
-              <div class="text-[13.5px] font-semibold leading-[1.25]">{{ rec.nom }}</div>
-              <div class="text-[12px] text-neutral-500 mt-0.5">{{ rec.poste }}</div>
-              <div class="font-mono text-[11px] text-neutral-500">{{ rec.email }}</div>
+              <div class="text-[13.5px] font-semibold leading-[1.25]">{{ rec.nom ?? '—' }}</div>
+              <div class="text-[12px] text-neutral-500 mt-0.5">{{ rec.role ?? '—' }}</div>
+              <div class="font-mono text-[11px] text-neutral-500">{{ rec.email ?? '—' }}</div>
             </div>
           </div>
+          <div v-if="state.detailContacts.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">Aucun recruteur renseigné.</div>
         </div>
 
         <!-- Historique -->
         <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">HISTORIQUE</div>
-          <div class="flex flex-col">
-            <div class="flex gap-3">
+          <div v-if="state.detailHistory.length" class="flex flex-col">
+            <div v-for="(entry, i) in state.detailHistory" :key="entry.id" class="flex gap-3">
               <div class="flex flex-col items-center">
                 <div class="w-[13px] h-[13px] rounded-full border-2 flex-none mt-0.5 bg-neutral-950 border-neutral-950" />
-                <div class="flex-1 w-0.5 bg-neutral-200 min-h-[22px] my-0.5" />
+                <div v-if="i < state.detailHistory.length - 1" class="flex-1 w-0.5 bg-neutral-200 min-h-[22px] my-0.5" />
               </div>
               <div>
-                <div class="text-[13px] font-semibold">Candidature créée</div>
-                <div class="text-[11.5px] text-neutral-400 mt-px font-mono pb-[14px]">{{ state.selectedCard?.date ?? '—' }}</div>
-              </div>
-            </div>
-            <div class="flex gap-3">
-              <div class="flex flex-col items-center">
-                <div
-                  class="w-[13px] h-[13px] rounded-full border-2 bg-white flex-none mt-0.5"
-                  :class="selectedCardColumn !== 'À postuler' ? 'bg-neutral-950 border-neutral-950' : 'border-neutral-300'"
-                />
-                <div class="flex-1 w-0.5 bg-neutral-200 min-h-[22px] my-0.5" />
-              </div>
-              <div>
-                <div class="text-[13px] font-semibold">Candidature envoyée</div>
-                <div class="text-[11.5px] text-neutral-400 mt-px font-mono pb-[14px]">{{ selectedCardColumn !== 'À postuler' ? selectedCardColumn : 'À planifier' }}</div>
-              </div>
-            </div>
-            <div class="flex gap-3">
-              <div class="flex flex-col items-center">
-                <div
-                  class="w-[13px] h-[13px] rounded-full border-2 bg-white flex-none mt-0.5"
-                  :class="selectedCardColumn === 'Entretien' || selectedCardColumn === 'Accepté' ? 'bg-neutral-950 border-neutral-950' : 'border-neutral-300'"
-                />
-              </div>
-              <div>
-                <div class="text-[13px] font-semibold">Entretien</div>
-                <div class="text-[11.5px] text-neutral-400 mt-px font-mono pb-[14px]">{{ selectedCardColumn === 'Entretien' || selectedCardColumn === 'Accepté' ? 'Planifié' : 'À planifier' }}</div>
+                <div class="text-[13px] font-semibold">{{ statusLabel(entry.nouveau_status) }}</div>
+                <div class="text-[11.5px] text-neutral-400 mt-px font-mono pb-[14px]">{{ formatDate(entry.changed_at) }}</div>
               </div>
             </div>
           </div>
+          <div v-else class="text-[12px] text-neutral-400 font-mono py-2">Aucun historique.</div>
         </div>
       </div>
     </div>
@@ -273,4 +341,5 @@ const initials = (nom: string) =>
 
   <!-- Popups -->
   <DetailPopup />
+  <DocumentPreviewModal ref="previewModal" />
 </template>
