@@ -2,9 +2,9 @@
 /**
  * Vue « Profil » : affiche et permet d'éditer les informations de
  * l'utilisateur (identité, description, expériences, formations, projets,
- * compétences, langues, CV et lettre de motivation). La persistance de
- * chaque section est déléguée aux composants sous `components/` ; cette vue
- * ne fait que les composer et orchestrer la sauvegarde globale.
+ * compétences, langues). La persistance de chaque section est déléguée aux
+ * composants sous `components/` ; cette vue ne fait que les composer et
+ * orchestrer la sauvegarde globale.
  */
 
 // Importation des modules Vue / framework
@@ -19,7 +19,6 @@ import FormationsSection from './components/FormationsSection.vue'
 import ProjetsSection from './components/ProjetsSection.vue'
 import SkillsSection from './components/SkillsSection.vue'
 import LanguesSection from './components/LanguesSection.vue'
-import DocumentReferenceEditor from '@/components/DocumentReferenceEditor.vue'
 import type {
   ProfileDto,
   UserView,
@@ -29,7 +28,6 @@ import type {
   ProjetView,
   SkillView,
   LangView,
-  DocumentReferenceView,
 } from '@/types/index'
 
 const profile = ref<ProfileDto | null>(null)
@@ -72,8 +70,6 @@ const formationsSection = ref<InstanceType<typeof FormationsSection> | null>(nul
 const projetsSection = ref<InstanceType<typeof ProjetsSection> | null>(null)
 const skillsSection = ref<InstanceType<typeof SkillsSection> | null>(null)
 const languesSection = ref<InstanceType<typeof LanguesSection> | null>(null)
-const cvEditor = ref<InstanceType<typeof DocumentReferenceEditor> | null>(null)
-const lettreEditor = ref<InstanceType<typeof DocumentReferenceEditor> | null>(null)
 
 const isDirty = computed(() =>
   isUserInfoDirty() ||
@@ -82,9 +78,7 @@ const isDirty = computed(() =>
   (formationsSection.value?.hasChanges ?? false) ||
   (projetsSection.value?.hasChanges ?? false) ||
   (skillsSection.value?.hasChanges ?? false) ||
-  (languesSection.value?.hasChanges ?? false) ||
-  (cvEditor.value?.hasChanges ?? false) ||
-  (lettreEditor.value?.hasChanges ?? false),
+  (languesSection.value?.hasChanges ?? false),
 )
 
 function enterEditMode() {
@@ -107,8 +101,6 @@ function cancelEdit() {
   projetsSection.value?.reset()
   skillsSection.value?.reset()
   languesSection.value?.reset()
-  cvEditor.value?.reset()
-  lettreEditor.value?.reset()
   saveError.value = null
   editMode.value = false
 }
@@ -154,9 +146,7 @@ async function saveDescription(): Promise<void> {
 /**
  * Orchestre la sauvegarde de toutes les sections du profil : informations
  * utilisateur, description, puis chaque liste éditable (expériences,
- * formations, projets, compétences, langues). Les documents (CV, lettre) sont
- * déjà persistés au moment de leur sélection — seule leur marque « modifié »
- * est réinitialisée ici.
+ * formations, projets, compétences, langues).
  */
 async function saveAll() {
   if (!isDirty.value || saving.value) return
@@ -185,23 +175,12 @@ async function saveAll() {
       if (langues) profile.value.langues = langues as LangView[]
     }
 
-    // 3. Documents — déjà persistés à la sélection, on efface juste la marque « modifié »
-    cvEditor.value?.reset()
-    lettreEditor.value?.reset()
     editMode.value = false
   } catch (e: unknown) {
     saveError.value = extractErrorMessage(e, 'Erreur lors de la sauvegarde.')
   } finally {
     saving.value = false
   }
-}
-
-function onCvReferenceSaved(reference: DocumentReferenceView) {
-  if (profile.value) profile.value.cv_reference = reference
-}
-
-function onLettreReferenceSaved(reference: DocumentReferenceView) {
-  if (profile.value) profile.value.lettre_motivation_reference = reference
 }
 
 onMounted(async () => {
@@ -320,21 +299,6 @@ const initials = computed(() => {
       <div>
         <SkillsSection ref="skillsSection" :items="profile.skills" :edit-mode="editMode" />
         <LanguesSection ref="languesSection" :items="profile.langues" :edit-mode="editMode" />
-
-        <DocumentReferenceEditor
-          ref="cvEditor"
-          doc-type="cv"
-          :reference="profile.cv_reference"
-          :edit-mode="editMode"
-          @update:reference="onCvReferenceSaved"
-        />
-        <DocumentReferenceEditor
-          ref="lettreEditor"
-          doc-type="lettre_motivation"
-          :reference="profile.lettre_motivation_reference"
-          :edit-mode="editMode"
-          @update:reference="onLettreReferenceSaved"
-        />
       </div>
     </div>
 

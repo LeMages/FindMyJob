@@ -3,17 +3,21 @@
  * Formulaire de paramètres de la session courante (onglet Paramètres de la
  * page Candidatures). Titre, contexte, statut et zone cible sont reliés au
  * backend (`sessions`), édités au double-clic (même mécanique que la page
- * détail d'une candidature) ; le CV/LM restent mockés en dur en attendant
- * leur commande Tauri.
+ * détail d'une candidature). Le CV et la lettre de motivation de référence
+ * sont propres à cette session (`documents/sessions/<id>/`) et gérés par
+ * `DocumentReferenceEditor` en mode "reference".
  */
 
 // Importation des modules Vue / framework
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import { currentSession, updateSession } from '@/stores/app'
-import type { SessionStatut } from '@/types'
+import { extractErrorMessage } from '@/composables/useErrorMessage'
+import type { DocumentReferenceView, SessionStatut } from '@/types'
 import EditableField from '@/components/EditableField.vue'
+import DocumentReferenceEditor from '@/components/DocumentReferenceEditor.vue'
 
 const STATUS_OPTIONS: { value: SessionStatut; label: string }[] = [
   { value: 'active', label: 'Active' },
@@ -49,8 +53,33 @@ async function saveZone(v: string): Promise<string | null | undefined> {
   return updateSession(session.id, { zone: v })
 }
 
-const cvFilename = ref('CV_Loic_Cupif_2026.pdf')
-const lettreFilename = ref('LM_Template_Stage.pdf')
+const sessionId = computed(() => currentSession.value?.id ?? null)
+
+const cvReference = ref<DocumentReferenceView | null>(null)
+const lettreReference = ref<DocumentReferenceView | null>(null)
+const documentsLoadError = ref<string | null>(null)
+
+/** Charge le CV et la lettre de motivation de référence de la session courante. */
+async function loadDocumentReferences() {
+  documentsLoadError.value = null
+  if (sessionId.value === null) {
+    cvReference.value = null
+    lettreReference.value = null
+    return
+  }
+  try {
+    const [cv, lettre] = await Promise.all([
+      invoke<DocumentReferenceView | null>('get_cv_reference', { sessionId: sessionId.value }),
+      invoke<DocumentReferenceView | null>('get_lettre_motivation_reference', { sessionId: sessionId.value }),
+    ])
+    cvReference.value = cv
+    lettreReference.value = lettre
+  } catch (e: unknown) {
+    documentsLoadError.value = extractErrorMessage(e, 'Impossible de charger les documents de la session.')
+  }
+}
+
+watch(sessionId, loadDocumentReferences, { immediate: true })
 </script>
 
 <template>
@@ -107,40 +136,18 @@ const lettreFilename = ref('LM_Template_Stage.pdf')
     </div>
 
     <!-- Documents -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DOCUMENTS</div>
-
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[7px] block">CV</label>
-        <div class="flex items-center gap-[10px] border border-neutral-200 rounded-lg p-[10px]">
-          <div class="w-7 h-9 rounded-md flex-none flex items-center justify-center bg-neutral-100 border border-neutral-200 text-neutral-500">
-            <svg width="14" height="17" viewBox="0 0 14 17" fill="none">
-              <path d="M1.5 1.5h7l4 4v9.5a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-12.5a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-              <path d="M8.5 1.5v4h4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-            </svg>
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="text-[13.5px] font-semibold leading-[1.25]">{{ cvFilename }}</div>
-            <div class="font-mono text-[11px] text-neutral-500">Joint</div>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <label class="text-[12px] text-neutral-600 mb-[7px] block">Lettre de motivation</label>
-        <div class="flex items-center gap-[10px] border border-neutral-200 rounded-lg p-[10px]">
-          <div class="w-7 h-9 rounded-md flex-none flex items-center justify-center bg-neutral-100 border border-neutral-200 text-neutral-500">
-            <svg width="14" height="17" viewBox="0 0 14 17" fill="none">
-              <path d="M1.5 1.5h7l4 4v9.5a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-12.5a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-              <path d="M8.5 1.5v4h4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-            </svg>
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="text-[13.5px] font-semibold leading-[1.25]">{{ lettreFilename }}</div>
-            <div class="font-mono text-[11px] text-neutral-500">Jointe</div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div v-if="documentsLoadError" class="font-mono text-[12px] text-red-500 mb-[18px]">{{ documentsLoadError }}</div>
+    <DocumentReferenceEditor
+      doc-type="cv"
+      :session-id="sessionId"
+      :reference="cvReference"
+      @update:reference="v => (cvReference = v)"
+    />
+    <DocumentReferenceEditor
+      doc-type="lettre_motivation"
+      :session-id="sessionId"
+      :reference="lettreReference"
+      @update:reference="v => (lettreReference = v)"
+    />
   </div>
 </template>

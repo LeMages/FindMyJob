@@ -25,6 +25,8 @@ interface Props {
   docType: 'cv' | 'lettre_motivation'
   /** Mode d'édition : document de référence persistant, ou pièce jointe ponctuelle. */
   mode?: 'reference' | 'attachment'
+  /** Identifiant de la session propriétaire des documents (CV/LM propres à chaque session). */
+  sessionId?: number | null
   /** Mode "reference" uniquement : contrôle l'affichage de l'upload. */
   editMode?: boolean
   /** Mode "reference" uniquement : référence actuellement sauvegardée. */
@@ -35,6 +37,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   mode: 'reference',
+  sessionId: null,
   editMode: true,
   reference: null,
   modelValue: null,
@@ -114,7 +117,11 @@ async function onFileSelected(event: Event) {
 
   try {
     const content = await file.text()
-    const saved = await invoke<DocumentReferenceView>(saveCommand.value, { filename: file.name, content })
+    const saved = await invoke<DocumentReferenceView>(saveCommand.value, {
+      sessionId: props.sessionId,
+      filename: file.name,
+      content,
+    })
     emit('update:reference', saved)
     justSaved.value = true
   } catch (e: unknown) {
@@ -132,7 +139,7 @@ async function preview() {
   previewError.value = null
   previewData.value = null
   try {
-    previewData.value = await invoke<string>(compileCommand.value)
+    previewData.value = await invoke<string>(compileCommand.value, { sessionId: props.sessionId })
   } catch (e: unknown) {
     previewError.value = extractErrorMessage(e, compileErrorFallback.value)
   } finally {
@@ -193,7 +200,11 @@ async function handleAttachmentFile(file: File) {
   error.value = null
   try {
     const content = await fileToBase64(file)
-    const path = await invoke<string>(uploadCommand.value, { filename: file.name, content })
+    const path = await invoke<string>(uploadCommand.value, {
+      sessionId: props.sessionId,
+      filename: file.name,
+      content,
+    })
     emit('update:modelValue', path)
   } catch (e: unknown) {
     error.value = extractErrorMessage(e, uploadErrorFallback.value)
@@ -212,7 +223,7 @@ function onDrop(event: DragEvent) {
 async function browse() {
   error.value = null
   try {
-    const dir = await invoke<string>(referenceDirCommand.value)
+    const dir = await invoke<string>(referenceDirCommand.value, { sessionId: props.sessionId })
     const path = await openDialog({
       title: browseDialogTitle.value,
       defaultPath: dir,
@@ -221,7 +232,7 @@ async function browse() {
     })
     if (!path || Array.isArray(path)) return
     saving.value = true
-    const staged = await invoke<string>(selectCommand.value, { path })
+    const staged = await invoke<string>(selectCommand.value, { sessionId: props.sessionId, path })
     emit('update:modelValue', staged)
   } catch (e: unknown) {
     error.value = extractErrorMessage(e, selectErrorFallback.value)
@@ -241,6 +252,14 @@ function clearAttachment() {
   <div v-if="!isAttachment" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
     <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ fieldsetTitle }}</div>
 
+    <input
+      ref="fileInput"
+      type="file"
+      accept=".typ"
+      class="hidden"
+      @change="onFileSelected"
+    />
+
     <!-- Affichage du document actuel -->
     <div v-if="reference" class="flex items-center gap-3 pt-[10px] pb-[6px]">
       <div class="w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-500 flex-none">
@@ -256,44 +275,53 @@ function clearAttachment() {
         <div class="text-[13px] font-semibold text-neutral-950 whitespace-nowrap overflow-hidden text-ellipsis">reference.typ</div>
         <div class="text-[11px] text-neutral-500 mt-px">{{ savedLabel }} {{ fmtReferenceDate(reference.updated_at) }}</div>
       </div>
-      <button
-        class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-blue-200 bg-blue-50 text-blue-500 cursor-pointer transition-colors duration-150 hover:bg-blue-100 hover:border-blue-300"
-        type="button"
-        :title="previewTitle"
-        @click="preview"
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-          <circle cx="12" cy="12" r="3"/>
-        </svg>
-      </button>
+      <div class="flex items-center gap-2 flex-none">
+        <button
+          class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-blue-200 bg-blue-50 text-blue-500 cursor-pointer transition-colors duration-150 hover:bg-blue-100 hover:border-blue-300"
+          type="button"
+          :title="previewTitle"
+          @click="preview"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+        <button
+          v-if="editMode"
+          class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-neutral-300 bg-neutral-50 text-neutral-600 cursor-pointer transition-colors duration-150 hover:bg-neutral-100 hover:border-neutral-400 disabled:opacity-60 disabled:cursor-default"
+          type="button"
+          :disabled="saving"
+          :title="uploadLabel"
+          @click="triggerPicker"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="17 1 21 5 17 9"/>
+            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+            <polyline points="7 23 3 19 7 15"/>
+            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+          </svg>
+        </button>
+      </div>
     </div>
+    <!-- Aucun document : bouton d'ajout centré en mode édition, texte statique sinon -->
+    <button
+      v-else-if="editMode"
+      class="w-full flex flex-col items-center justify-center gap-2 py-7 rounded-lg border border-dashed border-neutral-300 text-neutral-500 cursor-pointer transition-colors duration-150 hover:bg-neutral-50 hover:border-neutral-400 hover:text-neutral-700 disabled:opacity-60 disabled:cursor-default"
+      type="button"
+      :disabled="saving"
+      @click="triggerPicker"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      <span class="text-[13px] font-medium font-sans">{{ saving ? 'Sauvegarde…' : uploadLabel }}</span>
+    </button>
     <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ emptyLabel }}</div>
 
-    <!-- Bouton en mode édition -->
-    <div v-if="editMode" class="mt-[10px] flex items-center gap-[10px] flex-wrap">
-      <input
-        ref="fileInput"
-        type="file"
-        accept=".typ"
-        class="hidden"
-        @change="onFileSelected"
-      />
-      <button
-        class="h-9 px-[14px] rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] font-sans whitespace-nowrap bg-neutral-50 border border-neutral-300 text-neutral-950 cursor-pointer transition-colors duration-150 hover:bg-neutral-100 disabled:opacity-60 disabled:cursor-default"
-        type="button"
-        :disabled="saving"
-        @click="triggerPicker"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-[6px]">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="17 8 12 3 7 8"/>
-          <line x1="12" y1="3" x2="12" y2="15"/>
-        </svg>
-        {{ saving ? 'Sauvegarde…' : uploadLabel }}
-      </button>
-      <span v-if="error" class="text-[12px] text-red-600">{{ error }}</span>
-    </div>
+    <div v-if="reference && saving" class="mt-[10px] text-[12px] text-neutral-500 font-mono">Sauvegarde…</div>
+    <div v-if="error" class="mt-[10px] text-[12px] text-red-600">{{ error }}</div>
   </div>
 
   <!-- Mode "attachment" (nouvelle candidature) : document ponctuellement joint -->

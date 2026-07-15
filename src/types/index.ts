@@ -194,8 +194,6 @@ export interface ProfileDto {
   projets: ProjetView[]
   skills: SkillView[]
   langues: LangView[]
-  cv_reference: DocumentReferenceView | null
-  lettre_motivation_reference: DocumentReferenceView | null
 }
 
 // ── Candidatures ──────────────────────────────────────────────────────────────

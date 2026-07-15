@@ -215,8 +215,8 @@ async function submit() {
     <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DOCUMENTS</div>
       <div class="grid grid-cols-2 gap-4">
-        <DocumentReferenceEditor v-model="selectedCvPath" doc-type="cv" mode="attachment" />
-        <DocumentReferenceEditor v-model="selectedLettrePath" doc-type="lettre_motivation" mode="attachment" />
+        <DocumentReferenceEditor v-model="selectedCvPath" doc-type="cv" mode="attachment" :session-id="currentSession?.id" />
+        <DocumentReferenceEditor v-model="selectedLettrePath" doc-type="lettre_motivation" mode="attachment" :session-id="currentSession?.id" />
       </div>
     </div>
 
