@@ -145,26 +145,6 @@ watch(sessionId, loadCandidatures)
 
     <!-- Content -->
     <template v-else>
-      <!-- Stats -->
-      <div class="flex gap-[14px] px-[30px] pt-[6px] pb-1">
-        <div class="flex-1 bg-white border border-neutral-200 rounded-10 px-4 py-[13px]">
-          <div class="text-[22px] font-semibold">{{ kanbanStats.total }}</div>
-          <div class="text-[12px] text-neutral-500 mt-0.5">Total</div>
-        </div>
-        <div class="flex-1 bg-white border border-neutral-200 rounded-10 px-4 py-[13px]">
-          <div class="text-[22px] font-semibold">{{ kanbanStats.sent }}</div>
-          <div class="text-[12px] text-neutral-500 mt-0.5">Envoyées</div>
-        </div>
-        <div class="flex-1 bg-white border border-neutral-200 rounded-10 px-4 py-[13px]">
-          <div class="text-[22px] font-semibold">{{ kanbanStats.interviews }}</div>
-          <div class="text-[12px] text-neutral-500 mt-0.5">Entretiens</div>
-        </div>
-        <div class="flex-1 bg-white border border-neutral-200 rounded-10 px-4 py-[13px]">
-          <div class="text-[22px] font-semibold">{{ kanbanStats.accepted }}</div>
-          <div class="text-[12px] text-neutral-500 mt-0.5">Réponses</div>
-        </div>
-      </div>
-
       <!-- Kanban board -->
       <div class="grid grid-cols-5 gap-4 px-[30px] pt-[18px] pb-[30px]">
         <div
