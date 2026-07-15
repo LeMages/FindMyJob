@@ -97,6 +97,9 @@ pub async fn insert(
         type_contrat: row.try_get("type_contrat").map_err(AppError::from)?,
         date_candidature: row.try_get("date_candidature").map_err(AppError::from)?,
         next_relance: row.try_get("next_relance").map_err(AppError::from)?,
+        // À la création, l'unique entrée d'historique (insérée juste après)
+        // partage le même horodatage que `created_at`.
+        derniere_maj_statut: row.try_get("created_at").map_err(AppError::from)?,
         cv_path: None,
         lettre_motivation_path: None,
         created_at: row.try_get("created_at").map_err(AppError::from)?,
@@ -265,6 +268,11 @@ pub async fn list_for_session(
                 type AS type_contrat, \
                 CAST(date_candidature AS TEXT) AS date_candidature, \
                 CAST(next_relance     AS TEXT) AS next_relance, \
+                CAST(COALESCE( \
+                    (SELECT MAX(changed_at) FROM status_history \
+                     WHERE status_history.candidature_id = candidatures.id), \
+                    created_at \
+                ) AS TEXT) AS derniere_maj_statut, \
                 cv_path, lettre_motivation_path, \
                 created_at \
          FROM candidatures \
@@ -289,6 +297,7 @@ pub async fn list_for_session(
                 type_contrat: r.try_get("type_contrat")?,
                 date_candidature: r.try_get("date_candidature")?,
                 next_relance: r.try_get("next_relance")?,
+                derniere_maj_statut: r.try_get("derniere_maj_statut")?,
                 cv_path: r.try_get("cv_path")?,
                 lettre_motivation_path: r.try_get("lettre_motivation_path")?,
                 created_at: r.try_get("created_at")?,
