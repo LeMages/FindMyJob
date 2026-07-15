@@ -23,7 +23,7 @@ import { TYPE_CONTRAT_OPTIONS, SOURCE_OPTIONS, statusLabel } from '@/composables
 import { formatFileSize } from '@/composables/format_file_size'
 import DetailPopup from '@/views/detail/components/DetailPopup.vue'
 import DocumentPreviewModal from '@/views/detail/components/DocumentPreviewModal.vue'
-import EditableField from '@/views/detail/components/EditableField.vue'
+import EditableField from '@/components/EditableField.vue'
 
 // Libellés d'affichage des événements de suivi
 const eventLabel = (type: string) => {

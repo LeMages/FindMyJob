@@ -12,7 +12,7 @@ import { invoke } from '@tauri-apps/api/core'
 // Importation des modules internes
 import type {
   Screen, PopupKey, EventType,
-  BoardCard, Session,
+  BoardCard, Session, UpdateSessionInput,
   CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
   AppEvent, NewContact,
   DragState, DragPopupState,
@@ -136,6 +136,38 @@ export function setUserInfo(displayName: string, initials: string) {
  */
 export function navigate(screen: Screen) {
   state.screen = screen
+}
+
+/**
+ * Met à jour un ou plusieurs champs éditables d'une session (titre, contexte,
+ * statut, zone cible) et synchronise la liste des sessions. Fusionne le
+ * correctif avec les valeurs actuelles avant envoi, car le backend attend le
+ * jeu complet des champs éditables.
+ *
+ * @param id - Identifiant de la session à modifier.
+ * @param patch - Champs modifiés à envoyer au backend.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function updateSession(id: number, patch: Partial<UpdateSessionInput>): Promise<string | null> {
+  const current = backendSessions.value.find(s => s.id === id)
+  if (!current) return null
+
+  const input: UpdateSessionInput = {
+    nom: current.nom,
+    contexte: current.contexte,
+    statut: current.statut,
+    zone: current.zone,
+    ...patch,
+  }
+
+  try {
+    const updated = await invoke<Session>('update_session', { id, input })
+    const idx = backendSessions.value.findIndex(s => s.id === id)
+    if (idx !== -1) backendSessions.value[idx] = updated
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, 'Impossible de mettre à jour la session.')
+  }
 }
 
 /**

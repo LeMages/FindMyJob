@@ -21,7 +21,7 @@ pub use formation::{CreateFormationInput, FormationView};
 pub use lang::{CreateLangInput, LangView};
 pub use profile::ProfileDto;
 pub use projet::{CreateProjetInput, ProjetView};
-pub use session::{CreateSessionInput, SessionView};
+pub use session::{CreateSessionInput, SessionView, UpdateSessionInput};
 pub use skill::{CreateSkillInput, SkillView};
 pub use status_history::StatusHistoryView;
 pub use user::{CreateUserInput, UpdateUserInfoInput, UserView};

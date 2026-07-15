@@ -64,12 +64,24 @@ export interface BoardColumn {
   cards: BoardCard[]
 }
 
+export type SessionStatut = 'active' | 'pause' | 'termine'
+
 export interface Session {
   id: number
   nom: string
+  contexte: string | null
+  statut: SessionStatut
+  zone: string | null
   candidature_count: number
   has_accepted: boolean
   created_at: string
+}
+
+export interface UpdateSessionInput {
+  nom: string
+  contexte: string | null
+  statut: SessionStatut
+  zone: string | null
 }
 
 export interface AppEvent {

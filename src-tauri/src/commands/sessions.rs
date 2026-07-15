@@ -4,7 +4,7 @@
 use crate::db::init::DbState;
 use crate::db::{sessions, users};
 use crate::error::AppError;
-use crate::models::{CreateSessionInput, SessionView};
+use crate::models::{CreateSessionInput, SessionView, UpdateSessionInput};
 
 /// Crée une nouvelle session de candidature.
 ///
@@ -38,6 +38,26 @@ pub async fn create_session(
 pub async fn get_sessions(state: tauri::State<'_, DbState>) -> Result<Vec<SessionView>, AppError> {
     let user = users::fetch_first_user(&state.pool).await?;
     sessions::list_for_user(&state.pool, user.id).await
+}
+
+/// Met à jour le nom, le contexte, le statut et la zone cible d'une session existante.
+///
+/// # Arguments
+///
+/// * `state` - État partagé (pool de connexions).
+/// * `id` - Identifiant de la session à modifier.
+/// * `input` - Nouvelles valeurs des champs éditables de la session.
+///
+/// # Returns
+///
+/// `SessionView` mise à jour.
+#[tauri::command]
+pub async fn update_session(
+    state: tauri::State<'_, DbState>,
+    id: i64,
+    input: UpdateSessionInput,
+) -> Result<SessionView, AppError> {
+    sessions::update(&state.pool, id, &input).await
 }
 
 /// Supprime une session et toutes les candidatures qui en dépendent.

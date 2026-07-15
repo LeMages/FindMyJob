@@ -1,27 +1,53 @@
 <script setup lang="ts">
 /**
  * Formulaire de paramètres de la session courante (onglet Paramètres de la
- * page Candidatures). Purement visuel : données mockées en dur, aucune
- * commande Tauri, aucune persistance.
+ * page Candidatures). Titre, contexte, statut et zone cible sont reliés au
+ * backend (`sessions`), édités au double-clic (même mécanique que la page
+ * détail d'une candidature) ; le CV/LM restent mockés en dur en attendant
+ * leur commande Tauri.
  */
 
 // Importation des modules Vue / framework
 import { ref } from 'vue'
 
-type SessionStatus = 'active' | 'pause' | 'terminee'
+// Importation des modules internes
+import { currentSession, updateSession } from '@/stores/app'
+import type { SessionStatut } from '@/types'
+import EditableField from '@/components/EditableField.vue'
 
-const titre = ref('Stage M2 — Data/ML Engineering')
-const contexte = ref(
-  "Stage obligatoire de 6 mois pour valider mon diplôme d'ingénieur à EFREI Paris. Recherche dans la région Romandie (Genève/Lausanne).",
-)
-const statut = ref<SessionStatus>('active')
-const zoneCible = ref('Genève / Lausanne — Romandie')
-
-const STATUS_OPTIONS: { value: SessionStatus; label: string }[] = [
+const STATUS_OPTIONS: { value: SessionStatut; label: string }[] = [
   { value: 'active', label: 'Active' },
   { value: 'pause', label: 'En pause' },
-  { value: 'terminee', label: 'Terminée' },
+  { value: 'termine', label: 'Terminée' },
 ]
+
+/** Sauvegarde le titre de la session. */
+async function saveNom(v: string): Promise<string | null | undefined> {
+  const session = currentSession.value
+  if (!session) return
+  return updateSession(session.id, { nom: v })
+}
+
+/** Sauvegarde le contexte de la session. */
+async function saveContexte(v: string): Promise<string | null | undefined> {
+  const session = currentSession.value
+  if (!session) return
+  return updateSession(session.id, { contexte: v })
+}
+
+/** Sauvegarde le statut de la session. */
+async function saveStatut(v: string): Promise<string | null | undefined> {
+  const session = currentSession.value
+  if (!session) return
+  return updateSession(session.id, { statut: v as SessionStatut })
+}
+
+/** Sauvegarde la zone cible de la session. */
+async function saveZone(v: string): Promise<string | null | undefined> {
+  const session = currentSession.value
+  if (!session) return
+  return updateSession(session.id, { zone: v })
+}
 
 const cvFilename = ref('CV_Loic_Cupif_2026.pdf')
 const lettreFilename = ref('LM_Template_Stage.pdf')
@@ -35,34 +61,34 @@ const lettreFilename = ref('LM_Template_Stage.pdf')
 
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Titre de la session</label>
-        <input
-          v-model="titre"
-          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
-          type="text"
+        <EditableField
+          :model-value="currentSession?.nom ?? null"
+          :editable="true"
+          placeholder="Titre de la session"
+          :on-save="saveNom"
         />
       </div>
 
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Contexte</label>
-        <textarea
-          v-model="contexte"
-          class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-24"
+        <EditableField
+          type="textarea"
+          :model-value="currentSession?.contexte ?? null"
+          :editable="true"
+          placeholder="Contexte de la session"
+          :on-save="saveContexte"
         />
       </div>
 
       <div>
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Statut de la session</label>
-        <div class="flex gap-2">
-          <div
-            v-for="opt in STATUS_OPTIONS"
-            :key="opt.value"
-            class="flex-1 h-[38px] rounded-lg flex items-center justify-center text-[13px] font-semibold cursor-pointer"
-            :class="statut === opt.value ? 'border-2 border-neutral-950 bg-neutral-950 text-white' : 'border border-neutral-300 text-neutral-500'"
-            @click="statut = opt.value"
-          >
-            {{ opt.label }}
-          </div>
-        </div>
+        <EditableField
+          type="select"
+          :options="STATUS_OPTIONS"
+          :model-value="currentSession?.statut ?? null"
+          :editable="true"
+          :on-save="saveStatut"
+        />
       </div>
     </div>
 
@@ -71,10 +97,11 @@ const lettreFilename = ref('LM_Template_Stage.pdf')
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">ZONE GÉOGRAPHIQUE</div>
       <div>
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Zone cible</label>
-        <input
-          v-model="zoneCible"
-          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
-          type="text"
+        <EditableField
+          :model-value="currentSession?.zone ?? null"
+          :editable="true"
+          placeholder="Ex. Genève / Lausanne — Romandie"
+          :on-save="saveZone"
         />
       </div>
     </div>
@@ -115,13 +142,5 @@ const lettreFilename = ref('LM_Template_Stage.pdf')
         </div>
       </div>
     </div>
-
-    <!-- Enregistrer -->
-    <button
-      class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white opacity-40 cursor-not-allowed"
-      disabled
-    >
-      Enregistrer
-    </button>
   </div>
 </template>
