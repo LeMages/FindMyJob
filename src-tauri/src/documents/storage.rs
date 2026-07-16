@@ -98,8 +98,13 @@ pub async fn get_reference(app: &tauri::AppHandle, session_id: i64, doc_type: &s
     })
 }
 
-/// Sauvegarde un nouveau document de référence (.typ), en archivant l'ancien s'il existe,
-/// puis le compile immédiatement en PDF.
+/// Analyse le style du document via l'API Claude, puis sauvegarde le nouveau
+/// document de référence (.typ) en archivant l'ancien s'il existe, et le
+/// compile immédiatement en PDF.
+///
+/// L'analyse de style est bloquante et a lieu avant toute écriture disque :
+/// si l'appel à Claude échoue ou renvoie un format inattendu, le save entier
+/// échoue et rien n'est modifié (ni fichier, ni entrée DB).
 ///
 /// # Arguments
 ///
@@ -127,6 +132,13 @@ pub async fn save_reference(
             "Seuls les fichiers .typ sont acceptés.".to_string(),
         ));
     }
+
+    // ------------------------------------------------------------------
+    // 1bis. Analyse de style via l'API Claude — placée avant toute
+    //    écriture disque : si l'appel échoue ou renvoie un format
+    //    inattendu, rien n'est créé (ni dossier, ni backup, ni fichier).
+    // ------------------------------------------------------------------
+    let style_analysis = crate::llm::analyze_style(&content, doc_type).await?;
 
     let doc_dir = resolve_doc_dir(&app, session_id, doc_type);
     std::fs::create_dir_all(&doc_dir)
@@ -187,6 +199,7 @@ pub async fn save_reference(
         &filename,
         &typ_path.to_string_lossy(),
         Some(&pdf_path.to_string_lossy()),
+        Some(&style_analysis),
     )
     .await
     {

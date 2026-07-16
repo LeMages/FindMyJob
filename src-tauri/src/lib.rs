@@ -6,6 +6,7 @@ pub mod commands;
 pub mod db;
 pub mod documents;
 pub mod error;
+pub mod llm;
 pub mod models;
 
 // Importation des crates externes
@@ -18,6 +19,10 @@ use db::init::{init_db, resolve_db_path, DbState};
 /// l'injecte comme état partagé, puis enregistre toutes les commandes IPC .
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Charge le .env à la racine du projet (ANTHROPIC_API_KEY, etc.) — no-op
+    // silencieux si le fichier est absent (ex. build de production packagée).
+    dotenvy::dotenv().ok();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {

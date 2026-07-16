@@ -24,6 +24,7 @@ use crate::models::Document;
 /// * `original_filename` - Nom du fichier tel qu'uploadé par l'utilisateur.
 /// * `file_path` - Chemin absolu vers `reference.typ`.
 /// * `pdf_path` - Chemin absolu vers `reference.pdf`, si disponible.
+/// * `style_analysis` - JSON d'analyse de style produit par le pipeline IA, si disponible.
 ///
 /// # Returns
 ///
@@ -35,14 +36,16 @@ pub async fn upsert(
     original_filename: &str,
     file_path: &str,
     pdf_path: Option<&str>,
+    style_analysis: Option<&str>,
 ) -> Result<Document, AppError> {
     let doc = sqlx::query_as::<_, Document>(
-        "INSERT INTO documents (session_id, doc_type, original_filename, file_path, pdf_path) \
-         VALUES (?, ?, ?, ?, ?) \
+        "INSERT INTO documents (session_id, doc_type, original_filename, file_path, pdf_path, style_analysis) \
+         VALUES (?, ?, ?, ?, ?, ?) \
          ON CONFLICT(session_id, doc_type) DO UPDATE SET \
              original_filename = excluded.original_filename, \
              file_path = excluded.file_path, \
              pdf_path = excluded.pdf_path, \
+             style_analysis = excluded.style_analysis, \
              updated_at = datetime('now') \
          RETURNING id, session_id, doc_type, original_filename, file_path, pdf_path, \
                    style_analysis, created_at, updated_at",
@@ -52,6 +55,7 @@ pub async fn upsert(
     .bind(original_filename)
     .bind(file_path)
     .bind(pdf_path)
+    .bind(style_analysis)
     .fetch_one(pool)
     .await?;
 
