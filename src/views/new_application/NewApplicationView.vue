@@ -18,7 +18,6 @@ import {
   removeContact,
 } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
-import DocumentReferenceEditor from '@/components/DocumentReferenceEditor.vue'
 
 const roleRef = ref('')
 const companyRef = ref('')
@@ -42,12 +41,6 @@ const isValid = computed(() =>
 const saving = ref(false)
 const saveError = ref<string | null>(null)
 
-// Documents joints — la mise en scène (upload/sélection/glisser-déposer) est
-// déléguée à DocumentReferenceEditor (mode "attachment") ; cette vue ne garde
-// que le chemin résultant, lié en v-model.
-const selectedCvPath = ref<string | null>(null)
-const selectedLettrePath = ref<string | null>(null)
-
 /** Valide et envoie le formulaire de nouvelle candidature au backend. */
 async function submit() {
   if (!isValid.value) return
@@ -65,8 +58,8 @@ async function submit() {
       url_offre: urlOffreRef.value.trim() || null,
       description_offre: descriptionOffreRef.value.trim() || null,
       notes: notesRef.value.trim() || null,
-      cv_path: selectedCvPath.value,
-      lettre_motivation_path: selectedLettrePath.value,
+      cv_path: null,
+      lettre_motivation_path: null,
       session_id: currentSession.value?.id ?? null,
     }
     // 2. Création de la candidature côté backend
@@ -81,8 +74,6 @@ async function submit() {
     urlOffreRef.value = ''
     descriptionOffreRef.value = ''
     notesRef.value = ''
-    selectedCvPath.value = null
-    selectedLettrePath.value = null
     navigate('tracking')
   } catch (e: unknown) {
     saveError.value = extractErrorMessage(e, 'Erreur lors de la création de la candidature.')
@@ -209,15 +200,6 @@ async function submit() {
       >
         + Ajouter un contact
       </button>
-    </div>
-
-    <!-- Documents -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DOCUMENTS</div>
-      <div class="grid grid-cols-2 gap-4">
-        <DocumentReferenceEditor v-model="selectedCvPath" doc-type="cv" mode="attachment" :session-id="currentSession?.id" />
-        <DocumentReferenceEditor v-model="selectedLettrePath" doc-type="lettre_motivation" mode="attachment" :session-id="currentSession?.id" />
-      </div>
     </div>
 
     <!-- Notes -->
