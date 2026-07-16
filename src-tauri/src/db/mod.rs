@@ -4,6 +4,7 @@
 pub mod candidatures;
 pub mod common;
 pub mod contacts;
+pub mod documents;
 pub mod experiences;
 pub mod formations;
 pub mod init;

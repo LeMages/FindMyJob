@@ -9,8 +9,11 @@
 // Importation des modules standard
 use std::path::PathBuf;
 
+// Importation des crates externes
+use tauri::Manager;
+
 // Importation des modules internes
-use crate::db::resolve_data_dir;
+use crate::db::{self, resolve_data_dir, DbState};
 use crate::documents::typst::compile_to_pdf;
 use crate::error::AppError;
 use crate::models::{DocumentFileInfo, DocumentReferenceView};
@@ -72,12 +75,21 @@ fn updated_at_millis(path: &std::path::Path) -> String {
 /// # Returns
 ///
 /// `Some(DocumentReferenceView)` si un fichier de référence existe, `None` sinon.
-pub fn get_reference(app: &tauri::AppHandle, session_id: i64, doc_type: &str) -> Option<DocumentReferenceView> {
+pub async fn get_reference(app: &tauri::AppHandle, session_id: i64, doc_type: &str) -> Option<DocumentReferenceView> {
     let doc_dir = resolve_doc_dir(app, session_id, doc_type);
     let typ_path = doc_dir.join("reference.typ");
     if !typ_path.exists() {
         return None;
     }
+
+    // Lecture DB best-effort : prépare l'enrichissement futur de la réponse
+    // (ex. style_analysis), sans influencer le comportement actuel — le
+    // filesystem reste la source de vérité de l'existence du document.
+    let pool = app.state::<DbState>().pool.clone();
+    if let Err(e) = db::documents::get_by_session_and_type(&pool, session_id, doc_type).await {
+        eprintln!("Lecture DB du document ({doc_type}, session {session_id}) échouée : {e}");
+    }
+
     let pdf_path = doc_dir.join("reference.pdf");
     Some(DocumentReferenceView {
         file_path: typ_path.to_string_lossy().to_string(),
@@ -161,6 +173,25 @@ pub async fn save_reference(
 
     std::fs::write(&pdf_path, &pdf_bytes)
         .map_err(|e| AppError::Validation(format!("Écriture du PDF impossible : {}", e)))?;
+
+    // ------------------------------------------------------------------
+    // 5. Trace en DB (non bloquant : le filesystem reste la source de
+    //    vérité, on ne veut pas perdre un fichier correctement sauvegardé
+    //    à cause d'une erreur DB)
+    // ------------------------------------------------------------------
+    let pool = app.state::<DbState>().pool.clone();
+    if let Err(e) = db::documents::upsert(
+        &pool,
+        session_id,
+        doc_type,
+        &filename,
+        &typ_path.to_string_lossy(),
+        Some(&pdf_path.to_string_lossy()),
+    )
+    .await
+    {
+        eprintln!("Trace DB du document ({doc_type}, session {session_id}) échouée : {e}");
+    }
 
     Ok(DocumentReferenceView {
         file_path: typ_path.to_string_lossy().to_string(),

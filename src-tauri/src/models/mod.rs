@@ -15,7 +15,7 @@ pub mod user;
 
 pub use candidature::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
 pub use contact::ContactView;
-pub use document::{DocumentFileInfo, DocumentReferenceView};
+pub use document::{Document, DocumentFileInfo, DocumentReferenceView};
 pub use experience::{CreateExperienceInput, ExperienceView};
 pub use formation::{CreateFormationInput, FormationView};
 pub use lang::{CreateLangInput, LangView};
