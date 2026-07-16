@@ -12,6 +12,9 @@ pub struct CandidatureView {
     pub type_contrat: Option<String>,
     pub date_candidature: Option<String>,
     pub next_relance: Option<String>,
+    /// Horodatage du dernier changement de statut (issu de `status_history`),
+    /// utilisé pour calculer l'inactivité affichée dans la vue pipeline.
+    pub derniere_maj_statut: String,
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
     pub created_at: String,

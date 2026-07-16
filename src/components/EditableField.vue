@@ -3,8 +3,8 @@
  * Champ affiché en lecture seule, qui bascule en édition (uniquement si
  * `editable`) sur double-clic — ou sur simple clic pour un `select`, ouvert
  * directement comme un menu déroulant classique. Valide au blur ou à la
- * touche Entrée (sauf en `textarea`, où Entrée insère un saut de ligne),
- * annule sur Échap.
+ * touche Entrée ; en `textarea`, Entrée seule valide aussi (Maj+Entrée pour
+ * insérer un saut de ligne, comme Notion/Slack), annule sur Échap.
  *
  * La sauvegarde est déléguée au parent via `onSave` (fonction async qui
  * retourne un message d'erreur en cas d'échec, ou rien en cas de succès) :
@@ -147,6 +147,7 @@ onUnmounted(() => clearTimeout(errorTimeoutId))
       :class="textareaClass"
       :placeholder="placeholder"
       @blur="commit"
+      @keydown.enter.exact.prevent="commit"
       @keyup.esc="cancel"
     />
     <select

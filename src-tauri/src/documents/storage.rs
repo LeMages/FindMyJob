@@ -2,6 +2,9 @@
 //! et des documents joints à une candidature : résolution de chemins,
 //! sauvegarde avec historique, compilation Typst → PDF, mise en scène des
 //! fichiers avant rattachement définitif à une candidature.
+//!
+//! Chaque session de candidature a son propre CV et sa propre lettre de
+//! motivation : tout est stocké sous `documents/sessions/<session_id>/`.
 
 // Importation des modules standard
 use std::path::PathBuf;
@@ -12,18 +15,24 @@ use crate::documents::typst::compile_to_pdf;
 use crate::error::AppError;
 use crate::models::{DocumentFileInfo, DocumentReferenceView};
 
-/// Résout le dossier d'un type de document (`cv` ou `lettre_motivation`).
+/// Résout le dossier d'un type de document (`cv` ou `lettre_motivation`)
+/// propre à une session de candidature.
 ///
 /// # Arguments
 ///
 /// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire des documents.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"` — le nom du dossier correspond exactement.
 ///
 /// # Returns
 ///
-/// Chemin absolu vers `documents/<doc_type>/`.
-fn resolve_doc_dir(app: &tauri::AppHandle, doc_type: &str) -> PathBuf {
-    resolve_data_dir(app).join("documents").join(doc_type)
+/// Chemin absolu vers `documents/sessions/<session_id>/<doc_type>/`.
+fn resolve_doc_dir(app: &tauri::AppHandle, session_id: i64, doc_type: &str) -> PathBuf {
+    resolve_data_dir(app)
+        .join("documents")
+        .join("sessions")
+        .join(session_id.to_string())
+        .join(doc_type)
 }
 
 /// Nom de base utilisé pour les fichiers de sauvegarde (`cv.typ`/`lettre.typ`).
@@ -57,13 +66,14 @@ fn updated_at_millis(path: &std::path::Path) -> String {
 /// # Arguments
 ///
 /// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 ///
 /// # Returns
 ///
 /// `Some(DocumentReferenceView)` si un fichier de référence existe, `None` sinon.
-pub fn get_reference(app: &tauri::AppHandle, doc_type: &str) -> Option<DocumentReferenceView> {
-    let doc_dir = resolve_doc_dir(app, doc_type);
+pub fn get_reference(app: &tauri::AppHandle, session_id: i64, doc_type: &str) -> Option<DocumentReferenceView> {
+    let doc_dir = resolve_doc_dir(app, session_id, doc_type);
     let typ_path = doc_dir.join("reference.typ");
     if !typ_path.exists() {
         return None;
@@ -82,6 +92,7 @@ pub fn get_reference(app: &tauri::AppHandle, doc_type: &str) -> Option<DocumentR
 /// # Arguments
 ///
 /// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `filename` - Nom du fichier fourni par l'utilisateur (doit finir par `.typ`).
 /// * `content` - Contenu Typst du document.
@@ -91,6 +102,7 @@ pub fn get_reference(app: &tauri::AppHandle, doc_type: &str) -> Option<DocumentR
 /// `DocumentReferenceView` pointant vers les fichiers `.typ` et `.pdf` sauvegardés.
 pub async fn save_reference(
     app: tauri::AppHandle,
+    session_id: i64,
     doc_type: &'static str,
     filename: String,
     content: String,
@@ -104,7 +116,7 @@ pub async fn save_reference(
         ));
     }
 
-    let doc_dir = resolve_doc_dir(&app, doc_type);
+    let doc_dir = resolve_doc_dir(&app, session_id, doc_type);
     std::fs::create_dir_all(&doc_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
 
@@ -162,13 +174,18 @@ pub async fn save_reference(
 /// # Arguments
 ///
 /// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 ///
 /// # Returns
 ///
 /// PDF encodé en base64, prêt à être affiché côté frontend.
-pub async fn compile_reference(app: tauri::AppHandle, doc_type: &'static str) -> Result<String, AppError> {
-    let doc_dir = resolve_doc_dir(&app, doc_type);
+pub async fn compile_reference(
+    app: tauri::AppHandle,
+    session_id: i64,
+    doc_type: &'static str,
+) -> Result<String, AppError> {
+    let doc_dir = resolve_doc_dir(&app, session_id, doc_type);
     let typ_path = doc_dir.join("reference.typ");
     if !typ_path.exists() {
         return Err(AppError::NotFound("Aucun fichier de référence trouvé.".to_string()));
@@ -193,13 +210,18 @@ pub async fn compile_reference(app: tauri::AppHandle, doc_type: &'static str) ->
 /// # Arguments
 ///
 /// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 ///
 /// # Returns
 ///
 /// Chemin absolu du dossier, sous forme de chaîne.
-pub fn resolve_reference_dir(app: &tauri::AppHandle, doc_type: &str) -> Result<String, AppError> {
-    let dir = resolve_doc_dir(app, doc_type);
+pub fn resolve_reference_dir(
+    app: &tauri::AppHandle,
+    session_id: i64,
+    doc_type: &str,
+) -> Result<String, AppError> {
+    let dir = resolve_doc_dir(app, session_id, doc_type);
     std::fs::create_dir_all(&dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
     Ok(dir.to_string_lossy().to_string())
@@ -211,6 +233,7 @@ pub fn resolve_reference_dir(app: &tauri::AppHandle, doc_type: &str) -> Result<S
 /// # Arguments
 ///
 /// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `filename` - Nom de fichier d'origine (utilisé comme suffixe).
 ///
@@ -219,10 +242,11 @@ pub fn resolve_reference_dir(app: &tauri::AppHandle, doc_type: &str) -> Result<S
 /// Chemin de destination temporaire.
 fn next_staged_path(
     app: &tauri::AppHandle,
+    session_id: i64,
     doc_type: &str,
     filename: &str,
 ) -> Result<PathBuf, AppError> {
-    let artefact_dir = resolve_doc_dir(app, doc_type).join("artefact");
+    let artefact_dir = resolve_doc_dir(app, session_id, doc_type).join("artefact");
     std::fs::create_dir_all(&artefact_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
     let ts = std::time::SystemTime::now()
@@ -238,6 +262,7 @@ fn next_staged_path(
 /// # Arguments
 ///
 /// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `filename` - Nom du fichier d'origine (doit finir par `.pdf`).
 /// * `content` - Contenu du fichier encodé en base64.
@@ -247,6 +272,7 @@ fn next_staged_path(
 /// Chemin temporaire du fichier mis en scène.
 pub async fn upload_candidature_document(
     app: tauri::AppHandle,
+    session_id: i64,
     doc_type: &'static str,
     filename: String,
     content: String,
@@ -262,7 +288,7 @@ pub async fn upload_candidature_document(
         .decode(&content)
         .map_err(|e| AppError::Validation(format!("Contenu invalide : {}", e)))?;
 
-    let dest = next_staged_path(&app, doc_type, &filename)?;
+    let dest = next_staged_path(&app, session_id, doc_type, &filename)?;
     std::fs::write(&dest, &pdf_bytes)
         .map_err(|e| AppError::Validation(format!("Écriture impossible : {}", e)))?;
     Ok(dest.to_string_lossy().to_string())
@@ -274,6 +300,7 @@ pub async fn upload_candidature_document(
 /// # Arguments
 ///
 /// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `path` - Chemin absolu du fichier sélectionné (doit finir par `.pdf`).
 ///
@@ -282,6 +309,7 @@ pub async fn upload_candidature_document(
 /// Chemin temporaire du fichier mis en scène.
 pub async fn select_candidature_document(
     app: tauri::AppHandle,
+    session_id: i64,
     doc_type: &'static str,
     path: String,
 ) -> Result<String, AppError> {
@@ -296,7 +324,7 @@ pub async fn select_candidature_document(
         .map(|f| f.to_string_lossy().to_string())
         .unwrap_or_else(|| "document.pdf".to_string());
 
-    let dest = next_staged_path(&app, doc_type, &filename)?;
+    let dest = next_staged_path(&app, session_id, doc_type, &filename)?;
     std::fs::copy(&path, &dest)
         .map_err(|e| AppError::Validation(format!("Copie du fichier impossible : {}", e)))?;
     Ok(dest.to_string_lossy().to_string())
@@ -352,6 +380,7 @@ pub fn read_document_base64(path: &str) -> Result<String, AppError> {
 /// # Arguments
 ///
 /// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `staged_path` - Chemin temporaire renvoyé par `upload_candidature_document`
 ///   ou `select_candidature_document`, s'il y en a un.
@@ -362,6 +391,7 @@ pub fn read_document_base64(path: &str) -> Result<String, AppError> {
 /// `Some(chemin_final)` si un document était en attente, `None` sinon.
 pub fn finalize_candidature_document(
     app: &tauri::AppHandle,
+    session_id: i64,
     doc_type: &str,
     staged_path: Option<String>,
     candidature_id: i64,
@@ -375,7 +405,7 @@ pub fn finalize_candidature_document(
             "Le document sélectionné est introuvable.".to_string(),
         ));
     }
-    let artefact_dir = resolve_doc_dir(app, doc_type).join("artefact");
+    let artefact_dir = resolve_doc_dir(app, session_id, doc_type).join("artefact");
     std::fs::create_dir_all(&artefact_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
     let dest = artefact_dir.join(format!("{}.pdf", candidature_id));

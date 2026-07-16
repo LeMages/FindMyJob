@@ -74,6 +74,7 @@ pub fn run() {
             commands::select_candidature_lettre_motivation,
             commands::create_session,
             commands::get_sessions,
+            commands::update_session,
             commands::delete_session,
         ])
         .run(tauri::generate_context!())

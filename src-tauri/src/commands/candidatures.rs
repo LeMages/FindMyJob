@@ -30,13 +30,30 @@ pub async fn create_candidature(
 
     let mut view = candidatures::insert(&state.pool, user.id, &input).await?;
 
-    let cv_path = finalize_candidature_document(&app, "cv", input.cv_path, view.id)?;
-    let lettre_motivation_path = finalize_candidature_document(
-        &app,
-        "lettre_motivation",
-        input.lettre_motivation_path,
-        view.id,
-    )?;
+    // Les documents joints appartiennent à la session : impossible de les
+    // finaliser sans identifiant de session.
+    let session_id = if input.cv_path.is_some() || input.lettre_motivation_path.is_some() {
+        Some(input.session_id.ok_or_else(|| {
+            AppError::Validation("Une session est requise pour joindre un document.".to_string())
+        })?)
+    } else {
+        None
+    };
+
+    let cv_path = match session_id {
+        Some(sid) => finalize_candidature_document(&app, sid, "cv", input.cv_path, view.id)?,
+        None => None,
+    };
+    let lettre_motivation_path = match session_id {
+        Some(sid) => finalize_candidature_document(
+            &app,
+            sid,
+            "lettre_motivation",
+            input.lettre_motivation_path,
+            view.id,
+        )?,
+        None => None,
+    };
 
     if cv_path.is_some() || lettre_motivation_path.is_some() {
         candidatures::set_documents(&state.pool, view.id, &cv_path, &lettre_motivation_path).await?;

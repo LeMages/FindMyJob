@@ -64,12 +64,24 @@ export interface BoardColumn {
   cards: BoardCard[]
 }
 
+export type SessionStatut = 'active' | 'pause' | 'termine'
+
 export interface Session {
   id: number
   nom: string
+  contexte: string | null
+  statut: SessionStatut
+  zone: string | null
   candidature_count: number
   has_accepted: boolean
   created_at: string
+}
+
+export interface UpdateSessionInput {
+  nom: string
+  contexte: string | null
+  statut: SessionStatut
+  zone: string | null
 }
 
 export interface AppEvent {
@@ -182,8 +194,6 @@ export interface ProfileDto {
   projets: ProjetView[]
   skills: SkillView[]
   langues: LangView[]
-  cv_reference: DocumentReferenceView | null
-  lettre_motivation_reference: DocumentReferenceView | null
 }
 
 // ── Candidatures ──────────────────────────────────────────────────────────────
@@ -199,6 +209,7 @@ export interface CandidatureView {
   type_contrat: string | null
   date_candidature: string | null
   next_relance: string | null
+  derniere_maj_statut: string
   cv_path: string | null
   lettre_motivation_path: string | null
   created_at: string

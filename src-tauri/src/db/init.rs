@@ -85,8 +85,9 @@ pub fn resolve_data_dir(app: &tauri::AppHandle) -> PathBuf {
 
 /// Initialise le pool SQLite et applique les migrations.
 ///
-/// Crée également l'arborescence de dossiers `documents/{cv,lettre_motivation}/{backup,artefact}`
-/// nécessaire au stockage des documents de référence.
+/// Les dossiers de documents (`documents/sessions/<session_id>/{cv,lettre_motivation}/...`)
+/// sont propres à chaque session et créés à la volée par `documents::storage`,
+/// puisque les sessions n'existent pas encore à ce stade de l'initialisation.
 ///
 /// # Arguments
 ///
@@ -100,11 +101,6 @@ pub async fn init_db(
 ) -> Result<SqlitePool, Box<dyn std::error::Error + Send + Sync>> {
     if let Some(data_dir) = db_path.parent() {
         std::fs::create_dir_all(data_dir)?;
-        for doc_type in ["cv", "lettre_motivation"] {
-            let dir = data_dir.join("documents").join(doc_type);
-            std::fs::create_dir_all(dir.join("backup"))?;
-            std::fs::create_dir_all(dir.join("artefact"))?;
-        }
     }
 
     let options = SqliteConnectOptions::new()
