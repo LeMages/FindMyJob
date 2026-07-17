@@ -77,18 +77,6 @@ const progressText = computed(() =>
   progressStep.value > 0 ? `${progressLabel.value} (${progressStep.value}/${progressTotal.value})` : 'Sauvegarde…',
 )
 
-/**
- * Détermine la couleur d'un tiret de la barre de progression.
- *
- * @param index - Position du tiret (1-based).
- * @returns `'done'` si l'étape est terminée, `'active'` si en cours, `'pending'` sinon.
- */
-function segmentState(index: number): 'done' | 'active' | 'pending' {
-  if (index < progressStep.value) return 'done'
-  if (index === progressStep.value) return 'active'
-  return 'pending'
-}
-
 /** Écoute la progression de la sauvegarde en cours, filtrée sur ce document précis. */
 async function listenSaveProgress(): Promise<UnlistenFn> {
   progressStep.value = 0
@@ -370,20 +358,11 @@ function clearAttachment() {
     </button>
     <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ emptyLabel }}</div>
 
-    <div v-if="saving" class="mt-[10px]">
-      <div class="flex items-center gap-1 w-full">
-        <div
-          v-for="i in progressTotal"
-          :key="i"
-          class="h-[6px] flex-1 rounded-full transition-colors duration-300"
-          :class="{
-            'bg-green-500': segmentState(i) === 'done',
-            'bg-blue-500': segmentState(i) === 'active',
-            'bg-neutral-200': segmentState(i) === 'pending',
-          }"
-        />
-      </div>
-      <div class="mt-[6px] text-[12px] text-neutral-500 font-mono">{{ progressText }}</div>
+    <div v-if="saving" class="mt-[10px] flex items-center gap-[7px] text-[12px] text-neutral-500 font-mono">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-blue-500 flex-none">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+      </svg>
+      <span>{{ progressText }}</span>
     </div>
     <div v-if="error" class="mt-[10px] text-[12px] text-red-600">{{ error }}</div>
   </div>
