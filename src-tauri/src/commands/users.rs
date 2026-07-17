@@ -3,7 +3,7 @@
 
 // Importation des modules internes
 use crate::db::init::DbState;
-use crate::db::{experiences, formations, langues, projets, skills, users};
+use crate::db::{profile, users};
 use crate::error::AppError;
 use crate::models::{CreateUserInput, ProfileDto, UpdateUserInfoInput, UserView};
 
@@ -65,23 +65,7 @@ pub async fn get_user(state: tauri::State<'_, DbState>) -> Result<UserView, AppE
 /// `ProfileDto` agrégeant l'ensemble des données du profil.
 #[tauri::command]
 pub async fn get_profile(state: tauri::State<'_, DbState>) -> Result<ProfileDto, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    let uid = user.id;
-
-    let profile_experiences = experiences::list_for_user(&state.pool, uid).await?;
-    let profile_formations = formations::list_for_user(&state.pool, uid).await?;
-    let profile_projets = projets::list_for_user(&state.pool, uid).await?;
-    let profile_skills = skills::list_for_user(&state.pool, uid).await?;
-    let profile_langues = langues::list_for_user(&state.pool, uid).await?;
-
-    Ok(ProfileDto {
-        user,
-        experiences: profile_experiences,
-        formations: profile_formations,
-        projets: profile_projets,
-        skills: profile_skills,
-        langues: profile_langues,
-    })
+    profile::build_profile(&state.pool).await
 }
 
 /// Met à jour la description libre du profil.

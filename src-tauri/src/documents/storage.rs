@@ -495,3 +495,43 @@ pub fn finalize_candidature_document(
         .map_err(|e| AppError::Validation(format!("Impossible de finaliser le document : {}", e)))?;
     Ok(Some(dest.to_string_lossy().to_string()))
 }
+
+/// Sauvegarde un document généré par le pipeline IA (`llm::pipeline`) à
+/// l'emplacement définitif d'une candidature : le code Typst est conservé à
+/// côté du PDF pour le debug/la traçabilité, sous le même nom que
+/// `finalize_candidature_document` (`artefact/<candidature_id>.*`).
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire.
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `candidature_id` - Identifiant de la candidature à laquelle rattacher le document.
+/// * `typst` - Code Typst généré (sauvegardé à des fins de traçabilité).
+/// * `pdf` - Octets du PDF compilé.
+///
+/// # Returns
+///
+/// Chemin absolu du PDF sauvegardé.
+pub fn save_generated_document(
+    app: &tauri::AppHandle,
+    session_id: i64,
+    doc_type: &str,
+    candidature_id: i64,
+    typst: &str,
+    pdf: &[u8],
+) -> Result<String, AppError> {
+    let artefact_dir = resolve_doc_dir(app, session_id, doc_type).join("artefact");
+    std::fs::create_dir_all(&artefact_dir)
+        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
+
+    let typ_path = artefact_dir.join(format!("{}.typ", candidature_id));
+    std::fs::write(&typ_path, typst.as_bytes())
+        .map_err(|e| AppError::Validation(format!("Écriture du fichier Typst impossible : {}", e)))?;
+
+    let pdf_path = artefact_dir.join(format!("{}.pdf", candidature_id));
+    std::fs::write(&pdf_path, pdf)
+        .map_err(|e| AppError::Validation(format!("Écriture du PDF impossible : {}", e)))?;
+
+    Ok(pdf_path.to_string_lossy().to_string())
+}

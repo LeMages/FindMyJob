@@ -9,6 +9,7 @@ pub mod experiences;
 pub mod formations;
 pub mod init;
 pub mod langues;
+pub mod profile;
 pub mod projets;
 pub mod sessions;
 pub mod skills;

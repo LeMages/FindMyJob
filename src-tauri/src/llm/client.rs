@@ -36,6 +36,11 @@ struct ApiResponse {
 
 /// Envoie un message à l'API Claude et retourne le texte de la réponse.
 ///
+/// Utilise le plafond de tokens par défaut ([`MAX_TOKENS`]), adapté aux
+/// réponses JSON courtes (analyse de style, d'offre, de matching...). Pour
+/// les réponses volumineuses (ex. assemblage Typst), voir
+/// [`call_claude_with_tokens`].
+///
 /// # Arguments
 ///
 /// * `system` - Prompt système (instructions, contexte de la tâche).
@@ -52,6 +57,32 @@ pub async fn call_claude(
     user_message: &str,
     output_schema: Option<serde_json::Value>,
 ) -> Result<String, AppError> {
+    call_claude_with_tokens(system, user_message, output_schema, MAX_TOKENS).await
+}
+
+/// Variante de [`call_claude`] avec un plafond de tokens de sortie explicite.
+///
+/// Nécessaire pour les étapes produisant du code Typst complet (CV/lettre),
+/// dont la longueur dépasse largement le plafond par défaut d'une réponse JSON.
+///
+/// # Arguments
+///
+/// * `system` - Prompt système (instructions, contexte de la tâche).
+/// * `user_message` - Message utilisateur (contenu à traiter).
+/// * `output_schema` - Schéma JSON optionnel : si fourni, la requête active
+///   les structured outputs (`output_config.format`) pour garantir une
+///   réponse JSON strictement conforme.
+/// * `max_tokens` - Plafond de tokens de sortie pour cette requête.
+///
+/// # Returns
+///
+/// Le texte du premier bloc de type `text` dans la réponse.
+pub async fn call_claude_with_tokens(
+    system: &str,
+    user_message: &str,
+    output_schema: Option<serde_json::Value>,
+    max_tokens: u32,
+) -> Result<String, AppError> {
     // ------------------------------------------------------------------
     // 1. Clé API — lue à la volée depuis l'environnement (.env chargé au
     //    démarrage de l'app via dotenvy, voir lib.rs)
@@ -64,7 +95,7 @@ pub async fn call_claude(
     // ------------------------------------------------------------------
     let mut body = serde_json::json!({
         "model": MODEL,
-        "max_tokens": MAX_TOKENS,
+        "max_tokens": max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": user_message}],
     });
