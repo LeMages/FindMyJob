@@ -10,13 +10,46 @@
 use std::path::PathBuf;
 
 // Importation des crates externes
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 // Importation des modules internes
 use crate::db::{self, resolve_data_dir, DbState};
 use crate::documents::typst::compile_to_pdf;
 use crate::error::AppError;
-use crate::models::{DocumentFileInfo, DocumentReferenceView};
+use crate::models::{DocumentFileInfo, DocumentReferenceView, DocumentSaveProgress};
+
+/// Nom de l'événement Tauri émis à chaque étape de `save_reference`, écouté
+/// par le frontend pour afficher une barre de progression.
+const SAVE_PROGRESS_EVENT: &str = "document-save-progress";
+
+/// Nombre total d'étapes du flux de `save_reference`, communiqué au frontend
+/// pour calculer une progression (`step`/`total`).
+const SAVE_STEPS_TOTAL: u32 = 5;
+
+/// Émet la progression courante de `save_reference` vers le frontend.
+///
+/// Best-effort : un échec d'émission (aucune fenêtre active, par exemple)
+/// n'a aucun impact sur la sauvegarde elle-même, purement cosmétique.
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Session propriétaire, pour filtrer côté frontend.
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `step` - Étape courante (1-based).
+/// * `label` - Description courte affichée à l'utilisateur.
+fn emit_save_progress(app: &tauri::AppHandle, session_id: i64, doc_type: &str, step: u32, label: &str) {
+    let _ = app.emit(
+        SAVE_PROGRESS_EVENT,
+        DocumentSaveProgress {
+            session_id,
+            doc_type: doc_type.to_string(),
+            step,
+            total: SAVE_STEPS_TOTAL,
+            label: label.to_string(),
+        },
+    );
+}
 
 /// Résout le dossier d'un type de document (`cv` ou `lettre_motivation`)
 /// propre à une session de candidature.
@@ -138,6 +171,7 @@ pub async fn save_reference(
     //    écriture disque : si l'appel échoue ou renvoie un format
     //    inattendu, rien n'est créé (ni dossier, ni backup, ni fichier).
     // ------------------------------------------------------------------
+    emit_save_progress(&app, session_id, doc_type, 1, "Analyse du style (IA)…");
     let style_analysis = crate::llm::analyze_style(&content, doc_type).await?;
 
     let doc_dir = resolve_doc_dir(&app, session_id, doc_type);
@@ -150,6 +184,7 @@ pub async fn save_reference(
     // ------------------------------------------------------------------
     // 2. Sauvegarde de l'ancienne référence (si elle existe) dans backup/<timestamp>/
     // ------------------------------------------------------------------
+    emit_save_progress(&app, session_id, doc_type, 2, "Sauvegarde de l'historique…");
     if typ_path.exists() {
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -171,12 +206,14 @@ pub async fn save_reference(
     // ------------------------------------------------------------------
     // 3. Écriture du nouveau fichier .typ
     // ------------------------------------------------------------------
+    emit_save_progress(&app, session_id, doc_type, 3, "Écriture du fichier…");
     std::fs::write(&typ_path, content.as_bytes())
         .map_err(|e| AppError::Validation(format!("Écriture du fichier impossible : {}", e)))?;
 
     // ------------------------------------------------------------------
     // 4. Compilation en PDF
     // ------------------------------------------------------------------
+    emit_save_progress(&app, session_id, doc_type, 4, "Compilation en PDF…");
     let root = doc_dir.clone();
     let pdf_bytes = tauri::async_runtime::spawn_blocking(move || compile_to_pdf(content, root))
         .await
@@ -191,6 +228,7 @@ pub async fn save_reference(
     //    vérité, on ne veut pas perdre un fichier correctement sauvegardé
     //    à cause d'une erreur DB)
     // ------------------------------------------------------------------
+    emit_save_progress(&app, session_id, doc_type, 5, "Enregistrement en base…");
     let pool = app.state::<DbState>().pool.clone();
     if let Err(e) = db::documents::upsert(
         &pool,

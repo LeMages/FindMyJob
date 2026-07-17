@@ -8,6 +8,26 @@ pub struct DocumentReferenceView {
     pub updated_at: String,
 }
 
+/// Étape de progression émise pendant la sauvegarde d'un document de
+/// référence (`document-save-progress`), écoutée par le frontend pour
+/// afficher une barre de progression façon tqdm.
+///
+/// # Attributes
+///
+/// * `session_id` - Session propriétaire, pour filtrer les événements côté frontend.
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `step` - Étape courante (1-based).
+/// * `total` - Nombre total d'étapes du flux de sauvegarde.
+/// * `label` - Description courte de l'étape en cours, affichée à l'utilisateur.
+#[derive(serde::Serialize, Clone)]
+pub struct DocumentSaveProgress {
+    pub session_id: i64,
+    pub doc_type: String,
+    pub step: u32,
+    pub total: u32,
+    pub label: String,
+}
+
 /// État sur disque d'un document joint à une candidature (CV / lettre de
 /// motivation), utilisé pour afficher honnêtement sa présence dans la page
 /// de détail — le fichier peut avoir été déplacé ou supprimé après coup.

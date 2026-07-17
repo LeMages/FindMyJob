@@ -15,6 +15,7 @@
 // Importation des modules Vue / framework
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 
 // Importation des modules internes
@@ -53,6 +54,53 @@ const isAttachment = computed(() => props.mode === 'attachment')
 
 const saving = ref(false)
 const error = ref<string | null>(null)
+
+// ── Progression de la sauvegarde (événement `document-save-progress`) ───────
+
+interface DocumentSaveProgressEvent {
+  session_id: number
+  doc_type: 'cv' | 'lettre_motivation'
+  step: number
+  total: number
+  label: string
+}
+
+/** Nombre d'étapes du flux de sauvegarde, tant qu'aucun événement n'a encore été reçu. */
+const DEFAULT_PROGRESS_STEPS = 5
+
+const progressStep = ref(0)
+const progressTotal = ref(DEFAULT_PROGRESS_STEPS)
+const progressLabel = ref('')
+
+/** Texte affiché pendant la sauvegarde : étape en cours, ou fallback tant qu'aucun événement n'est reçu. */
+const progressText = computed(() =>
+  progressStep.value > 0 ? `${progressLabel.value} (${progressStep.value}/${progressTotal.value})` : 'Sauvegarde…',
+)
+
+/**
+ * Détermine la couleur d'un tiret de la barre de progression.
+ *
+ * @param index - Position du tiret (1-based).
+ * @returns `'done'` si l'étape est terminée, `'active'` si en cours, `'pending'` sinon.
+ */
+function segmentState(index: number): 'done' | 'active' | 'pending' {
+  if (index < progressStep.value) return 'done'
+  if (index === progressStep.value) return 'active'
+  return 'pending'
+}
+
+/** Écoute la progression de la sauvegarde en cours, filtrée sur ce document précis. */
+async function listenSaveProgress(): Promise<UnlistenFn> {
+  progressStep.value = 0
+  progressTotal.value = DEFAULT_PROGRESS_STEPS
+  progressLabel.value = ''
+  return listen<DocumentSaveProgressEvent>('document-save-progress', (event) => {
+    if (event.payload.session_id !== props.sessionId || event.payload.doc_type !== props.docType) return
+    progressStep.value = event.payload.step
+    progressTotal.value = event.payload.total
+    progressLabel.value = event.payload.label
+  })
+}
 
 // ── Mode "reference" (profil) ────────────────────────────────────────────────
 
@@ -115,6 +163,7 @@ async function onFileSelected(event: Event) {
   saving.value = true
   error.value = null
 
+  const unlisten = await listenSaveProgress()
   try {
     const content = await file.text()
     const saved = await invoke<DocumentReferenceView>(saveCommand.value, {
@@ -127,6 +176,7 @@ async function onFileSelected(event: Event) {
   } catch (e: unknown) {
     error.value = extractErrorMessage(e, saveErrorFallback.value)
   } finally {
+    unlisten()
     saving.value = false
     input.value = ''
   }
@@ -320,7 +370,21 @@ function clearAttachment() {
     </button>
     <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ emptyLabel }}</div>
 
-    <div v-if="reference && saving" class="mt-[10px] text-[12px] text-neutral-500 font-mono">Sauvegarde…</div>
+    <div v-if="saving" class="mt-[10px]">
+      <div class="flex items-center gap-1 w-full">
+        <div
+          v-for="i in progressTotal"
+          :key="i"
+          class="h-[6px] flex-1 rounded-full transition-colors duration-300"
+          :class="{
+            'bg-green-500': segmentState(i) === 'done',
+            'bg-blue-500': segmentState(i) === 'active',
+            'bg-neutral-200': segmentState(i) === 'pending',
+          }"
+        />
+      </div>
+      <div class="mt-[6px] text-[12px] text-neutral-500 font-mono">{{ progressText }}</div>
+    </div>
     <div v-if="error" class="mt-[10px] text-[12px] text-red-600">{{ error }}</div>
   </div>
 
