@@ -9,11 +9,47 @@
 // Importation des modules standard
 use std::path::PathBuf;
 
+// Importation des crates externes
+use tauri::{Emitter, Manager};
+
 // Importation des modules internes
-use crate::db::resolve_data_dir;
+use crate::db::{self, resolve_data_dir, DbState};
 use crate::documents::typst::compile_to_pdf;
 use crate::error::AppError;
-use crate::models::{DocumentFileInfo, DocumentReferenceView};
+use crate::models::{DocumentFileInfo, DocumentReferenceView, DocumentSaveProgress};
+
+/// Nom de l'événement Tauri émis à chaque étape de `save_reference`, écouté
+/// par le frontend pour afficher une barre de progression.
+const SAVE_PROGRESS_EVENT: &str = "document-save-progress";
+
+/// Nombre total d'étapes du flux de `save_reference`, communiqué au frontend
+/// pour calculer une progression (`step`/`total`).
+const SAVE_STEPS_TOTAL: u32 = 5;
+
+/// Émet la progression courante de `save_reference` vers le frontend.
+///
+/// Best-effort : un échec d'émission (aucune fenêtre active, par exemple)
+/// n'a aucun impact sur la sauvegarde elle-même, purement cosmétique.
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Session propriétaire, pour filtrer côté frontend.
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `step` - Étape courante (1-based).
+/// * `label` - Description courte affichée à l'utilisateur.
+fn emit_save_progress(app: &tauri::AppHandle, session_id: i64, doc_type: &str, step: u32, label: &str) {
+    let _ = app.emit(
+        SAVE_PROGRESS_EVENT,
+        DocumentSaveProgress {
+            session_id,
+            doc_type: doc_type.to_string(),
+            step,
+            total: SAVE_STEPS_TOTAL,
+            label: label.to_string(),
+        },
+    );
+}
 
 /// Résout le dossier d'un type de document (`cv` ou `lettre_motivation`)
 /// propre à une session de candidature.
@@ -72,12 +108,21 @@ fn updated_at_millis(path: &std::path::Path) -> String {
 /// # Returns
 ///
 /// `Some(DocumentReferenceView)` si un fichier de référence existe, `None` sinon.
-pub fn get_reference(app: &tauri::AppHandle, session_id: i64, doc_type: &str) -> Option<DocumentReferenceView> {
+pub async fn get_reference(app: &tauri::AppHandle, session_id: i64, doc_type: &str) -> Option<DocumentReferenceView> {
     let doc_dir = resolve_doc_dir(app, session_id, doc_type);
     let typ_path = doc_dir.join("reference.typ");
     if !typ_path.exists() {
         return None;
     }
+
+    // Lecture DB best-effort : prépare l'enrichissement futur de la réponse
+    // (ex. style_analysis), sans influencer le comportement actuel — le
+    // filesystem reste la source de vérité de l'existence du document.
+    let pool = app.state::<DbState>().pool.clone();
+    if let Err(e) = db::documents::get_by_session_and_type(&pool, session_id, doc_type).await {
+        eprintln!("Lecture DB du document ({doc_type}, session {session_id}) échouée : {e}");
+    }
+
     let pdf_path = doc_dir.join("reference.pdf");
     Some(DocumentReferenceView {
         file_path: typ_path.to_string_lossy().to_string(),
@@ -86,8 +131,13 @@ pub fn get_reference(app: &tauri::AppHandle, session_id: i64, doc_type: &str) ->
     })
 }
 
-/// Sauvegarde un nouveau document de référence (.typ), en archivant l'ancien s'il existe,
-/// puis le compile immédiatement en PDF.
+/// Analyse le style du document via l'API Claude, puis sauvegarde le nouveau
+/// document de référence (.typ) en archivant l'ancien s'il existe, et le
+/// compile immédiatement en PDF.
+///
+/// L'analyse de style est bloquante et a lieu avant toute écriture disque :
+/// si l'appel à Claude échoue ou renvoie un format inattendu, le save entier
+/// échoue et rien n'est modifié (ni fichier, ni entrée DB).
 ///
 /// # Arguments
 ///
@@ -116,6 +166,14 @@ pub async fn save_reference(
         ));
     }
 
+    // ------------------------------------------------------------------
+    // 1bis. Analyse de style via l'API Claude — placée avant toute
+    //    écriture disque : si l'appel échoue ou renvoie un format
+    //    inattendu, rien n'est créé (ni dossier, ni backup, ni fichier).
+    // ------------------------------------------------------------------
+    emit_save_progress(&app, session_id, doc_type, 1, "Analyse du style (IA)…");
+    let style_analysis = crate::llm::analyze_style(&content, doc_type).await?;
+
     let doc_dir = resolve_doc_dir(&app, session_id, doc_type);
     std::fs::create_dir_all(&doc_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
@@ -126,6 +184,7 @@ pub async fn save_reference(
     // ------------------------------------------------------------------
     // 2. Sauvegarde de l'ancienne référence (si elle existe) dans backup/<timestamp>/
     // ------------------------------------------------------------------
+    emit_save_progress(&app, session_id, doc_type, 2, "Sauvegarde de l'historique…");
     if typ_path.exists() {
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -147,12 +206,14 @@ pub async fn save_reference(
     // ------------------------------------------------------------------
     // 3. Écriture du nouveau fichier .typ
     // ------------------------------------------------------------------
+    emit_save_progress(&app, session_id, doc_type, 3, "Écriture du fichier…");
     std::fs::write(&typ_path, content.as_bytes())
         .map_err(|e| AppError::Validation(format!("Écriture du fichier impossible : {}", e)))?;
 
     // ------------------------------------------------------------------
     // 4. Compilation en PDF
     // ------------------------------------------------------------------
+    emit_save_progress(&app, session_id, doc_type, 4, "Compilation en PDF…");
     let root = doc_dir.clone();
     let pdf_bytes = tauri::async_runtime::spawn_blocking(move || compile_to_pdf(content, root))
         .await
@@ -161,6 +222,27 @@ pub async fn save_reference(
 
     std::fs::write(&pdf_path, &pdf_bytes)
         .map_err(|e| AppError::Validation(format!("Écriture du PDF impossible : {}", e)))?;
+
+    // ------------------------------------------------------------------
+    // 5. Trace en DB (non bloquant : le filesystem reste la source de
+    //    vérité, on ne veut pas perdre un fichier correctement sauvegardé
+    //    à cause d'une erreur DB)
+    // ------------------------------------------------------------------
+    emit_save_progress(&app, session_id, doc_type, 5, "Enregistrement en base…");
+    let pool = app.state::<DbState>().pool.clone();
+    if let Err(e) = db::documents::upsert(
+        &pool,
+        session_id,
+        doc_type,
+        &filename,
+        &typ_path.to_string_lossy(),
+        Some(&pdf_path.to_string_lossy()),
+        Some(&style_analysis),
+    )
+    .await
+    {
+        eprintln!("Trace DB du document ({doc_type}, session {session_id}) échouée : {e}");
+    }
 
     Ok(DocumentReferenceView {
         file_path: typ_path.to_string_lossy().to_string(),
@@ -412,4 +494,44 @@ pub fn finalize_candidature_document(
     std::fs::rename(&staged_pb, &dest)
         .map_err(|e| AppError::Validation(format!("Impossible de finaliser le document : {}", e)))?;
     Ok(Some(dest.to_string_lossy().to_string()))
+}
+
+/// Sauvegarde un document généré par le pipeline IA (`llm::pipeline`) à
+/// l'emplacement définitif d'une candidature : le code Typst est conservé à
+/// côté du PDF pour le debug/la traçabilité, sous le même nom que
+/// `finalize_candidature_document` (`artefact/<candidature_id>.*`).
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri.
+/// * `session_id` - Identifiant de la session propriétaire.
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `candidature_id` - Identifiant de la candidature à laquelle rattacher le document.
+/// * `typst` - Code Typst généré (sauvegardé à des fins de traçabilité).
+/// * `pdf` - Octets du PDF compilé.
+///
+/// # Returns
+///
+/// Chemin absolu du PDF sauvegardé.
+pub fn save_generated_document(
+    app: &tauri::AppHandle,
+    session_id: i64,
+    doc_type: &str,
+    candidature_id: i64,
+    typst: &str,
+    pdf: &[u8],
+) -> Result<String, AppError> {
+    let artefact_dir = resolve_doc_dir(app, session_id, doc_type).join("artefact");
+    std::fs::create_dir_all(&artefact_dir)
+        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
+
+    let typ_path = artefact_dir.join(format!("{}.typ", candidature_id));
+    std::fs::write(&typ_path, typst.as_bytes())
+        .map_err(|e| AppError::Validation(format!("Écriture du fichier Typst impossible : {}", e)))?;
+
+    let pdf_path = artefact_dir.join(format!("{}.pdf", candidature_id));
+    std::fs::write(&pdf_path, pdf)
+        .map_err(|e| AppError::Validation(format!("Écriture du PDF impossible : {}", e)))?;
+
+    Ok(pdf_path.to_string_lossy().to_string())
 }

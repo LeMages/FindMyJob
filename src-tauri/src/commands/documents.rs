@@ -23,7 +23,7 @@ pub async fn get_cv_reference(
     app: tauri::AppHandle,
     session_id: i64,
 ) -> Result<Option<DocumentReferenceView>, AppError> {
-    Ok(documents::get_reference(&app, session_id, "cv"))
+    Ok(documents::get_reference(&app, session_id, "cv").await)
 }
 
 /// Récupère la référence de lettre de motivation sauvegardée pour une
@@ -42,7 +42,7 @@ pub async fn get_lettre_motivation_reference(
     app: tauri::AppHandle,
     session_id: i64,
 ) -> Result<Option<DocumentReferenceView>, AppError> {
-    Ok(documents::get_reference(&app, session_id, "lettre_motivation"))
+    Ok(documents::get_reference(&app, session_id, "lettre_motivation").await)
 }
 
 /// Sauvegarde une nouvelle référence de CV (.typ) pour une session et la

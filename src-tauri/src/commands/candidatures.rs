@@ -3,13 +3,19 @@
 // Importation des modules internes
 use crate::db::init::DbState;
 use crate::db::{candidatures, users};
-use crate::documents::finalize_candidature_document;
+use crate::documents::save_generated_document;
 use crate::error::AppError;
+use crate::llm::generate_documents;
 use crate::models::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
 
-/// Crée une candidature et finalise les documents (CV / lettre de motivation)
-/// préalablement mis en scène par `upload_candidature_cv` / `select_candidature_cv`
-/// (et leurs équivalents lettre de motivation).
+/// Crée une candidature en générant d'abord, via le pipeline IA, un CV et
+/// une lettre de motivation adaptés à l'offre (à partir des documents de
+/// référence de la session et du profil candidat).
+///
+/// La génération a lieu avant l'insertion en base : si le pipeline échoue
+/// (documents de référence manquants, API indisponible, compilation Typst
+/// impossible même après correction), la candidature n'est pas créée et
+/// l'erreur remonte telle quelle au frontend.
 ///
 /// # Arguments
 ///
@@ -19,48 +25,67 @@ use crate::models::{CandidatureDetail, CandidatureView, CreateCandidatureInput, 
 ///
 /// # Returns
 ///
-/// `CandidatureView` créée, avec les chemins de documents finalisés.
+/// `CandidatureView` créée, avec les chemins des documents générés.
 #[tauri::command]
 pub async fn create_candidature(
     app: tauri::AppHandle,
     state: tauri::State<'_, DbState>,
     input: CreateCandidatureInput,
 ) -> Result<CandidatureView, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
+    // ------------------------------------------------------------------
+    // 1. Validation des prérequis à la génération — une session (donc des
+    //    documents de référence) et une offre sont indispensables.
+    // ------------------------------------------------------------------
+    let description_offre = input
+        .description_offre
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| AppError::Validation("La description de l'offre est requise.".to_string()))?;
+    let session_id = input.session_id.ok_or_else(|| {
+        AppError::Validation("Une session est requise pour générer les documents.".to_string())
+    })?;
 
+    // ------------------------------------------------------------------
+    // 2. Génération du CV et de la lettre de motivation — avant toute
+    //    persistance : en cas d'échec, rien n'est créé.
+    // ------------------------------------------------------------------
+    let generated = generate_documents(&state.pool, session_id, description_offre).await?;
+
+    // ------------------------------------------------------------------
+    // 3. Insertion de la candidature, puis sauvegarde des documents générés
+    //    sous leur emplacement définitif (artefact/<candidature_id>.*)
+    // ------------------------------------------------------------------
+    let user = users::fetch_first_user(&state.pool).await?;
     let mut view = candidatures::insert(&state.pool, user.id, &input).await?;
 
-    // Les documents joints appartiennent à la session : impossible de les
-    // finaliser sans identifiant de session.
-    let session_id = if input.cv_path.is_some() || input.lettre_motivation_path.is_some() {
-        Some(input.session_id.ok_or_else(|| {
-            AppError::Validation("Une session est requise pour joindre un document.".to_string())
-        })?)
-    } else {
-        None
-    };
+    let cv_path = save_generated_document(
+        &app,
+        session_id,
+        "cv",
+        view.id,
+        &generated.cv_typst,
+        &generated.cv_pdf,
+    )?;
+    let lettre_motivation_path = save_generated_document(
+        &app,
+        session_id,
+        "lettre_motivation",
+        view.id,
+        &generated.lm_typst,
+        &generated.lm_pdf,
+    )?;
 
-    let cv_path = match session_id {
-        Some(sid) => finalize_candidature_document(&app, sid, "cv", input.cv_path, view.id)?,
-        None => None,
-    };
-    let lettre_motivation_path = match session_id {
-        Some(sid) => finalize_candidature_document(
-            &app,
-            sid,
-            "lettre_motivation",
-            input.lettre_motivation_path,
-            view.id,
-        )?,
-        None => None,
-    };
+    candidatures::set_documents(
+        &state.pool,
+        view.id,
+        &Some(cv_path.clone()),
+        &Some(lettre_motivation_path.clone()),
+    )
+    .await?;
 
-    if cv_path.is_some() || lettre_motivation_path.is_some() {
-        candidatures::set_documents(&state.pool, view.id, &cv_path, &lettre_motivation_path).await?;
-    }
-
-    view.cv_path = cv_path;
-    view.lettre_motivation_path = lettre_motivation_path;
+    view.cv_path = Some(cv_path);
+    view.lettre_motivation_path = Some(lettre_motivation_path);
 
     Ok(view)
 }
