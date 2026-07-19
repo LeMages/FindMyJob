@@ -18,7 +18,7 @@ Principe directeur de conception : penser le périmètre et le schéma le plus c
 | Frontend | Vue 3 + TypeScript + Tailwind CSS (via Vite) |
 | Backend | Rust |
 | Base de données | SQLite locale, via sqlx (async, runtime tokio) |
-| IA | Couche compatible OpenAI, base URL configurable, pointée sur Ollama Cloud (free tier) |
+| IA | API Messages d'Anthropic (Claude, modèle `claude-sonnet-5`), appels HTTP directs via `reqwest` |
 
 ## 3. Périmètre
 
@@ -31,13 +31,13 @@ Cœur (suivi) :
 - Rappels de relance
 
 Features IA :
-1. Extraction d'offre : coller le texte d'une annonce, l'IA remplit la fiche (entreprise, intitulé, type, lieu, stack, date limite, rémunération). Cas d'usage texte non structuré vers JSON structuré.
-2. Relances intelligentes : détection des candidatures en attente et génération du mail de relance adapté au statut.
-3. Tailoring CV / lettre de motivation : à partir du profil et de l'offre, mettre en avant les bons éléments.
-4. Matching profil vers offre : pour une offre donnée, classer les projets de l'utilisateur par pertinence. **Développé en dernier** dans la séquence (dépend de l'infra embeddings).
+1. Tailoring CV / lettre de motivation : génération automatique d'un CV et d'une lettre adaptés à l'offre, à partir du profil complet et du texte de l'annonce (pipeline interne : analyse d'offre → matching profil → rédaction du contenu → assemblage Typst → compilation PDF).
 
 ### Hors MVP (évolutions)
 
+- Extraction d'offre : coller le texte d'une annonce, l'IA remplit la fiche (entreprise, intitulé, type, lieu, stack, date limite, rémunération). Cas d'usage texte non structuré vers JSON structuré.
+- Relances intelligentes : détection des candidatures en attente et génération du mail de relance adapté au statut.
+- Matching profil vers offre en tant que feature autonome : pour une offre donnée, classer les projets de l'utilisateur par pertinence (aujourd'hui, le matching n'existe qu'en étape interne du pipeline de tailoring, via appel LLM).
 - Recherche / scraping d'offres en ligne
 - Mode IA local (d'abord détection d'un Ollama déjà installé, puis sidecar llama.cpp pour un vrai zéro-setup)
 - Synchronisation multi-appareils
@@ -46,16 +46,17 @@ Features IA :
 
 ## 4. Décisions d'architecture IA
 
-- **Couche unique compatible OpenAI**, avec base URL configurable. En V1 elle ne pointe que sur Ollama Cloud. Le jour où on ajoute le local (llama.cpp), c'est juste une URL de plus, aucune réécriture. La logique prompt vers JSON vit directement dans le backend Rust (HTTP + serde), pas de Python ni LangChain ici (le packaging Python dans Tauri est trop lourd).
-- **Ollama Cloud free tier suffisant** pour ce cas : usage par à-coups et faible volume. Quotas mesurés en temps GPU, limites de session réinitialisées toutes les 5h, limites hebdo tous les 7 jours. Rester sur les modèles de niveau 1 et 2. Les structured outputs avec validation JSON Schema sont disponibles, parfait pour la feature d'extraction.
-- **Pas de SLA sur Ollama Cloud** (service as is, panne connue d'avril 2026). C'est pourquoi le mode local reste le vrai fallback à terme.
-- **Chaque utilisateur utilise son propre compte / clé Ollama**, donc son propre quota gratuit. Ça scale naturellement pour de l'open source sans clé centralisée.
-- **Embeddings** : modèle bge-m3. Sur quelques centaines d'éléments en local, pas de pgvector ni d'extension : cosinus en brute-force dans le Rust, vecteurs stockés en BLOB dans SQLite. Le matching alimente aussi le tailoring (mêmes vecteurs).
-- **Ne pas bundler Ollama dans l'installeur en V1.** Approche cloud-first : installeur léger, marche tout de suite avec une clé. Le sidecar llama.cpp viendra plus tard pour le mode local zéro-setup.
+- **État actuel : appels directs à l'API Messages d'Anthropic** (`https://api.anthropic.com/v1/messages`, modèle `claude-sonnet-5`), en HTTP brut via `reqwest` (`src-tauri/src/llm/client.rs`). Pas de base URL configurable pour l'instant, pas de SDK officiel Rust pour l'API Anthropic. La logique prompt vers JSON vit directement dans le backend Rust (HTTP + serde), pas de Python ni LangChain ici (le packaging Python dans Tauri est trop lourd). Les structured outputs (`output_config.format` + JSON Schema) sont utilisés pour garantir des réponses JSON conformes (analyse d'offre, matching, analyse de style).
+- **Hors MVP — couche provider-agnostic** : idée initiale d'une couche unique compatible OpenAI avec base URL configurable (Ollama Cloud puis mode local llama.cpp en une URL de plus, sans réécriture). Pas implémentée aujourd'hui ; reste un objectif si le provider doit devenir interchangeable.
+  - Pistes Ollama Cloud envisagées à l'époque : free tier suffisant pour un usage par à-coups (quotas en temps GPU, limites de session toutes les 5h, limites hebdo tous les 7 jours, modèles de niveau 1/2), mais pas de SLA (panne connue d'avril 2026) — d'où l'intérêt d'un mode local en vrai fallback. Chaque utilisateur utiliserait son propre compte/clé pour scaler sans clé centralisée.
+  - Ne pas bundler de runtime IA dans l'installeur en V1 : approche cloud-first, installeur léger, sidecar llama.cpp éventuel plus tard pour un mode local zéro-setup.
+- **Embeddings : non implémentés.** La table `embeddings` existe dans le schéma (migration `0001`) mais n'est ni écrite ni lue par le code. Le matching profil↔offre se fait aujourd'hui **par appel LLM** (structured output, `src-tauri/src/llm/matching.rs`), pas par similarité vectorielle. Piste repoussée hors MVP : modèle bge-m3, cosinus en brute-force dans le Rust (pas de pgvector/extension, volumétrie trop faible pour le justifier), vecteurs stockés en BLOB dans SQLite, réutilisés à la fois pour le matching et le tailoring.
 
 ## 5. Sécurité des secrets
 
-La clé API Ollama Cloud n'est **jamais** stockée en base, ni dans un .env, ni dans la table settings. Elle vit dans le **trousseau de l'OS** (Keychain macOS, Credential Manager Windows, Secret Service Linux), via la crate Rust `keyring` (ou un plugin Tauri équivalent). Le backend la lit du trousseau au moment d'appeler l'API. Aucune table ni colonne dédiée dans le schéma.
+**État actuel** : la clé `ANTHROPIC_API_KEY` vit dans un fichier `.env` à la racine du projet, gitignoré, chargé au démarrage via `dotenvy::dotenv()` (`src-tauri/src/lib.rs`). `.env.example` documente la variable sans valeur, pour la doc. Aucune table ni colonne dédiée dans le schéma.
+
+**Cible** : quand la page Settings globale sera construite, la clé API ne sera **jamais** stockée en base ni dans la table settings. Elle vivra dans le **trousseau de l'OS** (Keychain macOS, Credential Manager Windows, Secret Service Linux), via la crate Rust `keyring` (ou un plugin Tauri équivalent). Le backend la lira du trousseau au moment d'appeler l'API.
 
 ## 6. Base de données
 
@@ -82,26 +83,33 @@ Conventions : PRAGMA `foreign_keys = ON` et mode WAL. Enums DBML implémentés e
 <app_data_dir ou ./dev-data>/
   findmyjob.db
   documents/
-    references/   (CV et LM de référence)
-    generated/    (versions taillées par candidature)
+    sessions/
+      <session_id>/
+        cv/
+          reference.typ, reference.pdf
+          backup/<timestamp>/cv.typ, cv.pdf
+          artefact/<candidature_id>.typ, <candidature_id>.pdf, pending_<ts>_<filename>
+        lettre_motivation/   (même structure que cv/)
 ```
 
 ### Schéma
 
-La source de vérité du schéma est en DBML dans `db/schema.dbml` (rendu visuel via dbdiagram.io). Tables retenues (schéma final) :
+La source de vérité du schéma est les **migrations sqlx** dans `db/migrations/` (`0001` à `0012`), appliquées au boot par `sqlx::migrate!("../db/migrations")` (`src-tauri/src/db/init.rs`). `db/schema.dbml` existe encore mais décrit une version antérieure du schéma, désynchronisée — ne pas s'y fier. Tables réelles (état après migration `0012`) :
 
-`users`, `lang`, `projets`, `experiences`, `skills`, `candidatures`, `status_history`, `contacts`, `interviews`, `documents`, `emails`, `email_attachments`, `embeddings`, `settings`.
+`users`, `lang`, `formations`, `projets`, `experiences`, `skills`, `sessions`, `candidatures`, `status_history`, `contacts`, `interviews`, `documents`, `emails`, `embeddings`, `settings`.
 
 Points de modélisation importants :
 - **Entreprise dénormalisée** : les tables `companies` et `company_locations` ont été abandonnées dans le schéma final. La candidature porte directement `entreprise` (texte) et `localisation` (texte). Plus simple pour le MVP ; on pourra normaliser plus tard si le besoin de regrouper plusieurs candidatures par entreprise apparaît.
 - **users** : porte aussi `permis` (boolean) et `description` (texte libre), en plus de l'identité et des liens (LinkedIn, GitHub, portfolio).
 - **lang** : langues parlées par l'utilisateur (`nom`, `level`), liée à `users`. Sert au profil et au tailoring.
-- **documents** : table unique avec auto-référence. `source_document_id` pointe vers une autre ligne (NULL = document de référence). `is_reference` (boolean) pour filtrer explicitement. `candidature_id` nullable (NULL = document maître, sinon version taillée). Les fichiers sont sur le disque, la base ne stocke que `file_path`.
-- **embeddings** : table polymorphe. Colonnes `entity_type`, `entity_id` (FK logique, pas de contrainte stricte), `model`, `vector` (BLOB), index sur `(entity_type, entity_id)`. Permet d'embedder n'importe quel type sans migration.
+- **formations** : diplômes/écoles du profil (`titre`, `ecole`, dates), liée à `users` (migration `0003`).
+- **sessions** : session de recherche de candidatures (`nom`, `contexte`, `statut`, `zone`), liée à `users` (migration `0008`, enrichie en `0010`). Regroupe un ensemble de candidatures et possède ses propres CV/LM de référence.
+- **documents** : refondue en `0009`/`0011`. Liée à `sessions` (`session_id`), pas aux candidatures ni aux users. Colonnes : `doc_type` (`cv`/`lettre_motivation`), `file_path`, `pdf_path`, `style_analysis` (cache de l'analyse de style LLM, calculé à la sauvegarde de la référence), `UNIQUE(session_id, doc_type)` — un seul document de référence par type et par session. Plus d'auto-référence ni de notion "maître/version taillée" : ce rôle est maintenant porté par `candidatures.cv_path`/`lettre_motivation_path`.
+- **embeddings** : table polymorphe présente dans le schéma (`entity_type`, `entity_id`, `model`, `vector` en BLOB, index sur `(entity_type, entity_id)`) mais **non utilisée par le code actuel** — le matching profil↔offre passe par un appel LLM (voir section 4), pas par similarité vectorielle.
 - **status_history** : log des changements de statut (ancien, nouveau, date) pour les stats temps moyen entre statuts.
-- **emails + email_attachments** : tous les mails envoyés depuis l'app, avec table de liaison vers les documents joints (un mail peut partir avec CV et LM).
+- **emails** : tous les mails envoyés depuis l'app. La table de liaison `email_attachments` a été supprimée (migrations `0009`/`0011`), plus de table de documents partagée à joindre.
 - **skills** : liste à plat, une ligne par skill avec un champ `domaine` texte ("Langages", "Data & ML"...). Pas de table de liaison projet-skill pour le MVP.
-- **candidatures** : porte `entreprise`, `localisation`, `remuneration`, `url_offre`, `description_offre` (texte brut de l'annonce, sert à l'extraction IA), `type`, `status`, `date_candidature`. Porte `next_relance` et `last_relance` en colonnes (pas de table reminders, le détail des relances vit dans `emails`). Porte aussi `source` (canal de candidature, voir section 8). Note : pas de champ `date_limite` dans le schéma final.
+- **candidatures** : porte `entreprise`, `localisation`, `remuneration`, `url_offre`, `description_offre` (texte brut de l'annonce, sert à l'extraction IA), `type` (incluant `interim` depuis `0005`), `status`, `date_candidature`. Porte `next_relance` et `last_relance` en colonnes (pas de table reminders, le détail des relances vit dans `emails`). Porte aussi `source` (canal de candidature, voir section 8), `session_id` (migration `0008`), et `cv_path`/`lettre_motivation_path` (migration `0009`, chemins directs vers les documents finalisés sur disque). Note : pas de champ `date_limite` dans le schéma final.
 
 ## 7. Paramètres (table settings, clé-valeur)
 
@@ -132,22 +140,35 @@ Version courte possible : Mail, Plateforme en ligne, Site entreprise, Cooptation
 - Description du repo : "Logiciel open source pour suivre ses candidatures de stage, d'alternance et de CDI, avec assistance IA."
 - Topics : tauri, vue, rust, sqlite, job-search, ai, open-source.
 
+### Convention de commits
+
+Le projet utilise les **Conventional Commits** pour automatiser le versioning : format `<type>(<scope optionnel>): <description>`.
+- `feat:` → version mineure, `fix:` → patch, `feat!:`/`fix!:`/`BREAKING CHANGE` → version majeure.
+- Autres types (pas de release) : `docs:`, `style:`, `refactor:`, `test:`, `chore:`.
+
+### Flux de branches
+
+- `feature/*` → PR vers `dev` (CI : lint + clippy + tests).
+- `dev` → PR vers `staging` (pré-production, tests manuels).
+- `staging` → PR vers `main` (déclenche la release automatique).
+
 ## 10. État d'avancement
 
 Fait :
-- Fondation Tauri 2 + Vue 3 + TS + Tailwind initialisée, hello world via commande Tauri `greet` (pont Rust vers Vue validé).
-- Périmètre et stack figés.
-- Schéma de base finalisé en DBML (`schema.dbml`), version définitive (entreprise dénormalisée, table `lang` ajoutée, `documents` avec auto-référence).
-- README.md rédigé.
-- Wireframe HTML statique implémenté (maquette de l'interface).
-- Page Settings designée (Claude Design).
+- Fondation Tauri 2 + Vue 3 + TS + Tailwind, périmètre et stack figés.
+- README.md rédigé et tenu à jour.
+- Couche base de données : initialisation idempotente au boot (emplacement debug `./dev-data` vs release `app_data_dir`), migrations sqlx (`db/migrations/`, 12 migrations à date), commande `db_status` de vérification.
+- Profil utilisateur complet : onboarding, CRUD expériences, formations, langues, projets, skills (table `users` + tables liées).
+- Sessions de candidature : CRUD, page de paramètres de session (contexte, zone, statut), CV/lettre de motivation de référence par session (import `.typ`, compilation Typst → PDF, analyse de style via Claude, historique de sauvegarde).
+- Candidatures : CRUD, vue pipeline/kanban, page de détail (édition des champs, aperçu des documents, historique de statut), drag & drop de statut, upload/sélection de CV et lettre de motivation par candidature.
+- Assistance IA — tailoring CV/lettre de motivation : pipeline complet (analyse d'offre → matching profil → rédaction du contenu → assemblage Typst → compilation PDF avec retry de correction), génère un CV et une lettre adaptés à l'offre pour une candidature.
+- CI/CD : lint + clippy + tests, Conventional Commits, flux de branches `feature/* → dev → staging → main`.
 
 En cours / prochaine étape immédiate :
-- Couche base de données : prompt d'init rédigé (création idempotente au boot, emplacement debug vs release, application du schéma, commande `db_status` de vérification). À implémenter et valider (la base se crée et l'UI liste les tables).
+- Page Settings **globale** (hors paramètres de session) : clé API (aujourd'hui en `.env`, à terme au trousseau OS), modèle, thème, délai de relance.
 
 Ensuite :
-- Premier vrai morceau métier : CRUD candidatures.
-- Puis les features IA, en finissant par le matching (feature 4).
+- Features IA hors MVP : extraction d'offre (remplissage auto de la fiche), relances intelligentes, matching profil↔offre en tant que feature autonome (classement des projets par pertinence).
 
 ## 11. Conventions de travail
 

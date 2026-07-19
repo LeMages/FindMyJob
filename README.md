@@ -29,14 +29,14 @@ La couche IA est construite sur une base URL configurable : aujourd'hui Ollama C
 
 ### Assistance IA
 
-- **Extraction d'offre** : colle le texte d'une annonce, l'IA remplit la fiche (entreprise, intitulé, type, lieu, stack, date limite, rémunération)
-- **Relances intelligentes** : détection des candidatures en attente et génération du mail de relance adapté au statut
 - **Tailoring CV / lettre de motivation** : à partir de ton profil et de l'offre, ce qu'il faut mettre en avant
-- **Matching profil ↔ offre** : pour une offre donnée, classement de tes projets par pertinence *(en cours de développement)*
 
 ### À venir
 
-Recherche d'offres en ligne · mode IA local · synchronisation multi-appareils.
+- **Extraction d'offre** : colle le texte d'une annonce, l'IA remplit la fiche (entreprise, intitulé, type, lieu, stack, date limite, rémunération)
+- **Relances intelligentes** : détection des candidatures en attente et génération du mail de relance adapté au statut
+- **Matching profil ↔ offre** : pour une offre donnée, classement de tes projets par pertinence
+- Recherche d'offres en ligne · mode IA local · synchronisation multi-appareils
 
 ## Base de données
 
@@ -46,16 +46,17 @@ Les données sont stockées localement dans un fichier SQLite. Le schéma est ve
 |---|---|
 | `users` | Profil de l'utilisateur (nom, contact, permis, liens LinkedIn/GitHub) |
 | `lang` | Langues parlées par l'utilisateur et niveau associé |
+| `formations` | Diplômes et écoles du profil |
 | `projets` | Projets personnels associés au profil |
 | `experiences` | Expériences professionnelles du profil |
 | `skills` | Compétences classées par domaine |
-| `candidatures` | Cœur de l'app — une ligne par candidature (entreprise, statut et métadonnées) |
+| `sessions` | Session de recherche (contexte, zone, statut) regroupant un ensemble de candidatures |
+| `candidatures` | Cœur de l'app — une ligne par candidature (entreprise, statut, métadonnées, chemins du CV et de la lettre de motivation générés) |
 | `status_history` | Historique des changements de statut d'une candidature |
 | `contacts` | Interlocuteurs associés à une candidature (RH, manager…) |
 | `interviews` | Entretiens planifiés ou passés pour une candidature |
-| `documents` | CV et lettres de motivation (références et versions adaptées par candidature) |
+| `documents` | CV et lettre de motivation de référence d'une session (chemin fichier + cache d'analyse de style pour l'IA) |
 | `emails` | Emails envoyés depuis l'app (candidature, relance, remerciement…) |
-| `email_attachments` | Documents joints à un email |
 | `embeddings` | Vecteurs sémantiques pour le matching profil ↔ offre (table polymorphe) |
 | `settings` | Paramètres de l'app en clé-valeur (modèle IA, thème…) |
 
