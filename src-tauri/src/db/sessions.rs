@@ -16,10 +16,11 @@ const VALID_STATUTS: [&str; 3] = ["active", "pause", "termine"];
 /// partagée par le listing et la mise à jour d'une session.
 const SELECT_WITH_STATS: &str =
     "SELECT s.id, s.nom, s.contexte, s.statut, s.zone, s.created_at, \
-            (SELECT COUNT(*) FROM candidatures c WHERE c.session_id = s.id) AS candidature_count, \
+            (SELECT COUNT(*) FROM candidatures c \
+             WHERE c.session_id = s.id AND c.status != 'abandon') AS candidature_count, \
             (SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END \
              FROM candidatures c \
-             WHERE c.session_id = s.id AND c.status IN ('offre', 'refus', 'abandon')) AS has_accepted \
+             WHERE c.session_id = s.id AND c.status IN ('offre', 'refus')) AS has_accepted \
      FROM sessions s";
 
 /// Convertit une ligne de `SELECT_WITH_STATS` en `SessionView`.

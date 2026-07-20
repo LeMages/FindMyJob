@@ -149,3 +149,24 @@ pub async fn update_candidature(
     let user = users::fetch_first_user(&state.pool).await?;
     candidatures::update(&state.pool, user.id, id, &input).await
 }
+
+/// Marque une candidature comme abandonnée (statut `abandon`) — utilisé par
+/// le bouton « Supprimer » de la page de détail, tant que la candidature est
+/// encore au statut « à postuler ».
+///
+/// # Arguments
+///
+/// * `state` - État partagé (pool de connexions).
+/// * `id` - Identifiant de la candidature à abandonner.
+///
+/// # Returns
+///
+/// `Ok(())` une fois le statut mis à jour.
+#[tauri::command]
+pub async fn abandon_candidature(
+    state: tauri::State<'_, DbState>,
+    id: i64,
+) -> Result<(), AppError> {
+    let user = users::fetch_first_user(&state.pool).await?;
+    candidatures::abandon(&state.pool, user.id, id).await
+}

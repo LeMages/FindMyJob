@@ -324,6 +324,15 @@ function previewDocument(path: string, label: string) {
       @click="cancelAcceptation"
     >Annuler l'acceptation</button>
   </div>
+  <div v-else-if="state.detailCandidature?.status === 'a_postuler'" class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
+    <button
+      class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+      @click="openDetailPopup('confirmDelete')"
+    >Supprimer</button>
+    <button
+      class="h-9 px-4 rounded-lg border border-neutral-950 bg-neutral-950 text-[13px] font-medium text-white inline-flex items-center cursor-pointer font-sans hover:bg-neutral-800"
+    >Postuler</button>
+  </div>
   <div v-else class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
     <button
       class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-neutral-100 hover:text-neutral-800"

@@ -6,7 +6,13 @@
  */
 
 // Importation des modules internes
-import { state, closeDetailPopup, addEvent, addRecruiter } from '@/stores/app'
+import { state, closeDetailPopup, addEvent, addRecruiter, deleteCandidature } from '@/stores/app'
+
+/** Confirme la suppression de la candidature ouverte et affiche l'erreur éventuelle. */
+async function confirmDelete() {
+  const error = await deleteCandidature()
+  if (error) state.detailError = error
+}
 </script>
 
 <template>
@@ -122,6 +128,27 @@ import { state, closeDetailPopup, addEvent, addRecruiter } from '@/stores/app'
             <div class="text-[14px] font-semibold">Entretien</div>
             <div class="text-[12px] text-neutral-500 mt-0.5">Planifier et préparer un entretien téléphonique ou visio.</div>
           </div>
+        </div>
+      </template>
+
+      <!-- Confirm delete popup -->
+      <template v-else-if="state.detailPopup === 'confirmDelete'">
+        <div class="flex items-center justify-between mb-5">
+          <div class="text-[17px] font-semibold">Supprimer la candidature</div>
+          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
+        </div>
+        <div class="text-[13px] text-neutral-600 leading-[1.6]">
+          Cette candidature sera définitivement retirée de votre suivi. Cette action est irréversible.
+        </div>
+        <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
+          <button
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            @click="closeDetailPopup"
+          >Annuler</button>
+          <button
+            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-red-600 bg-red-600 text-white hover:bg-red-700"
+            @click="confirmDelete"
+          >Supprimer</button>
         </div>
       </template>
 

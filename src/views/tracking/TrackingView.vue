@@ -12,7 +12,6 @@ import { invoke } from '@tauri-apps/api/core'
 import type { CandidatureView } from '@/types'
 import {
   currentSession,
-  currentTrashedList,
   navigate,
   openCard,
   openTrashPopup,
@@ -33,7 +32,17 @@ const activeTab = ref<'candidatures' | 'parametres'>('candidatures')
 const sessionId = computed(() => currentSession.value?.id ?? null)
 
 const sessionIsAccepted = computed(() =>
-  candidatures.value.some(c => ['offre', 'refus', 'abandon'].includes(c.status))
+  candidatures.value.some(c => ['offre', 'refus'].includes(c.status))
+)
+
+// Les candidatures abandonnées ne figurent plus dans la liste principale :
+// elles sont reléguées à la corbeille (voir `trashedCandidatures`).
+const visibleCandidatures = computed(() =>
+  candidatures.value.filter(c => c.status !== 'abandon')
+)
+
+const trashedCandidatures = computed(() =>
+  candidatures.value.filter(c => c.status === 'abandon')
 )
 
 /**
@@ -164,7 +173,7 @@ watch(sessionId, loadCandidatures)
         <div>
           <h1 class="text-2xl font-semibold leading-tight">{{ currentSession.nom }}</h1>
           <div class="text-[13px] text-neutral-500 mt-[5px] font-mono">
-            {{ candidatures.length }} candidatures · dernière mise à jour {{ new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) }}
+            {{ visibleCandidatures.length }} candidatures · dernière mise à jour {{ new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) }}
           </div>
         </div>
         <div class="flex items-center gap-[10px]">
@@ -219,7 +228,7 @@ watch(sessionId, loadCandidatures)
             </thead>
             <tbody>
               <tr
-                v-for="c in candidatures"
+                v-for="c in visibleCandidatures"
                 :key="c.id"
                 class="border-b border-neutral-100 last:border-0 cursor-pointer hover:bg-neutral-50"
                 @click="openRow(c)"
@@ -240,7 +249,7 @@ watch(sessionId, loadCandidatures)
             </tbody>
           </table>
 
-          <div v-if="candidatures.length === 0" class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune candidature</div>
+          <div v-if="visibleCandidatures.length === 0" class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune candidature</div>
         </div>
       </template>
     </template>
@@ -250,5 +259,5 @@ watch(sessionId, loadCandidatures)
   </template>
 
   <!-- Popups -->
-  <TrashPopup :list="currentTrashedList" @close="closeTrashPopup" />
+  <TrashPopup :list="trashedCandidatures" @close="closeTrashPopup" />
 </template>

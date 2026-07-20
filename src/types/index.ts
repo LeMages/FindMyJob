@@ -47,7 +47,7 @@ export interface UserView {
 }
 // ── Suivi de candidatures (kanban) ───────────────────────────────────────────
 
-export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'addEvent' | null
+export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'addEvent' | 'confirmDelete' | null
 export type EventType = 'mail_relance' | 'mail_reponse' | 'entretien'
 
 export interface BoardCard {

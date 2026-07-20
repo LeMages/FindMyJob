@@ -92,10 +92,6 @@ export const currentSession = computed(() =>
   allSessions.value.find(s => s.id === state.sessionId) ?? allSessions.value[0] ?? null,
 )
 
-// Corbeille de session : pas encore de commande Tauri dédiée (candidatures
-// refusées/abandonnées ne sont pas encore listées séparément côté backend).
-export const currentTrashedList = computed<BoardCard[]>(() => [])
-
 // Colonne du kanban où se trouve la candidature sélectionnée, dérivée de son
 // statut réel une fois le détail chargé depuis le backend.
 export const selectedCardColumn = computed<string>(() =>
@@ -440,6 +436,27 @@ export function addRecruiter() {
 export function trashCard() {
   state.selectedCard = null
   state.screen = 'tracking'
+}
+
+/**
+ * Abandonne la candidature ouverte (statut « à postuler ») et retourne au
+ * suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function deleteCandidature(): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  try {
+    await invoke<void>('abandon_candidature', { id: current.id })
+    state.detailPopup = null
+    state.selectedCard = null
+    state.screen = 'tracking'
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, 'Impossible de supprimer la candidature.')
+  }
 }
 
 /** Marque la candidature ouverte comme acceptée et retourne au suivi. */

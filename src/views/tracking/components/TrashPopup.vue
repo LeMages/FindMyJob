@@ -1,15 +1,20 @@
 <script setup lang="ts">
 /**
- * Corbeille de la session courante : liste des candidatures refusées ou
- * abandonnées (voir `state.trashPopup`), propre à `TrackingView`.
+ * Corbeille de la session courante : liste des candidatures abandonnées
+ * (voir `state.trashPopup`), propre à `TrackingView`.
  */
 
 // Importation des modules internes
 import { state } from '@/stores/app'
-import type { BoardCard } from '@/types'
+import type { CandidatureView } from '@/types'
 
-defineProps<{ list: BoardCard[] }>()
+defineProps<{ list: CandidatureView[] }>()
 defineEmits<{ close: [] }>()
+
+/** Formate la date d'abandon pour l'affichage (ex. "12 juin 2026"). */
+function formatAbandonDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+}
 </script>
 
 <template>
@@ -21,20 +26,20 @@ defineEmits<{ close: [] }>()
       </div>
 
       <div class="text-[13px] text-neutral-500 font-mono -mt-[6px] mb-4">
-        Candidatures refusées ou abandonnées pour cette session.
+        Candidatures abandonnées pour cette session.
       </div>
 
       <div
-        v-for="(tc, i) in list"
-        :key="i"
+        v-for="tc in list"
+        :key="tc.id"
         class="flex items-center gap-3 py-3 border-b border-neutral-100"
       >
         <div class="w-[30px] h-[30px] rounded-7 flex-none bg-neutral-100 bg-[repeating-linear-gradient(45deg,var(--color-neutral-200)_0,var(--color-neutral-200)_1px,transparent_1px,transparent_7px)] border border-neutral-200" />
         <div class="flex-1">
-          <div class="text-[13.5px] font-semibold leading-[1.25]">{{ tc.role }}</div>
-          <div class="text-[12px] text-neutral-500 mt-0.5">{{ tc.company }} · {{ tc.location }}</div>
-          <div class="font-mono text-[11px] text-neutral-500 mt-0.5">{{ tc.date }}</div>
+          <div class="text-[13.5px] font-semibold leading-[1.25]">{{ tc.poste }}</div>
+          <div class="text-[12px] text-neutral-500 mt-0.5">{{ tc.entreprise ?? '—' }}</div>
         </div>
+        <div class="font-mono text-[11px] text-neutral-500">Abandon le {{ formatAbandonDate(tc.derniere_maj_statut) }}</div>
       </div>
 
       <div

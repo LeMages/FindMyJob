@@ -247,6 +247,46 @@ pub async fn set_documents(
     Ok(())
 }
 
+/// Marque une candidature comme abandonnée (statut `abandon`), utilisé quand
+/// l'utilisateur supprime une candidature encore au statut « à postuler ».
+/// La mise à jour du statut et son entrée d'historique sont écrites dans la
+/// même transaction, pour ne jamais désynchroniser les deux.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+/// * `user_id` - Identifiant de l'utilisateur propriétaire.
+/// * `id` - Identifiant de la candidature à abandonner.
+///
+/// # Returns
+///
+/// `Ok(())` une fois le changement de statut effectué, ou `AppError::NotFound`
+/// si la candidature n'existe pas.
+pub async fn abandon(pool: &SqlitePool, user_id: i64, id: i64) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+
+    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = ? AND user_id = ?")
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?
+        .try_get("status")
+        .map_err(AppError::from)?;
+
+    sqlx::query("UPDATE candidatures SET status = 'abandon' WHERE id = ? AND user_id = ?")
+        .bind(id)
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    status_history::record(&mut tx, id, Some(&ancien_status), "abandon").await?;
+
+    tx.commit().await?;
+
+    Ok(())
+}
+
 /// Liste les candidatures d'une session, les plus récentes en premier.
 ///
 /// # Arguments

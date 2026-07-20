@@ -66,6 +66,7 @@ pub fn run() {
             commands::get_candidatures,
             commands::get_candidature,
             commands::update_candidature,
+            commands::abandon_candidature,
             commands::get_contacts,
             commands::get_status_history,
             commands::get_document_info,
