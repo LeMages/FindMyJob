@@ -85,7 +85,7 @@ function previewDocument(path: string, label: string) {
 
     <div v-else-if="state.detailCandidature" class="grid grid-cols-[1fr_320px] gap-6 mt-[18px] items-start">
       <!-- Left column -->
-      <div>
+      <div class="min-w-0">
         <!-- Détails du poste -->
         <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="flex items-center justify-between mb-[14px]">
