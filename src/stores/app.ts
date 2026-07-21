@@ -459,6 +459,64 @@ export async function deleteCandidature(): Promise<string | null> {
   }
 }
 
+/**
+ * Invoque une commande Tauri « postuler » (mail, message ou sans message)
+ * pour la candidature ouverte, puis retourne au suivi de la session en cas
+ * de succès.
+ *
+ * @param command - Nom de la commande Tauri à invoquer (reçoit `{ id }`).
+ * @param errorFallback - Message d'erreur par défaut si l'erreur n'est pas exploitable.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+async function applyVia(command: string, errorFallback: string): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  try {
+    await invoke<void>(command, { id: current.id })
+    state.detailPopup = null
+    state.selectedCard = null
+    state.screen = 'tracking'
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, errorFallback)
+  }
+}
+
+/**
+ * Postule sans message : exporte le CV et la lettre de motivation de la
+ * candidature ouverte vers le dossier de téléchargements, marque la
+ * candidature comme postulée, puis retourne au suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function applyWithoutMessage(): Promise<string | null> {
+  return applyVia('postuler_sans_message', 'Impossible de postuler sans message.')
+}
+
+/**
+ * Postule par mail : fait rédiger un mail de candidature par l'IA, exporte
+ * CV, lettre de motivation et mail vers le dossier de téléchargements,
+ * marque la candidature comme postulée, puis retourne au suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function applyByMail(): Promise<string | null> {
+  return applyVia('postuler_par_mail', 'Impossible de postuler par mail.')
+}
+
+/**
+ * Postule par message : fait rédiger un message court (LinkedIn ou
+ * équivalent) par l'IA, exporte CV, lettre de motivation et message vers le
+ * dossier de téléchargements, marque la candidature comme postulée, puis
+ * retourne au suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function applyByMessage(): Promise<string | null> {
+  return applyVia('postuler_par_message', 'Impossible de postuler par message.')
+}
+
 /** Marque la candidature ouverte comme acceptée et retourne au suivi. */
 export function acceptCard() {
   state.selectedCard = null

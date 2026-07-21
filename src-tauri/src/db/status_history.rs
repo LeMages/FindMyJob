@@ -16,6 +16,8 @@ use crate::models::StatusHistoryView;
 /// * `candidature_id` - Identifiant de la candidature concernée.
 /// * `ancien_status` - Statut précédent, `None` s'il s'agit de la création.
 /// * `nouveau_status` - Nouveau statut de la candidature.
+/// * `content` - Message (mail ou message de candidature) ayant accompagné
+///   le changement, `None` s'il n'y en a pas (ex. « Postuler sans message »).
 ///
 /// # Returns
 ///
@@ -25,14 +27,16 @@ pub async fn record(
     candidature_id: i64,
     ancien_status: Option<&str>,
     nouveau_status: &str,
+    content: Option<&str>,
 ) -> Result<(), AppError> {
     sqlx::query(
-        "INSERT INTO status_history (candidature_id, ancien_status, nouveau_status) \
-         VALUES (?, ?, ?)",
+        "INSERT INTO status_history (candidature_id, ancien_status, nouveau_status, content) \
+         VALUES (?, ?, ?, ?)",
     )
     .bind(candidature_id)
     .bind(ancien_status)
     .bind(nouveau_status)
+    .bind(content)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -53,7 +57,7 @@ pub async fn list_for_candidature(
     candidature_id: i64,
 ) -> Result<Vec<StatusHistoryView>, AppError> {
     let rows = sqlx::query(
-        "SELECT id, candidature_id, ancien_status, nouveau_status, \
+        "SELECT id, candidature_id, ancien_status, nouveau_status, content, \
                 CAST(changed_at AS TEXT) AS changed_at \
          FROM status_history \
          WHERE candidature_id = ? \
@@ -70,6 +74,7 @@ pub async fn list_for_candidature(
                 candidature_id: r.try_get("candidature_id")?,
                 ancien_status: r.try_get("ancien_status")?,
                 nouveau_status: r.try_get("nouveau_status")?,
+                content: r.try_get("content")?,
                 changed_at: r.try_get("changed_at")?,
             })
         })

@@ -5,12 +5,43 @@
  * Propre à `DetailView`.
  */
 
+// Importation des modules Vue / framework
+import { ref } from 'vue'
+
 // Importation des modules internes
-import { state, closeDetailPopup, addEvent, addRecruiter, deleteCandidature } from '@/stores/app'
+import {
+  state,
+  closeDetailPopup,
+  addEvent,
+  addRecruiter,
+  deleteCandidature,
+  applyWithoutMessage,
+  applyByMail,
+  applyByMessage,
+} from '@/stores/app'
 
 /** Confirme la suppression de la candidature ouverte et affiche l'erreur éventuelle. */
 async function confirmDelete() {
   const error = await deleteCandidature()
+  if (error) state.detailError = error
+}
+
+/** Voie de candidature en cours de traitement (désactive les trois options tant qu'elle est active). */
+const applyingVia = ref<'mail' | 'message' | 'sans_message' | null>(null)
+
+/**
+ * Déclenche une des trois façons de postuler pour la candidature ouverte,
+ * en bloquant les autres options le temps de l'appel (rédaction IA incluse
+ * pour mail/message) et en affichant l'erreur éventuelle.
+ *
+ * @param via - Voie choisie, utilisée pour l'état de chargement affiché.
+ * @param action - Fonction du store à invoquer.
+ */
+async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: () => Promise<string | null>) {
+  if (applyingVia.value) return
+  applyingVia.value = via
+  const error = await action()
+  applyingVia.value = null
   if (error) state.detailError = error
 }
 </script>
@@ -19,8 +50,53 @@ async function confirmDelete() {
   <div v-if="state.detailPopup" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]" @click="closeDetailPopup">
     <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
 
+      <!-- Apply popup -->
+      <template v-if="state.detailPopup === 'apply'">
+        <div class="flex items-center justify-between mb-5">
+          <div class="text-[17px] font-semibold">Postuler</div>
+          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
+        </div>
+        <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[18px]">Comment veux-tu postuler à cette offre ?</div>
+
+        <div
+          class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100"
+          :class="{ 'opacity-40 pointer-events-none': applyingVia && applyingVia !== 'mail' }"
+          @click="confirmApply('mail', applyByMail)"
+        >
+          <div class="text-[15px] w-[38px] text-center flex-none">✉</div>
+          <div>
+            <div class="text-[14px] font-semibold">Postuler par mail</div>
+            <div class="text-[12px] text-neutral-500 mt-0.5">{{ applyingVia === 'mail' ? 'Rédaction du mail par l\'IA…' : 'Rédiger et envoyer un mail de candidature.' }}</div>
+          </div>
+        </div>
+
+        <div
+          class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100"
+          :class="{ 'opacity-40 pointer-events-none': applyingVia && applyingVia !== 'message' }"
+          @click="confirmApply('message', applyByMessage)"
+        >
+          <div class="text-[15px] w-[38px] text-center flex-none">💬</div>
+          <div>
+            <div class="text-[14px] font-semibold">Postuler par message</div>
+            <div class="text-[12px] text-neutral-500 mt-0.5">{{ applyingVia === 'message' ? 'Rédaction du message par l\'IA…' : 'Envoyer un message via la plateforme de l\'offre.' }}</div>
+          </div>
+        </div>
+
+        <div
+          class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100"
+          :class="{ 'opacity-40 pointer-events-none': applyingVia && applyingVia !== 'sans_message' }"
+          @click="confirmApply('sans_message', applyWithoutMessage)"
+        >
+          <div class="text-[15px] w-[38px] text-center flex-none">→</div>
+          <div>
+            <div class="text-[14px] font-semibold">Postuler sans message</div>
+            <div class="text-[12px] text-neutral-500 mt-0.5">Marquer la candidature comme envoyée, sans message.</div>
+          </div>
+        </div>
+      </template>
+
       <!-- Mail popup -->
-      <template v-if="state.detailPopup === 'mail'">
+      <template v-else-if="state.detailPopup === 'mail'">
         <div class="flex items-center justify-between mb-5">
           <div class="text-[17px] font-semibold">Rédiger le mail de candidature</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>

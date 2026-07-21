@@ -16,7 +16,7 @@ use tauri::{Emitter, Manager};
 use crate::db::{self, resolve_data_dir, DbState};
 use crate::documents::typst::compile_to_pdf;
 use crate::error::AppError;
-use crate::models::{DocumentFileInfo, DocumentReferenceView, DocumentSaveProgress};
+use crate::models::{CandidatureDetail, DocumentFileInfo, DocumentReferenceView, DocumentSaveProgress};
 
 /// Nom de l'événement Tauri émis à chaque étape de `save_reference`, écouté
 /// par le frontend pour afficher une barre de progression.
@@ -494,6 +494,108 @@ pub fn finalize_candidature_document(
     std::fs::rename(&staged_pb, &dest)
         .map_err(|e| AppError::Validation(format!("Impossible de finaliser le document : {}", e)))?;
     Ok(Some(dest.to_string_lossy().to_string()))
+}
+
+/// Remplace les caractères invalides pour un nom de fichier/dossier Windows
+/// (`< > : " / \ | ? *`) par `_`, pour bâtir un nom de dossier sûr à partir de
+/// données utilisateur (poste, entreprise).
+///
+/// # Arguments
+///
+/// * `name` - Nom brut à assainir.
+///
+/// # Returns
+///
+/// Nom assaini, débarrassé des espaces superflus en tête/fin.
+fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| if r#"<>:"/\|?*"#.contains(c) { '_' } else { c })
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+/// Copie le CV et la lettre de motivation d'une candidature vers un
+/// sous-dossier `<poste>_<entreprise>_<id>` du dossier de téléchargements de
+/// l'utilisateur — logique commune aux trois façons de postuler.
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
+/// * `detail` - Détail de la candidature (poste, entreprise, chemins des documents).
+///
+/// # Returns
+///
+/// Le dossier de destination, une fois les deux fichiers copiés, ou
+/// `AppError::Validation` si un document est manquant (candidature sans
+/// CV/lettre) ou introuvable sur le disque.
+fn export_documents(app: &tauri::AppHandle, detail: &CandidatureDetail) -> Result<PathBuf, AppError> {
+    let cv_path = detail.cv_path.as_deref().ok_or_else(|| {
+        AppError::Validation("Aucun CV disponible pour cette candidature.".to_string())
+    })?;
+    let lettre_path = detail.lettre_motivation_path.as_deref().ok_or_else(|| {
+        AppError::Validation("Aucune lettre de motivation disponible pour cette candidature.".to_string())
+    })?;
+
+    let download_dir = app
+        .path()
+        .download_dir()
+        .map_err(|e| AppError::Validation(format!("Dossier de téléchargements introuvable : {}", e)))?;
+
+    let entreprise = detail.entreprise.as_deref().unwrap_or("entreprise");
+    let folder_name = sanitize_filename(&format!("{}_{}_{}", detail.poste, entreprise, detail.id));
+    let dest_dir = download_dir.join(folder_name);
+    std::fs::create_dir_all(&dest_dir)
+        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
+
+    std::fs::copy(cv_path, dest_dir.join("CV.pdf"))
+        .map_err(|e| AppError::Validation(format!("Copie du CV impossible : {}", e)))?;
+    std::fs::copy(lettre_path, dest_dir.join("Lettre_de_motivation.pdf"))
+        .map_err(|e| AppError::Validation(format!("Copie de la lettre de motivation impossible : {}", e)))?;
+
+    Ok(dest_dir)
+}
+
+/// Exporte le CV et la lettre de motivation d'une candidature vers le dossier
+/// de téléchargements de l'utilisateur — utilisé par « Postuler sans message ».
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
+/// * `detail` - Détail de la candidature (poste, entreprise, chemins des documents).
+///
+/// # Returns
+///
+/// `Ok(())` une fois les deux fichiers copiés.
+pub fn export_for_apply(app: &tauri::AppHandle, detail: &CandidatureDetail) -> Result<(), AppError> {
+    export_documents(app, detail)?;
+    Ok(())
+}
+
+/// Exporte le CV, la lettre de motivation et un message de candidature rédigé
+/// par l'IA (mail ou message court) vers le dossier de téléchargements de
+/// l'utilisateur — utilisé par « Postuler par mail » et « Postuler par message ».
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
+/// * `detail` - Détail de la candidature (poste, entreprise, chemins des documents).
+/// * `message` - Contenu texte du message rédigé par l'IA.
+/// * `message_filename` - Nom du fichier `.txt` à créer (ex. `Mail_de_candidature.txt`).
+///
+/// # Returns
+///
+/// `Ok(())` une fois les trois fichiers écrits.
+pub fn export_for_apply_with_message(
+    app: &tauri::AppHandle,
+    detail: &CandidatureDetail,
+    message: &str,
+    message_filename: &str,
+) -> Result<(), AppError> {
+    let dest_dir = export_documents(app, detail)?;
+    std::fs::write(dest_dir.join(message_filename), message)
+        .map_err(|e| AppError::Validation(format!("Écriture du message impossible : {}", e)))?;
+    Ok(())
 }
 
 /// Sauvegarde un document généré par le pipeline IA (`llm::pipeline`) à

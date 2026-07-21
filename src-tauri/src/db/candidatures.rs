@@ -105,7 +105,7 @@ pub async fn insert(
         created_at: row.try_get("created_at").map_err(AppError::from)?,
     };
 
-    status_history::record(&mut tx, view.id, None, &view.status).await?;
+    status_history::record(&mut tx, view.id, None, &view.status, None).await?;
 
     tx.commit().await?;
 
@@ -280,7 +280,61 @@ pub async fn abandon(pool: &SqlitePool, user_id: i64, id: i64) -> Result<(), App
         .execute(&mut *tx)
         .await?;
 
-    status_history::record(&mut tx, id, Some(&ancien_status), "abandon").await?;
+    status_history::record(&mut tx, id, Some(&ancien_status), "abandon", None).await?;
+
+    tx.commit().await?;
+
+    Ok(())
+}
+
+/// Marque une candidature comme postulée (statut `postule`), utilisé une fois
+/// la candidature effectivement envoyée (mail, message ou export local sans
+/// message). La mise à jour du statut et son entrée d'historique sont écrites
+/// dans la même transaction, pour ne jamais désynchroniser les deux.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+/// * `user_id` - Identifiant de l'utilisateur propriétaire.
+/// * `id` - Identifiant de la candidature à marquer comme postulée.
+/// * `content` - Message (mail ou message de candidature) envoyé, `None` si
+///   la candidature a été postulée sans message.
+///
+/// # Returns
+///
+/// `Ok(())` une fois le changement de statut effectué, `AppError::NotFound`
+/// si la candidature n'existe pas, ou `AppError::Conflict` si elle n'est plus
+/// au statut « à postuler ».
+pub async fn mark_postule(
+    pool: &SqlitePool,
+    user_id: i64,
+    id: i64,
+    content: Option<&str>,
+) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+
+    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = ? AND user_id = ?")
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?
+        .try_get("status")
+        .map_err(AppError::from)?;
+
+    if ancien_status != "a_postuler" {
+        return Err(AppError::Conflict(
+            "Seule une candidature au statut « À postuler » peut être marquée comme postulée.".to_string(),
+        ));
+    }
+
+    sqlx::query("UPDATE candidatures SET status = 'postule' WHERE id = ? AND user_id = ?")
+        .bind(id)
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    status_history::record(&mut tx, id, Some(&ancien_status), "postule", content).await?;
 
     tx.commit().await?;
 
