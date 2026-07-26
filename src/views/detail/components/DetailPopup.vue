@@ -12,7 +12,6 @@ import { ref } from 'vue'
 import {
   state,
   closeDetailPopup,
-  addEvent,
   addRecruiter,
   deleteCandidature,
   applyWithoutMessage,
@@ -174,36 +173,20 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         </div>
       </template>
 
-      <!-- Add event popup -->
-      <template v-else-if="state.detailPopup === 'addEvent'">
+      <!-- Status history content popup -->
+      <template v-else-if="state.detailPopup === 'statusHistoryContent'">
         <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">Ajouter un événement</div>
+          <div class="text-[17px] font-semibold">Contenu envoyé</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
-        <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[18px]">Quel type d'événement veux-tu ajouter ?</div>
-
-        <div class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100" @click="addEvent('mail_relance')">
-          <div class="text-[13px] w-[38px] text-center font-mono font-bold text-neutral-700 bg-neutral-100 rounded-7 py-[6px] flex-none">ML</div>
-          <div>
-            <div class="text-[14px] font-semibold">Mail de relance</div>
-            <div class="text-[12px] text-neutral-500 mt-0.5">Relancer le recruteur après un délai sans réponse.</div>
-          </div>
+        <div class="bg-neutral-50 border border-neutral-200 rounded-10 p-[18px] text-[13px] leading-[1.7] text-neutral-700 min-h-[200px] font-mono whitespace-pre-wrap">
+          {{ state.detailStatusHistoryContent }}
         </div>
-
-        <div class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100" @click="addEvent('mail_reponse')">
-          <div class="text-[13px] w-[38px] text-center font-mono font-bold text-neutral-700 bg-neutral-100 rounded-7 py-[6px] flex-none">MR</div>
-          <div>
-            <div class="text-[14px] font-semibold">Mail de réponse</div>
-            <div class="text-[12px] text-neutral-500 mt-0.5">Enregistrer une réponse reçue du recruteur.</div>
-          </div>
-        </div>
-
-        <div class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100" @click="addEvent('entretien')">
-          <div class="text-[13px] w-[38px] text-center font-mono font-bold text-neutral-700 bg-neutral-100 rounded-7 py-[6px] flex-none">RV</div>
-          <div>
-            <div class="text-[14px] font-semibold">Entretien</div>
-            <div class="text-[12px] text-neutral-500 mt-0.5">Planifier et préparer un entretien téléphonique ou visio.</div>
-          </div>
+        <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
+          <button
+            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+            @click="closeDetailPopup"
+          >Fermer</button>
         </div>
       </template>
 

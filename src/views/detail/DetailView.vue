@@ -13,7 +13,7 @@ import {
   selectedCardColumn,
   navigate,
   openDetailPopup,
-  removeEvent,
+  openStatusHistoryPopup,
   trashCard,
   acceptCard,
   cancelAcceptation,
@@ -25,18 +25,6 @@ import DetailPopup from '@/views/detail/components/DetailPopup.vue'
 import DocumentPreviewModal from '@/views/detail/components/DocumentPreviewModal.vue'
 import EditableField from '@/components/EditableField.vue'
 
-// Libellés d'affichage des événements de suivi
-const eventLabel = (type: string) => {
-  if (type === 'mail_relance') return 'Mail de relance'
-  if (type === 'mail_reponse') return 'Mail de réponse'
-  return 'Entretien'
-}
-const eventIcon = (type: string) => {
-  if (type === 'mail_relance') return 'ML'
-  if (type === 'mail_reponse') return 'MR'
-  return 'RV'
-}
-const eventAction = (type: string) => type === 'entretien' ? 'Préparer →' : 'Rédiger →'
 const initials = (nom: string | null) =>
   (nom ?? '').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
 
@@ -179,49 +167,29 @@ function previewDocument(path: string, label: string) {
         </div>
 
         <!-- Statut & Suivi -->
-        <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+        <div v-if="state.detailCandidature.status !== 'a_postuler'" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">STATUT &amp; SUIVI</div>
 
-          <!-- Mail de candidature (always first) -->
-          <div class="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded-10 px-[14px] py-3 mb-[10px]">
+          <div v-for="entry in state.detailHistory" :key="entry.id" class="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded-10 px-[14px] py-3 mb-[10px]">
             <div class="w-9 h-9 rounded-9 bg-white border border-neutral-200 flex items-center justify-center text-[15px] flex-none">✉</div>
             <div class="flex-1 min-w-0">
-              <div class="text-[13.5px] font-semibold">Mail de candidature</div>
-              <div class="text-[12px] text-neutral-500 font-mono mt-0.5">Par défaut · En attente d'envoi</div>
+              <div class="text-[13.5px] font-semibold">{{ statusLabel(entry.nouveau_status) }}</div>
+              <div class="text-[12px] text-neutral-500 font-mono mt-0.5">{{ formatDate(entry.changed_at) }}</div>
             </div>
             <button
-              class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-              @click="openDetailPopup('mail')"
-            >Rédiger le mail →</button>
+              v-if="entry.content"
+              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none hover:text-neutral-950 hover:bg-neutral-100"
+              title="Voir le contenu"
+              @click="openStatusHistoryPopup(entry.content)"
+            >
+              <svg width="17" height="13" viewBox="0 0 17 13" fill="none">
+                <ellipse cx="8.5" cy="6.5" rx="7.5" ry="5.5" stroke="currentColor" stroke-width="1.4" />
+                <circle cx="8.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.4" />
+              </svg>
+            </button>
           </div>
 
-          <!-- Dynamic events -->
-          <div v-for="ev in state.detailEvents" :key="ev.id" class="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded-10 px-[14px] py-3 mb-[10px]">
-            <div class="w-9 h-9 rounded-9 bg-white border border-neutral-200 flex items-center justify-center flex-none font-mono text-[10px] font-bold text-neutral-700">
-              {{ eventIcon(ev.type) }}
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="text-[13.5px] font-semibold">{{ eventLabel(ev.type) }}</div>
-              <div class="text-[12px] text-neutral-500 font-mono mt-0.5">{{ ev.type === 'entretien' ? 'Date à définir' : 'En attente' }}</div>
-            </div>
-            <div class="flex items-center gap-[10px]">
-              <button
-                class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
-                @click="openDetailPopup('mail')"
-              >{{ eventAction(ev.type) }}</button>
-              <button
-                class="h-9 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100 px-[10px] text-neutral-300"
-                @click="removeEvent(ev.id)"
-              >✕</button>
-            </div>
-          </div>
-
-          <button
-            class="w-full justify-center mt-1 h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
-            @click="openDetailPopup('addEvent')"
-          >
-            + Ajouter un événement
-          </button>
+          <div v-if="state.detailHistory.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">Aucun suivi pour l'instant.</div>
         </div>
       </div>
 

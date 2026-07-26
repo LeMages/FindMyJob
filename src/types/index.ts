@@ -47,8 +47,7 @@ export interface UserView {
 }
 // ── Suivi de candidatures (kanban) ───────────────────────────────────────────
 
-export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'addEvent' | 'confirmDelete' | 'apply' | null
-export type EventType = 'mail_relance' | 'mail_reponse' | 'entretien'
+export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'statusHistoryContent' | 'confirmDelete' | 'apply' | null
 
 export interface BoardCard {
   id: number
@@ -82,11 +81,6 @@ export interface UpdateSessionInput {
   contexte: string | null
   statut: SessionStatut
   zone: string | null
-}
-
-export interface AppEvent {
-  id: number
-  type: EventType
 }
 
 export interface NewContact {
@@ -277,6 +271,7 @@ export interface StatusHistoryView {
   candidature_id: number
   ancien_status: string | null
   nouveau_status: string
+  content: string | null
   changed_at: string
 }
 

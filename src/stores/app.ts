@@ -11,10 +11,10 @@ import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import type {
-  Screen, PopupKey, EventType,
+  Screen, PopupKey,
   BoardCard, Session, UpdateSessionInput,
   CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
-  AppEvent, NewContact,
+  NewContact,
   DragState, DragPopupState,
   UpdateCandidatureInput,
 } from '@/types'
@@ -54,8 +54,7 @@ const state = reactive({
   detailLettreInfo: null as DocumentFileInfo | null,
   detailLoading: false,
   detailError: null as string | null,
-  detailEvents: [] as AppEvent[],
-  nextEventId: 1,
+  detailStatusHistoryContent: null as string | null,
   nextRecruiterId: 10,
 
   // Drag & drop
@@ -238,7 +237,6 @@ export async function confirmDeleteSession() {
 export function openCard(card: BoardCard) {
   state.selectedCard = card
   state.screen = 'detail'
-  state.detailEvents = []
   state.detailCandidature = null
   state.detailContacts = []
   state.detailHistory = []
@@ -396,22 +394,14 @@ export function closeDetailPopup() {
 }
 
 /**
- * Ajoute un événement au suivi de la candidature ouverte.
+ * Ouvre la popup de lecture du contenu associé à une entrée de l'historique
+ * de statut (mail ou message envoyé lors du changement de statut).
  *
- * @param type - Type d'événement à ajouter.
+ * @param content - Contenu à afficher.
  */
-export function addEvent(type: EventType) {
-  state.detailEvents.push({ id: state.nextEventId++, type })
-  state.detailPopup = null
-}
-
-/**
- * Retire un événement du suivi de la candidature ouverte.
- *
- * @param id - Identifiant de l'événement à retirer.
- */
-export function removeEvent(id: number) {
-  state.detailEvents = state.detailEvents.filter((e: AppEvent) => e.id !== id)
+export function openStatusHistoryPopup(content: string) {
+  state.detailStatusHistoryContent = content
+  state.detailPopup = 'statusHistoryContent'
 }
 
 // Ajout de recruteur non persistant en base : la commande Tauri `create_contact`
