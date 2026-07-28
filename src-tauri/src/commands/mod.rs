@@ -7,12 +7,14 @@ pub mod contacts;
 pub mod documents;
 pub mod experiences;
 pub mod formations;
+pub mod interviews;
 pub mod langues;
 pub mod projets;
 pub mod sessions;
 pub mod skills;
 pub mod status_history;
 pub mod system;
+pub mod timeline_events;
 pub mod users;
 
 // `pub use module::*` (plutôt que des imports nommés) est nécessaire ici :
@@ -23,10 +25,12 @@ pub use contacts::*;
 pub use documents::*;
 pub use experiences::*;
 pub use formations::*;
+pub use interviews::*;
 pub use langues::*;
 pub use projets::*;
 pub use sessions::*;
 pub use skills::*;
 pub use status_history::*;
 pub use system::*;
+pub use timeline_events::*;
 pub use users::*;

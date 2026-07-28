@@ -1,23 +1,26 @@
-//! Accès et logique de persistance pour l'historique de statut des candidatures.
+//! Accès et logique de persistance pour la timeline de suivi des candidatures.
 
 // Importation des crates externes
 use sqlx::{Row, SqlitePool};
 
 // Importation des modules internes
 use crate::error::AppError;
-use crate::models::StatusHistoryView;
+use crate::models::{EventType, StatusHistoryView};
 
-/// Enregistre un changement de statut dans l'historique d'une candidature.
+/// Enregistre un événement dans la timeline de suivi d'une candidature.
 ///
 /// # Arguments
 ///
 /// * `tx` - Transaction SQLite active (l'écriture doit rester atomique avec
-///   la modification du statut elle-même).
+///   les autres effets de l'événement : changement de statut, entretien...).
 /// * `candidature_id` - Identifiant de la candidature concernée.
+/// * `event_type` - Type de l'événement (voir `EventType`).
 /// * `ancien_status` - Statut précédent, `None` s'il s'agit de la création.
-/// * `nouveau_status` - Nouveau statut de la candidature.
-/// * `content` - Message (mail ou message de candidature) ayant accompagné
-///   le changement, `None` s'il n'y en a pas (ex. « Postuler sans message »).
+/// * `nouveau_status` - Nouveau statut de la candidature, `None` si
+///   l'événement ne change pas le statut.
+/// * `content` - Message ou note associé à l'événement, `None` s'il n'y en a pas.
+/// * `interview_id` - Entretien concerné, pour `entretien_planifie` /
+///   `entretien_passe` uniquement.
 ///
 /// # Returns
 ///
@@ -25,24 +28,29 @@ use crate::models::StatusHistoryView;
 pub async fn record(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     candidature_id: i64,
+    event_type: EventType,
     ancien_status: Option<&str>,
-    nouveau_status: &str,
+    nouveau_status: Option<&str>,
     content: Option<&str>,
+    interview_id: Option<i64>,
 ) -> Result<(), AppError> {
     sqlx::query(
-        "INSERT INTO status_history (candidature_id, ancien_status, nouveau_status, content) \
-         VALUES (?, ?, ?, ?)",
+        "INSERT INTO status_history \
+           (candidature_id, event_type, ancien_status, nouveau_status, content, interview_id) \
+         VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(candidature_id)
+    .bind(event_type.as_str())
     .bind(ancien_status)
     .bind(nouveau_status)
     .bind(content)
+    .bind(interview_id)
     .execute(&mut **tx)
     .await?;
     Ok(())
 }
 
-/// Liste l'historique de statut d'une candidature.
+/// Liste la timeline de suivi d'une candidature.
 ///
 /// # Arguments
 ///
@@ -57,8 +65,8 @@ pub async fn list_for_candidature(
     candidature_id: i64,
 ) -> Result<Vec<StatusHistoryView>, AppError> {
     let rows = sqlx::query(
-        "SELECT id, candidature_id, ancien_status, nouveau_status, content, \
-                CAST(changed_at AS TEXT) AS changed_at \
+        "SELECT id, candidature_id, event_type, ancien_status, nouveau_status, content, \
+                interview_id, CAST(changed_at AS TEXT) AS changed_at \
          FROM status_history \
          WHERE candidature_id = ? \
          ORDER BY changed_at",
@@ -72,9 +80,11 @@ pub async fn list_for_candidature(
             Ok(StatusHistoryView {
                 id: r.try_get("id")?,
                 candidature_id: r.try_get("candidature_id")?,
+                event_type: r.try_get("event_type")?,
                 ancien_status: r.try_get("ancien_status")?,
                 nouveau_status: r.try_get("nouveau_status")?,
                 content: r.try_get("content")?,
+                interview_id: r.try_get("interview_id")?,
                 changed_at: r.try_get("changed_at")?,
             })
         })

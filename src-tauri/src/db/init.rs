@@ -103,6 +103,26 @@ pub async fn init_db(
         std::fs::create_dir_all(data_dir)?;
     }
 
+    // Les migrations tournent avec les clés étrangères désactivées : plusieurs
+    // d'entre elles recréent une table parente pour changer un CHECK ou une
+    // contrainte NOT NULL (seule façon de faire en SQLite — voir
+    // 0005_candidatures_add_interim.sql et 0014_status_history_timeline.sql).
+    // Avec les clés étrangères actives, le DROP TABLE de la table parente
+    // échoue dès que des tables enfants contiennent des lignes qui la
+    // référencent ("FOREIGN KEY constraint failed").
+    let migration_options = SqliteConnectOptions::new()
+        .filename(db_path)
+        .create_if_missing(true)
+        // sqlx active les clés étrangères par défaut (contrairement à SQLite
+        // lui-même) : il faut les désactiver explicitement pour ce pool.
+        .foreign_keys(false)
+        .journal_mode(SqliteJournalMode::Wal);
+    let migration_pool = SqlitePool::connect_with(migration_options).await?;
+    sqlx::migrate!("../db/migrations").run(&migration_pool).await?;
+    migration_pool.close().await;
+
+    // Le pool applicatif, lui, doit appliquer les clés étrangères pour toute
+    // la durée de vie normale de l'application.
     let options = SqliteConnectOptions::new()
         .filename(db_path)
         .create_if_missing(true)
@@ -110,8 +130,6 @@ pub async fn init_db(
         .journal_mode(SqliteJournalMode::Wal);
 
     let pool = SqlitePool::connect_with(options).await?;
-
-    sqlx::migrate!("../db/migrations").run(&pool).await?;
 
     Ok(pool)
 }

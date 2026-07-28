@@ -7,7 +7,9 @@ use sqlx::{Row, SqlitePool};
 use crate::db::common::normalize;
 use crate::db::status_history;
 use crate::error::AppError;
-use crate::models::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
+use crate::models::{
+    CandidatureDetail, CandidatureView, CreateCandidatureInput, EventType, UpdateCandidatureInput,
+};
 
 const TYPES_CONTRAT_VALIDES: [&str; 6] = ["stage", "alternance", "cdi", "cdd", "interim", "freelance"];
 
@@ -105,7 +107,16 @@ pub async fn insert(
         created_at: row.try_get("created_at").map_err(AppError::from)?,
     };
 
-    status_history::record(&mut tx, view.id, None, &view.status, None).await?;
+    status_history::record(
+        &mut tx,
+        view.id,
+        EventType::Creation,
+        None,
+        Some(&view.status),
+        None,
+        None,
+    )
+    .await?;
 
     tx.commit().await?;
 
@@ -280,7 +291,16 @@ pub async fn abandon(pool: &SqlitePool, user_id: i64, id: i64) -> Result<(), App
         .execute(&mut *tx)
         .await?;
 
-    status_history::record(&mut tx, id, Some(&ancien_status), "abandon", None).await?;
+    status_history::record(
+        &mut tx,
+        id,
+        EventType::Desistement,
+        Some(&ancien_status),
+        Some("abandon"),
+        None,
+        None,
+    )
+    .await?;
 
     tx.commit().await?;
 
@@ -334,7 +354,16 @@ pub async fn mark_postule(
         .execute(&mut *tx)
         .await?;
 
-    status_history::record(&mut tx, id, Some(&ancien_status), "postule", content).await?;
+    status_history::record(
+        &mut tx,
+        id,
+        EventType::CandidatureEnvoyee,
+        Some(&ancien_status),
+        Some("postule"),
+        content,
+        None,
+    )
+    .await?;
 
     tx.commit().await?;
 
@@ -453,4 +482,26 @@ pub async fn fetch_detail(
         lettre_motivation_path: row.try_get("lettre_motivation_path").map_err(AppError::from)?,
         created_at: row.try_get("created_at").map_err(AppError::from)?,
     })
+}
+
+/// Récupère le statut courant d'une candidature.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+/// * `user_id` - Identifiant de l'utilisateur propriétaire.
+/// * `id` - Identifiant de la candidature.
+///
+/// # Returns
+///
+/// Statut brut de la candidature, ou `AppError::NotFound` si elle n'existe pas.
+pub async fn fetch_status(pool: &SqlitePool, user_id: i64, id: i64) -> Result<String, AppError> {
+    sqlx::query("SELECT status FROM candidatures WHERE id = ? AND user_id = ?")
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?
+        .try_get("status")
+        .map_err(AppError::from)
 }

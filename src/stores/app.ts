@@ -14,7 +14,7 @@ import type {
   Screen, PopupKey,
   BoardCard, Session, UpdateSessionInput,
   CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
-  NewContact,
+  NewContact, NewTimelineEvent,
   DragState, DragPopupState,
   UpdateCandidatureInput,
 } from '@/types'
@@ -279,6 +279,39 @@ async function loadCardDetail(id: number) {
     state.detailError = extractErrorMessage(e, 'Impossible de charger la candidature.')
   } finally {
     state.detailLoading = false
+  }
+}
+
+/**
+ * Recharge le détail de la candidature actuellement ouverte (candidature,
+ * timeline de suivi) depuis le backend. Utilisé après l'ajout d'un événement
+ * à la timeline, qui peut avoir changé le statut de la candidature.
+ */
+export async function reloadDetail(): Promise<void> {
+  const current = state.detailCandidature
+  if (!current) return
+  await loadCardDetail(current.id)
+}
+
+/**
+ * Ajoute un événement à la timeline de suivi de la candidature ouverte
+ * (relance, entretien, message, appel, note...), puis recharge le détail en
+ * cas de succès — l'événement peut avoir changé le statut de la candidature.
+ *
+ * @param event - Événement à ajouter (voir `get_available_events` pour les
+ *   types disponibles selon le statut courant).
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function addTimelineEvent(event: NewTimelineEvent): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  try {
+    await invoke<void>('add_timeline_event', { candidatureId: current.id, event })
+    await reloadDetail()
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, "Impossible d'ajouter l'événement.")
   }
 }
 

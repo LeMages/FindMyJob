@@ -13,24 +13,20 @@ import {
   selectedCardColumn,
   navigate,
   openDetailPopup,
-  openStatusHistoryPopup,
   trashCard,
   acceptCard,
   cancelAcceptation,
   updateDetailCandidature,
 } from '@/stores/app'
-import { TYPE_CONTRAT_OPTIONS, SOURCE_OPTIONS, statusLabel } from '@/composables/candidature_display'
+import { TYPE_CONTRAT_OPTIONS, SOURCE_OPTIONS } from '@/composables/candidature_display'
 import { formatFileSize } from '@/composables/format_file_size'
 import DetailPopup from '@/views/detail/components/DetailPopup.vue'
 import DocumentPreviewModal from '@/views/detail/components/DocumentPreviewModal.vue'
+import StatusTimelineCard from '@/views/detail/components/StatusTimelineCard.vue'
 import EditableField from '@/components/EditableField.vue'
 
 const initials = (nom: string | null) =>
   (nom ?? '').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
-
-/** Formate une date ISO pour l'affichage court (ex. "12 juin 2025"). */
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 
 // Les détails du poste et les notes ne sont modifiables que tant que la
 // candidature n'a pas encore été engagée (statut "à postuler").
@@ -167,30 +163,7 @@ function previewDocument(path: string, label: string) {
         </div>
 
         <!-- Statut & Suivi -->
-        <div v-if="state.detailCandidature.status !== 'a_postuler'" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-          <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">STATUT &amp; SUIVI</div>
-
-          <div v-for="entry in state.detailHistory" :key="entry.id" class="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded-10 px-[14px] py-3 mb-[10px]">
-            <div class="w-9 h-9 rounded-9 bg-white border border-neutral-200 flex items-center justify-center text-[15px] flex-none">✉</div>
-            <div class="flex-1 min-w-0">
-              <div class="text-[13.5px] font-semibold">{{ statusLabel(entry.nouveau_status) }}</div>
-              <div class="text-[12px] text-neutral-500 font-mono mt-0.5">{{ formatDate(entry.changed_at) }}</div>
-            </div>
-            <button
-              v-if="entry.content"
-              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none hover:text-neutral-950 hover:bg-neutral-100"
-              title="Voir le contenu"
-              @click="openStatusHistoryPopup(entry.content)"
-            >
-              <svg width="17" height="13" viewBox="0 0 17 13" fill="none">
-                <ellipse cx="8.5" cy="6.5" rx="7.5" ry="5.5" stroke="currentColor" stroke-width="1.4" />
-                <circle cx="8.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.4" />
-              </svg>
-            </button>
-          </div>
-
-          <div v-if="state.detailHistory.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">Aucun suivi pour l'instant.</div>
-        </div>
+        <StatusTimelineCard />
       </div>
 
       <!-- Right column -->
@@ -259,24 +232,6 @@ function previewDocument(path: string, label: string) {
             </div>
           </div>
           <div v-if="state.detailContacts.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">Aucun recruteur renseigné.</div>
-        </div>
-
-        <!-- Historique -->
-        <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-          <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">HISTORIQUE</div>
-          <div v-if="state.detailHistory.length" class="flex flex-col">
-            <div v-for="(entry, i) in state.detailHistory" :key="entry.id" class="flex gap-3">
-              <div class="flex flex-col items-center">
-                <div class="w-[13px] h-[13px] rounded-full border-2 flex-none mt-0.5 bg-neutral-950 border-neutral-950" />
-                <div v-if="i < state.detailHistory.length - 1" class="flex-1 w-0.5 bg-neutral-200 min-h-[22px] my-0.5" />
-              </div>
-              <div>
-                <div class="text-[13px] font-semibold">{{ statusLabel(entry.nouveau_status) }}</div>
-                <div class="text-[11.5px] text-neutral-400 mt-px font-mono pb-[14px]">{{ formatDate(entry.changed_at) }}</div>
-              </div>
-            </div>
-          </div>
-          <div v-else class="text-[12px] text-neutral-400 font-mono py-2">Aucun historique.</div>
         </div>
       </div>
     </div>
