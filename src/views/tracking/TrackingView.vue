@@ -19,7 +19,7 @@ import {
   addSession,
 } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
-import { statusLabel, statusColor } from '@/composables/candidature_display'
+import { statusLabel, statusColor, TRASHED_STATUSES } from '@/composables/candidature_display'
 import TrashPopup from '@/views/tracking/components/TrashPopup.vue'
 import CandidaturesTabs from '@/views/tracking/components/CandidaturesTabs.vue'
 import SessionParametersForm from '@/views/tracking/components/SessionParametersForm.vue'
@@ -35,14 +35,15 @@ const sessionIsAccepted = computed(() =>
   candidatures.value.some(c => ['offre', 'refus'].includes(c.status))
 )
 
-// Les candidatures abandonnées ne figurent plus dans la liste principale :
-// elles sont reléguées à la corbeille (voir `trashedCandidatures`).
+// Les candidatures aux statuts terminaux négatifs ne figurent plus dans la
+// liste principale : elles sont reléguées à la corbeille (voir
+// `trashedCandidatures`).
 const visibleCandidatures = computed(() =>
-  candidatures.value.filter(c => c.status !== 'abandon')
+  candidatures.value.filter(c => !TRASHED_STATUSES.includes(c.status))
 )
 
 const trashedCandidatures = computed(() =>
-  candidatures.value.filter(c => c.status === 'abandon')
+  candidatures.value.filter(c => TRASHED_STATUSES.includes(c.status))
 )
 
 /**

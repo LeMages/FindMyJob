@@ -18,7 +18,6 @@ import type {
   DragState, DragPopupState,
   UpdateCandidatureInput,
 } from '@/types'
-import { columnTitleForStatus } from '@/composables/candidature_display'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 
 // ---------------------------------------------------------------------------
@@ -89,12 +88,6 @@ export const allSessions = computed<(Session & { count: number; hasAccepted: boo
 
 export const currentSession = computed(() =>
   allSessions.value.find(s => s.id === state.sessionId) ?? allSessions.value[0] ?? null,
-)
-
-// Colonne du kanban où se trouve la candidature sélectionnée, dérivée de son
-// statut réel une fois le détail chargé depuis le backend.
-export const selectedCardColumn = computed<string>(() =>
-  state.detailCandidature ? columnTitleForStatus(state.detailCandidature.status) : ''
 )
 
 // ---------------------------------------------------------------------------
@@ -453,12 +446,6 @@ export function addRecruiter() {
     created_at: new Date().toISOString(),
   })
   state.detailPopup = null
-}
-
-/** Envoie la candidature ouverte à la corbeille et retourne au suivi. */
-export function trashCard() {
-  state.selectedCard = null
-  state.screen = 'tracking'
 }
 
 /**

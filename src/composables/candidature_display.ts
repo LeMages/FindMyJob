@@ -12,6 +12,12 @@ export const KANBAN_COLUMNS: { title: string; statuses: string[] }[] = [
   { title: 'Accepté',             statuses: ['offre', 'refus', 'abandon', 'ghosting'] },
 ]
 
+// Statuts terminaux négatifs : la candidature n'évoluera plus et n'a pas
+// débouché sur une offre — elle sort du pipeline principal et va en corbeille.
+// `offre` est aussi un statut terminal mais reste affiché sur le board
+// puisque c'est une issue positive.
+export const TRASHED_STATUSES = ['abandon', 'refus', 'ghosting']
+
 /** Libellés d'affichage des types de contrat. */
 export const TYPE_CONTRAT_LABELS: Record<string, string> = {
   stage: 'Stage',

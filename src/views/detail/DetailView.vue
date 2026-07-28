@@ -10,15 +10,13 @@ import { ref, computed } from 'vue'
 // Importation des modules internes
 import {
   state,
-  selectedCardColumn,
   navigate,
   openDetailPopup,
-  trashCard,
   acceptCard,
   cancelAcceptation,
   updateDetailCandidature,
 } from '@/stores/app'
-import { TYPE_CONTRAT_OPTIONS, SOURCE_OPTIONS } from '@/composables/candidature_display'
+import { TYPE_CONTRAT_OPTIONS, SOURCE_OPTIONS, TRASHED_STATUSES, statusLabel } from '@/composables/candidature_display'
 import { formatFileSize } from '@/composables/format_file_size'
 import DetailPopup from '@/views/detail/components/DetailPopup.vue'
 import DocumentPreviewModal from '@/views/detail/components/DocumentPreviewModal.vue'
@@ -238,7 +236,7 @@ function previewDocument(path: string, label: string) {
   </div>
 
   <!-- Action footer -->
-  <div v-if="selectedCardColumn === 'Accepté'" class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
+  <div v-if="state.detailCandidature?.status === 'offre'" class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
     <div class="flex-1 text-[13px] text-green-700 font-mono">
       ✓ Candidature acceptée — session verrouillée.
     </div>
@@ -246,6 +244,11 @@ function previewDocument(path: string, label: string) {
       class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
       @click="cancelAcceptation"
     >Annuler l'acceptation</button>
+  </div>
+  <div v-else-if="TRASHED_STATUSES.includes(state.detailCandidature?.status ?? '')" class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
+    <div class="flex-1 text-[13px] text-neutral-500 font-mono">
+      Candidature clôturée — {{ statusLabel(state.detailCandidature?.status ?? '') }}.
+    </div>
   </div>
   <div v-else-if="state.detailCandidature?.status === 'a_postuler'" class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
     <button
@@ -258,14 +261,6 @@ function previewDocument(path: string, label: string) {
     >Postuler</button>
   </div>
   <div v-else class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
-    <button
-      class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-neutral-100 hover:text-neutral-800"
-      @click="trashCard"
-    >Refusé entreprise</button>
-    <button
-      class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-neutral-100 hover:text-neutral-800"
-      @click="trashCard"
-    >Refus de ma part</button>
     <button
       class="h-9 px-4 rounded-lg border border-neutral-950 bg-neutral-950 text-[13px] font-medium text-white inline-flex items-center cursor-pointer font-sans hover:bg-neutral-800"
       @click="acceptCard"
