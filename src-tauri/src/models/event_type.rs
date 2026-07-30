@@ -22,6 +22,8 @@ pub enum EventType {
     RefusRecu,
     Ghosting,
     Desistement,
+    AccepterOffre,
+    DeclinerOffre,
     MessageEnvoye,
     MessageRecu,
     Appel,
@@ -42,6 +44,8 @@ impl EventType {
             EventType::RefusRecu => "refus_recu",
             EventType::Ghosting => "ghosting",
             EventType::Desistement => "desistement",
+            EventType::AccepterOffre => "accepter_offre",
+            EventType::DeclinerOffre => "decliner_offre",
             EventType::MessageEnvoye => "message_envoye",
             EventType::MessageRecu => "message_recu",
             EventType::Appel => "appel",
@@ -63,6 +67,8 @@ impl EventType {
             EventType::RefusRecu => Some("refus"),
             EventType::Ghosting => Some("ghosting"),
             EventType::Desistement => Some("abandon"),
+            EventType::AccepterOffre => Some("accepte"),
+            EventType::DeclinerOffre => Some("offre_refusee"),
             EventType::Creation
             | EventType::CandidatureEnvoyee
             | EventType::EntretienPasse
@@ -88,6 +94,8 @@ impl TryFrom<&str> for EventType {
             "refus_recu" => Ok(EventType::RefusRecu),
             "ghosting" => Ok(EventType::Ghosting),
             "desistement" => Ok(EventType::Desistement),
+            "accepter_offre" => Ok(EventType::AccepterOffre),
+            "decliner_offre" => Ok(EventType::DeclinerOffre),
             "message_envoye" => Ok(EventType::MessageEnvoye),
             "message_recu" => Ok(EventType::MessageRecu),
             "appel" => Ok(EventType::Appel),

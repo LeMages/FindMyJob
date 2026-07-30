@@ -14,7 +14,9 @@ use crate::models::{AvailableEvent, EventType, NewTimelineEvent};
 
 /// Statuts non terminaux d'une candidature — un événement de timeline ne peut
 /// être ajouté que tant que la candidature est dans l'un de ces statuts.
-const STATUTS_NON_TERMINAUX: [&str; 4] = ["a_postuler", "postule", "relance", "entretien"];
+/// `offre` y figure : recevoir une offre ne verrouille pas la candidature,
+/// il reste possible de l'accepter, la décliner, ou se désister.
+const STATUTS_NON_TERMINAUX: [&str; 5] = ["a_postuler", "postule", "relance", "entretien", "offre"];
 
 /// Construit la liste des événements que l'utilisateur peut ajouter à la
 /// timeline pour le statut courant d'une candidature.
@@ -66,6 +68,10 @@ pub fn available_events(current_status: &str, has_pending_interviews: bool) -> V
     }
     if matches!(current_status, "postule" | "relance") {
         push_event(&mut events, EventType::Ghosting, "Ghosting", Some("ghosting"));
+    }
+    if current_status == "offre" {
+        push_event(&mut events, EventType::AccepterOffre, "Accepter l'offre", Some("accepte"));
+        push_event(&mut events, EventType::DeclinerOffre, "Décliner l'offre", Some("offre_refusee"));
     }
     push_event(&mut events, EventType::Desistement, "Se désister", Some("abandon"));
 

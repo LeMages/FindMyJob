@@ -12,8 +12,6 @@ import {
   state,
   navigate,
   openDetailPopup,
-  acceptCard,
-  cancelAcceptation,
   updateDetailCandidature,
 } from '@/stores/app'
 import { TYPE_CONTRAT_OPTIONS, SOURCE_OPTIONS, TRASHED_STATUSES, statusLabel } from '@/composables/candidature_display'
@@ -236,14 +234,10 @@ function previewDocument(path: string, label: string) {
   </div>
 
   <!-- Action footer -->
-  <div v-if="state.detailCandidature?.status === 'offre'" class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
+  <div v-if="state.detailCandidature?.status === 'accepte'" class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
     <div class="flex-1 text-[13px] text-green-700 font-mono">
-      ✓ Candidature acceptée — session verrouillée.
+      ✓ Candidature acceptée — félicitations !
     </div>
-    <button
-      class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
-      @click="cancelAcceptation"
-    >Annuler l'acceptation</button>
   </div>
   <div v-else-if="TRASHED_STATUSES.includes(state.detailCandidature?.status ?? '')" class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
     <div class="flex-1 text-[13px] text-neutral-500 font-mono">
@@ -259,12 +253,6 @@ function previewDocument(path: string, label: string) {
       class="h-9 px-4 rounded-lg border border-neutral-950 bg-neutral-950 text-[13px] font-medium text-white inline-flex items-center cursor-pointer font-sans hover:bg-neutral-800"
       @click="openDetailPopup('apply')"
     >Postuler</button>
-  </div>
-  <div v-else class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
-    <button
-      class="h-9 px-4 rounded-lg border border-neutral-950 bg-neutral-950 text-[13px] font-medium text-white inline-flex items-center cursor-pointer font-sans hover:bg-neutral-800"
-      @click="acceptCard"
-    >Acceptation</button>
   </div>
 
   <!-- Popups -->

@@ -21,8 +21,10 @@ const formatDate = (iso: string) =>
 
 // Statuts terminaux : plus aucun événement de suivi ne peut être ajouté une
 // fois la candidature dans l'un de ces statuts (voir aussi
-// db::timeline_events::available_events côté backend).
-const STATUTS_TERMINAUX = ['offre', 'refus', 'abandon', 'ghosting']
+// db::timeline_events::available_events côté backend). `offre` n'y figure
+// pas : c'est un statut intermédiaire, on peut encore accepter/décliner
+// l'offre ou se désister.
+const STATUTS_TERMINAUX = ['accepte', 'offre_refusee', 'refus', 'abandon', 'ghosting']
 
 const canAddEvent = computed(() =>
   !!state.detailCandidature && !STATUTS_TERMINAUX.includes(state.detailCandidature.status),

@@ -527,17 +527,5 @@ export async function applyByMessage(): Promise<string | null> {
   return applyVia('postuler_par_message', 'Impossible de postuler par message.')
 }
 
-/** Marque la candidature ouverte comme acceptée et retourne au suivi. */
-export function acceptCard() {
-  state.selectedCard = null
-  state.screen = 'tracking'
-}
-
-/** Annule l'acceptation de la candidature ouverte et retourne au suivi. */
-export function cancelAcceptation() {
-  state.selectedCard = null
-  state.screen = 'tracking'
-}
-
 // Expose raw state for components that need it
 export { state }

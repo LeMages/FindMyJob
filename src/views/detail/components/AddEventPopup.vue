@@ -78,7 +78,10 @@ function contentLabel(eventType: string): string {
     case 'appel':
       return "Notes de l'appel"
     case 'entretien_passe':
+    case 'accepter_offre':
       return 'Notes (optionnel)'
+    case 'decliner_offre':
+      return 'Raison du refus (optionnel)'
     case 'note':
       return 'Note'
     default:
