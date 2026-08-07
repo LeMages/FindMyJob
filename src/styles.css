@@ -62,11 +62,19 @@
    sur @layer utilities, et ecrasait silencieusement toutes les classes
    p-*, m-*, px-*, py-* de l application (bug corrige ici). */
 @layer base {
+  html {
+    /* Evite le rubber-band (trackpad, molette) qui revele le fond blanc
+       par defaut du document derriere le contenu de l app. */
+    overscroll-behavior: none;
+    background: var(--color-neutral-50);
+  }
+
   body {
     font-family: var(--font-sans);
     color: var(--color-neutral-950);
     background: var(--color-neutral-50);
     -webkit-font-smoothing: antialiased;
     font-size: 14px;
+    overscroll-behavior: none;
   }
 }

@@ -11,14 +11,13 @@ import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import type {
-  Screen, PopupKey, EventType,
+  Screen, PopupKey,
   BoardCard, Session, UpdateSessionInput,
   CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
-  AppEvent, NewContact,
+  NewContact, NewTimelineEvent,
   DragState, DragPopupState,
   UpdateCandidatureInput,
 } from '@/types'
-import { columnTitleForStatus } from '@/composables/candidature_display'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 
 // ---------------------------------------------------------------------------
@@ -54,8 +53,7 @@ const state = reactive({
   detailLettreInfo: null as DocumentFileInfo | null,
   detailLoading: false,
   detailError: null as string | null,
-  detailEvents: [] as AppEvent[],
-  nextEventId: 1,
+  detailStatusHistoryContent: null as string | null,
   nextRecruiterId: 10,
 
   // Drag & drop
@@ -90,16 +88,6 @@ export const allSessions = computed<(Session & { count: number; hasAccepted: boo
 
 export const currentSession = computed(() =>
   allSessions.value.find(s => s.id === state.sessionId) ?? allSessions.value[0] ?? null,
-)
-
-// Corbeille de session : pas encore de commande Tauri dédiée (candidatures
-// refusées/abandonnées ne sont pas encore listées séparément côté backend).
-export const currentTrashedList = computed<BoardCard[]>(() => [])
-
-// Colonne du kanban où se trouve la candidature sélectionnée, dérivée de son
-// statut réel une fois le détail chargé depuis le backend.
-export const selectedCardColumn = computed<string>(() =>
-  state.detailCandidature ? columnTitleForStatus(state.detailCandidature.status) : ''
 )
 
 // ---------------------------------------------------------------------------
@@ -242,7 +230,6 @@ export async function confirmDeleteSession() {
 export function openCard(card: BoardCard) {
   state.selectedCard = card
   state.screen = 'detail'
-  state.detailEvents = []
   state.detailCandidature = null
   state.detailContacts = []
   state.detailHistory = []
@@ -285,6 +272,39 @@ async function loadCardDetail(id: number) {
     state.detailError = extractErrorMessage(e, 'Impossible de charger la candidature.')
   } finally {
     state.detailLoading = false
+  }
+}
+
+/**
+ * Recharge le détail de la candidature actuellement ouverte (candidature,
+ * timeline de suivi) depuis le backend. Utilisé après l'ajout d'un événement
+ * à la timeline, qui peut avoir changé le statut de la candidature.
+ */
+export async function reloadDetail(): Promise<void> {
+  const current = state.detailCandidature
+  if (!current) return
+  await loadCardDetail(current.id)
+}
+
+/**
+ * Ajoute un événement à la timeline de suivi de la candidature ouverte
+ * (relance, entretien, message, appel, note...), puis recharge le détail en
+ * cas de succès — l'événement peut avoir changé le statut de la candidature.
+ *
+ * @param event - Événement à ajouter (voir `get_available_events` pour les
+ *   types disponibles selon le statut courant).
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function addTimelineEvent(event: NewTimelineEvent): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  try {
+    await invoke<void>('add_timeline_event', { candidatureId: current.id, event })
+    await reloadDetail()
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, "Impossible d'ajouter l'événement.")
   }
 }
 
@@ -400,22 +420,14 @@ export function closeDetailPopup() {
 }
 
 /**
- * Ajoute un événement au suivi de la candidature ouverte.
+ * Ouvre la popup de lecture du contenu associé à une entrée de l'historique
+ * de statut (mail ou message envoyé lors du changement de statut).
  *
- * @param type - Type d'événement à ajouter.
+ * @param content - Contenu à afficher.
  */
-export function addEvent(type: EventType) {
-  state.detailEvents.push({ id: state.nextEventId++, type })
-  state.detailPopup = null
-}
-
-/**
- * Retire un événement du suivi de la candidature ouverte.
- *
- * @param id - Identifiant de l'événement à retirer.
- */
-export function removeEvent(id: number) {
-  state.detailEvents = state.detailEvents.filter((e: AppEvent) => e.id !== id)
+export function openStatusHistoryPopup(content: string) {
+  state.detailStatusHistoryContent = content
+  state.detailPopup = 'statusHistoryContent'
 }
 
 // Ajout de recruteur non persistant en base : la commande Tauri `create_contact`
@@ -436,22 +448,83 @@ export function addRecruiter() {
   state.detailPopup = null
 }
 
-/** Envoie la candidature ouverte à la corbeille et retourne au suivi. */
-export function trashCard() {
-  state.selectedCard = null
-  state.screen = 'tracking'
+/**
+ * Abandonne la candidature ouverte (statut « à postuler ») et retourne au
+ * suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function deleteCandidature(): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  try {
+    await invoke<void>('abandon_candidature', { id: current.id })
+    state.detailPopup = null
+    state.selectedCard = null
+    state.screen = 'tracking'
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, 'Impossible de supprimer la candidature.')
+  }
 }
 
-/** Marque la candidature ouverte comme acceptée et retourne au suivi. */
-export function acceptCard() {
-  state.selectedCard = null
-  state.screen = 'tracking'
+/**
+ * Invoque une commande Tauri « postuler » (mail, message ou sans message)
+ * pour la candidature ouverte, puis retourne au suivi de la session en cas
+ * de succès.
+ *
+ * @param command - Nom de la commande Tauri à invoquer (reçoit `{ id }`).
+ * @param errorFallback - Message d'erreur par défaut si l'erreur n'est pas exploitable.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+async function applyVia(command: string, errorFallback: string): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  try {
+    await invoke<void>(command, { id: current.id })
+    state.detailPopup = null
+    state.selectedCard = null
+    state.screen = 'tracking'
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, errorFallback)
+  }
 }
 
-/** Annule l'acceptation de la candidature ouverte et retourne au suivi. */
-export function cancelAcceptation() {
-  state.selectedCard = null
-  state.screen = 'tracking'
+/**
+ * Postule sans message : exporte le CV et la lettre de motivation de la
+ * candidature ouverte vers le dossier de téléchargements, marque la
+ * candidature comme postulée, puis retourne au suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function applyWithoutMessage(): Promise<string | null> {
+  return applyVia('postuler_sans_message', 'Impossible de postuler sans message.')
+}
+
+/**
+ * Postule par mail : fait rédiger un mail de candidature par l'IA, exporte
+ * CV, lettre de motivation et mail vers le dossier de téléchargements,
+ * marque la candidature comme postulée, puis retourne au suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function applyByMail(): Promise<string | null> {
+  return applyVia('postuler_par_mail', 'Impossible de postuler par mail.')
+}
+
+/**
+ * Postule par message : fait rédiger un message court (LinkedIn ou
+ * équivalent) par l'IA, exporte CV, lettre de motivation et message vers le
+ * dossier de téléchargements, marque la candidature comme postulée, puis
+ * retourne au suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function applyByMessage(): Promise<string | null> {
+  return applyVia('postuler_par_message', 'Impossible de postuler par message.')
 }
 
 // Expose raw state for components that need it

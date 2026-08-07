@@ -47,8 +47,7 @@ export interface UserView {
 }
 // ── Suivi de candidatures (kanban) ───────────────────────────────────────────
 
-export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'addEvent' | null
-export type EventType = 'mail_relance' | 'mail_reponse' | 'entretien'
+export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'statusHistoryContent' | 'confirmDelete' | 'apply' | null
 
 export interface BoardCard {
   id: number
@@ -82,11 +81,6 @@ export interface UpdateSessionInput {
   contexte: string | null
   statut: SessionStatut
   zone: string | null
-}
-
-export interface AppEvent {
-  id: number
-  type: EventType
 }
 
 export interface NewContact {
@@ -275,9 +269,50 @@ export interface ContactView {
 export interface StatusHistoryView {
   id: number
   candidature_id: number
+  event_type: string
   ancien_status: string | null
-  nouveau_status: string
+  /** `null` si l'événement ne change pas le statut (message, appel, note...). */
+  nouveau_status: string | null
+  content: string | null
+  interview_id: number | null
   changed_at: string
+}
+
+/** Événement proposable pour le statut courant d'une candidature (voir `get_available_events`). */
+export interface AvailableEvent {
+  event_type: string
+  label: string
+  changes_status: boolean
+  target_status: string | null
+}
+
+/** Entretien rattaché à une candidature. */
+export interface InterviewView {
+  id: number
+  candidature_id: number
+  type: string | null
+  date_entretien: string | null
+  lieu: string | null
+  issue: string
+  notes: string | null
+  contact_id: number | null
+}
+
+/** Données de l'entretien à créer, pour un événement `entretien_planifie`. */
+export interface NewInterviewData {
+  type: string
+  date_entretien: string | null
+  lieu: string | null
+  contact_id: number | null
+}
+
+/** Entrée soumise pour ajouter un événement à la timeline d'une candidature. */
+export interface NewTimelineEvent {
+  event_type: string
+  content: string | null
+  interview_data: NewInterviewData | null
+  interview_id: number | null
+  interview_issue: string | null
 }
 
 export interface DocumentFileInfo {

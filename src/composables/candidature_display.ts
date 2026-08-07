@@ -9,8 +9,15 @@ export const KANBAN_COLUMNS: { title: string; statuses: string[] }[] = [
   { title: 'Candidature envoyée', statuses: ['postule'] },
   { title: 'Discussion',          statuses: ['relance'] },
   { title: 'Entretien',           statuses: ['entretien'] },
-  { title: 'Accepté',             statuses: ['offre', 'refus', 'abandon'] },
+  { title: 'Accepté',             statuses: ['offre', 'accepte'] },
 ]
+
+// Statuts terminaux négatifs : la candidature n'évoluera plus et n'a pas
+// débouché sur une acceptation — elle sort du pipeline principal et va en
+// corbeille. `accepte` est aussi un statut terminal mais reste affiché sur le
+// board puisque c'est une issue positive. `offre` n'est pas terminal : c'est
+// une étape intermédiaire (l'offre peut encore être acceptée ou déclinée).
+export const TRASHED_STATUSES = ['abandon', 'refus', 'ghosting', 'offre_refusee']
 
 /** Libellés d'affichage des types de contrat. */
 export const TYPE_CONTRAT_LABELS: Record<string, string> = {
@@ -56,6 +63,9 @@ const STATUS_LABELS: Record<string, string> = {
   offre: 'Offre',
   refus: 'Refus',
   abandon: 'Abandon',
+  ghosting: 'Ghosté',
+  accepte: 'Accepté',
+  offre_refusee: 'Offre déclinée',
 }
 
 /** Classes Tailwind (fond + texte) associées à chaque statut brut de candidature. */
@@ -67,6 +77,28 @@ const STATUS_COLORS: Record<string, string> = {
   offre: 'bg-emerald-100 text-emerald-700',
   refus: 'bg-rose-100 text-rose-700',
   abandon: 'bg-neutral-200 text-neutral-500',
+  ghosting: 'bg-neutral-200 text-neutral-500',
+  accepte: 'bg-emerald-100 text-emerald-700',
+  offre_refusee: 'bg-rose-100 text-rose-700',
+}
+
+/** Libellés d'affichage des types d'événement de la timeline de suivi. */
+const EVENT_LABELS: Record<string, string> = {
+  creation: 'Candidature créée',
+  candidature_envoyee: 'Candidature envoyée',
+  relance: 'Relance envoyée',
+  entretien_planifie: 'Entretien planifié',
+  entretien_passe: 'Entretien passé',
+  offre_recue: 'Offre reçue',
+  refus_recu: 'Refus reçu',
+  ghosting: 'Ghosting',
+  desistement: 'Désistement',
+  accepter_offre: 'Offre acceptée',
+  decliner_offre: 'Offre déclinée',
+  message_envoye: 'Message envoyé',
+  message_recu: 'Message reçu',
+  appel: 'Appel',
+  note: 'Note',
 }
 
 /**
@@ -97,4 +129,14 @@ export function statusLabel(status: string): string {
  */
 export function statusColor(status: string): string {
   return STATUS_COLORS[status] ?? 'bg-neutral-100 text-neutral-600'
+}
+
+/**
+ * Libellé d'affichage d'un type d'événement de la timeline de suivi.
+ *
+ * @param eventType - Type d'événement brut (`entry.event_type`).
+ * @returns Libellé lisible, ou le type brut si inconnu.
+ */
+export function eventLabel(eventType: string): string {
+  return EVENT_LABELS[eventType] ?? eventType
 }

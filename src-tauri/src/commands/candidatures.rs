@@ -2,10 +2,10 @@
 
 // Importation des modules internes
 use crate::db::init::DbState;
-use crate::db::{candidatures, users};
-use crate::documents::save_generated_document;
+use crate::db::{candidatures, profile, users};
+use crate::documents::{export_for_apply, export_for_apply_with_message, save_generated_document};
 use crate::error::AppError;
-use crate::llm::generate_documents;
+use crate::llm::{generate_application_email, generate_application_message, generate_documents};
 use crate::models::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
 
 /// Crée une candidature en générant d'abord, via le pipeline IA, un CV et
@@ -148,4 +148,108 @@ pub async fn update_candidature(
 ) -> Result<CandidatureDetail, AppError> {
     let user = users::fetch_first_user(&state.pool).await?;
     candidatures::update(&state.pool, user.id, id, &input).await
+}
+
+/// Marque une candidature comme abandonnée (statut `abandon`) — utilisé par
+/// le bouton « Supprimer » de la page de détail, tant que la candidature est
+/// encore au statut « à postuler ».
+///
+/// # Arguments
+///
+/// * `state` - État partagé (pool de connexions).
+/// * `id` - Identifiant de la candidature à abandonner.
+///
+/// # Returns
+///
+/// `Ok(())` une fois le statut mis à jour.
+#[tauri::command]
+pub async fn abandon_candidature(
+    state: tauri::State<'_, DbState>,
+    id: i64,
+) -> Result<(), AppError> {
+    let user = users::fetch_first_user(&state.pool).await?;
+    candidatures::abandon(&state.pool, user.id, id).await
+}
+
+/// Traite le bouton « Postuler sans message » : exporte le CV et la lettre de
+/// motivation vers le dossier de téléchargements de l'utilisateur, puis passe
+/// la candidature au statut `postule`.
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
+/// * `state` - État partagé (pool de connexions).
+/// * `id` - Identifiant de la candidature.
+///
+/// # Returns
+///
+/// `Ok(())` une fois les documents exportés et le statut mis à jour.
+#[tauri::command]
+pub async fn postuler_sans_message(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DbState>,
+    id: i64,
+) -> Result<(), AppError> {
+    let user = users::fetch_first_user(&state.pool).await?;
+    let detail = candidatures::fetch_detail(&state.pool, user.id, id).await?;
+    export_for_apply(&app, &detail)?;
+    candidatures::mark_postule(&state.pool, user.id, id, None).await
+}
+
+/// Traite le bouton « Postuler par mail » : fait rédiger un mail de
+/// candidature par l'IA, exporte CV, lettre de motivation et mail (`.txt`)
+/// vers le dossier de téléchargements, puis passe la candidature au statut
+/// `postule`.
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
+/// * `state` - État partagé (pool de connexions).
+/// * `id` - Identifiant de la candidature.
+///
+/// # Returns
+///
+/// `Ok(())` une fois le mail rédigé, les documents exportés et le statut mis à jour.
+#[tauri::command]
+pub async fn postuler_par_mail(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DbState>,
+    id: i64,
+) -> Result<(), AppError> {
+    let user = users::fetch_first_user(&state.pool).await?;
+    let detail = candidatures::fetch_detail(&state.pool, user.id, id).await?;
+    let candidate_profile = profile::build_profile(&state.pool).await?;
+
+    let email = generate_application_email(&candidate_profile, &detail).await?;
+    export_for_apply_with_message(&app, &detail, &email, "Mail_de_candidature.txt")?;
+    candidatures::mark_postule(&state.pool, user.id, id, Some(&email)).await
+}
+
+/// Traite le bouton « Postuler par message » : fait rédiger un message court
+/// (LinkedIn ou équivalent) par l'IA, exporte CV, lettre de motivation et
+/// message (`.txt`) vers le dossier de téléchargements, puis passe la
+/// candidature au statut `postule`.
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
+/// * `state` - État partagé (pool de connexions).
+/// * `id` - Identifiant de la candidature.
+///
+/// # Returns
+///
+/// `Ok(())` une fois le message rédigé, les documents exportés et le statut mis à jour.
+#[tauri::command]
+pub async fn postuler_par_message(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DbState>,
+    id: i64,
+) -> Result<(), AppError> {
+    let user = users::fetch_first_user(&state.pool).await?;
+    let detail = candidatures::fetch_detail(&state.pool, user.id, id).await?;
+    let candidate_profile = profile::build_profile(&state.pool).await?;
+
+    let message = generate_application_message(&candidate_profile, &detail).await?;
+    export_for_apply_with_message(&app, &detail, &message, "Message_candidature.txt")?;
+    candidatures::mark_postule(&state.pool, user.id, id, Some(&message)).await
 }
