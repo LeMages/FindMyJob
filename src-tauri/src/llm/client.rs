@@ -19,7 +19,7 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Modèle utilisé pour les appels applicatifs (analyse de style, etc.).
 const MODEL: &str = "claude-sonnet-5";
 /// Plafond de tokens de sortie — largement suffisant pour un JSON d'analyse.
-const MAX_TOKENS: u32 = 4096;
+const MAX_TOKENS: u32 = 8192;
 
 #[derive(Deserialize)]
 struct ContentBlock {
@@ -93,11 +93,16 @@ pub async fn call_claude_with_tokens(
     // ------------------------------------------------------------------
     // 2. Construction du corps de la requête
     // ------------------------------------------------------------------
+    // On désactive le thinking : ce pipeline est une génération structurée en
+    // un seul tour (JSON ou Typst), le thinking n'apporte rien et partage le
+    // même budget de tokens que la sortie visible — l'activer par défaut
+    // tronquait les réponses avant même d'atteindre le contenu utile.
     let mut body = serde_json::json!({
         "model": MODEL,
         "max_tokens": max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": user_message}],
+        "thinking": { "type": "disabled" },
     });
     if let Some(schema) = output_schema {
         body["output_config"] = serde_json::json!({
@@ -139,8 +144,27 @@ pub async fn call_claude_with_tokens(
     // de sécurité) renvoie un contenu vide ou partiel qu'il ne faut pas
     // interpréter comme une réponse exploitable.
     if api_response.stop_reason.as_deref() == Some("refusal") {
+        eprintln!(
+            "[llm::client] Réponse refusée par l'API Claude (stop_reason={:?})",
+            api_response.stop_reason
+        );
         return Err(AppError::Llm(
             "L'API Claude a refusé de traiter cette requête.".to_string(),
+        ));
+    }
+
+    // On vérifie ensuite le troncage : max_tokens atteint signifie que le
+    // contenu (JSON ou Typst) est incomplet et ne pourra pas être parsé
+    // correctement — mieux vaut échouer explicitement ici que de laisser
+    // l'appelant se heurter à une erreur de parsing cryptique en aval.
+    if api_response.stop_reason.as_deref() == Some("max_tokens") {
+        eprintln!(
+            "[llm::client] Réponse tronquée par l'API Claude (stop_reason={:?})",
+            api_response.stop_reason
+        );
+        return Err(AppError::Llm(
+            "Réponse tronquée par le modèle (max_tokens atteint). Le contenu généré est incomplet."
+                .to_string(),
         ));
     }
 
@@ -149,5 +173,11 @@ pub async fn call_claude_with_tokens(
         .iter()
         .find(|b| b.block_type == "text")
         .and_then(|b| b.text.clone())
-        .ok_or_else(|| AppError::Llm("Pas de contenu texte dans la réponse API".to_string()))
+        .ok_or_else(|| {
+            eprintln!(
+                "[llm::client] Pas de contenu texte dans la réponse API (stop_reason={:?})",
+                api_response.stop_reason
+            );
+            AppError::Llm("Pas de contenu texte dans la réponse API".to_string())
+        })
 }
