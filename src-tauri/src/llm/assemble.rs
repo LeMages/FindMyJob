@@ -8,7 +8,7 @@
 
 // Importation des modules internes
 use crate::error::AppError;
-use crate::llm::client::call_claude_with_tokens;
+use crate::llm::client::{call_claude_with_tokens, call_claude_with_tokens_meta};
 
 /// Plafond de tokens de sortie pour l'assemblage Typst — un document complet
 /// (CV ou lettre) peut largement dépasser le plafond par défaut des étapes JSON.
@@ -94,8 +94,41 @@ Règles :
         "CONTENU :\n{content_json}\n\nANALYSE DE STYLE :\n{style_analysis}\n\nDOCUMENT ORIGINAL :\n{original_typst}"
     );
 
-    let raw_response = call_claude_with_tokens(&system_prompt, &user_message, None, ASSEMBLE_MAX_TOKENS).await?;
+    let is_lm = doc_type == "lettre_motivation";
+
+    // [LM-DEBUG] Point 3 — juste avant l'appel d'assemblage, pour la LM uniquement.
+    if is_lm {
+        eprintln!(
+            "[LM-DEBUG] assemble_typst(lettre_motivation): longueur du content_json injecté={} caractères",
+            content_json.len()
+        );
+        eprintln!(
+            "[LM-DEBUG] assemble_typst(lettre_motivation): 500 premiers caractères du content_json:\n{}",
+            content_json.chars().take(500).collect::<String>()
+        );
+        eprintln!(
+            "[LM-DEBUG] assemble_typst(lettre_motivation): document Typst de référence -> longueur={} caractères",
+            original_typst.len()
+        );
+    }
+
+    let (raw_response, stop_reason) =
+        call_claude_with_tokens_meta(&system_prompt, &user_message, None, ASSEMBLE_MAX_TOKENS).await?;
     let code = raw_response.trim().to_string();
+
+    // [LM-DEBUG] Point 4 — réponse de l'assemblage Typst, pour la LM uniquement.
+    if is_lm {
+        eprintln!(
+            "[LM-DEBUG] assemble_typst(lettre_motivation): stop_reason={:?}, longueur du Typst retourné={} caractères",
+            stop_reason,
+            code.len()
+        );
+        eprintln!(
+            "[LM-DEBUG] assemble_typst(lettre_motivation): 300 premiers caractères du Typst retourné:\n{}",
+            code.chars().take(300).collect::<String>()
+        );
+    }
+
     validate_typst_output(&code)?;
     Ok(code)
 }

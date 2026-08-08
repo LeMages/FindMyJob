@@ -19,7 +19,9 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Modèle utilisé pour les appels applicatifs (analyse de style, etc.).
 const MODEL: &str = "claude-sonnet-5";
 /// Plafond de tokens de sortie — largement suffisant pour un JSON d'analyse.
-const MAX_TOKENS: u32 = 8192;
+/// Visibilité `pub(crate)` pour permettre aux points d'appel utilisant
+/// [`call_claude_with_tokens_meta`] de réutiliser le même plafond par défaut.
+pub(crate) const MAX_TOKENS: u32 = 8192;
 
 #[derive(Deserialize)]
 struct ContentBlock {
@@ -83,6 +85,25 @@ pub async fn call_claude_with_tokens(
     output_schema: Option<serde_json::Value>,
     max_tokens: u32,
 ) -> Result<String, AppError> {
+    call_claude_with_tokens_meta(system, user_message, output_schema, max_tokens)
+        .await
+        .map(|(text, _stop_reason)| text)
+}
+
+/// Variante de [`call_claude_with_tokens`] qui expose aussi le `stop_reason`
+/// brut de la réponse, en plus du texte. Utilisée par les points d'appel qui
+/// ont besoin de logger le `stop_reason` d'un appel réussi (diagnostic du
+/// pipeline LM) sans dupliquer la logique d'appel réseau.
+///
+/// # Returns
+///
+/// Le texte du premier bloc `text` de la réponse, et le `stop_reason` associé.
+pub async fn call_claude_with_tokens_meta(
+    system: &str,
+    user_message: &str,
+    output_schema: Option<serde_json::Value>,
+    max_tokens: u32,
+) -> Result<(String, Option<String>), AppError> {
     // ------------------------------------------------------------------
     // 1. Clé API — lue à la volée depuis l'environnement (.env chargé au
     //    démarrage de l'app via dotenvy, voir lib.rs)
@@ -168,7 +189,9 @@ pub async fn call_claude_with_tokens(
         ));
     }
 
-    api_response
+    let stop_reason = api_response.stop_reason.clone();
+
+    let text = api_response
         .content
         .iter()
         .find(|b| b.block_type == "text")
@@ -179,5 +202,7 @@ pub async fn call_claude_with_tokens(
                 api_response.stop_reason
             );
             AppError::Llm("Pas de contenu texte dans la réponse API".to_string())
-        })
+        })?;
+
+    Ok((text, stop_reason))
 }
