@@ -98,6 +98,69 @@ fn validate_typst_output(code: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+// DEBUG: à supprimer — préfixe de log par type de document, pour le
+// diagnostic de troncature de l'assemblage Typst (CV vs lettre de motivation).
+fn debug_prefix(doc_type: &str) -> &str {
+    match doc_type {
+        "cv" => "[CV-DEBUG]",
+        "lettre_motivation" => "[LM-DEBUG]",
+        _ => "[DOC-DEBUG]",
+    }
+}
+
+// DEBUG: à supprimer — extrait les `n` derniers caractères d'une chaîne
+// (en nombre de caractères, pas d'octets, pour rester UTF-8-safe).
+fn tail_chars(s: &str, n: usize) -> String {
+    let char_count = s.chars().count();
+    let skip = char_count.saturating_sub(n);
+    s.chars().skip(skip).collect()
+}
+
+// DEBUG: à supprimer — logs d'entrée de `assemble_typst`, avant l'appel LLM.
+// Pour le CV, dump aussi la fin du template de référence afin de confirmer
+// que les sections formation / centres d'intérêt sont bien présentes en entrée.
+fn debug_log_assemble_input(doc_type: &str, content_json: &str, original_typst: &str) {
+    let prefix = debug_prefix(doc_type);
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): longueur du content_json injecté={} caractères",
+        content_json.len()
+    );
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): 500 premiers caractères du content_json:\n{}",
+        content_json.chars().take(500).collect::<String>()
+    );
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): document Typst de référence -> longueur={} caractères",
+        original_typst.len()
+    );
+    if doc_type == "cv" {
+        eprintln!(
+            "{prefix} assemble_typst({doc_type}): 500 derniers caractères du template de référence:\n{}",
+            tail_chars(original_typst, 500)
+        );
+    }
+}
+
+// DEBUG: à supprimer — logs de sortie de `assemble_typst`, après l'appel LLM.
+// Les 500 derniers caractères sont cruciaux : c'est là qu'on voit si la fin
+// du document (formation, centres d'intérêt) a été tronquée.
+fn debug_log_assemble_output(doc_type: &str, code: &str, stop_reason: &Option<String>) {
+    let prefix = debug_prefix(doc_type);
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): stop_reason={:?}, longueur du Typst retourné={} caractères",
+        stop_reason,
+        code.len()
+    );
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): 300 premiers caractères du Typst retourné:\n{}",
+        code.chars().take(300).collect::<String>()
+    );
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): 500 DERNIERS caractères du Typst retourné:\n{}",
+        tail_chars(code, 500)
+    );
+}
+
 /// Assemble le code Typst final d'un document (CV ou lettre de motivation) à
 /// partir de son contenu rédigé, de l'analyse de style du document de
 /// référence de la session, et du document Typst original lui-même.
@@ -168,40 +231,15 @@ Règles :
         ),
     };
 
-    let is_lm = doc_type == "lettre_motivation";
-
-    // [LM-DEBUG] Point 3 — juste avant l'appel d'assemblage, pour la LM uniquement.
-    if is_lm {
-        eprintln!(
-            "[LM-DEBUG] assemble_typst(lettre_motivation): longueur du content_json injecté={} caractères",
-            content_json.len()
-        );
-        eprintln!(
-            "[LM-DEBUG] assemble_typst(lettre_motivation): 500 premiers caractères du content_json:\n{}",
-            content_json.chars().take(500).collect::<String>()
-        );
-        eprintln!(
-            "[LM-DEBUG] assemble_typst(lettre_motivation): document Typst de référence -> longueur={} caractères",
-            original_typst.len()
-        );
-    }
+    // DEBUG: à supprimer — logs d'entrée/sortie pour le diagnostic de
+    // troncature de l'assemblage Typst (CV et lettre de motivation).
+    debug_log_assemble_input(doc_type, content_json, original_typst);
 
     let (raw_response, stop_reason) =
         call_claude_with_tokens_meta(&system_prompt, &user_message, None, ASSEMBLE_MAX_TOKENS).await?;
     let code = raw_response.trim().to_string();
 
-    // [LM-DEBUG] Point 4 — réponse de l'assemblage Typst, pour la LM uniquement.
-    if is_lm {
-        eprintln!(
-            "[LM-DEBUG] assemble_typst(lettre_motivation): stop_reason={:?}, longueur du Typst retourné={} caractères",
-            stop_reason,
-            code.len()
-        );
-        eprintln!(
-            "[LM-DEBUG] assemble_typst(lettre_motivation): 300 premiers caractères du Typst retourné:\n{}",
-            code.chars().take(300).collect::<String>()
-        );
-    }
+    debug_log_assemble_output(doc_type, &code, &stop_reason);
 
     validate_typst_output(&code)?;
     Ok(code)
