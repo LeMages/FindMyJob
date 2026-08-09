@@ -154,19 +154,25 @@ pub async fn generate_documents(
     let matching_strategy = matching::match_profile(&offer_analysis, &profile).await?;
 
     // ------------------------------------------------------------------
-    // 3. Étapes 3a/3b : rédaction du contenu CV et lettre, en parallèle
+    // 3. Étapes 3a/3b : rédaction du contenu CV et lettre
+    // [DIAG-TEMP] Séquentiel au lieu de tokio::try_join! — test décisif pour
+    // confirmer/infirmer une race de concurrence. À revert après diagnostic.
     // ------------------------------------------------------------------
-    let (cv_content, lm_content) = tokio::try_join!(
-        content::generate_cv_content(&matching_strategy, &profile, &offer_analysis),
-        content::generate_lm_content(&matching_strategy, &profile, &offer_analysis),
-    )?;
+    let cv_content = content::generate_cv_content(&matching_strategy, &profile, &offer_analysis).await?;
+    let lm_content = content::generate_lm_content(&matching_strategy, &profile, &offer_analysis).await?;
 
     // ------------------------------------------------------------------
     // 4. Étapes 4a/4b : assemblage Typst CV et lettre, en parallèle
     // ------------------------------------------------------------------
     let (cv_typst, lm_typst) = tokio::try_join!(
-        assemble::assemble_typst(&cv_content, cv_style, &cv_original, "cv"),
-        assemble::assemble_typst(&lm_content, lm_style, &lm_original, "lettre_motivation"),
+        assemble::assemble_typst(&cv_content, cv_style, &cv_original, "cv", Some(&profile.user)),
+        assemble::assemble_typst(
+            &lm_content,
+            lm_style,
+            &lm_original,
+            "lettre_motivation",
+            Some(&profile.user)
+        ),
     )?;
 
     // ------------------------------------------------------------------

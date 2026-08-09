@@ -8,7 +8,8 @@
 
 // Importation des modules internes
 use crate::error::AppError;
-use crate::llm::client::call_claude_with_tokens;
+use crate::llm::client::{call_claude_with_tokens, call_claude_with_tokens_meta};
+use crate::models::UserView;
 
 /// Plafond de tokens de sortie pour l'assemblage Typst — un document complet
 /// (CV ou lettre) peut largement dépasser le plafond par défaut des étapes JSON.
@@ -21,6 +22,52 @@ fn doc_type_label(doc_type: &str) -> &str {
         "lettre_motivation" => "lettre de motivation / cover letter",
         _ => doc_type,
     }
+}
+
+/// Construit le bloc de coordonnées réelles du candidat à injecter dans le
+/// message utilisateur de l'assemblage Typst, à partir des champs renseignés
+/// de `UserView`. Seuls les champs non vides sont inclus : c'est au LLM de
+/// ne retenir, parmi ceux-ci, que ceux qu'affiche déjà le document original.
+///
+/// # Arguments
+///
+/// * `user` - Profil du candidat (coordonnées potentiellement incomplètes).
+///
+/// # Returns
+///
+/// `Some(bloc)` formaté prêt à être inséré dans le prompt, ou `None` si
+/// aucune coordonnée n'est renseignée.
+fn build_sender_block(user: &UserView) -> Option<String> {
+    let fields: [(&str, &Option<String>); 8] = [
+        ("Prénom", &user.prenom),
+        ("Nom", &user.nom),
+        ("Email", &user.email),
+        ("Téléphone", &user.telephone),
+        ("Ville", &user.ville),
+        ("LinkedIn", &user.linkedin),
+        ("GitHub", &user.github),
+        ("Portfolio", &user.portfolio),
+    ];
+
+    let lines: Vec<String> = fields
+        .into_iter()
+        .filter_map(|(label, value)| {
+            let value = value.as_deref()?.trim();
+            if value.is_empty() {
+                return None;
+            }
+            Some(format!("- {label} : {value}"))
+        })
+        .collect();
+
+    if lines.is_empty() {
+        return None;
+    }
+
+    Some(format!(
+        "COORDONNÉES RÉELLES DU CANDIDAT (expéditeur) :\n{}",
+        lines.join("\n")
+    ))
 }
 
 /// Valide que la réponse du LLM ressemble à du code Typst compilable et non
@@ -51,6 +98,69 @@ fn validate_typst_output(code: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+// DEBUG: à supprimer — préfixe de log par type de document, pour le
+// diagnostic de troncature de l'assemblage Typst (CV vs lettre de motivation).
+fn debug_prefix(doc_type: &str) -> &str {
+    match doc_type {
+        "cv" => "[CV-DEBUG]",
+        "lettre_motivation" => "[LM-DEBUG]",
+        _ => "[DOC-DEBUG]",
+    }
+}
+
+// DEBUG: à supprimer — extrait les `n` derniers caractères d'une chaîne
+// (en nombre de caractères, pas d'octets, pour rester UTF-8-safe).
+fn tail_chars(s: &str, n: usize) -> String {
+    let char_count = s.chars().count();
+    let skip = char_count.saturating_sub(n);
+    s.chars().skip(skip).collect()
+}
+
+// DEBUG: à supprimer — logs d'entrée de `assemble_typst`, avant l'appel LLM.
+// Pour le CV, dump aussi la fin du template de référence afin de confirmer
+// que les sections formation / centres d'intérêt sont bien présentes en entrée.
+fn debug_log_assemble_input(doc_type: &str, content_json: &str, original_typst: &str) {
+    let prefix = debug_prefix(doc_type);
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): longueur du content_json injecté={} caractères",
+        content_json.len()
+    );
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): 500 premiers caractères du content_json:\n{}",
+        content_json.chars().take(500).collect::<String>()
+    );
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): document Typst de référence -> longueur={} caractères",
+        original_typst.len()
+    );
+    if doc_type == "cv" {
+        eprintln!(
+            "{prefix} assemble_typst({doc_type}): 500 derniers caractères du template de référence:\n{}",
+            tail_chars(original_typst, 500)
+        );
+    }
+}
+
+// DEBUG: à supprimer — logs de sortie de `assemble_typst`, après l'appel LLM.
+// Les 500 derniers caractères sont cruciaux : c'est là qu'on voit si la fin
+// du document (formation, centres d'intérêt) a été tronquée.
+fn debug_log_assemble_output(doc_type: &str, code: &str, stop_reason: &Option<String>) {
+    let prefix = debug_prefix(doc_type);
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): stop_reason={:?}, longueur du Typst retourné={} caractères",
+        stop_reason,
+        code.len()
+    );
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): 300 premiers caractères du Typst retourné:\n{}",
+        code.chars().take(300).collect::<String>()
+    );
+    eprintln!(
+        "{prefix} assemble_typst({doc_type}): 500 DERNIERS caractères du Typst retourné:\n{}",
+        tail_chars(code, 500)
+    );
+}
+
 /// Assemble le code Typst final d'un document (CV ou lettre de motivation) à
 /// partir de son contenu rédigé, de l'analyse de style du document de
 /// référence de la session, et du document Typst original lui-même.
@@ -61,6 +171,8 @@ fn validate_typst_output(code: &str) -> Result<(), AppError> {
 /// * `style_analysis` - JSON d'analyse de style du document de référence (voir `llm::style`).
 /// * `original_typst` - Code Typst du document de référence, utilisé comme référence de style et de syntaxe.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `sender_info` - Coordonnées réelles du candidat, à substituer à celles du document
+///   original. `None` désactive la substitution (aucune coordonnée disponible).
 ///
 /// # Returns
 ///
@@ -70,8 +182,28 @@ pub async fn assemble_typst(
     style_analysis: &str,
     original_typst: &str,
     doc_type: &str,
+    sender_info: Option<&UserView>,
 ) -> Result<String, AppError> {
     let label = doc_type_label(doc_type);
+    let sender_block = sender_info.and_then(build_sender_block);
+
+    let sender_intro = if sender_block.is_some() {
+        "\n4. Les COORDONNÉES RÉELLES DU CANDIDAT — à utiliser à la place de celles du document original"
+    } else {
+        ""
+    };
+    let sender_rules = if sender_block.is_some() {
+        "\n- Les COORDONNÉES RÉELLES DU CANDIDAT remplacent celles du document original partout \
+          où elles apparaissent (bloc expéditeur, en-tête, pied de page, signature)\n\
+        - N'ajoute AUCUN champ de coordonnées absent du document original : si le document \
+          n'affiche que le nom et le prénom, n'ajoute ni email, ni téléphone, ni ville\n\
+        - Inversement, tout champ de coordonnées présent dans le document original doit être \
+          renseigné avec la valeur réelle correspondante, jamais avec la valeur du template\n\
+        - Si une coordonnée demandée par le document original n'est pas fournie, conserve la \
+          structure du document sans inventer de valeur"
+    } else {
+        ""
+    };
 
     let system_prompt = format!(
         r#"Tu es un expert Typst. Tu génères un document {label} en code Typst.
@@ -79,23 +211,36 @@ pub async fn assemble_typst(
 Tu reçois :
 1. Le CONTENU à utiliser (JSON) — c'est ce qui doit apparaître dans le document
 2. L'ANALYSE DE STYLE — les conventions de structure et de design à reproduire
-3. Le DOCUMENT ORIGINAL en Typst — c'est ta référence de style et de syntaxe
+3. Le DOCUMENT ORIGINAL en Typst — c'est ta référence de style et de syntaxe{sender_intro}
 
 Règles :
 - Reproduis fidèlement la structure, le design et le style Typst du document original
 - Utilise UNIQUEMENT le contenu fourni dans le JSON — n'invente rien
 - Le code Typst doit compiler sans erreur
 - Conserve les imports, les fonctions custom, et les packages du document original
-- Conserve les polices, couleurs, et spacing du document original
+- Conserve les polices, couleurs, et spacing du document original{sender_rules}
 - Retourne UNIQUEMENT le code Typst, sans backticks, sans commentaires avant/après"#
     );
 
-    let user_message = format!(
-        "CONTENU :\n{content_json}\n\nANALYSE DE STYLE :\n{style_analysis}\n\nDOCUMENT ORIGINAL :\n{original_typst}"
-    );
+    let user_message = match &sender_block {
+        Some(block) => format!(
+            "{block}\n\nCONTENU :\n{content_json}\n\nANALYSE DE STYLE :\n{style_analysis}\n\nDOCUMENT ORIGINAL :\n{original_typst}"
+        ),
+        None => format!(
+            "CONTENU :\n{content_json}\n\nANALYSE DE STYLE :\n{style_analysis}\n\nDOCUMENT ORIGINAL :\n{original_typst}"
+        ),
+    };
 
-    let raw_response = call_claude_with_tokens(&system_prompt, &user_message, None, ASSEMBLE_MAX_TOKENS).await?;
+    // DEBUG: à supprimer — logs d'entrée/sortie pour le diagnostic de
+    // troncature de l'assemblage Typst (CV et lettre de motivation).
+    debug_log_assemble_input(doc_type, content_json, original_typst);
+
+    let (raw_response, stop_reason) =
+        call_claude_with_tokens_meta(&system_prompt, &user_message, None, ASSEMBLE_MAX_TOKENS).await?;
     let code = raw_response.trim().to_string();
+
+    debug_log_assemble_output(doc_type, &code, &stop_reason);
+
     validate_typst_output(&code)?;
     Ok(code)
 }
