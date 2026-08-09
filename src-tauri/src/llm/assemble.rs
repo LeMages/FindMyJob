@@ -9,6 +9,7 @@
 // Importation des modules internes
 use crate::error::AppError;
 use crate::llm::client::{call_claude_with_tokens, call_claude_with_tokens_meta};
+use crate::models::UserView;
 
 /// Plafond de tokens de sortie pour l'assemblage Typst — un document complet
 /// (CV ou lettre) peut largement dépasser le plafond par défaut des étapes JSON.
@@ -21,6 +22,52 @@ fn doc_type_label(doc_type: &str) -> &str {
         "lettre_motivation" => "lettre de motivation / cover letter",
         _ => doc_type,
     }
+}
+
+/// Construit le bloc de coordonnées réelles du candidat à injecter dans le
+/// message utilisateur de l'assemblage Typst, à partir des champs renseignés
+/// de `UserView`. Seuls les champs non vides sont inclus : c'est au LLM de
+/// ne retenir, parmi ceux-ci, que ceux qu'affiche déjà le document original.
+///
+/// # Arguments
+///
+/// * `user` - Profil du candidat (coordonnées potentiellement incomplètes).
+///
+/// # Returns
+///
+/// `Some(bloc)` formaté prêt à être inséré dans le prompt, ou `None` si
+/// aucune coordonnée n'est renseignée.
+fn build_sender_block(user: &UserView) -> Option<String> {
+    let fields: [(&str, &Option<String>); 8] = [
+        ("Prénom", &user.prenom),
+        ("Nom", &user.nom),
+        ("Email", &user.email),
+        ("Téléphone", &user.telephone),
+        ("Ville", &user.ville),
+        ("LinkedIn", &user.linkedin),
+        ("GitHub", &user.github),
+        ("Portfolio", &user.portfolio),
+    ];
+
+    let lines: Vec<String> = fields
+        .into_iter()
+        .filter_map(|(label, value)| {
+            let value = value.as_deref()?.trim();
+            if value.is_empty() {
+                return None;
+            }
+            Some(format!("- {label} : {value}"))
+        })
+        .collect();
+
+    if lines.is_empty() {
+        return None;
+    }
+
+    Some(format!(
+        "COORDONNÉES RÉELLES DU CANDIDAT (expéditeur) :\n{}",
+        lines.join("\n")
+    ))
 }
 
 /// Valide que la réponse du LLM ressemble à du code Typst compilable et non
@@ -61,6 +108,8 @@ fn validate_typst_output(code: &str) -> Result<(), AppError> {
 /// * `style_analysis` - JSON d'analyse de style du document de référence (voir `llm::style`).
 /// * `original_typst` - Code Typst du document de référence, utilisé comme référence de style et de syntaxe.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `sender_info` - Coordonnées réelles du candidat, à substituer à celles du document
+///   original. `None` désactive la substitution (aucune coordonnée disponible).
 ///
 /// # Returns
 ///
@@ -70,8 +119,28 @@ pub async fn assemble_typst(
     style_analysis: &str,
     original_typst: &str,
     doc_type: &str,
+    sender_info: Option<&UserView>,
 ) -> Result<String, AppError> {
     let label = doc_type_label(doc_type);
+    let sender_block = sender_info.and_then(build_sender_block);
+
+    let sender_intro = if sender_block.is_some() {
+        "\n4. Les COORDONNÉES RÉELLES DU CANDIDAT — à utiliser à la place de celles du document original"
+    } else {
+        ""
+    };
+    let sender_rules = if sender_block.is_some() {
+        "\n- Les COORDONNÉES RÉELLES DU CANDIDAT remplacent celles du document original partout \
+          où elles apparaissent (bloc expéditeur, en-tête, pied de page, signature)\n\
+        - N'ajoute AUCUN champ de coordonnées absent du document original : si le document \
+          n'affiche que le nom et le prénom, n'ajoute ni email, ni téléphone, ni ville\n\
+        - Inversement, tout champ de coordonnées présent dans le document original doit être \
+          renseigné avec la valeur réelle correspondante, jamais avec la valeur du template\n\
+        - Si une coordonnée demandée par le document original n'est pas fournie, conserve la \
+          structure du document sans inventer de valeur"
+    } else {
+        ""
+    };
 
     let system_prompt = format!(
         r#"Tu es un expert Typst. Tu génères un document {label} en code Typst.
@@ -79,20 +148,25 @@ pub async fn assemble_typst(
 Tu reçois :
 1. Le CONTENU à utiliser (JSON) — c'est ce qui doit apparaître dans le document
 2. L'ANALYSE DE STYLE — les conventions de structure et de design à reproduire
-3. Le DOCUMENT ORIGINAL en Typst — c'est ta référence de style et de syntaxe
+3. Le DOCUMENT ORIGINAL en Typst — c'est ta référence de style et de syntaxe{sender_intro}
 
 Règles :
 - Reproduis fidèlement la structure, le design et le style Typst du document original
 - Utilise UNIQUEMENT le contenu fourni dans le JSON — n'invente rien
 - Le code Typst doit compiler sans erreur
 - Conserve les imports, les fonctions custom, et les packages du document original
-- Conserve les polices, couleurs, et spacing du document original
+- Conserve les polices, couleurs, et spacing du document original{sender_rules}
 - Retourne UNIQUEMENT le code Typst, sans backticks, sans commentaires avant/après"#
     );
 
-    let user_message = format!(
-        "CONTENU :\n{content_json}\n\nANALYSE DE STYLE :\n{style_analysis}\n\nDOCUMENT ORIGINAL :\n{original_typst}"
-    );
+    let user_message = match &sender_block {
+        Some(block) => format!(
+            "{block}\n\nCONTENU :\n{content_json}\n\nANALYSE DE STYLE :\n{style_analysis}\n\nDOCUMENT ORIGINAL :\n{original_typst}"
+        ),
+        None => format!(
+            "CONTENU :\n{content_json}\n\nANALYSE DE STYLE :\n{style_analysis}\n\nDOCUMENT ORIGINAL :\n{original_typst}"
+        ),
+    };
 
     let is_lm = doc_type == "lettre_motivation";
 
