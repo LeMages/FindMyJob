@@ -14,22 +14,23 @@ Les données restent locales sur ta machine (SQLite). Seule l'inférence IA pass
 | Frontend | Vue 3 + TypeScript + Tailwind CSS |
 | Backend | Rust |
 | Base de données | SQLite (locale, mono-utilisateur) |
-| IA | Couche compatible OpenAI → Ollama Cloud (free tier), modèle configurable dans les paramètres |
+| IA | API Messages d'Anthropic (Claude), appels HTTP directs |
 
-La couche IA est construite sur une base URL configurable : aujourd'hui Ollama Cloud, demain un runtime local sans réécriture.
+Aujourd'hui l'app appelle directement l'API Claude d'Anthropic. Une couche compatible OpenAI à base URL configurable (Ollama Cloud, puis un runtime local) est envisagée mais pas encore implémentée.
 
 ## Les features
 
 ### Suivi des candidatures
 
-- Gestion des candidatures : entreprise, poste, type (stage / alternance / CDI), contact, notes, version du CV associée
-- Pipeline de statut : à postuler → postulé → relancé → entretien → offre / refus
-- Vues kanban et liste
-- Rappels de relance automatiques
+- Gestion des candidatures : entreprise, poste, type (stage / alternance / CDI / CDD / intérim / freelance), contacts, notes
+- Statuts : à postuler → postulé → en discussion → entretien → offre reçue → acceptée / déclinée (ou refus / ghosting / abandon)
+- Timeline de suivi par candidature : relances, entretiens, messages, appels, notes
+- Vue tableau du pipeline, avec corbeille pour les candidatures closes sans issue positive
 
 ### Assistance IA
 
-- **Tailoring CV / lettre de motivation** : à partir de ton profil et de l'offre, ce qu'il faut mettre en avant
+- **Tailoring CV / lettre de motivation** : génère automatiquement un CV et une lettre adaptés à l'offre, à partir de ton profil et du texte de l'annonce
+- **Rédaction de mail ou message de candidature** : au moment de postuler, l'IA rédige un mail ou un message court adapté à l'offre
 
 ### À venir
 
@@ -52,13 +53,13 @@ Les données sont stockées localement dans un fichier SQLite. Le schéma est ve
 | `skills` | Compétences classées par domaine |
 | `sessions` | Session de recherche (contexte, zone, statut) regroupant un ensemble de candidatures |
 | `candidatures` | Cœur de l'app — une ligne par candidature (entreprise, statut, métadonnées, chemins du CV et de la lettre de motivation générés) |
-| `status_history` | Historique des changements de statut d'une candidature |
+| `status_history` | Timeline des événements de suivi d'une candidature (changements de statut, relances, entretiens, messages, appels, notes) |
 | `contacts` | Interlocuteurs associés à une candidature (RH, manager…) |
 | `interviews` | Entretiens planifiés ou passés pour une candidature |
 | `documents` | CV et lettre de motivation de référence d'une session (chemin fichier + cache d'analyse de style pour l'IA) |
 | `emails` | Emails envoyés depuis l'app (candidature, relance, remerciement…) |
-| `embeddings` | Vecteurs sémantiques pour le matching profil ↔ offre (table polymorphe) |
-| `settings` | Paramètres de l'app en clé-valeur (modèle IA, thème…) |
+| `embeddings` | Vecteurs sémantiques pour le matching profil ↔ offre (table polymorphe, prévue mais pas encore utilisée : le matching passe aujourd'hui par un appel IA) |
+| `settings` | Paramètres de l'app en clé-valeur (modèle IA, thème…), prévue mais pas encore branchée |
 
 ![Schéma de la base de données](db/schema.png)
 

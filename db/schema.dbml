@@ -1,5 +1,6 @@
 // ============================================
 // FindMyJob - Schéma de base de données (SQLite)
+// Généré à partir de db/migrations/0001 à 0015.
 // ============================================
 
 Table users {
@@ -18,7 +19,7 @@ Table users {
   updated_at timestamp
 }
 
-Table lang{
+Table lang {
   id integer [pk, increment]
   user_id integer [ref: > users.id, not null]
   nom text
@@ -26,8 +27,19 @@ Table lang{
 }
 
 // ============================================
-// Profil : projets, expériences, skills
+// Profil : formations, projets, expériences, skills
 // ============================================
+
+Table formations {
+  id integer [pk, increment]
+  user_id integer [ref: > users.id, not null]
+  titre varchar [not null]
+  ecole varchar
+  date_debut date
+  date_fin date
+  created_at timestamp
+  updated_at timestamp
+}
 
 Table projets {
   id integer [pk, increment]
@@ -36,6 +48,7 @@ Table projets {
   description text
   stack text          // technologies utilisées, texte libre
   url varchar         // repo ou démo
+  pour_qui text        // client / employeur / projet perso (migration 0004)
   date_debut date
   date_fin date
   created_at timestamp
@@ -51,6 +64,7 @@ Table experiences {
   description text
   date_debut date
   date_fin date
+  type_contrat experience_type_contrat  // migration 0002
   created_at timestamp
   updated_at timestamp
 }
@@ -65,6 +79,23 @@ Table skills {
 }
 
 // ============================================
+// Sessions de candidature
+// ============================================
+
+Table sessions {
+  id integer [pk, increment]
+  user_id integer [ref: > users.id, not null]
+  nom varchar [not null]
+  contexte text            // migration 0010
+  statut session_statut [not null, default: 'active']  // migration 0010
+  zone varchar              // migration 0010
+  created_at timestamp
+  updated_at timestamp
+
+  Note: 'Regroupe un ensemble de candidatures. Possède son propre CV et sa\npropre lettre de motivation de référence, tracés dans documents\n(session.cv_path / lm_path ont été droppées en 0012, remplacées par la table documents en 0011).'
+}
+
+// ============================================
 // Candidatures (cœur)
 // ============================================
 
@@ -73,44 +104,62 @@ Enum candidature_type {
   alternance
   cdi
   cdd
+  interim   // ajouté en migration 0005
   freelance
 }
 
+// Recréée en 0005 (ajout interim), 0014 (ajout ghosting), 0015 (ajout
+// accepte / offre_refusee) : SQLite ne permet pas d'altérer un CHECK.
 Enum candidature_status {
   a_postuler
   postule
   relance
   entretien
-  offre
+  offre           // statut intermédiaire depuis 0015 : peut encore être accepté ou décliné
   refus
   abandon
+  ghosting        // migration 0014
+  accepte         // migration 0015
+  offre_refusee   // migration 0015
 }
 
 Table candidatures {
   id integer [pk, increment]
   user_id integer [ref: > users.id, not null]
+  session_id integer [ref: > sessions.id]        // migration 0008
   poste varchar [not null]
   type candidature_type
   status candidature_status [not null, default: 'a_postuler']
-  source varchar              // LinkedIn, site carrière, cooptation...
+  source varchar              // canal de candidature, voir SOURCE_OPTIONS côté frontend
   url_offre varchar
-  description_offre text      // texte brut de l'annonce (sert à l'extraction IA)
+  description_offre text      // texte brut de l'annonce, entrée du pipeline IA
   entreprise text
   localisation varchar
   remuneration varchar
-  date_candidature date
-  next_relance date
-  last_relance date
+  date_candidature date       // colonne présente mais jamais écrite par le code actuel
+  next_relance date           // colonne présente mais jamais écrite par le code actuel
+  last_relance date           // colonne présente mais jamais écrite par le code actuel
   notes text
+  cv_path text                    // migration 0009 : chemin du CV généré/joint, remplace documents.candidature_id
+  lettre_motivation_path text     // migration 0009
   created_at timestamp
   updated_at timestamp
 }
 
+// status_history est devenue une timeline unifiée en migration 0014 :
+// event_type n'a pas de CHECK SQL, la validation vit côté Rust
+// (EventType, src-tauri/src/models/event_type.rs) — 15 valeurs possibles :
+// creation, candidature_envoyee, relance, entretien_planifie,
+// entretien_passe, offre_recue, refus_recu, ghosting, desistement,
+// accepter_offre, decliner_offre, message_envoye, message_recu, appel, note.
 Table status_history {
   id integer [pk, increment]
   candidature_id integer [ref: > candidatures.id, not null]
+  event_type varchar [not null]        // voir EventType côté Rust, pas de CHECK SQL
   ancien_status candidature_status
-  nouveau_status candidature_status [not null]
+  nouveau_status candidature_status    // nullable depuis 0014 : un événement ne change pas toujours le statut
+  content text                         // migration 0013 : mail/message associé à l'événement
+  interview_id integer [ref: > interviews.id]  // migration 0014
   changed_at timestamp
 }
 
@@ -152,6 +201,7 @@ Table interviews {
   lieu varchar         // visio, sur site, téléphone
   issue interview_issue [default: 'en_attente']
   notes text
+  contact_id integer [ref: > contacts.id]  // migration 0014 : contact rencontré
   created_at timestamp
   updated_at timestamp
 }
@@ -159,6 +209,12 @@ Table interviews {
 // ============================================
 // Documents (CV / LM) — fichiers sur disque
 // ============================================
+// Table refondue en 0009 (suppression de l'ancienne table documents liée aux
+// candidatures) puis recréée en 0011 avec un rôle différent : un document
+// de référence par type et par session, contenu sur le filesystem, métadonnées
+// et cache d'analyse de style en base. Le document rattaché à une candidature
+// (généré ou joint) est tracé par candidatures.cv_path / lettre_motivation_path,
+// pas par cette table.
 
 Enum document_type {
   cv
@@ -167,15 +223,18 @@ Enum document_type {
 
 Table documents {
   id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
-  source_document_id integer [ref: > documents.id]  // NULL = document de référence
-  candidature_id integer [ref: > candidatures.id]    // NULL pour une référence
-  type document_type [not null]
-  label varchar
+  session_id integer [ref: > sessions.id, not null]
+  doc_type document_type [not null]
+  original_filename varchar [not null]
   file_path varchar [not null]
-  is_reference boolean [not null, default: false]    // true = CV/LM de référence
+  pdf_path varchar
+  style_analysis text   // cache JSON de l'analyse de style LLM, calculé à la sauvegarde de la référence
   created_at timestamp
   updated_at timestamp
+
+  indexes {
+    (session_id, doc_type) [unique]
+  }
 }
 
 // ============================================
@@ -200,17 +259,35 @@ Table emails {
   destinataire varchar
   sent_at timestamp
   created_at timestamp
-}
 
-Table email_attachments {
-  id integer [pk, increment]
-  email_id integer [ref: > emails.id, not null]
-  document_id integer [ref: > documents.id, not null]
+  Note: 'email_attachments a été supprimée en migration 0009 : plus de table de\ndocuments partagée à joindre à un email.'
 }
 
 // ============================================
-// Embeddings (matching) — table polymorphe
+// Profil : type de contrat des expériences
 // ============================================
+// Distinct de candidature_type : ordre et valeurs légèrement différents
+// (pas de "freelance" ici), ajouté en migration 0002.
+Enum experience_type_contrat {
+  stage
+  alternance
+  interim
+  cdd
+  cdi
+}
+
+Enum session_statut {
+  active
+  pause
+  termine
+}
+
+// ============================================
+// Embeddings (matching) — table polymorphe, non utilisée par le code actuel
+// ============================================
+// Prévue pour un matching par similarité vectorielle (modèle bge-m3,
+// cosinus en brute-force). Le matching profil ↔ offre passe aujourd'hui par
+// un appel LLM (src-tauri/src/llm/matching.rs), pas par cette table.
 
 Table embeddings {
   id integer [pk, increment]
@@ -227,8 +304,10 @@ Table embeddings {
 }
 
 // ============================================
-// Paramètres de l'app (clé-valeur)
+// Paramètres de l'app (clé-valeur) — non utilisée par le code actuel
 // ============================================
+// Page Settings encore en maquette front (aucune commande Tauri branchée) :
+// cette table n'est ni écrite ni lue aujourd'hui.
 
 Table settings {
   id integer [pk, increment]
