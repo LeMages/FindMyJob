@@ -32,7 +32,7 @@ const activeTab = ref<'candidatures' | 'parametres'>('candidatures')
 const sessionId = computed(() => currentSession.value?.id ?? null)
 
 const sessionIsAccepted = computed(() =>
-  candidatures.value.some(c => ['accepte', 'offre_refusee', 'refus'].includes(c.status))
+  candidatures.value.some(c => c.status === 'accepte')
 )
 
 // Les candidatures aux statuts terminaux négatifs ne figurent plus dans la
