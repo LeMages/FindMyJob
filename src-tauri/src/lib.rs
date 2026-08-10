@@ -75,6 +75,7 @@ pub fn run() {
             commands::get_available_events,
             commands::add_timeline_event,
             commands::get_pending_interviews,
+            commands::get_all_interviews_for_session,
             commands::get_document_info,
             commands::get_document_pdf,
             commands::open_document,

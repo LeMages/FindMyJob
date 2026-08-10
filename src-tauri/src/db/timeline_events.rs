@@ -163,12 +163,19 @@ pub async fn add_event(
             if !interviews::TYPES_ENTRETIEN_VALIDES.contains(&type_entretien.as_str()) {
                 return Err(AppError::Validation("Type d'entretien invalide.".to_string()));
             }
+            let modalite = normalize(data.modalite).map(|m| m.to_lowercase());
+            if let Some(m) = &modalite {
+                if !interviews::MODALITES_VALIDES.contains(&m.as_str()) {
+                    return Err(AppError::Validation("Modalité d'entretien invalide.".to_string()));
+                }
+            }
             let id = interviews::insert(
                 &mut tx,
                 candidature_id,
                 &type_entretien,
                 normalize(data.date_entretien).as_deref(),
                 normalize(data.lieu).as_deref(),
+                modalite.as_deref(),
                 data.contact_id,
             )
             .await?;

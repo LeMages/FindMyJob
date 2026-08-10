@@ -15,17 +15,9 @@ import { invoke } from '@tauri-apps/api/core'
 // Importation des modules internes
 import { state, addTimelineEvent } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { INTERVIEW_TYPE_OPTIONS, MODALITE_OPTIONS } from '@/composables/candidature_display'
 import type { AvailableEvent, InterviewView, NewTimelineEvent } from '@/types'
 import TimelineEventIcon from './TimelineEventIcon.vue'
-
-/** Types d'entretien proposés au formulaire de planification. */
-const INTERVIEW_TYPE_OPTIONS = [
-  { value: 'rh', label: 'RH' },
-  { value: 'technique', label: 'Technique' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'final', label: 'Final' },
-  { value: 'autre', label: 'Autre' },
-]
 
 const visible = ref(false)
 const step = ref<'select' | 'form'>('select')
@@ -42,6 +34,7 @@ const content = ref('')
 const interviewType = ref('rh')
 const interviewDate = ref('')
 const interviewLieu = ref('')
+const interviewModalite = ref('')
 const interviewContactId = ref<number | ''>('')
 
 // Champs propres à `entretien_passe`.
@@ -56,6 +49,7 @@ function resetFormFields() {
   interviewType.value = 'rh'
   interviewDate.value = ''
   interviewLieu.value = ''
+  interviewModalite.value = ''
   interviewContactId.value = ''
   pendingInterviews.value = []
   selectedInterviewId.value = ''
@@ -165,6 +159,7 @@ async function save() {
       type: interviewType.value,
       date_entretien: interviewDate.value || null,
       lieu: interviewLieu.value.trim() || null,
+      modalite: interviewModalite.value || null,
       contact_id: interviewContactId.value === '' ? null : Number(interviewContactId.value),
     }
   } else if (selected.value.event_type === 'entretien_passe') {
@@ -239,6 +234,13 @@ defineExpose({ open })
           <div class="mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Lieu (optionnel)</label>
             <input v-model="interviewLieu" placeholder="Visio, locaux de l'entreprise..." class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" />
+          </div>
+          <div class="mb-[14px]">
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">Modalité (optionnel)</label>
+            <select v-model="interviewModalite" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400">
+              <option value="">Non précisée</option>
+              <option v-for="opt in MODALITE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
           </div>
           <div class="mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Contact (optionnel)</label>

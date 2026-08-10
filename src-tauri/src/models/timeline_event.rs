@@ -19,6 +19,7 @@ pub struct NewInterviewData {
     pub type_entretien: String,
     pub date_entretien: Option<String>,
     pub lieu: Option<String>,
+    pub modalite: Option<String>,
     pub contact_id: Option<i64>,
 }
 

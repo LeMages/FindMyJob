@@ -8,13 +8,16 @@ use sqlx::{Row, SqlitePool};
 
 // Importation des modules internes
 use crate::error::AppError;
-use crate::models::InterviewView;
+use crate::models::{InterviewView, PlanningInterviewView};
 
 /// Types d'entretien acceptés (voir `interviews.type` en base).
 pub const TYPES_ENTRETIEN_VALIDES: [&str; 5] = ["rh", "technique", "manager", "final", "autre"];
 
 /// Issues possibles pour un entretien passé (voir `interviews.issue` en base).
 pub const ISSUES_VALIDES: [&str; 2] = ["positif", "negatif"];
+
+/// Modalités d'entretien acceptées (voir `interviews.modalite` en base).
+pub const MODALITES_VALIDES: [&str; 3] = ["visio", "presentiel", "telephone"];
 
 /// Liste les entretiens encore en attente d'une candidature — utilisé pour
 /// proposer à l'utilisateur lequel marquer comme passé.
@@ -53,6 +56,57 @@ pub async fn list_pending_for_candidature(
                 issue: r.try_get("issue")?,
                 notes: r.try_get("notes")?,
                 contact_id: r.try_get("contact_id")?,
+            })
+        })
+        .collect::<Result<_, _>>()
+        .map_err(AppError::from)
+}
+
+/// Liste les entretiens planifiés d'une session, avec entreprise et poste de
+/// leur candidature — utilisé par la vue planning.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+/// * `user_id` - Identifiant de l'utilisateur propriétaire.
+/// * `session_id` - Identifiant de la session.
+///
+/// # Returns
+///
+/// Entretiens dont la date est renseignée, triés par date croissante.
+pub async fn list_for_session(
+    pool: &SqlitePool,
+    user_id: i64,
+    session_id: i64,
+) -> Result<Vec<PlanningInterviewView>, AppError> {
+    let rows = sqlx::query(
+        "SELECT i.id, i.candidature_id, c.entreprise, c.poste, \
+                i.type AS type_entretien, \
+                CAST(i.date_entretien AS TEXT) AS date_entretien, \
+                i.lieu, i.modalite, i.issue, i.notes \
+         FROM interviews i \
+         JOIN candidatures c ON c.id = i.candidature_id \
+         WHERE c.user_id = ? AND c.session_id = ? AND i.date_entretien IS NOT NULL \
+         ORDER BY i.date_entretien",
+    )
+    .bind(user_id)
+    .bind(session_id)
+    .fetch_all(pool)
+    .await?;
+
+    rows.iter()
+        .map(|r| -> Result<PlanningInterviewView, sqlx::Error> {
+            Ok(PlanningInterviewView {
+                id: r.try_get("id")?,
+                candidature_id: r.try_get("candidature_id")?,
+                entreprise: r.try_get("entreprise")?,
+                poste: r.try_get("poste")?,
+                type_entretien: r.try_get("type_entretien")?,
+                date_entretien: r.try_get("date_entretien")?,
+                lieu: r.try_get("lieu")?,
+                modalite: r.try_get("modalite")?,
+                issue: r.try_get("issue")?,
+                notes: r.try_get("notes")?,
             })
         })
         .collect::<Result<_, _>>()
@@ -100,6 +154,7 @@ where
 /// * `type_entretien` - Type d'entretien (voir `TYPES_ENTRETIEN_VALIDES`).
 /// * `date_entretien` - Date/heure de l'entretien, si renseignée.
 /// * `lieu` - Lieu de l'entretien, si renseigné.
+/// * `modalite` - Modalité de l'entretien (voir `MODALITES_VALIDES`), si renseignée.
 /// * `contact_id` - Contact recruteur rencontré, si renseigné.
 ///
 /// # Returns
@@ -111,16 +166,18 @@ pub(crate) async fn insert(
     type_entretien: &str,
     date_entretien: Option<&str>,
     lieu: Option<&str>,
+    modalite: Option<&str>,
     contact_id: Option<i64>,
 ) -> Result<i64, AppError> {
     let row = sqlx::query(
-        "INSERT INTO interviews (candidature_id, type, date_entretien, lieu, contact_id) \
-         VALUES (?, ?, ?, ?, ?) RETURNING id",
+        "INSERT INTO interviews (candidature_id, type, date_entretien, lieu, modalite, contact_id) \
+         VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
     )
     .bind(candidature_id)
     .bind(type_entretien)
     .bind(date_entretien)
     .bind(lieu)
+    .bind(modalite)
     .bind(contact_id)
     .fetch_one(&mut **tx)
     .await?;
