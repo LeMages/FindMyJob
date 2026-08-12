@@ -109,6 +109,31 @@ export function isToday(d: Date): boolean {
 }
 
 /**
+ * Indique si une date est déjà passée par rapport à maintenant.
+ *
+ * @param d - Date à tester.
+ * @returns `true` si `d` est dans le passé.
+ */
+export function isPast(d: Date): boolean {
+  return d.getTime() < Date.now()
+}
+
+/** Statut visuel d'un entretien dans le planning : passé confirmé, en retard, ou rien à signaler. */
+export type InterviewStatusDot = 'passed' | 'overdue' | null
+
+/**
+ * Détermine la pastille de statut à afficher sur un entretien dans le planning.
+ *
+ * @param issue - Issue de l'entretien (`en_attente`, `positif`, `negatif`).
+ * @param date - Date de l'entretien.
+ * @returns `'passed'` si l'entretien a été marqué comme passé, `'overdue'` s'il est en attente et sa date est dépassée, `null` sinon.
+ */
+export function interviewStatusDot(issue: string, date: Date): InterviewStatusDot {
+  if (issue !== 'en_attente') return 'passed'
+  return isPast(date) ? 'overdue' : null
+}
+
+/**
  * Formate une heure entière au format `"HH:00"`.
  *
  * @param hour - Heure (0-23).

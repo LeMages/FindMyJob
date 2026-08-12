@@ -142,6 +142,12 @@ const INTERVIEW_TYPE_COLORS: Record<string, string> = {
   autre: 'bg-neutral-100 border-neutral-300 text-neutral-700',
 }
 
+/** Classes Tailwind de fond de la pastille de statut d'un entretien dans le planning. */
+const INTERVIEW_STATUS_DOT_COLORS: Record<'passed' | 'overdue', string> = {
+  passed: 'bg-green-500',
+  overdue: 'bg-red-500',
+}
+
 /**
  * Trouve le titre de colonne kanban correspondant à un statut brut.
  *
@@ -213,4 +219,14 @@ export function modaliteLabel(modalite: string): string {
 export function interviewTypeColor(type: string | null): string {
   if (!type) return INTERVIEW_TYPE_COLORS.autre
   return INTERVIEW_TYPE_COLORS[type] ?? INTERVIEW_TYPE_COLORS.autre
+}
+
+/**
+ * Couleur de la pastille de statut d'un entretien dans le planning.
+ *
+ * @param status - Statut de pastille (`'passed'` ou `'overdue'`).
+ * @returns Classe Tailwind de fond de la pastille.
+ */
+export function interviewStatusDotColor(status: 'passed' | 'overdue'): string {
+  return INTERVIEW_STATUS_DOT_COLORS[status]
 }

@@ -8,8 +8,8 @@
 import { computed } from 'vue'
 
 // Importation des modules internes
-import { interviewTypeColor } from '@/composables/candidature_display'
-import { formatTime, isSameDay, isToday, monthGridDays, parseInterviewDate } from './planning_dates'
+import { interviewStatusDotColor, interviewTypeColor } from '@/composables/candidature_display'
+import { formatTime, interviewStatusDot, isSameDay, isToday, monthGridDays, parseInterviewDate } from './planning_dates'
 import type { PlanningInterviewView } from '@/types'
 
 const props = defineProps<{
@@ -43,6 +43,7 @@ function itemsForDay(day: Date) {
   return parsedItems.value
     .filter(e => isSameDay(e.date, day))
     .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .map(e => ({ ...e, statusDot: interviewStatusDot(e.interview.issue, e.date) }))
 }
 
 /**
@@ -84,11 +85,12 @@ function inCurrentMonth(day: Date): boolean {
           <div
             v-for="entry in itemsForDay(day).slice(0, MAX_CHIPS_PER_DAY)"
             :key="entry.interview.id"
-            class="rounded-md border px-[6px] py-[2px] text-[10.5px] truncate cursor-pointer"
+            class="flex items-center gap-1 rounded-md border px-[6px] py-[2px] text-[10.5px] cursor-pointer"
             :class="interviewTypeColor(entry.interview.type)"
             @click="emit('select', entry.interview)"
           >
-            <span class="font-mono">{{ formatTime(entry.date) }}</span> {{ entry.interview.entreprise ?? 'Entreprise inconnue' }}
+            <span v-if="entry.statusDot" class="w-1.5 h-1.5 rounded-full flex-none" :class="interviewStatusDotColor(entry.statusDot)" />
+            <span class="truncate min-w-0 flex-1"><span class="font-mono">{{ formatTime(entry.date) }}</span> {{ entry.interview.entreprise ?? 'Entreprise inconnue' }}</span>
           </div>
           <div v-if="itemsForDay(day).length > MAX_CHIPS_PER_DAY" class="text-[10.5px] text-neutral-500 px-[6px]">
             +{{ itemsForDay(day).length - MAX_CHIPS_PER_DAY }}

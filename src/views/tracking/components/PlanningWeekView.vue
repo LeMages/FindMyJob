@@ -9,8 +9,8 @@
 import { computed } from 'vue'
 
 // Importation des modules internes
-import { interviewTypeColor } from '@/composables/candidature_display'
-import { addDays, formatDayLabel, formatHour, formatTime, isSameDay, isToday, parseInterviewDate } from './planning_dates'
+import { interviewStatusDotColor, interviewTypeColor } from '@/composables/candidature_display'
+import { addDays, formatDayLabel, formatHour, formatTime, interviewStatusDot, isPast, isSameDay, isToday, parseInterviewDate } from './planning_dates'
 import type { PlanningInterviewView } from '@/types'
 
 const props = defineProps<{
@@ -52,17 +52,8 @@ function itemsForDay(day: Date) {
     .map(e => ({
       ...e,
       top: (e.date.getHours() - hourMin.value) * HOUR_HEIGHT + (e.date.getMinutes() / 60) * HOUR_HEIGHT,
+      statusDot: interviewStatusDot(e.interview.issue, e.date),
     }))
-}
-
-/**
- * Indique si un entretien est déjà passé (atténué dans la grille).
- *
- * @param date - Date de l'entretien.
- * @returns `true` si la date est dans le passé.
- */
-function isPast(date: Date): boolean {
-  return date.getTime() < Date.now()
 }
 </script>
 
@@ -91,7 +82,12 @@ function isPast(date: Date): boolean {
           :style="{ top: `${entry.top}px`, height: '44px' }"
           @click="emit('select', entry.interview)"
         >
-          <div class="font-semibold truncate">{{ entry.interview.entreprise ?? 'Entreprise inconnue' }}</div>
+          <span
+            v-if="entry.statusDot"
+            class="absolute top-1 right-1 w-2 h-2 rounded-full"
+            :class="interviewStatusDotColor(entry.statusDot)"
+          />
+          <div class="font-semibold truncate pr-3">{{ entry.interview.entreprise ?? 'Entreprise inconnue' }}</div>
           <div class="truncate text-[10.5px]">{{ entry.interview.poste }} · <span class="font-mono">{{ formatTime(entry.date) }}</span></div>
         </div>
       </div>
