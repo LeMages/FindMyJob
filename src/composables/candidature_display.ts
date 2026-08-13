@@ -8,7 +8,7 @@ export const KANBAN_COLUMNS: { title: string; statuses: string[] }[] = [
   { title: 'À postuler',          statuses: ['a_postuler'] },
   { title: 'Candidature envoyée', statuses: ['postule'] },
   { title: 'Discussion',          statuses: ['relance'] },
-  { title: 'Entretien',           statuses: ['entretien'] },
+  { title: 'Entretien',           statuses: ['entretien', 'entretien_passe'] },
   { title: 'Accepté',             statuses: ['offre', 'accepte'] },
 ]
 
@@ -76,6 +76,7 @@ const STATUS_LABELS: Record<string, string> = {
   postule: 'Candidature envoyée',
   relance: 'Discussion',
   entretien: 'Entretien',
+  entretien_passe: 'En attente de réponse',
   offre: 'Offre',
   refus: 'Refus',
   abandon: 'Abandon',
@@ -90,6 +91,7 @@ const STATUS_COLORS: Record<string, string> = {
   postule: 'bg-blue-100 text-blue-700',
   relance: 'bg-amber-100 text-amber-700',
   entretien: 'bg-purple-100 text-purple-700',
+  entretien_passe: 'bg-violet-100 text-violet-700',
   offre: 'bg-emerald-100 text-emerald-700',
   refus: 'bg-rose-100 text-rose-700',
   abandon: 'bg-neutral-200 text-neutral-500',

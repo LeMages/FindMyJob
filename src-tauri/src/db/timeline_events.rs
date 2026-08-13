@@ -16,7 +16,8 @@ use crate::models::{AvailableEvent, EventType, NewTimelineEvent};
 /// être ajouté que tant que la candidature est dans l'un de ces statuts.
 /// `offre` y figure : recevoir une offre ne verrouille pas la candidature,
 /// il reste possible de l'accepter, la décliner, ou se désister.
-const STATUTS_NON_TERMINAUX: [&str; 5] = ["a_postuler", "postule", "relance", "entretien", "offre"];
+const STATUTS_NON_TERMINAUX: [&str; 6] =
+    ["a_postuler", "postule", "relance", "entretien", "entretien_passe", "offre"];
 
 /// Construit la liste des événements que l'utilisateur peut ajouter à la
 /// timeline pour le statut courant d'une candidature.
@@ -51,22 +52,22 @@ pub fn available_events(current_status: &str, has_pending_interviews: bool) -> V
     // ------------------------------------------------------------------
     // 2. Événements conditionnés au statut courant
     // ------------------------------------------------------------------
-    if matches!(current_status, "postule" | "relance") {
+    if matches!(current_status, "postule" | "relance" | "entretien_passe") {
         push_event(&mut events, EventType::Relance, "Relance", Some("relance"));
     }
-    if matches!(current_status, "postule" | "relance" | "entretien") {
+    if matches!(current_status, "postule" | "relance" | "entretien" | "entretien_passe") {
         push_event(&mut events, EventType::EntretienPlanifie, "Entretien planifié", Some("entretien"));
     }
-    if current_status == "entretien" && has_pending_interviews {
-        push_event(&mut events, EventType::EntretienPasse, "Entretien passé", None);
+    if matches!(current_status, "entretien" | "entretien_passe") && has_pending_interviews {
+        push_event(&mut events, EventType::EntretienPasse, "Entretien passé", Some("entretien_passe"));
     }
-    if current_status == "entretien" {
+    if matches!(current_status, "entretien" | "entretien_passe") {
         push_event(&mut events, EventType::OffreRecue, "Offre reçue", Some("offre"));
     }
-    if matches!(current_status, "postule" | "relance" | "entretien") {
+    if matches!(current_status, "postule" | "relance" | "entretien" | "entretien_passe") {
         push_event(&mut events, EventType::RefusRecu, "Refus reçu", Some("refus"));
     }
-    if matches!(current_status, "postule" | "relance") {
+    if matches!(current_status, "postule" | "relance" | "entretien_passe") {
         push_event(&mut events, EventType::Ghosting, "Ghosting", Some("ghosting"));
     }
     if current_status == "offre" {
