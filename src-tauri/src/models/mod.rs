@@ -22,7 +22,7 @@ pub use document::{Document, DocumentFileInfo, DocumentReferenceView, DocumentSa
 pub use event_type::EventType;
 pub use experience::{CreateExperienceInput, ExperienceView};
 pub use formation::{CreateFormationInput, FormationView};
-pub use interview::InterviewView;
+pub use interview::{InterviewView, PlanningInterviewView};
 pub use lang::{CreateLangInput, LangView};
 pub use profile::ProfileDto;
 pub use projet::{CreateProjetInput, ProjetView};

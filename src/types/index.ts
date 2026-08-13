@@ -303,7 +303,22 @@ export interface NewInterviewData {
   type: string
   date_entretien: string | null
   lieu: string | null
+  modalite: string | null
   contact_id: number | null
+}
+
+/** Entretien enrichi de sa candidature, pour la vue planning. */
+export interface PlanningInterviewView {
+  id: number
+  candidature_id: number
+  entreprise: string | null
+  poste: string
+  type: string | null
+  date_entretien: string | null
+  lieu: string | null
+  modalite: string | null
+  issue: string
+  notes: string | null
 }
 
 /** Entrée soumise pour ajouter un événement à la timeline d'une candidature. */

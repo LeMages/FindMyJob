@@ -8,7 +8,7 @@ export const KANBAN_COLUMNS: { title: string; statuses: string[] }[] = [
   { title: 'À postuler',          statuses: ['a_postuler'] },
   { title: 'Candidature envoyée', statuses: ['postule'] },
   { title: 'Discussion',          statuses: ['relance'] },
-  { title: 'Entretien',           statuses: ['entretien'] },
+  { title: 'Entretien',           statuses: ['entretien', 'entretien_passe'] },
   { title: 'Accepté',             statuses: ['offre', 'accepte'] },
 ]
 
@@ -43,6 +43,22 @@ export const TYPE_CONTRAT_OPTIONS: SelectOption[] = [
   { value: 'cdi', label: 'CDI' },
 ]
 
+/** Types d'entretien proposés au formulaire de planification. */
+export const INTERVIEW_TYPE_OPTIONS: SelectOption[] = [
+  { value: 'rh', label: 'RH' },
+  { value: 'technique', label: 'Technique' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'final', label: 'Final' },
+  { value: 'autre', label: 'Autre' },
+]
+
+/** Modalités d'entretien proposées au formulaire de planification. */
+export const MODALITE_OPTIONS: SelectOption[] = [
+  { value: 'visio', label: 'Visio' },
+  { value: 'presentiel', label: 'Présentiel' },
+  { value: 'telephone', label: 'Téléphone' },
+]
+
 /** Plateformes d'origine de l'offre proposées à la création/modification d'une candidature. */
 export const SOURCE_OPTIONS: SelectOption[] = [
   { value: 'Plateforme en ligne (Indeed, LinkedIn, Welcome to the Jungle...)', label: 'Plateforme en ligne (Indeed, LinkedIn, Welcome to the Jungle...)' },
@@ -60,6 +76,7 @@ const STATUS_LABELS: Record<string, string> = {
   postule: 'Candidature envoyée',
   relance: 'Discussion',
   entretien: 'Entretien',
+  entretien_passe: 'En attente de réponse',
   offre: 'Offre',
   refus: 'Refus',
   abandon: 'Abandon',
@@ -74,6 +91,7 @@ const STATUS_COLORS: Record<string, string> = {
   postule: 'bg-blue-100 text-blue-700',
   relance: 'bg-amber-100 text-amber-700',
   entretien: 'bg-purple-100 text-purple-700',
+  entretien_passe: 'bg-violet-100 text-violet-700',
   offre: 'bg-emerald-100 text-emerald-700',
   refus: 'bg-rose-100 text-rose-700',
   abandon: 'bg-neutral-200 text-neutral-500',
@@ -99,6 +117,37 @@ const EVENT_LABELS: Record<string, string> = {
   message_recu: 'Message reçu',
   appel: 'Appel',
   note: 'Note',
+}
+
+/** Libellés d'affichage des types d'entretien. */
+const INTERVIEW_TYPE_LABELS: Record<string, string> = {
+  rh: 'RH',
+  technique: 'Technique',
+  manager: 'Manager',
+  final: 'Final',
+  autre: 'Autre',
+}
+
+/** Libellés d'affichage des modalités d'entretien. */
+const MODALITE_LABELS: Record<string, string> = {
+  visio: 'Visio',
+  presentiel: 'Présentiel',
+  telephone: 'Téléphone',
+}
+
+/** Classes Tailwind (fond + bordure + texte) associées à chaque type d'entretien, utilisées dans le planning. */
+const INTERVIEW_TYPE_COLORS: Record<string, string> = {
+  rh: 'bg-blue-50 border-blue-200 text-blue-700',
+  technique: 'bg-violet-50 border-violet-200 text-violet-700',
+  manager: 'bg-amber-50 border-amber-300 text-amber-700',
+  final: 'bg-red-50 border-red-200 text-red-700',
+  autre: 'bg-neutral-100 border-neutral-300 text-neutral-700',
+}
+
+/** Classes Tailwind de fond de la pastille de statut d'un entretien dans le planning. */
+const INTERVIEW_STATUS_DOT_COLORS: Record<'passed' | 'overdue', string> = {
+  passed: 'bg-green-500',
+  overdue: 'bg-red-500',
 }
 
 /**
@@ -139,4 +188,47 @@ export function statusColor(status: string): string {
  */
 export function eventLabel(eventType: string): string {
   return EVENT_LABELS[eventType] ?? eventType
+}
+
+/**
+ * Libellé d'affichage d'un type d'entretien.
+ *
+ * @param type - Type d'entretien brut, `null` si non renseigné.
+ * @returns Libellé lisible, le type brut si inconnu, ou « Entretien » si absent.
+ */
+export function interviewTypeLabel(type: string | null): string {
+  if (!type) return 'Entretien'
+  return INTERVIEW_TYPE_LABELS[type] ?? type
+}
+
+/**
+ * Libellé d'affichage d'une modalité d'entretien.
+ *
+ * @param modalite - Modalité brute, `null` si non renseignée.
+ * @returns Libellé lisible, ou la modalité brute si inconnue.
+ */
+export function modaliteLabel(modalite: string): string {
+  return MODALITE_LABELS[modalite] ?? modalite
+}
+
+/**
+ * Couleur d'affichage d'un type d'entretien, utilisée pour les blocs et chips
+ * de la vue planning.
+ *
+ * @param type - Type d'entretien brut, `null` si non renseigné.
+ * @returns Classes Tailwind de fond, bordure et texte, grises par défaut si le type est inconnu.
+ */
+export function interviewTypeColor(type: string | null): string {
+  if (!type) return INTERVIEW_TYPE_COLORS.autre
+  return INTERVIEW_TYPE_COLORS[type] ?? INTERVIEW_TYPE_COLORS.autre
+}
+
+/**
+ * Couleur de la pastille de statut d'un entretien dans le planning.
+ *
+ * @param status - Statut de pastille (`'passed'` ou `'overdue'`).
+ * @returns Classe Tailwind de fond de la pastille.
+ */
+export function interviewStatusDotColor(status: 'passed' | 'overdue'): string {
+  return INTERVIEW_STATUS_DOT_COLORS[status]
 }

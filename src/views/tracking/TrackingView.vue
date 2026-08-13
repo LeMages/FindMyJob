@@ -22,12 +22,13 @@ import { extractErrorMessage } from '@/composables/useErrorMessage'
 import { statusLabel, statusColor, TRASHED_STATUSES } from '@/composables/candidature_display'
 import TrashPopup from '@/views/tracking/components/TrashPopup.vue'
 import CandidaturesTabs from '@/views/tracking/components/CandidaturesTabs.vue'
+import PlanningPanel from '@/views/tracking/components/PlanningPanel.vue'
 import SessionParametersForm from '@/views/tracking/components/SessionParametersForm.vue'
 
 const candidatures = ref<CandidatureView[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const activeTab = ref<'candidatures' | 'parametres'>('candidatures')
+const activeTab = ref<'candidatures' | 'planning' | 'parametres'>('candidatures')
 
 const sessionId = computed(() => currentSession.value?.id ?? null)
 
@@ -254,6 +255,9 @@ watch(sessionId, loadCandidatures)
         </div>
       </template>
     </template>
+
+    <!-- Onglet Planning -->
+    <PlanningPanel v-else-if="activeTab === 'planning'" />
 
     <!-- Onglet Paramètres -->
     <SessionParametersForm v-else />

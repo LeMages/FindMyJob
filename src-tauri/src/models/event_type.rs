@@ -58,11 +58,12 @@ impl EventType {
     /// # Returns
     ///
     /// `Some(statut)` si l'événement change le statut de la candidature,
-    /// `None` sinon (message, appel, note, entretien passé...).
+    /// `None` sinon (message, appel, note...).
     pub fn changes_status(&self) -> Option<&'static str> {
         match self {
             EventType::Relance => Some("relance"),
             EventType::EntretienPlanifie => Some("entretien"),
+            EventType::EntretienPasse => Some("entretien_passe"),
             EventType::OffreRecue => Some("offre"),
             EventType::RefusRecu => Some("refus"),
             EventType::Ghosting => Some("ghosting"),
@@ -71,7 +72,6 @@ impl EventType {
             EventType::DeclinerOffre => Some("offre_refusee"),
             EventType::Creation
             | EventType::CandidatureEnvoyee
-            | EventType::EntretienPasse
             | EventType::MessageEnvoye
             | EventType::MessageRecu
             | EventType::Appel
