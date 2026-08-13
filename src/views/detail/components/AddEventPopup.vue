@@ -7,7 +7,7 @@
  */
 
 // Importation des modules Vue / framework
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 // Importation des modules externes
 import { invoke } from '@tauri-apps/api/core'
@@ -26,6 +26,24 @@ const events = ref<AvailableEvent[]>([])
 const selected = ref<AvailableEvent | null>(null)
 const error = ref<string | null>(null)
 const saving = ref(false)
+
+// Regroupement visuel des événements par catégorie (étape 1).
+const EVENT_CATEGORIES: Record<string, string> = {
+  message_envoye: 'Communication',
+  message_recu: 'Communication',
+  appel: 'Communication',
+  relance: 'Communication',
+  entretien_planifie: 'Entretien',
+  entretien_passe: 'Entretien',
+  note: 'Suivi',
+  refus_recu: 'Issue',
+  ghosting: 'Issue',
+  desistement: 'Issue',
+  offre_recue: 'Issue',
+  accepter_offre: 'Issue',
+  decliner_offre: 'Issue',
+}
+const ORDER_CATEGORIES = ['Communication', 'Entretien', 'Suivi', 'Issue']
 
 // Champ commun à la plupart des événements (message, note, notes libres...).
 const content = ref('')
@@ -55,6 +73,27 @@ function resetFormFields() {
   selectedInterviewId.value = ''
   interviewIssue.value = 'positif'
 }
+
+/** Événements disponibles regroupés par catégorie, dans l'ordre `ORDER_CATEGORIES`. */
+const groupedEvents = computed(() => {
+  const groups: { category: string; items: AvailableEvent[] }[] = []
+
+  for (const cat of ORDER_CATEGORIES) {
+    const items = events.value.filter((ev) => (EVENT_CATEGORIES[ev.event_type] ?? 'Autre') === cat)
+    if (items.length > 0) {
+      groups.push({ category: cat, items })
+    }
+  }
+
+  // Filet de sécurité si un event_type n'est pas encore mappé ci-dessus.
+  const mapped = new Set(Object.keys(EVENT_CATEGORIES))
+  const unmapped = events.value.filter((ev) => !mapped.has(ev.event_type))
+  if (unmapped.length > 0) {
+    groups.push({ category: 'Autre', items: unmapped })
+  }
+
+  return groups
+})
 
 /**
  * Libellé du champ de texte libre, adapté au type d'événement choisi.
@@ -197,16 +236,20 @@ defineExpose({ open })
         <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-10 p-3 text-[13px] text-red-600 mb-3">{{ error }}</div>
 
         <template v-else>
-          <div
-            v-for="ev in events"
-            :key="ev.event_type"
-            class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100"
-            @click="selectEvent(ev)"
-          >
-            <div class="w-9 h-9 rounded-9 bg-white border border-neutral-200 flex items-center justify-center text-neutral-600 flex-none">
-              <TimelineEventIcon :event-type="ev.event_type" />
+          <div v-for="group in groupedEvents" :key="group.category" class="mb-4">
+            <div class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider px-1 mb-2">{{ group.category }}</div>
+
+            <div
+              v-for="ev in group.items"
+              :key="ev.event_type"
+              class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100"
+              @click="selectEvent(ev)"
+            >
+              <div class="w-9 h-9 rounded-9 bg-white border border-neutral-200 flex items-center justify-center text-neutral-600 flex-none">
+                <TimelineEventIcon :event-type="ev.event_type" />
+              </div>
+              <div class="text-[14px] font-semibold">{{ ev.label }}</div>
             </div>
-            <div class="text-[14px] font-semibold">{{ ev.label }}</div>
           </div>
           <div v-if="events.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">Aucun événement disponible pour ce statut.</div>
         </template>
