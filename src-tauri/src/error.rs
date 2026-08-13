@@ -13,6 +13,7 @@ pub enum AppError {
     NotFound(String),
     Config(String),
     Llm(String),
+    Scraping(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -23,7 +24,8 @@ impl std::fmt::Display for AppError {
             | AppError::Conflict(m)
             | AppError::NotFound(m)
             | AppError::Config(m)
-            | AppError::Llm(m) => write!(f, "{}", m),
+            | AppError::Llm(m)
+            | AppError::Scraping(m) => write!(f, "{}", m),
         }
     }
 }

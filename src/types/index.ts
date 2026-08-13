@@ -224,6 +224,16 @@ export interface CreateCandidatureInput {
   session_id: number | null
 }
 
+/** Champs extraits d'une offre scrapée (voir `scrape_offer`), pour pré-remplir le formulaire. */
+export interface ScrapedOfferFields {
+  poste: string | null
+  entreprise: string | null
+  localisation: string | null
+  type_contrat: string | null
+  remuneration: string | null
+  description_offre: string | null
+}
+
 export interface UpdateCandidatureInput {
   poste: string
   entreprise: string | null

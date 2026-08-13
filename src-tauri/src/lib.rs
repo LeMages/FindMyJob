@@ -8,6 +8,7 @@ pub mod documents;
 pub mod error;
 pub mod llm;
 pub mod models;
+pub mod scraping;
 
 // Importation des crates externes
 use tauri::Manager;
@@ -63,6 +64,8 @@ pub fn run() {
             commands::delete_skill,
             commands::update_skill,
             commands::create_candidature,
+            commands::scrape_offer,
+            commands::extract_offer_from_text,
             commands::get_candidatures,
             commands::get_candidature,
             commands::update_candidature,
