@@ -10,6 +10,7 @@ pub mod content;
 pub mod matching;
 pub mod offer;
 pub mod pipeline;
+pub mod scraping_extract;
 pub mod style;
 
 pub use candidature_message::{generate_application_email, generate_application_message};

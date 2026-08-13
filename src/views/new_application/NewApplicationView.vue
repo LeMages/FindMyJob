@@ -9,7 +9,7 @@ import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
-import type { CandidatureView, CreateCandidatureInput } from '@/types'
+import type { CandidatureView, CreateCandidatureInput, ScrapedOfferFields } from '@/types'
 import {
   state,
   currentSession,
@@ -28,6 +28,11 @@ const remunerationRef = ref('')
 const urlOffreRef = ref('')
 const descriptionOffreRef = ref('')
 const notesRef = ref('')
+
+const step = ref<'url' | 'paste' | 'form'>('url')
+const scraping = ref(false)
+const scrapingError = ref<string | null>(null)
+const pasteText = ref('')
 
 const isValid = computed(() =>
   roleRef.value.trim() !== '' &&
@@ -81,6 +86,88 @@ async function submit() {
     saving.value = false
   }
 }
+
+/** Domaines de job boards reconnus par `autoDetectSource`. */
+const JOB_BOARD_DOMAINS = [
+  'linkedin.com',
+  'indeed.com',
+  'indeed.fr',
+  'welcometothejungle.com',
+  'apec.fr',
+  'monster.fr',
+  'hellowork.com',
+]
+
+/**
+ * Détecte la plateforme source depuis le domaine de l'URL et pré-remplit
+ * `sourceRef` avec l'unique option du `<select>` correspondant aux
+ * plateformes en ligne (le formulaire n'a pas d'option par plateforme).
+ */
+function autoDetectSource(url: string) {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '')
+    const isJobBoard = JOB_BOARD_DOMAINS.some(
+      (domain) => hostname === domain || hostname.endsWith(`.${domain}`)
+    )
+    if (isJobBoard) {
+      sourceRef.value = 'Plateforme en ligne (Indeed, LinkedIn, Welcome to the Jungle...)'
+    }
+  } catch {
+    // URL invalide : on ne pré-remplit pas la source
+  }
+}
+
+/** Pré-remplit les refs du formulaire avec les champs extraits (scraping ou texte collé). */
+function applyFields(fields: ScrapedOfferFields) {
+  if (fields.poste) roleRef.value = fields.poste
+  if (fields.entreprise) companyRef.value = fields.entreprise
+  if (fields.localisation) locationRef.value = fields.localisation
+  if (fields.type_contrat) typeRef.value = fields.type_contrat
+  if (fields.remuneration) remunerationRef.value = fields.remuneration
+  if (fields.description_offre) descriptionOffreRef.value = fields.description_offre
+}
+
+/**
+ * Scrape l'offre à l'URL saisie et pré-remplit le formulaire avec les champs
+ * extraits. En cas d'échec (site protégé, timeout...), bascule sur l'étape
+ * de copier-coller manuel plutôt que de bloquer l'utilisateur.
+ */
+async function handleScrape() {
+  scraping.value = true
+  scrapingError.value = null
+  try {
+    const fields = await invoke<ScrapedOfferFields>('scrape_offer', { url: urlOffreRef.value.trim() })
+    applyFields(fields)
+    autoDetectSource(urlOffreRef.value)
+    step.value = 'form'
+  } catch (e: unknown) {
+    scrapingError.value = extractErrorMessage(e, "Ce site bloque l'extraction automatique.")
+    step.value = 'paste'
+  } finally {
+    scraping.value = false
+  }
+}
+
+/** Extrait les champs du formulaire depuis le texte de l'offre collé manuellement. */
+async function handlePasteExtract() {
+  scraping.value = true
+  scrapingError.value = null
+  try {
+    const fields = await invoke<ScrapedOfferFields>('extract_offer_from_text', {
+      text: pasteText.value.trim(),
+    })
+    applyFields(fields)
+    if (urlOffreRef.value) autoDetectSource(urlOffreRef.value)
+    step.value = 'form'
+  } catch (e: unknown) {
+    scrapingError.value = extractErrorMessage(
+      e,
+      "Impossible d'extraire les informations. Essaie la saisie manuelle."
+    )
+  } finally {
+    scraping.value = false
+  }
+}
 </script>
 
 <template>
@@ -98,6 +185,55 @@ async function submit() {
       >Annuler</button>
     </div>
 
+    <!-- Étape 1 : lien de l'offre -->
+    <div v-if="step === 'url'" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">LIEN DE L'OFFRE</div>
+      <p class="text-[13px] text-neutral-500 mb-[14px]">Colle le lien de l'offre pour pré-remplir automatiquement le formulaire, ou passe directement à la saisie manuelle.</p>
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Lien de l'offre</label>
+        <input v-model="urlOffreRef" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://www.linkedin.com/jobs/view/..." />
+      </div>
+      <div class="flex gap-3">
+        <button
+          class="h-12 text-[15px] rounded-10 px-4 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': scraping || !urlOffreRef.trim() }"
+          :disabled="scraping || !urlOffreRef.trim()"
+          @click="handleScrape"
+        >{{ scraping ? 'Analyse en cours…' : 'Analyser l\'offre →' }}</button>
+        <button
+          class="h-12 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': scraping }"
+          :disabled="scraping"
+          @click="step = 'form'"
+        >Saisie manuelle</button>
+      </div>
+    </div>
+
+    <!-- Étape fallback : copier-coller du texte de l'offre (scraping échoué) -->
+    <div v-if="step === 'paste'" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+      <div v-if="scrapingError" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[14px] text-[13px] text-amber-700">{{ scrapingError }}</div>
+      <p class="text-[13px] text-neutral-500 mb-[14px]">Sélectionne tout le texte de la page de l'offre et colle-le ci-dessous.</p>
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Texte de l'offre</label>
+        <textarea v-model="pasteText" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-48" placeholder="Colle ici le texte complet de l'offre d'emploi..." />
+      </div>
+      <div class="flex gap-3">
+        <button
+          class="h-12 text-[15px] rounded-10 px-4 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': scraping || !pasteText.trim() }"
+          :disabled="scraping || !pasteText.trim()"
+          @click="handlePasteExtract"
+        >{{ scraping ? 'Analyse en cours…' : 'Analyser le texte →' }}</button>
+        <button
+          class="h-12 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': scraping }"
+          :disabled="scraping"
+          @click="step = 'form'"
+        >Saisie manuelle</button>
+      </div>
+    </div>
+
+    <template v-if="step === 'form'">
     <!-- Détails du poste -->
     <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DÉTAILS DU POSTE</div>
@@ -220,5 +356,6 @@ async function submit() {
     >
       {{ saving ? 'Enregistrement…' : 'Valider la candidature →' }}
     </button>
+    </template>
   </div>
 </template>
