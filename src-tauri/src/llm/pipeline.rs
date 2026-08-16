@@ -63,6 +63,7 @@ async fn require_reference(
 /// * `code` - Code Typst à compiler.
 /// * `original_typst` - Document Typst de référence, transmis à `fix_typst` comme référence de syntaxe.
 /// * `root` - Dossier racine pour la résolution des imports/images relatifs du template.
+/// * `model` - Identifiant du modèle Claude à utiliser pour la correction éventuelle.
 ///
 /// # Returns
 ///
@@ -71,6 +72,7 @@ async fn compile_with_retry(
     code: String,
     original_typst: &str,
     root: PathBuf,
+    model: &str,
 ) -> Result<(String, Vec<u8>), AppError> {
     let first_attempt = {
         let code = code.clone();
@@ -83,7 +85,7 @@ async fn compile_with_retry(
     match first_attempt {
         Ok(pdf) => Ok((code, pdf)),
         Err(compiler_errors) => {
-            let fixed_code = assemble::fix_typst(&code, &compiler_errors, original_typst).await?;
+            let fixed_code = assemble::fix_typst(&code, &compiler_errors, original_typst, model).await?;
 
             let retry_result = {
                 let code = fixed_code.clone();
@@ -126,9 +128,10 @@ pub async fn generate_documents(
     description_offre: &str,
 ) -> Result<GeneratedDocuments, AppError> {
     // ------------------------------------------------------------------
-    // 1. Profil candidat et documents de référence de la session
+    // 1. Profil candidat, modèle configuré, documents de référence
     // ------------------------------------------------------------------
     let profile = db::profile::build_profile(pool).await?;
+    let model = db::settings::resolve_llm_model(pool, crate::llm::client::DEFAULT_MODEL).await?;
 
     let cv_doc = require_reference(pool, session_id, "cv", "CV").await?;
     let lm_doc = require_reference(pool, session_id, "lettre_motivation", "lettre de motivation").await?;
@@ -150,36 +153,39 @@ pub async fn generate_documents(
     // 2. Étapes 1 → 2 : analyse de l'offre, puis matching du profil
     //    (séquentielles, la seconde dépend de la première)
     // ------------------------------------------------------------------
-    let offer_analysis = offer::analyze_offer(description_offre).await?;
-    let matching_strategy = matching::match_profile(&offer_analysis, &profile).await?;
+    let offer_analysis = offer::analyze_offer(description_offre, &model).await?;
+    let matching_strategy = matching::match_profile(&offer_analysis, &profile, &model).await?;
 
     // ------------------------------------------------------------------
     // 3. Étapes 3a/3b : rédaction du contenu CV et lettre
     // [DIAG-TEMP] Séquentiel au lieu de tokio::try_join! — test décisif pour
     // confirmer/infirmer une race de concurrence. À revert après diagnostic.
     // ------------------------------------------------------------------
-    let cv_content = content::generate_cv_content(&matching_strategy, &profile, &offer_analysis).await?;
-    let lm_content = content::generate_lm_content(&matching_strategy, &profile, &offer_analysis).await?;
+    let cv_content =
+        content::generate_cv_content(&matching_strategy, &profile, &offer_analysis, &model).await?;
+    let lm_content =
+        content::generate_lm_content(&matching_strategy, &profile, &offer_analysis, &model).await?;
 
     // ------------------------------------------------------------------
     // 4. Étapes 4a/4b : assemblage Typst CV et lettre, en parallèle
     // ------------------------------------------------------------------
     let (cv_typst, lm_typst) = tokio::try_join!(
-        assemble::assemble_typst(&cv_content, cv_style, &cv_original, "cv", Some(&profile.user)),
+        assemble::assemble_typst(&cv_content, cv_style, &cv_original, "cv", Some(&profile.user), &model),
         assemble::assemble_typst(
             &lm_content,
             lm_style,
             &lm_original,
             "lettre_motivation",
-            Some(&profile.user)
+            Some(&profile.user),
+            &model,
         ),
     )?;
 
     // ------------------------------------------------------------------
     // 5. Compilation PDF, avec un retry de correction par document
     // ------------------------------------------------------------------
-    let (cv_typst, cv_pdf) = compile_with_retry(cv_typst, &cv_original, cv_root).await?;
-    let (lm_typst, lm_pdf) = compile_with_retry(lm_typst, &lm_original, lm_root).await?;
+    let (cv_typst, cv_pdf) = compile_with_retry(cv_typst, &cv_original, cv_root, &model).await?;
+    let (lm_typst, lm_pdf) = compile_with_retry(lm_typst, &lm_original, lm_root, &model).await?;
 
     Ok(GeneratedDocuments { cv_typst, cv_pdf, lm_typst, lm_pdf })
 }

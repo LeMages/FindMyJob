@@ -173,6 +173,7 @@ fn debug_log_assemble_output(doc_type: &str, code: &str, stop_reason: &Option<St
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `sender_info` - Coordonnées réelles du candidat, à substituer à celles du document
 ///   original. `None` désactive la substitution (aucune coordonnée disponible).
+/// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -183,6 +184,7 @@ pub async fn assemble_typst(
     original_typst: &str,
     doc_type: &str,
     sender_info: Option<&UserView>,
+    model: &str,
 ) -> Result<String, AppError> {
     let label = doc_type_label(doc_type);
     let sender_block = sender_info.and_then(build_sender_block);
@@ -235,8 +237,14 @@ Règles :
     // troncature de l'assemblage Typst (CV et lettre de motivation).
     debug_log_assemble_input(doc_type, content_json, original_typst);
 
-    let (raw_response, stop_reason) =
-        call_claude_with_tokens_meta(&system_prompt, &user_message, None, ASSEMBLE_MAX_TOKENS).await?;
+    let (raw_response, stop_reason) = call_claude_with_tokens_meta(
+        &system_prompt,
+        &user_message,
+        None,
+        ASSEMBLE_MAX_TOKENS,
+        model,
+    )
+    .await?;
     let code = raw_response.trim().to_string();
 
     debug_log_assemble_output(doc_type, &code, &stop_reason);
@@ -254,6 +262,7 @@ Règles :
 /// * `broken_code` - Code Typst dont la compilation a échoué.
 /// * `compiler_errors` - Message d'erreur retourné par `documents::compile_to_pdf`.
 /// * `original_typst` - Code Typst du document de référence, pour la syntaxe.
+/// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -262,6 +271,7 @@ pub async fn fix_typst(
     broken_code: &str,
     compiler_errors: &str,
     original_typst: &str,
+    model: &str,
 ) -> Result<String, AppError> {
     let system_prompt = "Corrige ce code Typst. Voici les erreurs du compilateur. Voici le document \
         original pour référence de syntaxe. Retourne uniquement le code corrigé, sans backticks, \
@@ -271,7 +281,8 @@ pub async fn fix_typst(
         "CODE À CORRIGER :\n{broken_code}\n\nERREURS DU COMPILATEUR :\n{compiler_errors}\n\nDOCUMENT ORIGINAL (référence de syntaxe) :\n{original_typst}"
     );
 
-    let raw_response = call_claude_with_tokens(system_prompt, &user_message, None, ASSEMBLE_MAX_TOKENS).await?;
+    let raw_response =
+        call_claude_with_tokens(system_prompt, &user_message, None, ASSEMBLE_MAX_TOKENS, model).await?;
     let code = raw_response.trim().to_string();
     validate_typst_output(&code)?;
     Ok(code)

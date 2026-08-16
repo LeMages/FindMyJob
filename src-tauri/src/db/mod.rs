@@ -13,6 +13,7 @@ pub mod langues;
 pub mod profile;
 pub mod projets;
 pub mod sessions;
+pub mod settings;
 pub mod skills;
 pub mod status_history;
 pub mod timeline_events;

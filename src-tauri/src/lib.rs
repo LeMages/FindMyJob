@@ -9,6 +9,7 @@ pub mod error;
 pub mod llm;
 pub mod models;
 pub mod scraping;
+pub mod security;
 
 // Importation des crates externes
 use tauri::Manager;
@@ -92,6 +93,14 @@ pub fn run() {
             commands::get_sessions,
             commands::update_session,
             commands::delete_session,
+            commands::get_api_key_status,
+            commands::set_api_key,
+            commands::delete_api_key,
+            commands::get_llm_model,
+            commands::set_llm_model,
+            commands::get_documents_path,
+            commands::open_folder,
+            commands::test_api_connection,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

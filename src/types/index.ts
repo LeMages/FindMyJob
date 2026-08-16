@@ -353,3 +353,25 @@ export interface DragPopupState {
   toColIndex: number
   cardIndex: number
 }
+
+// ── Paramètres ────────────────────────────────────────────────────────────────
+
+/** Résultat de la commande de diagnostic `db_status`. */
+export interface DbStatusResult {
+  db_path: string
+  tables: string[]
+}
+
+/** Statut de la clé API Anthropic, sans jamais exposer sa valeur réelle. */
+export interface ApiKeyStatus {
+  exists: boolean
+  source: 'env' | 'keyring'
+}
+
+/** Résultat d'un test de connexion à l'API Claude. */
+export interface TestConnectionResult {
+  success: boolean
+  model: string
+  message: string
+  latency_ms: number
+}

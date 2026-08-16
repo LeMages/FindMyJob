@@ -51,12 +51,13 @@ fn offer_analysis_schema() -> serde_json::Value {
 /// # Arguments
 ///
 /// * `description_offre` - Texte brut de l'offre d'emploi.
+/// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
 /// Le JSON d'analyse (sérialisé de façon canonique). Toute erreur d'appel,
 /// de refus ou de format inattendu remonte telle quelle.
-pub async fn analyze_offer(description_offre: &str) -> Result<String, AppError> {
+pub async fn analyze_offer(description_offre: &str, model: &str) -> Result<String, AppError> {
     let system_prompt = r#"Tu es un expert en recrutement. Analyse cette offre d'emploi et retourne un JSON structuré.
 
 Description des champs à renseigner :
@@ -71,7 +72,7 @@ Description des champs à renseigner :
 
     let user_message = format!("Analyse cette offre d'emploi :\n\n{description_offre}");
 
-    let raw_response = call_claude(system_prompt, &user_message, Some(offer_analysis_schema())).await?;
+    let raw_response = call_claude(system_prompt, &user_message, Some(offer_analysis_schema()), model).await?;
 
     // Le structured output garantit normalement un JSON conforme au schéma ;
     // ce parsing reste un filet de sécurité plutôt qu'une validation de forme.

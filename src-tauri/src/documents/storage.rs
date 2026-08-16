@@ -171,8 +171,11 @@ pub async fn save_reference(
     //    écriture disque : si l'appel échoue ou renvoie un format
     //    inattendu, rien n'est créé (ni dossier, ni backup, ni fichier).
     // ------------------------------------------------------------------
+    let pool = app.state::<DbState>().pool.clone();
+    let model = db::settings::resolve_llm_model(&pool, crate::llm::client::DEFAULT_MODEL).await?;
+
     emit_save_progress(&app, session_id, doc_type, 1, "Analyse du style (IA)…");
-    let style_analysis = crate::llm::analyze_style(&content, doc_type).await?;
+    let style_analysis = crate::llm::analyze_style(&content, doc_type, &model).await?;
 
     let doc_dir = resolve_doc_dir(&app, session_id, doc_type);
     std::fs::create_dir_all(&doc_dir)
@@ -229,7 +232,6 @@ pub async fn save_reference(
     //    à cause d'une erreur DB)
     // ------------------------------------------------------------------
     emit_save_progress(&app, session_id, doc_type, 5, "Enregistrement en base…");
-    let pool = app.state::<DbState>().pool.clone();
     if let Err(e) = db::documents::upsert(
         &pool,
         session_id,
