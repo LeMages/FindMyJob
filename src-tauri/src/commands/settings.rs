@@ -104,6 +104,38 @@ pub async fn set_llm_model(state: tauri::State<'_, DbState>, model: String) -> R
     settings::set(&state.pool, settings::KEY_LLM_MODEL, &model).await
 }
 
+/// Retourne le thème d'affichage actuellement configuré.
+///
+/// # Arguments
+///
+/// * `state` - État partagé (pool de connexions).
+///
+/// # Returns
+///
+/// Le thème configuré en base, ou [`settings::DEFAULT_THEME`] si aucun n'est enregistré.
+#[tauri::command]
+pub async fn get_theme(state: tauri::State<'_, DbState>) -> Result<String, AppError> {
+    settings::resolve_theme(&state.pool).await
+}
+
+/// Change le thème d'affichage de l'application.
+///
+/// # Arguments
+///
+/// * `state` - État partagé (pool de connexions).
+/// * `theme` - Thème à appliquer, doit figurer dans [`settings::VALID_THEMES`].
+///
+/// # Returns
+///
+/// `Ok(())` si le thème a été enregistré.
+#[tauri::command]
+pub async fn set_theme(state: tauri::State<'_, DbState>, theme: String) -> Result<(), AppError> {
+    if !settings::VALID_THEMES.contains(&theme.as_str()) {
+        return Err(AppError::Validation(format!("Thème inconnu : {theme}")));
+    }
+    settings::set(&state.pool, settings::KEY_THEME, &theme).await
+}
+
 /// Retourne le chemin du dossier de documents de l'application.
 ///
 /// # Arguments

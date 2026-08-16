@@ -6,6 +6,7 @@ pub mod common;
 pub mod contacts;
 pub mod documents;
 pub mod experiences;
+pub mod export;
 pub mod formations;
 pub mod init;
 pub mod interviews;

@@ -356,6 +356,9 @@ export interface DragPopupState {
 
 // ── Paramètres ────────────────────────────────────────────────────────────────
 
+/** Thème d'affichage de l'application. */
+export type ThemeSetting = 'clair' | 'sombre' | 'systeme'
+
 /** Résultat de la commande de diagnostic `db_status`. */
 export interface DbStatusResult {
   db_path: string

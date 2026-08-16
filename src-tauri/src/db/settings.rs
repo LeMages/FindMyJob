@@ -10,6 +10,15 @@ use crate::error::AppError;
 /// Clé du paramètre stockant l'identifiant du modèle Claude sélectionné.
 pub const KEY_LLM_MODEL: &str = "llm_model";
 
+/// Clé du paramètre stockant le thème d'affichage choisi.
+pub const KEY_THEME: &str = "theme";
+
+/// Valeurs valides pour le paramètre `theme`.
+pub const VALID_THEMES: [&str; 3] = ["clair", "sombre", "systeme"];
+
+/// Thème appliqué en l'absence de valeur enregistrée.
+pub const DEFAULT_THEME: &str = "systeme";
+
 /// Récupère la valeur brute associée à une clé de paramètre.
 ///
 /// # Arguments
@@ -69,4 +78,18 @@ pub async fn set(pool: &SqlitePool, cle: &str, valeur: &str) -> Result<(), AppEr
 /// Identifiant du modèle Claude à utiliser pour les appels LLM.
 pub async fn resolve_llm_model(pool: &SqlitePool, default: &str) -> Result<String, AppError> {
     Ok(get(pool, KEY_LLM_MODEL).await?.unwrap_or_else(|| default.to_string()))
+}
+
+/// Résout le thème d'affichage configuré : valeur en base, ou
+/// [`DEFAULT_THEME`] si aucune valeur n'est encore enregistrée.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+///
+/// # Returns
+///
+/// Le thème à appliquer (`"clair"`, `"sombre"` ou `"systeme"`).
+pub async fn resolve_theme(pool: &SqlitePool) -> Result<String, AppError> {
+    Ok(get(pool, KEY_THEME).await?.unwrap_or_else(|| DEFAULT_THEME.to_string()))
 }

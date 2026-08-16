@@ -98,9 +98,12 @@ pub fn run() {
             commands::delete_api_key,
             commands::get_llm_model,
             commands::set_llm_model,
+            commands::get_theme,
+            commands::set_theme,
             commands::get_documents_path,
             commands::open_folder,
             commands::test_api_connection,
+            commands::export_data_json,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
