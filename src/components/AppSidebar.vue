@@ -24,7 +24,7 @@ import {
     </div>
 
     <!-- Sessions -->
-    <div class="px-[18px] pt-3 pb-[6px] font-mono text-[10.5px] tracking-[.07em] text-neutral-400 flex-none">MES SESSIONS</div>
+    <div class="px-[18px] pt-3 pb-[6px] mt-3 font-mono text-[10.5px] tracking-[.07em] text-neutral-400 flex-none">MES SESSIONS</div>
     <nav class="flex-1 overflow-y-auto px-[10px]">
       <div
         v-for="s in allSessions"
