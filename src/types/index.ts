@@ -58,11 +58,6 @@ export interface BoardCard {
   meta: string
 }
 
-export interface BoardColumn {
-  title: string
-  cards: BoardCard[]
-}
-
 export type SessionStatut = 'active' | 'pause' | 'termine'
 
 export interface Session {
@@ -85,11 +80,6 @@ export interface UpdateSessionInput {
 
 export interface NewContact {
   id: number
-}
-
-export interface DragState {
-  fromColIndex: number
-  cardIndex: number
 }
 
 // ── Profil : expériences, compétences, langues, formations, projets ──────────
@@ -343,15 +333,6 @@ export interface NewTimelineEvent {
 export interface DocumentFileInfo {
   exists: boolean
   size: number
-}
-
-export interface DragPopupState {
-  card: BoardCard
-  fromColTitle: string
-  toColTitle: string
-  fromColIndex: number
-  toColIndex: number
-  cardIndex: number
 }
 
 // ── Paramètres ────────────────────────────────────────────────────────────────

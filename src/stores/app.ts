@@ -15,7 +15,6 @@ import type {
   BoardCard, Session, UpdateSessionInput,
   CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
   NewContact, NewTimelineEvent,
-  DragState, DragPopupState,
   UpdateCandidatureInput,
 } from '@/types'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
@@ -55,10 +54,6 @@ const state = reactive({
   detailError: null as string | null,
   detailStatusHistoryContent: null as string | null,
   nextRecruiterId: 10,
-
-  // Drag & drop
-  dragState: null as DragState | null,
-  dragPopup: null as DragPopupState | null,
 
   // Trash popup
   trashPopup: false,
@@ -363,36 +358,6 @@ export function addContact() {
 export function removeContact(index: number) {
   if (state.newContacts.length <= 1) return
   state.newContacts.splice(index, 1)
-}
-
-/**
- * Démarre le glisser-déposer d'une candidature dans le kanban.
- *
- * @param fromColIndex - Index de la colonne d'origine.
- * @param cardIndex - Index de la carte dans la colonne d'origine.
- */
-export function startDrag(fromColIndex: number, cardIndex: number) {
-  state.dragState = { fromColIndex, cardIndex }
-}
-
-/**
- * Termine le glisser-déposer sur une colonne cible.
- *
- * @param _toColIndex - Index de la colonne cible (popup de confirmation à implémenter).
- */
-export function showDragPopup(_toColIndex: number) {
-  state.dragState = null
-}
-
-/** Confirme le déplacement de candidature en attente. */
-export function confirmDrag() {
-  state.dragPopup = null
-}
-
-/** Annule le déplacement de candidature en cours. */
-export function cancelDrag() {
-  state.dragPopup = null
-  state.dragState = null
 }
 
 /** Ouvre la corbeille de la session courante. */
