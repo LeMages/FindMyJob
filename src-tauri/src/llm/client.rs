@@ -16,8 +16,11 @@ use crate::error::AppError;
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
 /// Version d'API figée, requise par Anthropic sur chaque requête.
 const ANTHROPIC_VERSION: &str = "2023-06-01";
-/// Modèle utilisé pour les appels applicatifs (analyse de style, etc.).
-const MODEL: &str = "claude-sonnet-5";
+/// Modèle utilisé par défaut si aucun n'est configuré en base (voir
+/// `db::settings::resolve_llm_model`).
+pub const DEFAULT_MODEL: &str = "claude-sonnet-4-6";
+/// Modèles proposés dans le sélecteur des paramètres.
+pub const AVAILABLE_MODELS: [&str; 2] = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"];
 /// Plafond de tokens de sortie — largement suffisant pour un JSON d'analyse.
 /// Visibilité `pub(crate)` pour permettre aux points d'appel utilisant
 /// [`call_claude_with_tokens_meta`] de réutiliser le même plafond par défaut.
@@ -50,6 +53,7 @@ struct ApiResponse {
 /// * `output_schema` - Schéma JSON optionnel : si fourni, la requête active
 ///   les structured outputs (`output_config.format`) pour garantir une
 ///   réponse JSON strictement conforme.
+/// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -58,8 +62,9 @@ pub async fn call_claude(
     system: &str,
     user_message: &str,
     output_schema: Option<serde_json::Value>,
+    model: &str,
 ) -> Result<String, AppError> {
-    call_claude_with_tokens(system, user_message, output_schema, MAX_TOKENS).await
+    call_claude_with_tokens(system, user_message, output_schema, MAX_TOKENS, model).await
 }
 
 /// Variante de [`call_claude`] avec un plafond de tokens de sortie explicite.
@@ -75,6 +80,7 @@ pub async fn call_claude(
 ///   les structured outputs (`output_config.format`) pour garantir une
 ///   réponse JSON strictement conforme.
 /// * `max_tokens` - Plafond de tokens de sortie pour cette requête.
+/// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -84,8 +90,9 @@ pub async fn call_claude_with_tokens(
     user_message: &str,
     output_schema: Option<serde_json::Value>,
     max_tokens: u32,
+    model: &str,
 ) -> Result<String, AppError> {
-    call_claude_with_tokens_meta(system, user_message, output_schema, max_tokens)
+    call_claude_with_tokens_meta(system, user_message, output_schema, max_tokens, model)
         .await
         .map(|(text, _stop_reason)| text)
 }
@@ -103,13 +110,14 @@ pub async fn call_claude_with_tokens_meta(
     user_message: &str,
     output_schema: Option<serde_json::Value>,
     max_tokens: u32,
+    model: &str,
 ) -> Result<(String, Option<String>), AppError> {
     // ------------------------------------------------------------------
-    // 1. Clé API — lue à la volée depuis l'environnement (.env chargé au
-    //    démarrage de l'app via dotenvy, voir lib.rs)
+    // 1. Clé API — .env en développement, trousseau OS en production
+    //    (voir `security::get_api_key`)
     // ------------------------------------------------------------------
-    let api_key = std::env::var("ANTHROPIC_API_KEY")
-        .map_err(|_| AppError::Config("ANTHROPIC_API_KEY non définie".to_string()))?;
+    let api_key = crate::security::get_api_key()?
+        .ok_or_else(|| AppError::Config("Aucune clé API Anthropic configurée.".to_string()))?;
 
     // ------------------------------------------------------------------
     // 2. Construction du corps de la requête
@@ -119,7 +127,7 @@ pub async fn call_claude_with_tokens_meta(
     // même budget de tokens que la sortie visible — l'activer par défaut
     // tronquait les réponses avant même d'atteindre le contenu utile.
     let mut body = serde_json::json!({
-        "model": MODEL,
+        "model": model,
         "max_tokens": max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": user_message}],

@@ -287,7 +287,7 @@ function clearAttachment() {
 
 <template>
   <!-- Mode "reference" (profil) : document persistant, compilation + aperçu -->
-  <div v-if="!isAttachment" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+  <div v-if="!isAttachment" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
     <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ fieldsetTitle }}</div>
 
     <input
@@ -327,7 +327,7 @@ function clearAttachment() {
         </button>
         <button
           v-if="editMode"
-          class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-neutral-300 bg-neutral-50 text-neutral-600 cursor-pointer transition-colors duration-150 hover:bg-neutral-100 hover:border-neutral-400 disabled:opacity-60 disabled:cursor-default"
+          class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-neutral-300 bg-surface-2 text-neutral-600 cursor-pointer transition-colors duration-150 hover:bg-surface-3 hover:border-neutral-400 disabled:opacity-60 disabled:cursor-default"
           type="button"
           :disabled="saving"
           :title="uploadLabel"
@@ -345,7 +345,7 @@ function clearAttachment() {
     <!-- Aucun document : bouton d'ajout centré en mode édition, texte statique sinon -->
     <button
       v-else-if="editMode"
-      class="w-full flex flex-col items-center justify-center gap-2 py-7 rounded-lg border border-dashed border-neutral-300 text-neutral-500 cursor-pointer transition-colors duration-150 hover:bg-neutral-50 hover:border-neutral-400 hover:text-neutral-700 disabled:opacity-60 disabled:cursor-default"
+      class="w-full flex flex-col items-center justify-center gap-2 py-7 rounded-lg border border-dashed border-neutral-300 text-neutral-500 cursor-pointer transition-colors duration-150 hover:bg-surface-2 hover:border-neutral-400 hover:text-neutral-700 disabled:opacity-60 disabled:cursor-default"
       type="button"
       :disabled="saving"
       @click="triggerPicker"
@@ -383,7 +383,7 @@ function clearAttachment() {
         <div class="font-mono text-[11px] text-neutral-500">{{ attachedLabel }}</div>
       </div>
       <button
-        class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-neutral-100"
+        class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-surface-2"
         type="button"
         title="Retirer"
         @click="clearAttachment"
@@ -399,7 +399,7 @@ function clearAttachment() {
       >
         <div class="text-[13px] text-neutral-500 text-center font-mono">→ Glisser le PDF ici</div>
         <button
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           type="button"
           :disabled="saving"
           @click="browse"
@@ -408,7 +408,7 @@ function clearAttachment() {
         </button>
       </div>
       <button
-        class="w-full justify-center mt-2 h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        class="w-full justify-center mt-2 h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         type="button"
       >
         ✦ {{ generateLabel }}
@@ -420,11 +420,11 @@ function clearAttachment() {
   <!-- Modale prévisualisation (mode "reference" uniquement) -->
   <Teleport to="body">
     <div v-if="previewVisible" class="fixed inset-0 bg-black/45 z-[1000] flex items-center justify-center" @click.self="previewVisible = false">
-      <div class="bg-white rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.22)] w-[min(860px,calc(100vw-48px))] h-[min(92vh,1000px)] flex flex-col overflow-hidden">
+      <div class="bg-surface-3 rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.22)] w-[min(860px,calc(100vw-48px))] h-[min(92vh,1000px)] flex flex-col overflow-hidden">
         <div class="flex items-center justify-between px-5 py-[14px] border-b border-neutral-200 flex-none">
           <span class="text-[14px] font-semibold text-neutral-950">{{ modalTitle }}</span>
           <button
-            class="w-7 h-7 rounded-7 border border-neutral-200 bg-neutral-50 flex items-center justify-center cursor-pointer text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950"
+            class="w-7 h-7 rounded-7 border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer text-neutral-600 hover:bg-surface-3 hover:text-neutral-950"
             type="button"
             @click="previewVisible = false"
           >

@@ -219,7 +219,7 @@ const initials = computed(() => {
     <div class="text-[13px] text-neutral-500 mt-[5px] font-mono mb-[18px]">Ces informations pré-remplissent tes candidatures.</div>
 
     <!-- Header -->
-    <div class="flex items-center gap-5 bg-white border border-neutral-200 rounded-xl p-6">
+    <div class="flex items-center gap-5 bg-surface-1 border border-neutral-200 rounded-xl p-6">
       <div class="w-[84px] h-[84px] rounded-full flex-none flex items-center justify-center font-semibold text-[26px] bg-neutral-200 text-neutral-700">
         {{ initials }}
       </div>
@@ -238,32 +238,32 @@ const initials = computed(() => {
       </div>
       <button
         v-if="!editMode"
-        class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         @click="enterEditMode"
       >Modifier</button>
     </div>
 
     <!-- Section infos de base (visible uniquement en mode édition) -->
-    <div v-if="editMode" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px] mt-[18px]">
+    <div v-if="editMode" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px] mt-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">INFORMATIONS</div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Prénom</label>
-          <input v-model="draftUserInfo.prenom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom" />
+          <input v-model="draftUserInfo.prenom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom" />
         </div>
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom</label>
-          <input v-model="draftUserInfo.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom" />
+          <input v-model="draftUserInfo.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom" />
         </div>
       </div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse e-mail</label>
-          <input v-model="draftUserInfo.email" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" type="email" placeholder="prenom.nom@email.com" />
+          <input v-model="draftUserInfo.email" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" type="email" placeholder="prenom.nom@email.com" />
         </div>
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Téléphone</label>
-          <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
+          <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
         </div>
       </div>
       <label class="inline-flex items-center gap-2 text-[13.5px] cursor-pointer select-none mt-0.5">
@@ -276,7 +276,7 @@ const initials = computed(() => {
       <!-- ── Colonne gauche ── -->
       <div>
         <!-- À propos -->
-        <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+        <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">À PROPOS</div>
           <template v-if="!editMode">
             <div v-if="profile.user.description" class="text-[13px] text-neutral-700 mt-[7px] leading-[1.55]">{{ profile.user.description }}</div>
@@ -285,7 +285,7 @@ const initials = computed(() => {
           <textarea
             v-else
             v-model="draftDescription"
-            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
+            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
             placeholder="Décris ton parcours, tes objectifs…"
           />
         </div>
@@ -303,7 +303,7 @@ const initials = computed(() => {
     </div>
 
     <!-- Edit footer -->
-    <div v-if="editMode" class="fixed bottom-0 left-[264px] right-0 h-[60px] bg-white border-t border-neutral-200 flex items-center gap-[10px] px-9 z-10">
+    <div v-if="editMode" class="fixed bottom-0 left-[264px] right-0 h-[60px] bg-surface-1 border-t border-neutral-200 flex items-center gap-[10px] px-9 z-10">
       <span v-if="saveError" class="font-mono text-[12px] text-red-500">{{ saveError }}</span>
       <div class="flex-1 min-w-0" />
       <button

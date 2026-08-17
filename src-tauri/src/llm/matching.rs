@@ -70,12 +70,13 @@ fn matching_schema() -> serde_json::Value {
 ///
 /// * `offer_analysis` - JSON produit par `llm::offer::analyze_offer`.
 /// * `profile` - Profil complet du candidat.
+/// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
 /// Le JSON de stratégie de matching (sérialisé de façon canonique). Toute
 /// erreur d'appel, de refus ou de format inattendu remonte telle quelle.
-pub async fn match_profile(offer_analysis: &str, profile: &ProfileDto) -> Result<String, AppError> {
+pub async fn match_profile(offer_analysis: &str, profile: &ProfileDto, model: &str) -> Result<String, AppError> {
     let system_prompt = r#"Tu es un stratège de candidature. Analyse le profil du candidat par rapport à l'offre et décide quoi mettre en avant.
 
 Description des champs à renseigner :
@@ -92,7 +93,7 @@ Description des champs à renseigner :
         "Analyse d'offre :\n{offer_analysis}\n\nProfil du candidat :\n{profile_json}"
     );
 
-    let raw_response = call_claude(system_prompt, &user_message, Some(matching_schema())).await?;
+    let raw_response = call_claude(system_prompt, &user_message, Some(matching_schema()), model).await?;
 
     // Le structured output garantit normalement un JSON conforme au schéma ;
     // ce parsing reste un filet de sécurité plutôt qu'une validation de forme.

@@ -133,14 +133,14 @@ function selectInterview(interview: PlanningInterviewView) {
         </div>
 
         <!-- Navigation temporelle -->
-        <button class="w-[38px] h-[38px] flex-none rounded-lg border border-neutral-200 bg-white flex items-center justify-center cursor-pointer hover:bg-neutral-100" title="Période précédente" @click="goToPrevious">
+        <button class="w-[38px] h-[38px] flex-none rounded-lg border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer hover:bg-surface-3" title="Période précédente" @click="goToPrevious">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M9.5 3 5 7.5l4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </button>
         <button
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           @click="goToToday"
         >Aujourd'hui</button>
-        <button class="w-[38px] h-[38px] flex-none rounded-lg border border-neutral-200 bg-white flex items-center justify-center cursor-pointer hover:bg-neutral-100" title="Période suivante" @click="goToNext">
+        <button class="w-[38px] h-[38px] flex-none rounded-lg border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer hover:bg-surface-3" title="Période suivante" @click="goToNext">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M5.5 3 10 7.5l-4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </button>
       </div>

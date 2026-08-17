@@ -73,6 +73,7 @@ fn doc_type_label(doc_type: &str) -> &str {
 ///
 /// * `typ_content` - Contenu source Typst du document à analyser.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -80,7 +81,7 @@ fn doc_type_label(doc_type: &str) -> &str {
 /// dans `documents.style_analysis`. Toute erreur d'appel, de refus ou de
 /// format inattendu remonte telle quelle : l'appelant doit alors abandonner
 /// la sauvegarde du document.
-pub async fn analyze_style(typ_content: &str, doc_type: &str) -> Result<String, AppError> {
+pub async fn analyze_style(typ_content: &str, doc_type: &str, model: &str) -> Result<String, AppError> {
     let label = doc_type_label(doc_type);
 
     let system_prompt = format!(
@@ -101,7 +102,7 @@ Description des champs à renseigner :
         format!("Analyse ce document {label} au format Typst :\n\n```typst\n{typ_content}\n```");
 
     let raw_response =
-        call_claude(&system_prompt, &user_message, Some(style_analysis_schema())).await?;
+        call_claude(&system_prompt, &user_message, Some(style_analysis_schema()), model).await?;
 
     // Le structured output garantit normalement un JSON conforme au schéma ;
     // ce parsing reste un filet de sécurité plutôt qu'une validation de forme.

@@ -2,7 +2,7 @@
 
 // Importation des modules internes
 use crate::db::init::DbState;
-use crate::db::{candidatures, profile, users};
+use crate::db::{candidatures, profile, settings, users};
 use crate::documents::{export_for_apply, export_for_apply_with_message, save_generated_document};
 use crate::error::AppError;
 use crate::llm::{generate_application_email, generate_application_message, generate_documents};
@@ -219,8 +219,9 @@ pub async fn postuler_par_mail(
     let user = users::fetch_first_user(&state.pool).await?;
     let detail = candidatures::fetch_detail(&state.pool, user.id, id).await?;
     let candidate_profile = profile::build_profile(&state.pool).await?;
+    let model = settings::resolve_llm_model(&state.pool, crate::llm::client::DEFAULT_MODEL).await?;
 
-    let email = generate_application_email(&candidate_profile, &detail).await?;
+    let email = generate_application_email(&candidate_profile, &detail, &model).await?;
     export_for_apply_with_message(&app, &detail, &email, "Mail_de_candidature.txt")?;
     candidatures::mark_postule(&state.pool, user.id, id, Some(&email)).await
 }
@@ -248,8 +249,9 @@ pub async fn postuler_par_message(
     let user = users::fetch_first_user(&state.pool).await?;
     let detail = candidatures::fetch_detail(&state.pool, user.id, id).await?;
     let candidate_profile = profile::build_profile(&state.pool).await?;
+    let model = settings::resolve_llm_model(&state.pool, crate::llm::client::DEFAULT_MODEL).await?;
 
-    let message = generate_application_message(&candidate_profile, &detail).await?;
+    let message = generate_application_message(&candidate_profile, &detail, &model).await?;
     export_for_apply_with_message(&app, &detail, &message, "Message_candidature.txt")?;
     candidatures::mark_postule(&state.pool, user.id, id, Some(&message)).await
 }

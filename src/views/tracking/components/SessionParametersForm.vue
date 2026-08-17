@@ -85,7 +85,7 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
 <template>
   <div class="px-[30px] pt-[18px] pb-[30px]">
     <!-- Informations générales -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">INFORMATIONS GÉNÉRALES</div>
 
       <div class="mb-[14px]">
@@ -122,7 +122,7 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
     </div>
 
     <!-- Zone géographique -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">ZONE GÉOGRAPHIQUE</div>
       <div>
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Zone cible</label>

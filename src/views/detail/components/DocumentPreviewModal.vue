@@ -50,11 +50,11 @@ defineExpose({ open })
 <template>
   <Teleport to="body">
     <div v-if="visible" class="fixed inset-0 bg-black/45 z-[1000] flex items-center justify-center" @click.self="close">
-      <div class="bg-white rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.22)] w-[min(860px,calc(100vw-48px))] h-[min(92vh,1000px)] flex flex-col overflow-hidden">
+      <div class="bg-surface-3 rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.22)] w-[min(860px,calc(100vw-48px))] h-[min(92vh,1000px)] flex flex-col overflow-hidden">
         <div class="flex items-center justify-between px-5 py-[14px] border-b border-neutral-200 flex-none">
           <span class="text-[14px] font-semibold text-neutral-950">{{ title }}</span>
           <button
-            class="w-7 h-7 rounded-7 border border-neutral-200 bg-neutral-50 flex items-center justify-center cursor-pointer text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950"
+            class="w-7 h-7 rounded-7 border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer text-neutral-600 hover:bg-surface-3 hover:text-neutral-950"
             type="button"
             @click="close"
           >

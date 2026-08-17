@@ -43,6 +43,11 @@
   --color-amber-300: #e0a050;
   --color-amber-700: #a06010;
 
+  /* Hiérarchie de surfaces (voir bloc html.dark pour le rôle de chaque niveau) */
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f8f8f6;
+  --color-surface-3: #ffffff;
+
   /* Polices */
   --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
@@ -53,6 +58,77 @@
   --radius-9: 9px;
   --radius-10: 10px;
   --radius-14: 14px;
+}
+
+/* ===== THÈME SOMBRE =====
+   Tailwind v4 émet les tokens de @theme comme variables CSS sur :root, et
+   les utilitaires générés (bg-neutral-50, bg-white, text-red-700, ...)
+   référencent ces variables plutôt que des valeurs figées. Redéfinir ces
+   mêmes variables sous html.dark suffit donc à basculer tout le thème,
+   sans ajouter le moindre `dark:` dans les composants.
+
+   Sélecteur `html.dark` (élément + classe, spécificité 0,1,1) plutôt que
+   `.dark` seul : bat de façon déterministe le `:root` émis par @theme
+   (spécificité 0,1,0), sans dépendre de l'ordre des règles dans ce fichier.
+   La classe est posée/retirée par `useTheme.ts`.
+
+   Chaque teinte est réappliquée avec sa luminosité perceptuelle inversée
+   (même principe que neutral-50 <-> neutral-950) : un jeton utilisé comme
+   fond pâle en clair (ex. green-50, red-50) devient un fond sombre teinté,
+   et un jeton utilisé comme texte foncé en clair (ex. green-700, red-500)
+   devient un texte clair lisible sur fond sombre. Valeurs de départ
+   raisonnables, ajustables visuellement sans changer le mécanisme. */
+html.dark {
+  --color-white: #242220;
+
+  --color-neutral-50: #1d1d1b;
+  --color-neutral-100: #2a2a27;
+  --color-neutral-200: #3a3a37;
+  --color-neutral-300: #56564f;
+  --color-neutral-400: #76766f;
+  --color-neutral-500: #83837e;
+  --color-neutral-600: #aeaea7;
+  --color-neutral-700: #bcbcb5;
+  --color-neutral-800: #e6e6e1;
+  --color-neutral-900: #f0f0ed;
+  --color-neutral-950: #f8f8f6;
+
+  --color-green-50: #0f2116;
+  --color-green-400: #5ec97e;
+  --color-green-500: #34b871;
+  --color-green-600: #3fc785;
+  --color-green-700: #8fe0a8;
+
+  --color-red-50: #241616;
+  --color-red-100: #2e1a1a;
+  --color-red-200: #4a2626;
+  --color-red-300: #e59a9a;
+  --color-red-400: #ff5c5c;
+  --color-red-500: #f08080;
+  --color-red-600: #ff6b6b;
+  --color-red-700: #ff9b9b;
+
+  --color-blue-50: #161b26;
+  --color-blue-100: #1c2333;
+  --color-blue-200: #2c3752;
+  --color-blue-300: #7f9be0;
+  --color-blue-400: #6fb0ff;
+  --color-blue-500: #6f8fe0;
+  --color-blue-700: #9db8ff;
+
+  --color-amber-50: #241d12;
+  --color-amber-100: #2e2716;
+  --color-amber-200: #4a3d22;
+  --color-amber-300: #e8b06a;
+  --color-amber-700: #e3ac5c;
+
+  /* Hiérarchie de surfaces : échelle ascendante distincte de neutral-50
+     (fond de page). surface-1 = conteneurs structurels (tableau, cartes),
+     surface-2 = éléments interactifs au repos (inputs, boutons),
+     surface-3 = hover des interactifs et panneaux flottants (modales). */
+  --color-surface-1: #2b2926;
+  --color-surface-2: #38362f;
+  --color-surface-3: #443f37;
 }
 
 /* ===== BASE =====

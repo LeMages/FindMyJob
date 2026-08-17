@@ -217,6 +217,7 @@ fn validate_lm_content(parsed: &serde_json::Value) -> Result<(), String> {
 /// * `matching` - JSON produit par `llm::matching::match_profile`.
 /// * `profile` - Profil complet du candidat.
 /// * `offer_analysis` - JSON produit par `llm::offer::analyze_offer`.
+/// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -225,6 +226,7 @@ pub async fn generate_cv_content(
     matching: &str,
     profile: &ProfileDto,
     offer_analysis: &str,
+    model: &str,
 ) -> Result<String, AppError> {
     let system_prompt = format!(
         "Tu rédiges le contenu d'un CV adapté à l'offre.\n\n{RULES_HONNETETE}\n\
@@ -264,7 +266,7 @@ Description des champs à renseigner :\n\
     // retentée — c'est un problème de format, pas de contenu.
     let mut validation_error: Option<String> = None;
     for attempt in 1..=2u8 {
-        let raw_response = call_claude(&system_prompt, &user_message, Some(cv_content_schema())).await?;
+        let raw_response = call_claude(&system_prompt, &user_message, Some(cv_content_schema()), model).await?;
 
         // DEBUG: à supprimer
         eprintln!(
@@ -305,6 +307,7 @@ Description des champs à renseigner :\n\
 /// * `matching` - JSON produit par `llm::matching::match_profile`.
 /// * `profile` - Profil complet du candidat.
 /// * `offer_analysis` - JSON produit par `llm::offer::analyze_offer`.
+/// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -313,6 +316,7 @@ pub async fn generate_lm_content(
     matching: &str,
     profile: &ProfileDto,
     offer_analysis: &str,
+    model: &str,
 ) -> Result<String, AppError> {
     let system_prompt = format!(
         "Tu rédiges le contenu d'une lettre de motivation.\n\n{RULES_HONNETETE}\n\
@@ -357,6 +361,7 @@ Description des champs à renseigner :\n\
             &user_message,
             Some(lm_content_schema()),
             crate::llm::client::MAX_TOKENS,
+            model,
         )
         .await?;
 

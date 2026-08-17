@@ -34,11 +34,11 @@ const addEventPopup = ref<InstanceType<typeof AddEventPopup> | null>(null)
 </script>
 
 <template>
-  <div v-if="state.detailCandidature?.status !== 'a_postuler'" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+  <div v-if="state.detailCandidature?.status !== 'a_postuler'" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
     <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">STATUT &amp; SUIVI</div>
 
     <div v-for="entry in state.detailHistory" :key="entry.id" class="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded-10 px-[14px] py-3 mb-[10px]">
-      <div class="w-9 h-9 rounded-9 bg-white border border-neutral-200 flex items-center justify-center text-neutral-600 flex-none">
+      <div class="w-9 h-9 rounded-9 bg-surface-2 border border-neutral-200 flex items-center justify-center text-neutral-600 flex-none">
         <TimelineEventIcon :event-type="entry.event_type" />
       </div>
       <div class="flex-1 min-w-0">
@@ -47,7 +47,7 @@ const addEventPopup = ref<InstanceType<typeof AddEventPopup> | null>(null)
       </div>
       <button
         v-if="entry.content"
-        class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none hover:text-neutral-950 hover:bg-neutral-100"
+        class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none hover:text-neutral-950 hover:bg-surface-2"
         title="Voir le contenu"
         @click="openStatusHistoryPopup(entry.content)"
       >
@@ -62,7 +62,7 @@ const addEventPopup = ref<InstanceType<typeof AddEventPopup> | null>(null)
 
     <button
       v-if="canAddEvent"
-      class="w-full justify-center mt-1 h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+      class="w-full justify-center mt-1 h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
       @click="addEventPopup?.open()"
     >+ Ajouter un événement</button>
 

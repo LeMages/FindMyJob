@@ -55,12 +55,12 @@ const displayLabel = computed(() => {
   return props.modelValue
 })
 
-const baseClass = 'w-full border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 focus:outline-none focus:border-neutral-400'
+const baseClass = 'w-full border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 focus:outline-none focus:border-neutral-400'
 const inputClass = `${baseClass} h-[38px] block`
 const textareaClass = `${baseClass} py-[10px] block resize-none leading-[1.5] h-[100px]`
 const selectClass = `${inputClass} appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]`
 
-const interactiveClass = computed(() => props.editable ? 'cursor-pointer hover:bg-neutral-100' : 'cursor-default')
+const interactiveClass = computed(() => props.editable ? 'cursor-pointer hover:bg-surface-3' : 'cursor-default')
 const emptyInputClass = computed(() => `${inputClass} ${interactiveClass.value}`)
 const emptyTextareaClass = computed(() => `${textareaClass} ${interactiveClass.value}`)
 

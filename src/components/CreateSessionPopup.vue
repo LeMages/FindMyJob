@@ -51,7 +51,7 @@ function onKeydown(e: KeyboardEvent) {
     class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]"
     @click="cancelCreateSession"
   >
-    <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[420px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop @vue:mounted="onOpen">
+    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[420px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop @vue:mounted="onOpen">
       <div class="flex items-center justify-between mb-5">
         <div class="text-[17px] font-semibold">Nouvelle session</div>
         <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="cancelCreateSession">×</button>
@@ -65,7 +65,7 @@ function onKeydown(e: KeyboardEvent) {
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom de la session</label>
         <input
           v-model="nom"
-          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
           placeholder="Ex. Stage M2 – 2025"
           autofocus
           @keydown="onKeydown"
@@ -76,7 +76,7 @@ function onKeydown(e: KeyboardEvent) {
 
       <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
         <button
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           @click="cancelCreateSession"
         >Annuler</button>
         <button

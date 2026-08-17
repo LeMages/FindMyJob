@@ -51,12 +51,13 @@ fn scraped_offer_schema() -> serde_json::Value {
 /// # Arguments
 ///
 /// * `text` - Texte nettoyé de la page d'offre (voir `scraping::extract`).
+/// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
 /// Les champs extraits, chacun `None` si non trouvé dans le texte. Toute
 /// erreur d'appel, de refus ou de format inattendu remonte telle quelle.
-pub async fn extract_offer_fields(text: &str) -> Result<ScrapedOfferFields, AppError> {
+pub async fn extract_offer_fields(text: &str, model: &str) -> Result<ScrapedOfferFields, AppError> {
     let system_prompt = r#"Tu es un extracteur de données d'offres d'emploi. À partir du texte d'une page web d'offre d'emploi, extrais les informations suivantes en JSON.
 
 Règles :
@@ -73,7 +74,7 @@ Réponds uniquement en JSON valide, sans markdown ni commentaires."#;
     let user_message = format!("Voici le texte de la page d'offre d'emploi :\n\n{text}");
 
     let raw_response =
-        call_claude(system_prompt, &user_message, Some(scraped_offer_schema())).await?;
+        call_claude(system_prompt, &user_message, Some(scraped_offer_schema()), model).await?;
 
     // Le structured output garantit normalement un JSON conforme au schéma ;
     // ce parsing reste un filet de sécurité plutôt qu'une validation de forme.
