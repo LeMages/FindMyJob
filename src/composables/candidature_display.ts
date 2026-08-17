@@ -3,31 +3,12 @@
  * la page de détail d'une candidature — dérivés du statut brut stocké en base.
  */
 
-/** Colonnes du kanban, chacune regroupant un ou plusieurs statuts bruts. */
-export const KANBAN_COLUMNS: { title: string; statuses: string[] }[] = [
-  { title: 'À postuler',          statuses: ['a_postuler'] },
-  { title: 'Candidature envoyée', statuses: ['postule'] },
-  { title: 'Discussion',          statuses: ['relance'] },
-  { title: 'Entretien',           statuses: ['entretien', 'entretien_passe'] },
-  { title: 'Accepté',             statuses: ['offre', 'accepte'] },
-]
-
 // Statuts terminaux négatifs : la candidature n'évoluera plus et n'a pas
 // débouché sur une acceptation — elle sort du pipeline principal et va en
 // corbeille. `accepte` est aussi un statut terminal mais reste affiché sur le
 // board puisque c'est une issue positive. `offre` n'est pas terminal : c'est
 // une étape intermédiaire (l'offre peut encore être acceptée ou déclinée).
 export const TRASHED_STATUSES = ['abandon', 'refus', 'ghosting', 'offre_refusee']
-
-/** Libellés d'affichage des types de contrat. */
-export const TYPE_CONTRAT_LABELS: Record<string, string> = {
-  stage: 'Stage',
-  alternance: 'Alternance',
-  cdi: 'CDI',
-  cdd: 'CDD',
-  interim: 'Intérim',
-  freelance: 'Freelance',
-}
 
 export interface SelectOption {
   value: string
@@ -148,16 +129,6 @@ const INTERVIEW_TYPE_COLORS: Record<string, string> = {
 const INTERVIEW_STATUS_DOT_COLORS: Record<'passed' | 'overdue', string> = {
   passed: 'bg-green-500',
   overdue: 'bg-red-500',
-}
-
-/**
- * Trouve le titre de colonne kanban correspondant à un statut brut.
- *
- * @param status - Statut brut de la candidature (ex. `'entretien'`).
- * @returns Titre de la colonne kanban, ou chaîne vide si le statut est inconnu.
- */
-export function columnTitleForStatus(status: string): string {
-  return KANBAN_COLUMNS.find(col => col.statuses.includes(status))?.title ?? ''
 }
 
 /**

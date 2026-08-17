@@ -288,132 +288,6 @@ pub async fn compile_reference(
     Ok(base64::engine::general_purpose::STANDARD.encode(&pdf_bytes))
 }
 
-/// Résout (et crée si besoin) le dossier de référence d'un type de document,
-/// utilisé comme dossier par défaut dans le sélecteur de fichiers du frontend.
-///
-/// # Arguments
-///
-/// * `app` - Handle de l'application Tauri.
-/// * `session_id` - Identifiant de la session propriétaire.
-/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
-///
-/// # Returns
-///
-/// Chemin absolu du dossier, sous forme de chaîne.
-pub fn resolve_reference_dir(
-    app: &tauri::AppHandle,
-    session_id: i64,
-    doc_type: &str,
-) -> Result<String, AppError> {
-    let dir = resolve_doc_dir(app, session_id, doc_type);
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
-    Ok(dir.to_string_lossy().to_string())
-}
-
-/// Construit un chemin de mise en scène unique pour un document en attente
-/// de rattachement à une candidature (`artefact/pending_<timestamp>_<filename>`).
-///
-/// # Arguments
-///
-/// * `app` - Handle de l'application Tauri.
-/// * `session_id` - Identifiant de la session propriétaire.
-/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
-/// * `filename` - Nom de fichier d'origine (utilisé comme suffixe).
-///
-/// # Returns
-///
-/// Chemin de destination temporaire.
-fn next_staged_path(
-    app: &tauri::AppHandle,
-    session_id: i64,
-    doc_type: &str,
-    filename: &str,
-) -> Result<PathBuf, AppError> {
-    let artefact_dir = resolve_doc_dir(app, session_id, doc_type).join("artefact");
-    std::fs::create_dir_all(&artefact_dir)
-        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
-    Ok(artefact_dir.join(format!("pending_{}_{}", ts, filename)))
-}
-
-/// Met en scène un document envoyé en base64 (glisser-déposer ou sélection navigateur)
-/// avant rattachement définitif à une candidature.
-///
-/// # Arguments
-///
-/// * `app` - Handle de l'application Tauri.
-/// * `session_id` - Identifiant de la session propriétaire.
-/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
-/// * `filename` - Nom du fichier d'origine (doit finir par `.pdf`).
-/// * `content` - Contenu du fichier encodé en base64.
-///
-/// # Returns
-///
-/// Chemin temporaire du fichier mis en scène.
-pub async fn upload_candidature_document(
-    app: tauri::AppHandle,
-    session_id: i64,
-    doc_type: &'static str,
-    filename: String,
-    content: String,
-) -> Result<String, AppError> {
-    if !filename.to_lowercase().ends_with(".pdf") {
-        return Err(AppError::Validation(
-            "Seuls les fichiers PDF sont acceptés.".to_string(),
-        ));
-    }
-
-    use base64::Engine as _;
-    let pdf_bytes = base64::engine::general_purpose::STANDARD
-        .decode(&content)
-        .map_err(|e| AppError::Validation(format!("Contenu invalide : {}", e)))?;
-
-    let dest = next_staged_path(&app, session_id, doc_type, &filename)?;
-    std::fs::write(&dest, &pdf_bytes)
-        .map_err(|e| AppError::Validation(format!("Écriture impossible : {}", e)))?;
-    Ok(dest.to_string_lossy().to_string())
-}
-
-/// Met en scène un document sélectionné via l'explorateur de fichiers natif
-/// (copie vers l'espace de mise en scène de l'application).
-///
-/// # Arguments
-///
-/// * `app` - Handle de l'application Tauri.
-/// * `session_id` - Identifiant de la session propriétaire.
-/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
-/// * `path` - Chemin absolu du fichier sélectionné (doit finir par `.pdf`).
-///
-/// # Returns
-///
-/// Chemin temporaire du fichier mis en scène.
-pub async fn select_candidature_document(
-    app: tauri::AppHandle,
-    session_id: i64,
-    doc_type: &'static str,
-    path: String,
-) -> Result<String, AppError> {
-    if !path.to_lowercase().ends_with(".pdf") {
-        return Err(AppError::Validation(
-            "Seuls les fichiers PDF sont acceptés.".to_string(),
-        ));
-    }
-
-    let filename = std::path::Path::new(&path)
-        .file_name()
-        .map(|f| f.to_string_lossy().to_string())
-        .unwrap_or_else(|| "document.pdf".to_string());
-
-    let dest = next_staged_path(&app, session_id, doc_type, &filename)?;
-    std::fs::copy(&path, &dest)
-        .map_err(|e| AppError::Validation(format!("Copie du fichier impossible : {}", e)))?;
-    Ok(dest.to_string_lossy().to_string())
-}
-
 /// Inspecte l'état sur disque d'un document joint à une candidature (CV ou
 /// lettre de motivation), pour affichage honnête dans la page de détail —
 /// le chemin enregistré en base peut pointer vers un fichier déplacé ou supprimé.
@@ -466,8 +340,7 @@ pub fn read_document_base64(path: &str) -> Result<String, AppError> {
 /// * `app` - Handle de l'application Tauri.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
-/// * `staged_path` - Chemin temporaire renvoyé par `upload_candidature_document`
-///   ou `select_candidature_document`, s'il y en a un.
+/// * `staged_path` - Chemin temporaire du fichier mis en scène, s'il y en a un.
 /// * `candidature_id` - Identifiant de la candidature à laquelle rattacher le document.
 ///
 /// # Returns
