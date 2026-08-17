@@ -189,12 +189,12 @@ defineExpose({ hasChanges, reset, save })
 </script>
 
 <template>
-  <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+  <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
     <div :class="editMode ? 'flex items-center justify-between mb-[14px]' : ''">
       <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">EXPÉRIENCES</div>
       <button
         v-if="editMode"
-        class="h-[30px] px-3 text-[12px] rounded-lg border border-neutral-300 bg-white font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        class="h-[30px] px-3 text-[12px] rounded-lg border border-neutral-300 bg-surface-2 font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         type="button"
         @click="openAddModal"
       >
@@ -231,7 +231,7 @@ defineExpose({ hasChanges, reset, save })
         <!-- Boutons édition (visibles uniquement en mode édition) -->
         <div v-if="editMode" class="flex flex-row gap-[5px] flex-none self-center ml-[6px]">
           <button
-            class="w-[30px] h-[30px] rounded-7 border border-neutral-200 bg-neutral-50 flex items-center justify-center cursor-pointer flex-none text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950 hover:border-neutral-300"
+            class="w-[30px] h-[30px] rounded-7 border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer flex-none text-neutral-600 hover:bg-surface-3 hover:text-neutral-950 hover:border-neutral-300"
             type="button"
             title="Modifier"
             @click="openEditModal(exp)"
@@ -262,7 +262,7 @@ defineExpose({ hasChanges, reset, save })
 
   <!-- Popup ajout/modification d'expérience -->
   <div v-if="modalOpen" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]">
-    <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6">
+    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6">
       <div class="flex items-center justify-between mb-5">
         <div class="text-[17px] font-semibold">
           {{ editTarget.kind === 'new' ? 'Ajouter une expérience' : 'Modifier une expérience' }}
@@ -272,17 +272,17 @@ defineExpose({ hasChanges, reset, save })
 
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Intitulé du poste *</label>
-        <input v-model="draft.poste" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Développeur Full-Stack" />
+        <input v-model="draft.poste" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Développeur Full-Stack" />
       </div>
 
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Entreprise</label>
-          <input v-model="draft.entreprise" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom de l'entreprise" />
+          <input v-model="draft.entreprise" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom de l'entreprise" />
         </div>
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Lieu</label>
-          <input v-model="draft.lieu" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Paris, France" />
+          <input v-model="draft.lieu" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Paris, France" />
         </div>
       </div>
 
@@ -290,7 +290,7 @@ defineExpose({ hasChanges, reset, save })
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Type de contrat</label>
         <select
           v-model="draft.type_contrat"
-          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
+          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
         >
           <option value="">-- Sélectionner --</option>
           <option value="stage">Stage</option>
@@ -305,10 +305,10 @@ defineExpose({ hasChanges, reset, save })
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Début</label>
           <div class="flex gap-2">
-            <select v-model="draft.debut_mois" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1">
+            <select v-model="draft.debut_mois" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1">
               <option v-for="(m, idx) in MONTHS" :key="idx" :value="idx + 1">{{ m }}</option>
             </select>
-            <select v-model="draft.debut_annee" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1">
+            <select v-model="draft.debut_annee" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1">
               <option v-for="y in yearRange" :key="y" :value="y">{{ y }}</option>
             </select>
           </div>
@@ -317,10 +317,10 @@ defineExpose({ hasChanges, reset, save })
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Fin</label>
           <div class="flex gap-2 items-center flex-wrap">
             <template v-if="!draft.en_cours">
-              <select v-model="draft.fin_mois" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1 min-w-[80px]">
+              <select v-model="draft.fin_mois" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1 min-w-[80px]">
                 <option v-for="(m, idx) in MONTHS" :key="idx" :value="idx + 1">{{ m }}</option>
               </select>
-              <select v-model="draft.fin_annee" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1 min-w-[80px]">
+              <select v-model="draft.fin_annee" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1 min-w-[80px]">
                 <option v-for="y in yearRange" :key="y" :value="y">{{ y }}</option>
               </select>
             </template>
@@ -337,7 +337,7 @@ defineExpose({ hasChanges, reset, save })
           <label class="text-[12px] text-neutral-600 mb-0 block">Description</label>
           <button
             type="button"
-            class="inline-flex items-center gap-1 h-6 px-[9px] text-[12px] rounded-5 border border-neutral-300 bg-neutral-50 text-neutral-700 cursor-pointer leading-none transition-colors duration-[120ms] hover:bg-neutral-100 hover:border-neutral-300 hover:text-neutral-950"
+            class="inline-flex items-center gap-1 h-6 px-[9px] text-[12px] rounded-5 border border-neutral-300 bg-surface-2 text-neutral-700 cursor-pointer leading-none transition-colors duration-[120ms] hover:bg-surface-3 hover:border-neutral-300 hover:text-neutral-950"
             aria-label="Ajouter une puce"
             @click="descTextarea && insertBullet(descTextarea, draft.description, v => draft.description = v)"
           ><span aria-hidden="true">•</span> Puce</button>
@@ -345,14 +345,14 @@ defineExpose({ hasChanges, reset, save })
         <textarea
           ref="descTextarea"
           v-model="draft.description"
-          class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[100px]"
+          class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[100px]"
           placeholder="Décris tes missions, technologies utilisées…"
         />
       </div>
 
       <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
         <button
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           type="button"
           @click="closeModal"
         >Annuler</button>

@@ -180,7 +180,7 @@ watch(sessionId, loadCandidatures)
         </div>
         <div class="flex items-center gap-[10px]">
           <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="openTrashPopup"
           >
             <svg width="15" height="16" viewBox="0 0 15 16" fill="none">
@@ -218,7 +218,7 @@ watch(sessionId, loadCandidatures)
       <template v-else>
         <!-- Pipeline -->
         <div class="px-[30px] pt-[18px] pb-[30px]">
-          <table class="w-full text-[13px] border-collapse bg-white border border-neutral-200 rounded-10 overflow-hidden">
+          <table class="w-full text-[13px] border-collapse bg-surface-1 border border-neutral-200 rounded-10 overflow-hidden">
             <thead>
               <tr class="text-left bg-neutral-950">
                 <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">ENTREPRISE</th>
@@ -232,7 +232,7 @@ watch(sessionId, loadCandidatures)
               <tr
                 v-for="c in visibleCandidatures"
                 :key="c.id"
-                class="border-b border-neutral-100 last:border-0 cursor-pointer hover:bg-neutral-50"
+                class="border-b border-neutral-100 last:border-0 cursor-pointer hover:bg-surface-3"
                 @click="openRow(c)"
               >
                 <td class="py-2.5 px-4">

@@ -58,7 +58,7 @@ function itemsForDay(day: Date) {
 </script>
 
 <template>
-  <div class="flex border border-neutral-200 rounded-xl overflow-hidden bg-white">
+  <div class="flex border border-neutral-200 rounded-xl overflow-hidden bg-surface-1">
     <!-- Colonne des heures -->
     <div class="w-[52px] flex-none border-r border-neutral-200">
       <div class="h-10 border-b border-neutral-200" />

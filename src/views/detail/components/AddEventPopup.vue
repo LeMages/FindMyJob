@@ -223,7 +223,7 @@ defineExpose({ open })
 
 <template>
   <div v-if="visible" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]" @click="close">
-    <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
+    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
 
       <!-- Étape 1 : choix du type d'événement -->
       <template v-if="step === 'select'">
@@ -242,10 +242,10 @@ defineExpose({ open })
             <div
               v-for="ev in group.items"
               :key="ev.event_type"
-              class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100"
+              class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-surface-2 hover:border-neutral-300 hover:bg-surface-3"
               @click="selectEvent(ev)"
             >
-              <div class="w-9 h-9 rounded-9 bg-white border border-neutral-200 flex items-center justify-center text-neutral-600 flex-none">
+              <div class="w-9 h-9 rounded-9 bg-surface-2 border border-neutral-200 flex items-center justify-center text-neutral-600 flex-none">
                 <TimelineEventIcon :event-type="ev.event_type" />
               </div>
               <div class="text-[14px] font-semibold">{{ ev.label }}</div>
@@ -266,28 +266,28 @@ defineExpose({ open })
         <template v-if="selected.event_type === 'entretien_planifie'">
           <div class="mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Type d'entretien</label>
-            <select v-model="interviewType" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400">
+            <select v-model="interviewType" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
               <option v-for="opt in INTERVIEW_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
           <div class="mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Date et heure</label>
-            <input v-model="interviewDate" type="datetime-local" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" />
+            <input v-model="interviewDate" type="datetime-local" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" />
           </div>
           <div class="mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Lieu (optionnel)</label>
-            <input v-model="interviewLieu" placeholder="Visio, locaux de l'entreprise..." class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" />
+            <input v-model="interviewLieu" placeholder="Visio, locaux de l'entreprise..." class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" />
           </div>
           <div class="mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Modalité (optionnel)</label>
-            <select v-model="interviewModalite" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400">
+            <select v-model="interviewModalite" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
               <option value="">Non précisée</option>
               <option v-for="opt in MODALITE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
           <div class="mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Contact (optionnel)</label>
-            <select v-model="interviewContactId" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400">
+            <select v-model="interviewContactId" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
               <option value="">Aucun</option>
               <option v-for="rec in state.detailContacts" :key="rec.id" :value="rec.id">{{ rec.nom ?? '—' }}</option>
             </select>
@@ -300,7 +300,7 @@ defineExpose({ open })
           <template v-else>
             <div class="mb-[14px]">
               <label class="text-[12px] text-neutral-600 mb-[5px] block">Entretien</label>
-              <select v-model="selectedInterviewId" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400">
+              <select v-model="selectedInterviewId" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
                 <option value="" disabled>Choisir l'entretien passé</option>
                 <option v-for="iv in pendingInterviews" :key="iv.id" :value="iv.id">
                   {{ iv.type ?? 'Entretien' }} — {{ iv.date_entretien ?? 'Date non renseignée' }}
@@ -309,7 +309,7 @@ defineExpose({ open })
             </div>
             <div class="mb-[14px]">
               <label class="text-[12px] text-neutral-600 mb-[5px] block">Issue</label>
-              <select v-model="interviewIssue" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400">
+              <select v-model="interviewIssue" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
                 <option value="positif">Positif</option>
                 <option value="negatif">Négatif</option>
               </select>
@@ -322,7 +322,7 @@ defineExpose({ open })
           <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ contentLabel(selected.event_type) }}</label>
           <textarea
             v-model="content"
-            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
+            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
           />
         </div>
 
@@ -330,12 +330,12 @@ defineExpose({ open })
 
         <div class="flex justify-between items-center mt-5 pt-4 border-t border-neutral-100">
           <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="back"
           >← Retour</button>
           <div class="flex gap-[10px]">
             <button
-              class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+              class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
               @click="close"
             >Annuler</button>
             <button

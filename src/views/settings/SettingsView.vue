@@ -171,23 +171,23 @@ async function exportData() {
     <div class="text-[13px] text-neutral-500 mt-[5px] font-mono mb-[22px]">Configuration de l'application FindMyJob.</div>
 
     <!-- Intelligence artificielle -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">INTELLIGENCE ARTIFICIELLE</div>
 
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Clé API Anthropic</label>
 
         <div v-if="apiKeyStatus?.exists && !showApiKeyInput" class="flex items-center gap-2">
-          <div class="h-[38px] border border-neutral-300 rounded-lg px-3 flex items-center gap-2 text-[13.5px] bg-neutral-50 text-neutral-950 flex-1 font-mono">
+          <div class="h-[38px] border border-neutral-300 rounded-lg px-3 flex items-center gap-2 text-[13.5px] bg-surface-2 text-neutral-950 flex-1 font-mono">
             <span>Clé API configurée</span>
             <span class="text-[10px] font-mono bg-neutral-100 px-[6px] py-0.5 rounded uppercase">{{ apiKeyStatus.source === 'env' ? '.env' : 'Trousseau OS' }}</span>
           </div>
           <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="showApiKeyInput = true"
           >Modifier</button>
           <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-neutral-100 hover:text-neutral-800"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-surface-3 hover:text-neutral-800"
             @click="removeApiKey"
           >Supprimer</button>
         </div>
@@ -195,18 +195,18 @@ async function exportData() {
         <div v-else class="flex gap-2">
           <input
             v-model="apiKeyInput"
-            class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1 font-mono"
+            class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1 font-mono"
             type="password"
             placeholder="sk-ant-..."
           />
           <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="apiKeySaving || !apiKeyInput.trim()"
             @click="saveApiKey"
           >{{ apiKeySaving ? 'Enregistrement…' : 'Enregistrer' }}</button>
           <button
             v-if="apiKeyStatus?.exists"
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="showApiKeyInput = false; apiKeyInput = ''"
           >Annuler</button>
         </div>
@@ -223,7 +223,7 @@ async function exportData() {
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Modèle</label>
         <select
           v-model="selectedModel"
-          class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 w-full font-sans cursor-pointer"
+          class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 w-full font-sans cursor-pointer"
           @change="onModelChange"
         >
           <option v-for="opt in MODEL_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
@@ -239,7 +239,7 @@ async function exportData() {
           </div>
         </div>
         <button
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="testing || !apiKeyStatus?.exists"
           @click="testConnection"
         >{{ testing ? 'Test en cours…' : 'Tester →' }}</button>
@@ -247,19 +247,19 @@ async function exportData() {
     </div>
 
     <!-- Stockage -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">STOCKAGE</div>
 
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Base de données</label>
         <div class="flex gap-2">
           <input
-            class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[12px] font-mono bg-neutral-50 text-neutral-500 block focus:outline-none focus:border-neutral-400 flex-1"
+            class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[12px] font-mono bg-surface-2 text-neutral-500 block focus:outline-none focus:border-neutral-400 flex-1"
             :value="dbPath"
             readonly
           />
           <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="openFolder(dbPath)"
           >Ouvrir le dossier</button>
         </div>
@@ -269,12 +269,12 @@ async function exportData() {
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Dossier documents</label>
         <div class="flex gap-2">
           <input
-            class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[12px] font-mono bg-neutral-50 text-neutral-500 block focus:outline-none focus:border-neutral-400 flex-1"
+            class="h-[38px] border border-neutral-300 rounded-lg px-3 text-[12px] font-mono bg-surface-2 text-neutral-500 block focus:outline-none focus:border-neutral-400 flex-1"
             :value="documentsPath"
             readonly
           />
           <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="openFolder(documentsPath)"
           >Ouvrir le dossier</button>
         </div>
@@ -282,7 +282,7 @@ async function exportData() {
     </div>
 
     <!-- Apparence -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">APPARENCE</div>
       <div class="mb-0">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Thème</label>
@@ -292,7 +292,7 @@ async function exportData() {
             :key="t"
             type="button"
             class="flex-1 h-[38px] rounded-lg flex items-center justify-center text-[13px] cursor-pointer capitalize font-sans"
-            :class="theme === t ? 'border-2 border-neutral-950 font-semibold' : 'border border-neutral-300 hover:bg-neutral-100'"
+            :class="theme === t ? 'border-2 border-neutral-950 font-semibold' : 'border border-neutral-300 hover:bg-surface-2'"
             @click="onThemeChange(t)"
           >
             {{ t.charAt(0).toUpperCase() + t.slice(1) }}
@@ -303,7 +303,7 @@ async function exportData() {
     </div>
 
     <!-- Données -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DONNÉES</div>
       <div class="flex items-center justify-between gap-5">
         <div>
@@ -314,7 +314,7 @@ async function exportData() {
           </div>
         </div>
         <button
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="exporting"
           @click="exportData"
         >{{ exporting ? 'Export en cours…' : 'Exporter' }}</button>

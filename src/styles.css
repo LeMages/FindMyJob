@@ -43,6 +43,11 @@
   --color-amber-300: #e0a050;
   --color-amber-700: #a06010;
 
+  /* Hiérarchie de surfaces (voir bloc html.dark pour le rôle de chaque niveau) */
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f8f8f6;
+  --color-surface-3: #ffffff;
+
   /* Polices */
   --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
@@ -116,6 +121,14 @@ html.dark {
   --color-amber-200: #4a3d22;
   --color-amber-300: #e8b06a;
   --color-amber-700: #e3ac5c;
+
+  /* Hiérarchie de surfaces : échelle ascendante distincte de neutral-50
+     (fond de page). surface-1 = conteneurs structurels (tableau, cartes),
+     surface-2 = éléments interactifs au repos (inputs, boutons),
+     surface-3 = hover des interactifs et panneaux flottants (modales). */
+  --color-surface-1: #2b2926;
+  --color-surface-2: #38362f;
+  --color-surface-3: #443f37;
 }
 
 /* ===== BASE =====

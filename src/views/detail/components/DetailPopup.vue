@@ -47,7 +47,7 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
 
 <template>
   <div v-if="state.detailPopup" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]" @click="closeDetailPopup">
-    <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
+    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
 
       <!-- Apply popup -->
       <template v-if="state.detailPopup === 'apply'">
@@ -58,7 +58,7 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[18px]">Comment veux-tu postuler à cette offre ?</div>
 
         <div
-          class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100"
+          class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-surface-2 hover:border-neutral-300 hover:bg-surface-3"
           :class="{ 'opacity-40 pointer-events-none': applyingVia && applyingVia !== 'mail' }"
           @click="confirmApply('mail', applyByMail)"
         >
@@ -70,7 +70,7 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         </div>
 
         <div
-          class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100"
+          class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-surface-2 hover:border-neutral-300 hover:bg-surface-3"
           :class="{ 'opacity-40 pointer-events-none': applyingVia && applyingVia !== 'message' }"
           @click="confirmApply('message', applyByMessage)"
         >
@@ -82,7 +82,7 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         </div>
 
         <div
-          class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-neutral-50 hover:border-neutral-300 hover:bg-neutral-100"
+          class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-surface-2 hover:border-neutral-300 hover:bg-surface-3"
           :class="{ 'opacity-40 pointer-events-none': applyingVia && applyingVia !== 'sans_message' }"
           @click="confirmApply('sans_message', applyWithoutMessage)"
         >
@@ -103,20 +103,20 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         <div class="mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Objet</label>
           <input
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             :value="`Candidature — ${state.selectedCard?.role ?? ''} — Alex Martin`"
           />
         </div>
         <div class="mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Corps du mail</label>
-          <textarea class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[180px]" placeholder="Madame, Monsieur, ..." />
+          <textarea class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[180px]" placeholder="Madame, Monsieur, ..." />
         </div>
-        <button class="w-full justify-center mb-1 h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100">
+        <button class="w-full justify-center mb-1 h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3">
           ✦ Générer par IA
         </button>
         <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
           <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="closeDetailPopup"
           >Annuler</button>
           <button
@@ -134,19 +134,19 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         </div>
         <div class="mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom complet</label>
-          <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom Nom" />
+          <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom Nom" />
         </div>
         <div class="mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Poste</label>
-          <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. Tech Recruiter" />
+          <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. Tech Recruiter" />
         </div>
         <div class="mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Email</label>
-          <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="contact@entreprise.com" />
+          <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="contact@entreprise.com" />
         </div>
         <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
           <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="closeDetailPopup"
           >Annuler</button>
           <button
@@ -201,7 +201,7 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         </div>
         <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
           <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="closeDetailPopup"
           >Annuler</button>
           <button

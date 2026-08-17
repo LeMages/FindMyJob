@@ -49,7 +49,7 @@ defineExpose({ open })
 
 <template>
   <div v-if="visible && interview" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]" @click="close">
-    <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[480px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
+    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[480px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
       <div class="flex items-center justify-between mb-5">
         <div>
           <div class="text-[17px] font-semibold">{{ interview.entreprise ?? 'Entreprise inconnue' }}</div>

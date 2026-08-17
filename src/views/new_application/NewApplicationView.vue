@@ -180,18 +180,18 @@ async function handlePasteExtract() {
         <div class="text-[13px] text-neutral-500 mt-[5px] font-mono">{{ currentSession?.nom }}</div>
       </div>
       <button
-        class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         @click="navigate('tracking')"
       >Annuler</button>
     </div>
 
     <!-- Étape 1 : lien de l'offre -->
-    <div v-if="step === 'url'" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div v-if="step === 'url'" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">LIEN DE L'OFFRE</div>
       <p class="text-[13px] text-neutral-500 mb-[14px]">Colle le lien de l'offre pour pré-remplir automatiquement le formulaire, ou passe directement à la saisie manuelle.</p>
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Lien de l'offre</label>
-        <input v-model="urlOffreRef" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://www.linkedin.com/jobs/view/..." />
+        <input v-model="urlOffreRef" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://www.linkedin.com/jobs/view/..." />
       </div>
       <div class="flex gap-3">
         <button
@@ -201,7 +201,7 @@ async function handlePasteExtract() {
           @click="handleScrape"
         >{{ scraping ? 'Analyse en cours…' : 'Analyser l\'offre →' }}</button>
         <button
-          class="h-12 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          class="h-12 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': scraping }"
           :disabled="scraping"
           @click="step = 'form'"
@@ -210,12 +210,12 @@ async function handlePasteExtract() {
     </div>
 
     <!-- Étape fallback : copier-coller du texte de l'offre (scraping échoué) -->
-    <div v-if="step === 'paste'" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div v-if="step === 'paste'" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div v-if="scrapingError" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[14px] text-[13px] text-amber-700">{{ scrapingError }}</div>
       <p class="text-[13px] text-neutral-500 mb-[14px]">Sélectionne tout le texte de la page de l'offre et colle-le ci-dessous.</p>
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Texte de l'offre</label>
-        <textarea v-model="pasteText" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-48" placeholder="Colle ici le texte complet de l'offre d'emploi..." />
+        <textarea v-model="pasteText" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-48" placeholder="Colle ici le texte complet de l'offre d'emploi..." />
       </div>
       <div class="flex gap-3">
         <button
@@ -225,7 +225,7 @@ async function handlePasteExtract() {
           @click="handlePasteExtract"
         >{{ scraping ? 'Analyse en cours…' : 'Analyser le texte →' }}</button>
         <button
-          class="h-12 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          class="h-12 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': scraping }"
           :disabled="scraping"
           @click="step = 'form'"
@@ -235,20 +235,20 @@ async function handlePasteExtract() {
 
     <template v-if="step === 'form'">
     <!-- Détails du poste -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DÉTAILS DU POSTE</div>
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Intitulé du poste <span class="text-red-500 font-semibold">*</span></label>
-        <input v-model="roleRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. Stage Data Scientist" />
+        <input v-model="roleRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. Stage Data Scientist" />
       </div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Entreprise <span class="text-red-500 font-semibold">*</span></label>
-          <input v-model="companyRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom de l'entreprise" />
+          <input v-model="companyRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom de l'entreprise" />
         </div>
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Lieu <span class="text-red-500 font-semibold">*</span></label>
-          <input v-model="locationRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ville, pays" />
+          <input v-model="locationRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ville, pays" />
         </div>
       </div>
       <div class="flex gap-[14px]">
@@ -256,7 +256,7 @@ async function handlePasteExtract() {
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Type de contrat <span class="text-red-500 font-semibold">*</span></label>
           <select
             v-model="typeRef"
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
           >
             <option value="">-- Sélectionner --</option>
             <option value="stage">Stage</option>
@@ -268,14 +268,14 @@ async function handlePasteExtract() {
         </div>
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Gratification</label>
-          <input v-model="remunerationRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. 1 300 €/mois" />
+          <input v-model="remunerationRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. 1 300 €/mois" />
         </div>
       </div>
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Plateforme de l'offre <span class="text-red-500 font-semibold">*</span></label>
         <select
           v-model="sourceRef"
-          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
+          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
         >
           <option value="">-- Sélectionner --</option>
           <option>Plateforme en ligne (Indeed, LinkedIn, Welcome to the Jungle...)</option>
@@ -289,16 +289,16 @@ async function handlePasteExtract() {
       </div>
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Lien de l'offre</label>
-        <input v-model="urlOffreRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://..." />
+        <input v-model="urlOffreRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://..." />
       </div>
       <div class="mb-0">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Contenu de l'offre <span class="text-red-500 font-semibold">*</span></label>
-        <textarea v-model="descriptionOffreRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-40" placeholder="Colle ici le texte complet de l'offre d'emploi..." />
+        <textarea v-model="descriptionOffreRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-40" placeholder="Colle ici le texte complet de l'offre d'emploi..." />
       </div>
     </div>
 
     <!-- Contacts recruteur -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">CONTACTS RECRUTEUR</div>
       <div
         v-for="(ct, index) in state.newContacts"
@@ -309,7 +309,7 @@ async function handlePasteExtract() {
           <span class="text-[11px] font-semibold text-neutral-500 font-mono tracking-[.06em]">CONTACT {{ index + 1 }}</span>
           <button
             v-if="state.newContacts.length > 1"
-            class="bg-transparent border-none text-[12px] text-neutral-300 cursor-pointer font-sans px-[6px] py-1 rounded-md hover:text-neutral-800 hover:bg-neutral-100"
+            class="bg-transparent border-none text-[12px] text-neutral-300 cursor-pointer font-sans px-[6px] py-1 rounded-md hover:text-neutral-800 hover:bg-surface-2"
             @click="removeContact(index)"
           >
             Supprimer
@@ -318,20 +318,20 @@ async function handlePasteExtract() {
         <div class="flex gap-[14px]">
           <div class="flex-1 mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom</label>
-            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom Nom" />
+            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom Nom" />
           </div>
           <div class="flex-1 mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Poste</label>
-            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. Chargé·e de recrutement" />
+            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. Chargé·e de recrutement" />
           </div>
           <div class="flex-1 mb-[14px]">
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Email</label>
-            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="contact@entreprise.com" />
+            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="contact@entreprise.com" />
           </div>
         </div>
       </div>
       <button
-        class="w-full justify-center h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        class="w-full justify-center h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         @click="addContact"
       >
         + Ajouter un contact
@@ -339,9 +339,9 @@ async function handlePasteExtract() {
     </div>
 
     <!-- Notes -->
-    <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">NOTES</div>
-      <textarea v-model="notesRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-20" placeholder="Notes libres, contexte, points à préparer..." />
+      <textarea v-model="notesRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-20" placeholder="Notes libres, contexte, points à préparer..." />
     </div>
 
     <!-- Error -->

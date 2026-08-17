@@ -67,11 +67,11 @@ function previewDocument(path: string, label: string) {
       <!-- Left column -->
       <div class="min-w-0">
         <!-- Détails du poste -->
-        <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+        <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="flex items-center justify-between mb-[14px]">
             <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500">DÉTAILS DU POSTE</div>
             <button
-              class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+              class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
               @click="openDetailPopup('offer')"
             >Voir l'offre →</button>
           </div>
@@ -147,7 +147,7 @@ function previewDocument(path: string, label: string) {
         </div>
 
         <!-- Notes -->
-        <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+        <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">NOTES</div>
           <EditableField
             type="textarea"
@@ -165,7 +165,7 @@ function previewDocument(path: string, label: string) {
       <!-- Right column -->
       <div class="sticky top-[26px]">
         <!-- Documents -->
-        <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+        <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DOCUMENTS</div>
 
           <!-- CV -->
@@ -177,7 +177,7 @@ function previewDocument(path: string, label: string) {
             </div>
             <button
               v-if="cvExists"
-              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-neutral-100"
+              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-surface-2"
               title="Visualiser"
               @click="previewDocument(cvPath!, 'Aperçu du CV')"
             >
@@ -197,7 +197,7 @@ function previewDocument(path: string, label: string) {
             </div>
             <button
               v-if="lettreExists"
-              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-neutral-100"
+              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-surface-2"
               title="Visualiser"
               @click="previewDocument(lettrePath!, 'Aperçu de la lettre de motivation')"
             >
@@ -211,11 +211,11 @@ function previewDocument(path: string, label: string) {
         </div>
 
         <!-- Contacts recruteur -->
-        <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+        <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="flex items-center justify-between mb-[14px]">
             <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500">CONTACTS RECRUTEUR</div>
             <button
-              class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+              class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
               @click="openDetailPopup('addRecruiter')"
             >+ Ajouter</button>
           </div>
@@ -246,7 +246,7 @@ function previewDocument(path: string, label: string) {
   </div>
   <div v-else-if="state.detailCandidature?.status === 'a_postuler'" class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
     <button
-      class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+      class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-red-50 hover:border-red-300 hover:text-red-600"
       @click="openDetailPopup('confirmDelete')"
     >Supprimer</button>
     <button

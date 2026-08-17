@@ -59,7 +59,7 @@ function inCurrentMonth(day: Date): boolean {
 </script>
 
 <template>
-  <div class="border border-neutral-200 rounded-xl overflow-hidden bg-white">
+  <div class="border border-neutral-200 rounded-xl overflow-hidden bg-surface-1">
     <div class="grid grid-cols-7 border-b border-neutral-200">
       <div v-for="nom in NOMS_JOURS" :key="nom" class="py-2 text-center font-mono text-[10.5px] tracking-[.07em] text-neutral-400">{{ nom }}</div>
     </div>

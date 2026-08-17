@@ -70,7 +70,7 @@ async function handleOnboardingCompleted(user: UserView) {
 
   <!-- Startup error — fail fast, do not assume absence of user -->
   <div v-else-if="startupError" class="fixed inset-0 bg-neutral-50 flex items-center justify-center">
-    <div class="bg-white border border-neutral-200 rounded-xl py-8 px-9 max-w-[400px] text-center">
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl py-8 px-9 max-w-[400px] text-center">
       <div class="text-[16px] font-semibold text-neutral-950 mb-2">Impossible de démarrer</div>
       <div class="text-[13px] text-neutral-600 font-mono">{{ startupError }}</div>
     </div>
