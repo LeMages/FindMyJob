@@ -2,7 +2,7 @@
 
 Ce document rassemble toutes les décisions de cadrage du projet FindMyJob. Il sert à reprendre une conversation avec une IA sans avoir à tout réexpliquer. Il décrit le quoi, le pourquoi, et l'état d'avancement réel du code.
 
-Dernière mise à jour : 9 août 2026, contre l'état du code sur `fix/generation_document` (dernier commit `43c6a6c`).
+Dernière mise à jour : 19 août 2026, contre l'état du code sur `fix/logo`.
 
 ## 1. Vision
 
@@ -21,9 +21,11 @@ Principe directeur de conception : penser le périmètre et le schéma le plus c
 | Backend | Rust, édition 2021 |
 | Base de données | SQLite locale, via sqlx 0.8 (`sqlite`, `runtime-tokio-rustls`, `migrate`) |
 | Compilation de documents | `typst-as-lib` 0.16 (`typst-kit-fonts`, `typst-kit-embed-fonts`) + `typst-pdf` 0.15 |
-| IA | API Messages d'Anthropic (Claude, modèle `claude-sonnet-5`), appels HTTP directs via `reqwest` 0.12 (rustls) |
+| IA | API Messages d'Anthropic (Claude, modèle par défaut `claude-sonnet-4-6`), appels HTTP directs via `reqwest` 0.12 (rustls) |
 
-Autres dépendances notables : `tauri-plugin-dialog` (sélecteur de fichiers natif), `dotenvy` (chargement du `.env`), `base64` (échange de PDF en base64 sur l'IPC), `open` (ouverture de dossiers/URL dans l'explorateur système).
+Le modèle est sélectionnable dans les paramètres (`AVAILABLE_MODELS` = `claude-sonnet-4-6` / `claude-haiku-4-5-20251001`, `llm/client.rs`, résolu via `get_llm_model`/`set_llm_model`).
+
+Autres dépendances notables : `tauri-plugin-dialog` (sélecteur de fichiers natif), `dotenvy` (chargement du `.env`), `base64` (échange de PDF en base64 sur l'IPC), `open` (ouverture de dossiers/URL dans l'explorateur système), `scraper` (extraction HTML des offres d'emploi), `keyring` (trousseau OS pour la clé API Anthropic en release), `chrono` (manipulation de dates).
 
 Pas de vue-router : la navigation est un routeur maison par `state.screen` (`src/stores/app.ts` + `src/App.vue`). Pas de Pinia : le store est un simple objet `reactive` exporté (`src/stores/app.ts`).
 
@@ -32,12 +34,16 @@ Pas de vue-router : la navigation est un routeur maison par `state.screen` (`src
 ### Backend (`src-tauri/src/`)
 
 ```
-commands/    couche IPC — un fichier par domaine, 15 fichiers, #[tauri::command] uniquement
+commands/    couche IPC — un fichier par domaine, 18 fichiers (mod.rs + 17 modules),
+             #[tauri::command] uniquement
 db/          accès SQLite — un fichier par table + common.rs (utilitaires), profile.rs
              (agrégat profil complet), timeline_events.rs (règles de timeline)
 models/      DTO sérialisables, miroir des lignes SQL / réponses IPC
 documents/   stockage disque + compilation Typst (storage.rs, typst.rs)
 llm/         intégration API Claude (client, pipeline, prompts par étape)
+scraping/    récupération HTML (fetch.rs) + extraction de texte (extract.rs),
+             pour l'import d'offre depuis une URL
+security.rs  clé API Anthropic : .env en dev, trousseau OS (keyring) en release
 error.rs     AppError, type d'erreur commun sérialisé vers le frontend
 ```
 
@@ -56,19 +62,23 @@ types/index.ts                   DTOs miroir des structs Rust, écrits à la mai
 
 ### Commandes IPC enregistrées
 
-55 commandes sont enregistrées dans `generate_handler!` (`src-tauri/src/lib.rs:35-91`), regroupées par domaine :
+62 commandes sont enregistrées dans `generate_handler!` (`src-tauri/src/lib.rs:38-99`), regroupées par domaine :
 
 | Domaine | Commandes |
 |---|---|
-| Système | `db_status` |
-| Utilisateur / onboarding | `user_exists`, `create_user`, `get_user`, `update_user_info`, `open_url` |
+| Système | `db_status`, `open_url` |
+| Utilisateur / onboarding | `user_exists`, `create_user`, `get_user`, `update_user_info` |
 | Profil | `get_profile`, `update_description` |
 | Expériences / formations / langues / projets / skills | `add_*`, `delete_*`, `update_*` (5 tables × 3 verbes) |
-| Documents de référence (session) | `get_cv_reference`, `get_lettre_motivation_reference`, `save_cv`, `save_lettre_motivation`, `compile_cv`, `compile_lettre_motivation`, `get_cv_reference_dir`, `get_lettre_motivation_reference_dir` |
-| Documents joints (candidature) | `upload_candidature_cv`, `upload_candidature_lettre_motivation`, `select_candidature_cv`, `select_candidature_lettre_motivation`, `get_document_info`, `get_document_pdf`, `open_document` |
+| Documents de référence (session) | `get_cv_reference`, `get_lettre_motivation_reference`, `save_cv`, `save_lettre_motivation`, `compile_cv`, `compile_lettre_motivation` |
+| Documents (aperçu, session ou candidature) | `get_document_info`, `get_document_pdf` |
 | Candidatures | `create_candidature`, `get_candidatures`, `get_candidature`, `update_candidature`, `abandon_candidature`, `postuler_sans_message`, `postuler_par_mail`, `postuler_par_message` |
-| Timeline / suivi | `get_status_history`, `get_available_events`, `add_timeline_event`, `get_pending_interviews`, `get_contacts` |
+| Scraping / import d'offre | `scrape_offer`, `extract_offer_from_text` |
+| Contacts | `get_contacts` |
+| Timeline / suivi | `get_status_history`, `get_available_events`, `add_timeline_event`, `get_pending_interviews`, `get_all_interviews_for_session` |
 | Sessions | `create_session`, `get_sessions`, `update_session`, `delete_session` |
+| Paramètres | `get_api_key_status`, `set_api_key`, `delete_api_key`, `get_llm_model`, `set_llm_model`, `get_theme`, `set_theme`, `get_documents_path`, `open_folder`, `test_api_connection` |
+| Export | `export_data_json` |
 
 ## 4. Frontière front / back (thin client)
 
@@ -143,7 +153,7 @@ Les deux pools sont en mode WAL (`SqliteJournalMode::Wal`). Les dossiers de docu
 
 ### Schéma
 
-La source de vérité du schéma est les **migrations sqlx** dans `db/migrations/` (**15 migrations**, `0001` à `0015`), appliquées au boot par `sqlx::migrate!("../db/migrations")`. `db/schema.dbml` et `db/schema.png` existent encore mais décrivent une version antérieure du schéma, désynchronisée — ne pas s'y fier.
+La source de vérité du schéma est les **migrations sqlx** dans `db/migrations/` (**17 migrations**, `0001` à `0017`), appliquées au boot par `sqlx::migrate!("../db/migrations")`. `db/schema.dbml` est tenu synchronisé avec ces migrations. `db/schema.png` reste une image statique, non régénérée automatiquement — vérifier qu'elle correspond avant de s'y fier.
 
 Tables réelles : `users`, `lang`, `formations`, `projets`, `experiences`, `skills`, `sessions`, `candidatures`, `status_history`, `contacts`, `interviews`, `documents`, `emails`, `embeddings`, `settings`.
 
@@ -154,19 +164,22 @@ Points de modélisation importants :
 - **formations** : diplômes/écoles du profil (`titre`, `ecole`, dates), liée à `users` (migration `0003`).
 - **sessions** : session de recherche de candidatures (`nom`, `contexte`, `statut`, `zone`), liée à `users` (migration `0008`, enrichie en `0010`). Regroupe un ensemble de candidatures et possède ses propres CV/LM de référence.
 - **documents** : refondue en `0009`/`0011`. Liée à `sessions` (`session_id`), pas aux candidatures ni aux users. Colonnes : `doc_type` (`cv`/`lettre_motivation`), `file_path`, `pdf_path`, `style_analysis` (cache de l'analyse de style LLM, calculé à la sauvegarde de la référence), `UNIQUE(session_id, doc_type)`. Le rôle « document rattaché à une candidature » est porté par `candidatures.cv_path`/`lettre_motivation_path`, pas par cette table.
-- **candidatures** : porte `entreprise`, `localisation`, `remuneration`, `url_offre`, `description_offre` (texte brut de l'annonce), `type` (incluant `interim` depuis `0005`), `status` (10 valeurs, voir section 6), `source`, `session_id`, `cv_path`/`lettre_motivation_path`, `date_candidature`, `next_relance`, `last_relance`, `notes`. Recréée deux fois (`0014`, `0015`) pour étendre le `CHECK(status)`.
+- **candidatures** : porte `entreprise`, `localisation`, `remuneration`, `url_offre`, `description_offre` (texte brut de l'annonce), `type` (incluant `interim` depuis `0005`), `status` (11 valeurs, voir section 6), `source`, `session_id`, `cv_path`/`lettre_motivation_path`, `date_candidature`, `next_relance`, `last_relance`, `notes`. Recréée trois fois (`0014`, `0015`, `0017`) pour étendre le `CHECK(status)`.
 - **status_history** : devenue **timeline unifiée** en migration `0014` — chaque ligne est un événement typé (`event_type` NOT NULL), qu'il change le statut ou non. `nouveau_status` est désormais **nullable** (un événement comme « appel » ou « note » n'en écrit aucun). Porte aussi `content` (message associé, migration `0013`) et `interview_id` (lien optionnel vers un entretien, migration `0014`).
-- **interviews** : porte `contact_id` (migration `0014`, lien optionnel vers le contact rencontré).
+- **interviews** : porte `contact_id` (migration `0014`, lien optionnel vers le contact rencontré) et `modalite` (migration `0016`, `visio`/`presentiel`/`telephone`, distincte de `lieu` qui reste du texte libre).
 - **skills** : liste à plat, une ligne par skill avec un champ `domaine` texte. Pas de table de liaison projet-skill.
 - **contacts** : interlocuteurs associés à une candidature (RH, manager…).
 - **emails** : tous les mails envoyés depuis l'app. La table de liaison `email_attachments` a été supprimée (migrations `0009`/`0011`).
-- **embeddings** et **settings** : présentes dans le schéma mais **mortes** — ni écrites ni lues par le code actuel (voir section 11).
+- **settings** : clé-valeur, **utilisée** par `db/settings.rs` pour le modèle LLM (`llm_model`) et le thème (`theme`), branchée sur la page Settings.
+- **embeddings** : présente dans le schéma mais **morte** — ni écrite ni lue par le code actuel (voir section 11).
 
 ## 6. Cycle de vie d'une candidature
 
-### Statuts (10 valeurs, `candidatures.status`)
+### Statuts (11 valeurs, `candidatures.status`)
 
-`a_postuler`, `postule`, `relance`, `entretien`, `offre`, `refus`, `abandon`, `ghosting`, `accepte`, `offre_refusee`.
+`a_postuler`, `postule`, `relance`, `entretien`, `entretien_passe`, `offre`, `refus`, `abandon`, `ghosting`, `accepte`, `offre_refusee`.
+
+`entretien_passe` (migration `0017`) distingue un entretien à venir d'un entretien déjà passé mais sans retour de l'entreprise.
 
 `offre` est un statut **intermédiaire** depuis la migration `0015` : recevoir une offre n'est pas terminal, elle peut encore être acceptée (`accepte`) ou déclinée (`offre_refusee`). Les statuts terminaux négatifs (`abandon`, `refus`, `ghosting`, `offre_refusee`) envoient la candidature en corbeille côté frontend (`TRASHED_STATUSES`, `src/composables/candidature_display.ts:20`) ; `accepte` est terminal mais reste affiché car c'est une issue positive.
 
@@ -178,7 +191,14 @@ Chacun a un effet optionnel sur le statut (`EventType::changes_status`) : par ex
 
 ### Événements proposables selon le statut courant
 
-`db::timeline_events::available_events` (`src-tauri/src/db/timeline_events.rs:35-79`) est la seule source de vérité. Une candidature dans un statut non terminal (`STATUTS_NON_TERMINAUX` = `a_postuler`, `postule`, `relance`, `entretien`, `offre`) peut toujours recevoir `message_envoye`, `message_recu`, `appel`, `note`, `desistement` ; les autres événements (`relance`, `entretien_planifie`, `entretien_passe`, `offre_recue`, `refus_recu`, `ghosting`, `accepter_offre`, `decliner_offre`) ne sont proposés que pour un sous-ensemble précis de statuts.
+`db::timeline_events::available_events` (`src-tauri/src/db/timeline_events.rs:36-80`) est la seule source de vérité. Une candidature dans un statut non terminal (`STATUTS_NON_TERMINAUX` = `a_postuler`, `postule`, `relance`, `entretien`, `entretien_passe`, `offre`) peut toujours recevoir `message_envoye`, `message_recu`, `appel`, `note`, `desistement` ; les autres événements ne sont proposés que pour un sous-ensemble précis de statuts :
+- `relance` : depuis `postule`, `relance`, `entretien_passe`.
+- `entretien_planifie` : depuis `postule`, `relance`, `entretien`, `entretien_passe`.
+- `entretien_passe` (l'événement) : depuis `entretien` ou `entretien_passe`, seulement s'il existe un entretien `en_attente`.
+- `offre_recue` : depuis `entretien` ou `entretien_passe`.
+- `refus_recu` : depuis `postule`, `relance`, `entretien`, `entretien_passe`.
+- `ghosting` : depuis `postule`, `relance`, `entretien_passe`.
+- `accepter_offre` / `decliner_offre` : uniquement depuis `offre`.
 
 ### Flux « Postuler »
 
@@ -207,7 +227,7 @@ Chaque session de candidature a son propre CV et sa propre lettre de motivation 
 
 ### Client HTTP (`src-tauri/src/llm/client.rs`)
 
-Appels directs à l'API Messages d'Anthropic (`https://api.anthropic.com/v1/messages`, `anthropic-version: 2023-06-01`), modèle `claude-sonnet-5` en constante, en HTTP brut via `reqwest`. Pas de SDK officiel Rust pour l'API Anthropic. La clé `ANTHROPIC_API_KEY` est lue à la volée depuis l'environnement à chaque appel.
+Appels directs à l'API Messages d'Anthropic (`https://api.anthropic.com/v1/messages`, `anthropic-version: 2023-06-01`), modèle par défaut `claude-sonnet-4-6` (`DEFAULT_MODEL`, sélectionnable via les paramètres), en HTTP brut via `reqwest`. Pas de SDK officiel Rust pour l'API Anthropic. La clé API est récupérée via `security::get_api_key()` à chaque appel (voir section 9) : `.env` en développement, trousseau OS en release — jamais lue directement dans l'environnement en production.
 
 - `thinking: { type: "disabled" }` sur chaque requête : le pipeline est une génération structurée en un seul tour, le thinking ne sert à rien ici et partage le même budget de tokens que la sortie visible — l'avoir activé par défaut tronquait les réponses avant même le contenu utile.
 - `output_config.format` (structured outputs / JSON Schema) activé dès qu'un schéma est fourni, pour garantir une réponse JSON strictement conforme (analyse d'offre, matching, analyse de style, contenu CV/LM).
@@ -238,9 +258,12 @@ Deux fonctions (`generate_application_email`, `generate_application_message`), t
 
 ## 9. Sécurité des secrets
 
-**État actuel** : la clé `ANTHROPIC_API_KEY` vit dans un fichier `.env` à la racine du projet, gitignoré, chargé au démarrage via `dotenvy::dotenv().ok()` (`src-tauri/src/lib.rs:24`, silencieux si absent). `.env.example` documente la variable sans valeur.
+Gérée par `src-tauri/src/security.rs`, avec un comportement différent selon le mode de compilation (`#[cfg(debug_assertions)]`) :
 
-**Cible** : quand la page Settings sera réellement branchée, la clé API ne sera **jamais** stockée en base ni dans la table `settings`. Elle vivra dans le **trousseau de l'OS** (Keychain macOS, Credential Manager Windows, Secret Service Linux), via la crate Rust `keyring` (ou un plugin Tauri équivalent).
+- **Développement** : la clé `ANTHROPIC_API_KEY` vit dans un fichier `.env` à la racine du projet, gitignoré, chargé au démarrage via `dotenvy::dotenv().ok()` (`src-tauri/src/lib.rs:26`, silencieux si absent). `.env.example` documente la variable sans valeur. `set_api_key`/`delete_api_key` échouent volontairement en dev (message renvoyant à l'édition manuelle du `.env`).
+- **Release** : la clé vit dans le **trousseau de l'OS** (Keychain macOS, Credential Manager Windows, Secret Service Linux) via la crate `keyring`, service `"FindMyJob"`, entrée `"anthropic_api_key"`. `get_api_key`/`set_api_key`/`delete_api_key`/`has_api_key` passent tous par cette entrée.
+
+Dans les deux cas, la clé n'est **jamais** stockée en base de données ni dans la table `settings`. `key_source()` renvoie `"env"` ou `"keyring"` pour affichage dans les paramètres (`get_api_key_status`), sans jamais révéler la valeur.
 
 ## 10. Fonctionnalités
 
@@ -251,20 +274,21 @@ Deux fonctions (`generate_application_email`, `generate_application_message`), t
 - Candidatures : création avec génération IA obligatoire (CV + lettre adaptés, pipeline complet, échec bloquant la création), liste en tableau par session, détail éditable tant que « à postuler » (règle `editable` dans `DetailView.vue`), timeline d'événements typés, gestion d'entretiens, corbeille pour les statuts terminaux négatifs.
 - Flux « Postuler » : sans message, par mail (rédigé par l'IA), par message court (rédigé par l'IA) — export systématique des documents vers le dossier de téléchargements.
 - Aperçu PDF des documents (référence et joints), via `get_document_pdf` / `compile_cv` / `compile_lettre_motivation` encodés en base64.
+- Import d'offre depuis une URL ou un texte collé : `scrape_offer` (récupération HTML via `scraping::fetch` + extraction de texte via `scraping::extract`, puis extraction structurée par l'IA) ou `extract_offer_from_text` (texte collé directement) préremplissent le formulaire de nouvelle candidature (`NewApplicationView.vue`, flux en 3 étapes : URL → texte collé en repli → formulaire manuel). Champs extraits (`ScrapedOfferFields`) : poste, entreprise, localisation, type de contrat, rémunération, description de l'offre — validation manuelle ensuite, pas de date limite ni de stack extraites séparément.
+- Planning des entretiens : vues semaine/mois (`PlanningPanel.vue`, `PlanningWeekView.vue`, `PlanningMonthView.vue`) listant tous les entretiens d'une session (`get_all_interviews_for_session`).
+- Page Settings (`SettingsView.vue`) entièrement branchée : gestion de la clé API Anthropic (statut, définition, suppression), sélection du modèle LLM, test de connexion, chemins de stockage (DB, dossier documents, ouverture dans l'explorateur), thème clair/sombre/système, export JSON complet des données (`export_data_json`).
 - CI/CD : lint + clippy + tests (voir section 12 pour le détail réel), Conventional Commits, flux de branches `feature/* → dev → staging → main`.
 
 ### Partiel / en maquette
 
-- **Page Settings** (`SettingsView.vue`) : interface complète (IA, relances, apparence, signature, données/stockage) mais **aucune commande Tauri branchée** — tout est en `ref` local avec des valeurs en dur (clé API factice, chemin `~/Library/Application Support/...` macOS codé en dur, modèle affiché « llama3.2 », libellé « Clé API Ollama Cloud »).
 - **Contacts recruteur** : lecture fonctionnelle (`get_contacts`), mais l'ajout depuis la page détail (`addRecruiter` dans `stores/app.ts`) pousse un contact factice **purement local**, jamais persisté — aucune commande `create_contact` n'existe côté backend.
-- **Relances** : colonnes `next_relance`, `last_relance`, `date_candidature` présentes dans le schéma et lues dans tous les DTO, mais **jamais écrites** par le code actuel.
+- **Relances** : colonnes `next_relance`, `last_relance`, `date_candidature` présentes dans le schéma et lues dans tous les DTO, mais **jamais écrites** par le code actuel. Le suivi de relance reste manuel (statut `relance` + événement de timeline du même nom).
 
 ### Prévu / hors MVP
 
-- Extraction d'offre : coller le texte d'une annonce, l'IA remplit la fiche.
-- Relances intelligentes : détection des candidatures en attente et génération du mail de relance adapté au statut.
-- Matching profil vers offre en tant que feature autonome (classement des projets par pertinence), distinct de l'étape interne du pipeline de tailoring.
-- Recherche / scraping d'offres en ligne.
+- Relances intelligentes : détection automatique des candidatures en attente et génération du mail de relance adapté au statut (à distinguer du statut/événement `relance` déjà existant, qui reste manuel).
+- Matching profil vers offre en tant que feature autonome (classement des projets par pertinence), distinct de l'étape interne du pipeline de tailoring (`llm::matching::match_profile`, déjà utilisée en interne pour la génération de documents).
+- Recherche d'offres en ligne (moteur de recherche intégré permettant de parcourir des offres, distinct de l'import d'une URL déjà connue, celui-ci étant implémenté).
 - Mode IA local (détection d'un Ollama déjà installé, puis sidecar llama.cpp).
 - Synchronisation multi-appareils, mobile, intégrations mail/calendrier.
 
@@ -273,11 +297,11 @@ Deux fonctions (`generate_application_email`, `generate_application_message`), t
 - **Diagnostic temporaire en cours dans le pipeline IA** : `llm/pipeline.rs:156-162` porte un bloc commenté `[DIAG-TEMP]` — la rédaction du contenu CV et lettre de motivation a été repassée en **séquentiel** au lieu de `tokio::try_join!`, pour tester une hypothèse de race de concurrence. À revert une fois le diagnostic conclu. La branche `fix/generation_document` porte aussi des commits de logging temporaire (`debug(assemble): log CV assembly input/output for truncation diagnosis`) liés au même sujet.
 - **Code mort du drag & drop kanban** : le suivi des candidatures est aujourd'hui un tableau (`TrackingView.vue`), plus un kanban. Restent inutilisés : `startDrag`, `showDragPopup`, `confirmDrag`, `cancelDrag`, `state.dragState`, `state.dragPopup` (`src/stores/app.ts:374-396`), les types `DragState`/`DragPopupState` (`src/types/index.ts`), le composant `DragPopup.vue`, ainsi que `KANBAN_COLUMNS` et `columnTitleForStatus` (`composables/candidature_display.ts`) sans plus aucun appelant.
 - **Règle thin-client partiellement contournée** : `TrackingView.vue` calcule côté Vue des valeurs qui devraient être des flags dérivés fournis par Rust — `inactivityDays`/`inactivityColor` (prédicat métier sur le nombre de jours d'inactivité), `sessionIsAccepted`, et le filtrage corbeille par `TRASHED_STATUSES`. Contraire à la règle de pont de la section 4.
-- **Tables mortes** : `settings` et `embeddings` existent dans le schéma mais ne sont ni écrites ni lues par le code applicatif.
+- **Table morte** : `embeddings` existe dans le schéma mais n'est ni écrite ni lue par le code applicatif (`settings`, en revanche, est utilisée — voir section 5).
 - **Relances jamais écrites** : `mark_postule` ne pose même pas `date_candidature` au passage à `postule` ; `next_relance`/`last_relance` ne sont mis à jour nulle part.
 - **Formulaire de nouvelle candidature incomplet** : les champs de contact recruteur dans `NewApplicationView.vue` n'ont aucun `v-model`, donc ne sont jamais envoyés à la création.
 - **Zéro test dans le dépôt** alors que `.github/workflows/ci.yml` lance `cargo test` sur chaque PR vers `dev` — le job passe systématiquement à vide — et que le README annonce « CI : lint + clippy + tests ».
-- **Documentation désynchronisée en dehors de ce fichier** : `db/schema.dbml` et `db/schema.png` décrivent un schéma antérieur ; le README décrit encore la couche IA comme « compatible OpenAI → Ollama Cloud, modèle configurable » et le pipeline de statut sans les statuts terminaux (`ghosting`, `accepte`, `offre_refusee`) ni la timeline d'événements.
+- **Documentation** : `db/schema.dbml` a été resynchronisé avec les migrations `0001` à `0017` lors de cette mise à jour ; `db/schema.png` reste une image statique non régénérée, à vérifier séparément avant de s'y fier.
 
 ## 12. Dépôt, CI/CD et conventions de travail
 

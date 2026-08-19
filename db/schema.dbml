@@ -1,6 +1,6 @@
 // ============================================
 // FindMyJob - Schéma de base de données (SQLite)
-// Généré à partir de db/migrations/0001 à 0015.
+// Généré à partir de db/migrations/0001 à 0017.
 // ============================================
 
 Table users {
@@ -109,12 +109,14 @@ Enum candidature_type {
 }
 
 // Recréée en 0005 (ajout interim), 0014 (ajout ghosting), 0015 (ajout
-// accepte / offre_refusee) : SQLite ne permet pas d'altérer un CHECK.
+// accepte / offre_refusee), 0017 (ajout entretien_passe) : SQLite ne permet
+// pas d'altérer un CHECK.
 Enum candidature_status {
   a_postuler
   postule
   relance
   entretien
+  entretien_passe // migration 0017 : entretien passé, en attente de retour
   offre           // statut intermédiaire depuis 0015 : peut encore être accepté ou décliné
   refus
   abandon
@@ -193,12 +195,21 @@ Enum interview_issue {
   negatif
 }
 
+// Migration 0016 : modalité structurée de l'entretien, distincte de `lieu`
+// qui reste du texte libre (adresse, lien de visio, numéro).
+Enum interview_modalite {
+  visio
+  presentiel
+  telephone
+}
+
 Table interviews {
   id integer [pk, increment]
   candidature_id integer [ref: > candidatures.id, not null]
   type interview_type
   date_entretien timestamp
-  lieu varchar         // visio, sur site, téléphone
+  lieu varchar         // texte libre : adresse, lien de visio, numéro
+  modalite interview_modalite  // migration 0016, nullable
   issue interview_issue [default: 'en_attente']
   notes text
   contact_id integer [ref: > contacts.id]  // migration 0014 : contact rencontré
@@ -304,14 +315,15 @@ Table embeddings {
 }
 
 // ============================================
-// Paramètres de l'app (clé-valeur) — non utilisée par le code actuel
+// Paramètres de l'app (clé-valeur)
 // ============================================
-// Page Settings encore en maquette front (aucune commande Tauri branchée) :
-// cette table n'est ni écrite ni lue aujourd'hui.
+// Utilisée par src-tauri/src/db/settings.rs : get/set génériques, plus
+// des résolveurs typés pour le modèle LLM et le thème, lus/écrits par la
+// page Settings (get_llm_model / set_llm_model / get_theme / set_theme).
 
 Table settings {
   id integer [pk, increment]
-  cle varchar [not null, unique]   // "ia_mode", "ia_model", "theme"...
+  cle varchar [not null, unique]   // "llm_model", "theme"
   valeur varchar
   updated_at timestamp
 }
