@@ -2,9 +2,9 @@
 /**
  * Vue « Profil » : affiche et permet d'éditer les informations de
  * l'utilisateur (identité, description, expériences, formations, projets,
- * compétences, langues, CV et lettre de motivation). La persistance de
- * chaque section est déléguée aux composants sous `components/` ; cette vue
- * ne fait que les composer et orchestrer la sauvegarde globale.
+ * compétences, langues). La persistance de chaque section est déléguée aux
+ * composants sous `components/` ; cette vue ne fait que les composer et
+ * orchestrer la sauvegarde globale.
  */
 
 // Importation des modules Vue / framework
@@ -19,7 +19,6 @@ import FormationsSection from './components/FormationsSection.vue'
 import ProjetsSection from './components/ProjetsSection.vue'
 import SkillsSection from './components/SkillsSection.vue'
 import LanguesSection from './components/LanguesSection.vue'
-import DocumentReferenceEditor from '@/components/DocumentReferenceEditor.vue'
 import type {
   ProfileDto,
   UserView,
@@ -29,7 +28,6 @@ import type {
   ProjetView,
   SkillView,
   LangView,
-  DocumentReferenceView,
 } from '@/types/index'
 
 const profile = ref<ProfileDto | null>(null)
@@ -72,8 +70,6 @@ const formationsSection = ref<InstanceType<typeof FormationsSection> | null>(nul
 const projetsSection = ref<InstanceType<typeof ProjetsSection> | null>(null)
 const skillsSection = ref<InstanceType<typeof SkillsSection> | null>(null)
 const languesSection = ref<InstanceType<typeof LanguesSection> | null>(null)
-const cvEditor = ref<InstanceType<typeof DocumentReferenceEditor> | null>(null)
-const lettreEditor = ref<InstanceType<typeof DocumentReferenceEditor> | null>(null)
 
 const isDirty = computed(() =>
   isUserInfoDirty() ||
@@ -82,9 +78,7 @@ const isDirty = computed(() =>
   (formationsSection.value?.hasChanges ?? false) ||
   (projetsSection.value?.hasChanges ?? false) ||
   (skillsSection.value?.hasChanges ?? false) ||
-  (languesSection.value?.hasChanges ?? false) ||
-  (cvEditor.value?.hasChanges ?? false) ||
-  (lettreEditor.value?.hasChanges ?? false),
+  (languesSection.value?.hasChanges ?? false),
 )
 
 function enterEditMode() {
@@ -107,8 +101,6 @@ function cancelEdit() {
   projetsSection.value?.reset()
   skillsSection.value?.reset()
   languesSection.value?.reset()
-  cvEditor.value?.reset()
-  lettreEditor.value?.reset()
   saveError.value = null
   editMode.value = false
 }
@@ -154,9 +146,7 @@ async function saveDescription(): Promise<void> {
 /**
  * Orchestre la sauvegarde de toutes les sections du profil : informations
  * utilisateur, description, puis chaque liste éditable (expériences,
- * formations, projets, compétences, langues). Les documents (CV, lettre) sont
- * déjà persistés au moment de leur sélection — seule leur marque « modifié »
- * est réinitialisée ici.
+ * formations, projets, compétences, langues).
  */
 async function saveAll() {
   if (!isDirty.value || saving.value) return
@@ -185,23 +175,12 @@ async function saveAll() {
       if (langues) profile.value.langues = langues as LangView[]
     }
 
-    // 3. Documents — déjà persistés à la sélection, on efface juste la marque « modifié »
-    cvEditor.value?.reset()
-    lettreEditor.value?.reset()
     editMode.value = false
   } catch (e: unknown) {
     saveError.value = extractErrorMessage(e, 'Erreur lors de la sauvegarde.')
   } finally {
     saving.value = false
   }
-}
-
-function onCvReferenceSaved(reference: DocumentReferenceView) {
-  if (profile.value) profile.value.cv_reference = reference
-}
-
-function onLettreReferenceSaved(reference: DocumentReferenceView) {
-  if (profile.value) profile.value.lettre_motivation_reference = reference
 }
 
 onMounted(async () => {
@@ -240,7 +219,7 @@ const initials = computed(() => {
     <div class="text-[13px] text-neutral-500 mt-[5px] font-mono mb-[18px]">Ces informations pré-remplissent tes candidatures.</div>
 
     <!-- Header -->
-    <div class="flex items-center gap-5 bg-white border border-neutral-200 rounded-xl p-6">
+    <div class="flex items-center gap-5 bg-surface-1 border border-neutral-200 rounded-xl p-6">
       <div class="w-[84px] h-[84px] rounded-full flex-none flex items-center justify-center font-semibold text-[26px] bg-neutral-200 text-neutral-700">
         {{ initials }}
       </div>
@@ -259,32 +238,32 @@ const initials = computed(() => {
       </div>
       <button
         v-if="!editMode"
-        class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         @click="enterEditMode"
       >Modifier</button>
     </div>
 
     <!-- Section infos de base (visible uniquement en mode édition) -->
-    <div v-if="editMode" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px] mt-[18px]">
+    <div v-if="editMode" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px] mt-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">INFORMATIONS</div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Prénom</label>
-          <input v-model="draftUserInfo.prenom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom" />
+          <input v-model="draftUserInfo.prenom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom" />
         </div>
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom</label>
-          <input v-model="draftUserInfo.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom" />
+          <input v-model="draftUserInfo.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom" />
         </div>
       </div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse e-mail</label>
-          <input v-model="draftUserInfo.email" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" type="email" placeholder="prenom.nom@email.com" />
+          <input v-model="draftUserInfo.email" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" type="email" placeholder="prenom.nom@email.com" />
         </div>
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Téléphone</label>
-          <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
+          <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
         </div>
       </div>
       <label class="inline-flex items-center gap-2 text-[13.5px] cursor-pointer select-none mt-0.5">
@@ -297,7 +276,7 @@ const initials = computed(() => {
       <!-- ── Colonne gauche ── -->
       <div>
         <!-- À propos -->
-        <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+        <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">À PROPOS</div>
           <template v-if="!editMode">
             <div v-if="profile.user.description" class="text-[13px] text-neutral-700 mt-[7px] leading-[1.55]">{{ profile.user.description }}</div>
@@ -306,7 +285,7 @@ const initials = computed(() => {
           <textarea
             v-else
             v-model="draftDescription"
-            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
+            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
             placeholder="Décris ton parcours, tes objectifs…"
           />
         </div>
@@ -320,26 +299,11 @@ const initials = computed(() => {
       <div>
         <SkillsSection ref="skillsSection" :items="profile.skills" :edit-mode="editMode" />
         <LanguesSection ref="languesSection" :items="profile.langues" :edit-mode="editMode" />
-
-        <DocumentReferenceEditor
-          ref="cvEditor"
-          doc-type="cv"
-          :reference="profile.cv_reference"
-          :edit-mode="editMode"
-          @update:reference="onCvReferenceSaved"
-        />
-        <DocumentReferenceEditor
-          ref="lettreEditor"
-          doc-type="lettre_motivation"
-          :reference="profile.lettre_motivation_reference"
-          :edit-mode="editMode"
-          @update:reference="onLettreReferenceSaved"
-        />
       </div>
     </div>
 
     <!-- Edit footer -->
-    <div v-if="editMode" class="fixed bottom-0 left-[264px] right-0 h-[60px] bg-white border-t border-neutral-200 flex items-center gap-[10px] px-9 z-10">
+    <div v-if="editMode" class="fixed bottom-0 left-[264px] right-0 h-[60px] bg-surface-1 border-t border-neutral-200 flex items-center gap-[10px] px-9 z-10">
       <span v-if="saveError" class="font-mono text-[12px] text-red-500">{{ saveError }}</span>
       <div class="flex-1 min-w-0" />
       <button

@@ -93,7 +93,7 @@ async function finish() {
 
 <template>
   <div class="fixed inset-0 bg-neutral-50 flex items-center justify-center">
-    <div class="bg-white border border-neutral-200 rounded-2xl py-9 px-10 w-full max-w-[480px] shadow-[0_4px_24px_rgba(0,0,0,0.07)]">
+    <div class="bg-surface-1 border border-neutral-200 rounded-2xl py-9 px-10 w-full max-w-[480px] shadow-[0_4px_24px_rgba(0,0,0,0.07)]">
 
       <!-- Header -->
       <div class="text-center mb-7">
@@ -122,7 +122,7 @@ async function finish() {
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Prénom <span class="text-red-500">*</span></label>
             <input
               v-model="formRaw.prenom"
-              class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+              class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
               type="text"
               placeholder="Jean"
               autocomplete="given-name"
@@ -132,7 +132,7 @@ async function finish() {
             <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom <span class="text-red-500">*</span></label>
             <input
               v-model="formRaw.nom"
-              class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+              class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
               type="text"
               placeholder="Dupont"
               autocomplete="family-name"
@@ -147,7 +147,7 @@ async function finish() {
           <label class="text-[12px] text-neutral-600 mb-[5px] block">E-mail <span class="text-red-500">*</span></label>
           <input
             v-model="formRaw.email"
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="email"
             placeholder="jean.dupont@email.com"
             autocomplete="email"
@@ -157,7 +157,7 @@ async function finish() {
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Téléphone</label>
           <input
             v-model="formRaw.telephone"
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="tel"
             placeholder="+33 6 12 34 56 78"
             autocomplete="tel"
@@ -171,7 +171,7 @@ async function finish() {
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Ville</label>
           <input
             v-model="formRaw.ville"
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="text"
             placeholder="Paris"
           />
@@ -181,13 +181,13 @@ async function finish() {
           <div class="flex gap-2">
             <button
               class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap"
-              :class="formRaw.permis === true ? 'border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800' : 'border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100'"
+              :class="formRaw.permis === true ? 'border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800' : 'border border-neutral-300 bg-surface-2 text-neutral-900 hover:bg-surface-3'"
               type="button"
               @click="formRaw.permis = formRaw.permis === true ? null : true"
             >Oui</button>
             <button
               class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap"
-              :class="formRaw.permis === false ? 'border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800' : 'border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100'"
+              :class="formRaw.permis === false ? 'border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800' : 'border border-neutral-300 bg-surface-2 text-neutral-900 hover:bg-surface-3'"
               type="button"
               @click="formRaw.permis = formRaw.permis === false ? null : false"
             >Non</button>
@@ -201,7 +201,7 @@ async function finish() {
           <label class="text-[12px] text-neutral-600 mb-[5px] block">À propos de toi</label>
           <textarea
             v-model="formRaw.description"
-            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
+            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
             placeholder="Étudiant·e en M2 Data Science à la recherche d'un stage…"
           />
         </div>
@@ -213,7 +213,7 @@ async function finish() {
           <label class="text-[12px] text-neutral-600 mb-[5px] block">LinkedIn</label>
           <input
             v-model="formRaw.linkedin"
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="url"
             placeholder="linkedin.com/in/jean-dupont"
           />
@@ -222,7 +222,7 @@ async function finish() {
           <label class="text-[12px] text-neutral-600 mb-[5px] block">GitHub</label>
           <input
             v-model="formRaw.github"
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="url"
             placeholder="github.com/jeandupont"
           />
@@ -231,7 +231,7 @@ async function finish() {
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Portfolio</label>
           <input
             v-model="formRaw.portfolio"
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="url"
             placeholder="jeandupont.dev"
           />
@@ -245,7 +245,7 @@ async function finish() {
       <div class="flex items-center gap-[10px] mt-2">
         <button
           v-if="currentStep > 0"
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           type="button"
           @click="goPrev"
         >← Précédent</button>

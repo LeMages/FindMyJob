@@ -67,6 +67,24 @@ Return types must implement `serde::Serialize`; error types must implement `serd
 
 The AI base URL is user-configurable (settings). Prompts are sent as standard OpenAI chat completions. The layer must remain provider-agnostic so switching from Ollama Cloud to a local runtime requires only a base URL change in settings.
 
+## Code Conventions
+
+### Rust (`src-tauri/`)
+
+| Aspect | Rule |
+|---|---|
+| Documentation | `///` for public items, `//!` for modules |
+| Linting | `cargo clippy` must pass with zero warnings |
+| Imports | Grouped by category, separated by a blank line: std → external crates → internal modules |
+
+### TypeScript/Vue (`src/`)
+
+| Aspect | Rule |
+|---|---|
+| Documentation | JSDoc for exported functions and composables |
+| Linting | `npm run lint` must pass with zero warnings |
+| Imports | Grouped by category, separated by a blank line: external packages → components → composables → types |
+
 ## Key conventions
 
 - All user-facing text is in French.
