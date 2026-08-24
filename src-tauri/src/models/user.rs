@@ -38,4 +38,7 @@ pub struct UpdateUserInfoInput {
     pub email: Option<String>,
     pub telephone: Option<String>,
     pub permis: Option<bool>,
+    pub linkedin: Option<String>,
+    pub github: Option<String>,
+    pub portfolio: Option<String>,
 }

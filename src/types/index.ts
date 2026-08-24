@@ -15,6 +15,9 @@ export interface UpdateUserInfoInput {
   email: string | null
   telephone: string | null
   permis: boolean | null
+  linkedin: string | null
+  github: string | null
+  portfolio: string | null
 }
 
 export interface CreateUserInput {
