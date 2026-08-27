@@ -218,7 +218,8 @@ pub async fn save_reference(
     // ------------------------------------------------------------------
     emit_save_progress(&app, session_id, doc_type, 4, "Compilation en PDF…");
     let root = doc_dir.clone();
-    let pdf_bytes = tauri::async_runtime::spawn_blocking(move || compile_to_pdf(content, root))
+    let fonts_dir = crate::documents::fonts::resolve_fonts_dir(&app);
+    let pdf_bytes = tauri::async_runtime::spawn_blocking(move || compile_to_pdf(content, root, fonts_dir))
         .await
         .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
         .map_err(AppError::Validation)?;
@@ -278,8 +279,9 @@ pub async fn compile_reference(
     let content = std::fs::read_to_string(&typ_path)
         .map_err(|e| AppError::Validation(format!("Impossible de lire le fichier : {}", e)))?;
     let root = doc_dir;
+    let fonts_dir = crate::documents::fonts::resolve_fonts_dir(&app);
 
-    let pdf_bytes = tauri::async_runtime::spawn_blocking(move || compile_to_pdf(content, root))
+    let pdf_bytes = tauri::async_runtime::spawn_blocking(move || compile_to_pdf(content, root, fonts_dir))
         .await
         .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
         .map_err(AppError::Validation)?;

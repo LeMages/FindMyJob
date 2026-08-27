@@ -362,3 +362,11 @@ export interface TestConnectionResult {
   message: string
   latency_ms: number
 }
+
+// ── Polices ───────────────────────────────────────────────────────────────────
+
+/** Famille de polices importée par l'utilisateur pour la compilation Typst. */
+export interface FontFamilyView {
+  name: string
+  file_count: number
+}
