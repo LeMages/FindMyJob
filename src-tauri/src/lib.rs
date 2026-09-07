@@ -97,6 +97,9 @@ pub fn run() {
             commands::open_folder,
             commands::test_api_connection,
             commands::export_data_json,
+            commands::list_fonts,
+            commands::import_font_folder,
+            commands::delete_font,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
