@@ -15,6 +15,9 @@ export interface UpdateUserInfoInput {
   email: string | null
   telephone: string | null
   permis: boolean | null
+  linkedin: string | null
+  github: string | null
+  portfolio: string | null
 }
 
 export interface CreateUserInput {
@@ -358,4 +361,12 @@ export interface TestConnectionResult {
   model: string
   message: string
   latency_ms: number
+}
+
+// ── Polices ───────────────────────────────────────────────────────────────────
+
+/** Famille de polices importée par l'utilisateur pour la compilation Typst. */
+export interface FontFamilyView {
+  name: string
+  file_count: number
 }

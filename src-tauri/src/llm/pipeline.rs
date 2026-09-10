@@ -63,6 +63,7 @@ async fn require_reference(
 /// * `code` - Code Typst à compiler.
 /// * `original_typst` - Document Typst de référence, transmis à `fix_typst` comme référence de syntaxe.
 /// * `root` - Dossier racine pour la résolution des imports/images relatifs du template.
+/// * `fonts_dir` - Dossier des polices importées par l'utilisateur.
 /// * `model` - Identifiant du modèle Claude à utiliser pour la correction éventuelle.
 ///
 /// # Returns
@@ -72,12 +73,14 @@ async fn compile_with_retry(
     code: String,
     original_typst: &str,
     root: PathBuf,
+    fonts_dir: PathBuf,
     model: &str,
 ) -> Result<(String, Vec<u8>), AppError> {
     let first_attempt = {
         let code = code.clone();
         let root = root.clone();
-        tauri::async_runtime::spawn_blocking(move || compile_to_pdf(code, root))
+        let fonts_dir = fonts_dir.clone();
+        tauri::async_runtime::spawn_blocking(move || compile_to_pdf(code, root, fonts_dir))
             .await
             .map_err(|e| AppError::Llm(format!("Erreur interne de compilation Typst : {e}")))?
     };
@@ -89,7 +92,7 @@ async fn compile_with_retry(
 
             let retry_result = {
                 let code = fixed_code.clone();
-                tauri::async_runtime::spawn_blocking(move || compile_to_pdf(code, root))
+                tauri::async_runtime::spawn_blocking(move || compile_to_pdf(code, root, fonts_dir))
                     .await
                     .map_err(|e| AppError::Llm(format!("Erreur interne de compilation Typst : {e}")))?
             };
@@ -115,6 +118,7 @@ async fn compile_with_retry(
 ///
 /// # Arguments
 ///
+/// * `app` - Handle de l'application Tauri (résolution du dossier des polices importées).
 /// * `pool` - Pool de connexions SQLite.
 /// * `session_id` - Identifiant de la session (fournit les documents de référence).
 /// * `description_offre` - Texte brut de l'offre d'emploi.
@@ -123,10 +127,13 @@ async fn compile_with_retry(
 ///
 /// `GeneratedDocuments` avec le Typst et le PDF de chaque document.
 pub async fn generate_documents(
+    app: &tauri::AppHandle,
     pool: &SqlitePool,
     session_id: i64,
     description_offre: &str,
 ) -> Result<GeneratedDocuments, AppError> {
+    let fonts_dir = crate::documents::fonts::resolve_fonts_dir(app);
+
     // ------------------------------------------------------------------
     // 1. Profil candidat, modèle configuré, documents de référence
     // ------------------------------------------------------------------
@@ -184,8 +191,9 @@ pub async fn generate_documents(
     // ------------------------------------------------------------------
     // 5. Compilation PDF, avec un retry de correction par document
     // ------------------------------------------------------------------
-    let (cv_typst, cv_pdf) = compile_with_retry(cv_typst, &cv_original, cv_root, &model).await?;
-    let (lm_typst, lm_pdf) = compile_with_retry(lm_typst, &lm_original, lm_root, &model).await?;
+    let (cv_typst, cv_pdf) =
+        compile_with_retry(cv_typst, &cv_original, cv_root, fonts_dir.clone(), &model).await?;
+    let (lm_typst, lm_pdf) = compile_with_retry(lm_typst, &lm_original, lm_root, fonts_dir, &model).await?;
 
     Ok(GeneratedDocuments { cv_typst, cv_pdf, lm_typst, lm_pdf })
 }

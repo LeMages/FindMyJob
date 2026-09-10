@@ -50,7 +50,7 @@ pub async fn create_candidature(
     // 2. Génération du CV et de la lettre de motivation — avant toute
     //    persistance : en cas d'échec, rien n'est créé.
     // ------------------------------------------------------------------
-    let generated = generate_documents(&state.pool, session_id, description_offre).await?;
+    let generated = generate_documents(&app, &state.pool, session_id, description_offre).await?;
 
     // ------------------------------------------------------------------
     // 3. Insertion de la candidature, puis sauvegarde des documents générés

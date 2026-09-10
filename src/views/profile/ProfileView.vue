@@ -33,6 +33,23 @@ import type {
 const profile = ref<ProfileDto | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
+const linkError = ref<string | null>(null)
+
+/**
+ * Ouvre une URL du profil (LinkedIn, GitHub, portfolio) dans le navigateur
+ * par défaut de l'utilisateur, via la commande Tauri `open_url` — un simple
+ * `<a target="_blank">` ne fonctionne pas dans la webview.
+ *
+ * @param url - URL à ouvrir.
+ */
+async function openExternalLink(url: string): Promise<void> {
+  linkError.value = null
+  try {
+    await invoke('open_url', { url })
+  } catch (e: unknown) {
+    linkError.value = extractErrorMessage(e, "Impossible d'ouvrir ce lien.")
+  }
+}
 
 // ── Mode édition ────────────────────────────────────────────────────────────
 
@@ -47,9 +64,21 @@ interface UserInfoDraft {
   email: string
   telephone: string
   permis: boolean
+  linkedin: string
+  github: string
+  portfolio: string
 }
 
-const draftUserInfo = ref<UserInfoDraft>({ prenom: '', nom: '', email: '', telephone: '', permis: false })
+const draftUserInfo = ref<UserInfoDraft>({
+  prenom: '',
+  nom: '',
+  email: '',
+  telephone: '',
+  permis: false,
+  linkedin: '',
+  github: '',
+  portfolio: '',
+})
 
 function isUserInfoDirty(): boolean {
   const u = profile.value?.user
@@ -59,7 +88,10 @@ function isUserInfoDirty(): boolean {
     draftUserInfo.value.nom !== (u.nom ?? '') ||
     draftUserInfo.value.email !== (u.email ?? '') ||
     draftUserInfo.value.telephone !== (u.telephone ?? '') ||
-    draftUserInfo.value.permis !== (u.permis ?? false)
+    draftUserInfo.value.permis !== (u.permis ?? false) ||
+    draftUserInfo.value.linkedin !== (u.linkedin ?? '') ||
+    draftUserInfo.value.github !== (u.github ?? '') ||
+    draftUserInfo.value.portfolio !== (u.portfolio ?? '')
   )
 }
 
@@ -89,6 +121,9 @@ function enterEditMode() {
     email: u?.email ?? '',
     telephone: u?.telephone ?? '',
     permis: u?.permis ?? false,
+    linkedin: u?.linkedin ?? '',
+    github: u?.github ?? '',
+    portfolio: u?.portfolio ?? '',
   }
   draftDescription.value = u?.description ?? ''
   saveError.value = null
@@ -117,16 +152,43 @@ function syncUserInfo(u: UserView) {
   setUserInfo(name, initials || '?')
 }
 
+/**
+ * Vérifie qu'une valeur non vide est une URL valide.
+ *
+ * @param value - Valeur saisie (déjà trim).
+ * @returns `true` si `value` est vide ou constitue une URL valide.
+ */
+function isValidUrlOrEmpty(value: string): boolean {
+  if (!value) return true
+  try {
+    new URL(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Sauvegarde les informations de contact du profil, si elles ont changé. */
 async function saveUserInfo(): Promise<void> {
   if (!isUserInfoDirty()) return
   const d = draftUserInfo.value
+  const linkedin = d.linkedin.trim()
+  const github = d.github.trim()
+  const portfolio = d.portfolio.trim()
+
+  if (!isValidUrlOrEmpty(linkedin)) throw new Error('Le lien LinkedIn n\'est pas une URL valide.')
+  if (!isValidUrlOrEmpty(github)) throw new Error('Le lien GitHub n\'est pas une URL valide.')
+  if (!isValidUrlOrEmpty(portfolio)) throw new Error('Le lien portfolio n\'est pas une URL valide.')
+
   const input: UpdateUserInfoInput = {
     prenom: d.prenom.trim() || null,
     nom: d.nom.trim() || null,
     email: d.email.trim() || null,
     telephone: d.telephone.trim() || null,
     permis: d.permis,
+    linkedin: linkedin || null,
+    github: github || null,
+    portfolio: portfolio || null,
   }
   const updated = await invoke<UserView>('update_user_info', { input })
   profile.value!.user = updated
@@ -231,10 +293,50 @@ const initials = computed(() => {
           <span v-if="profile.user.email">{{ profile.user.email }}</span>
           <span v-if="profile.user.telephone">{{ profile.user.telephone }}</span>
           <span v-if="profile.user.ville">{{ profile.user.ville }}</span>
-          <span v-if="profile.user.github">{{ profile.user.github }}</span>
-          <span v-if="profile.user.linkedin">{{ profile.user.linkedin }}</span>
+          <a
+            v-if="profile.user.linkedin"
+            href="#"
+            :title="profile.user.linkedin"
+            class="inline-flex items-center gap-1.5 hover:text-neutral-900 cursor-pointer"
+            @click.prevent="openExternalLink(profile.user.linkedin!)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+              <rect width="4" height="12" x="2" y="9" />
+              <circle cx="4" cy="4" r="2" />
+            </svg>
+            LinkedIn
+          </a>
+          <a
+            v-if="profile.user.github"
+            href="#"
+            :title="profile.user.github"
+            class="inline-flex items-center gap-1.5 hover:text-neutral-900 cursor-pointer"
+            @click.prevent="openExternalLink(profile.user.github!)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+              <path d="M9 18c-4.51 2-5-2-7-2" />
+            </svg>
+            GitHub
+          </a>
+          <a
+            v-if="profile.user.portfolio"
+            href="#"
+            :title="profile.user.portfolio"
+            class="inline-flex items-center gap-1.5 hover:text-neutral-900 cursor-pointer"
+            @click.prevent="openExternalLink(profile.user.portfolio!)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+              <path d="M2 12h20" />
+            </svg>
+            Portfolio
+          </a>
           <span v-if="profile.user.permis === true">Permis B</span>
         </div>
+        <div v-if="linkError" class="text-[12px] text-red-500 mt-[7px]">{{ linkError }}</div>
       </div>
       <button
         v-if="!editMode"
@@ -270,6 +372,45 @@ const initials = computed(() => {
         <input type="checkbox" v-model="draftUserInfo.permis" />
         Permis B
       </label>
+    </div>
+
+    <!-- Section liens (visible uniquement en mode édition) -->
+    <div v-if="editMode" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">LIENS</div>
+      <div class="flex gap-[14px]">
+        <div class="flex-1">
+          <label class="text-[12px] text-neutral-600 mb-[5px] flex items-center gap-1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+              <rect width="4" height="12" x="2" y="9" />
+              <circle cx="4" cy="4" r="2" />
+            </svg>
+            LinkedIn
+          </label>
+          <input v-model="draftUserInfo.linkedin" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://linkedin.com/in/..." />
+        </div>
+        <div class="flex-1">
+          <label class="text-[12px] text-neutral-600 mb-[5px] flex items-center gap-1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+              <path d="M9 18c-4.51 2-5-2-7-2" />
+            </svg>
+            GitHub
+          </label>
+          <input v-model="draftUserInfo.github" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://github.com/..." />
+        </div>
+        <div class="flex-1">
+          <label class="text-[12px] text-neutral-600 mb-[5px] flex items-center gap-1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+              <path d="M2 12h20" />
+            </svg>
+            Portfolio
+          </label>
+          <input v-model="draftUserInfo.portfolio" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://monsite.com" />
+        </div>
+      </div>
     </div>
 
     <div class="grid grid-cols-[1fr_300px] gap-6 mt-[18px] items-start">

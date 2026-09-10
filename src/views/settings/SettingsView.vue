@@ -10,6 +10,9 @@ import { onMounted, ref } from 'vue'
 // Importation des modules externes
 import { invoke } from '@tauri-apps/api/core'
 
+// Importation des composants
+import FontsSection from '@/views/settings/components/FontsSection.vue'
+
 // Importation des modules internes
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 import { useTheme } from '@/composables/useTheme'
@@ -280,6 +283,9 @@ async function exportData() {
         </div>
       </div>
     </div>
+
+    <!-- Polices -->
+    <FontsSection />
 
     <!-- Apparence -->
     <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
