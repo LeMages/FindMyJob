@@ -20,4 +20,4 @@ pub mod status_history;
 pub mod timeline_events;
 pub mod users;
 
-pub use init::{list_tables, resolve_data_dir, resolve_db_path, DbState};
+pub use init::{init_db, list_tables};

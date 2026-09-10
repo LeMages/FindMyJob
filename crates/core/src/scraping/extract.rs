@@ -23,10 +23,10 @@ const CONTENT_SELECTORS: &[&str] = &[
 const SKIP_TAGS: &[&str] = &["script", "style", "nav", "header", "footer", "aside"];
 
 /// Troncature du texte extrait, en nombre de caractères — garde de contexte
-/// avant l'appel LLM. Visibilité `pub(crate)` : réutilisée telle quelle par
-/// `commands::scraping::extract_offer_from_text` pour le texte collé
-/// manuellement (même garde que pour le texte scrapé).
-pub(crate) const MAX_CHARS: usize = 12_000;
+/// avant l'appel LLM. Réutilisée telle quelle par
+/// `commands::scraping::extract_offer_from_text` (crate `findmyjob`, desktop)
+/// pour le texte collé manuellement (même garde que pour le texte scrapé).
+pub const MAX_CHARS: usize = 12_000;
 
 /// Extrait le texte lisible d'une page HTML d'offre d'emploi.
 ///
@@ -110,7 +110,7 @@ fn collect_text(element: ElementRef, out: &mut String) {
 
 /// Tronque une chaîne à `max_chars` caractères, en respectant les frontières
 /// UTF-8 (le contenu est en français : ne pas découper au milieu d'un octet).
-pub(crate) fn truncate_chars(s: &str, max_chars: usize) -> String {
+pub fn truncate_chars(s: &str, max_chars: usize) -> String {
     if s.chars().count() <= max_chars {
         return s.to_string();
     }

@@ -15,7 +15,7 @@ pub mod security;
 use tauri::Manager;
 
 // Importation des modules internes (usage local à run())
-use db::init::{init_db, resolve_db_path, DbState};
+use db::init::{resolve_db_path, DbState};
 
 /// Configure et lance l'application Tauri : initialise la base de données,
 /// l'injecte comme état partagé, puis enregistre toutes les commandes IPC .
@@ -29,7 +29,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let db_path = resolve_db_path(app.handle());
-            let pool = tauri::async_runtime::block_on(init_db(&db_path))
+            let pool = tauri::async_runtime::block_on(findmyjob_core::db::init_db(&db_path))
                 .map_err(|e| e.to_string())?;
             app.manage(DbState { pool, db_path });
             Ok(())

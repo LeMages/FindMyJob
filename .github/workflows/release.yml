@@ -73,6 +73,7 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
+          cache-dependency-path: crates/desktop/package-lock.json
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -82,7 +83,7 @@ jobs:
       - name: Cache Cargo
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: . -> target
 
       - name: Install system dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
@@ -92,19 +93,21 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        working-directory: crates/desktop
 
       - name: Inject version
         shell: bash
         run: |
           VERSION=${{ needs.version.outputs.version }}
-          jq --arg v "$VERSION" '.version = $v' src-tauri/tauri.conf.json > tmp.json && mv tmp.json src-tauri/tauri.conf.json
-          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
+          jq --arg v "$VERSION" '.version = $v' crates/desktop/src-tauri/tauri.conf.json > tmp.json && mv tmp.json crates/desktop/src-tauri/tauri.conf.json
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" crates/desktop/src-tauri/Cargo.toml && rm -f crates/desktop/src-tauri/Cargo.toml.bak
 
       - name: Build Tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          projectPath: crates/desktop
           tagName: v${{ needs.version.outputs.version }}
           releaseName: FindMyJob v${{ needs.version.outputs.version }}
           releaseBody: Télécharge le fichier correspondant à ton OS ci-dessous.

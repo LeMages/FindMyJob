@@ -1,0 +1,9 @@
+# Placeholder : service pour le futur agent FindMyJob (headless).
+# À compléter une fois le crate crates/agent implémenté (base de données,
+# ports, variables d'environnement).
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent

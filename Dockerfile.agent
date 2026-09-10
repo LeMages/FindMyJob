@@ -1,0 +1,12 @@
+# Placeholder : build du futur agent FindMyJob (service headless).
+# À enrichir une fois le crate crates/agent implémenté (dépendances système,
+# configuration réseau, etc.).
+
+FROM rust:1-slim AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release -p findmyjob-agent
+
+FROM debian:trixie-slim
+COPY --from=builder /app/target/release/findmyjob-agent /usr/local/bin/findmyjob-agent
+CMD ["findmyjob-agent"]

@@ -5,13 +5,13 @@ node_modules/
 dev-data/
 
 # Build output
-dist/
+crates/desktop/dist/
 
-# Rust / Tauri build
-src-tauri/target/
+# Rust / Tauri build (target unique à la racine du workspace)
+/target/
 
 # Generated Tauri schemas (recreated on build)
-src-tauri/gen/
+crates/desktop/src-tauri/gen/
 
 # Environment
 .env

@@ -5,66 +5,42 @@
 //!
 //! Chaque session de candidature a son propre CV et sa propre lettre de
 //! motivation : tout est stocké sous `documents/sessions/<session_id>/`.
+//!
+//! La résolution de chemins liée à `tauri::AppHandle` (dossier de données,
+//! dossier de téléchargements) et l'émission d'événements de progression
+//! vivent dans `crates/desktop/src-tauri/src/documents/storage.rs`, qui
+//! délègue à ce module une fois ces chemins résolus.
 
 // Importation des modules standard
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // Importation des crates externes
-use tauri::{Emitter, Manager};
+use sqlx::SqlitePool;
 
 // Importation des modules internes
-use crate::db::{self, resolve_data_dir, DbState};
+use crate::db;
 use crate::documents::typst::compile_to_pdf;
 use crate::error::AppError;
-use crate::models::{CandidatureDetail, DocumentFileInfo, DocumentReferenceView, DocumentSaveProgress};
+use crate::models::{CandidatureDetail, DocumentFileInfo, DocumentReferenceView};
 
-/// Nom de l'événement Tauri émis à chaque étape de `save_reference`, écouté
-/// par le frontend pour afficher une barre de progression.
-const SAVE_PROGRESS_EVENT: &str = "document-save-progress";
-
-/// Nombre total d'étapes du flux de `save_reference`, communiqué au frontend
-/// pour calculer une progression (`step`/`total`).
-const SAVE_STEPS_TOTAL: u32 = 5;
-
-/// Émet la progression courante de `save_reference` vers le frontend.
-///
-/// Best-effort : un échec d'émission (aucune fenêtre active, par exemple)
-/// n'a aucun impact sur la sauvegarde elle-même, purement cosmétique.
-///
-/// # Arguments
-///
-/// * `app` - Handle de l'application Tauri.
-/// * `session_id` - Session propriétaire, pour filtrer côté frontend.
-/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
-/// * `step` - Étape courante (1-based).
-/// * `label` - Description courte affichée à l'utilisateur.
-fn emit_save_progress(app: &tauri::AppHandle, session_id: i64, doc_type: &str, step: u32, label: &str) {
-    let _ = app.emit(
-        SAVE_PROGRESS_EVENT,
-        DocumentSaveProgress {
-            session_id,
-            doc_type: doc_type.to_string(),
-            step,
-            total: SAVE_STEPS_TOTAL,
-            label: label.to_string(),
-        },
-    );
-}
+/// Nombre total d'étapes du flux de `save_reference`, communiqué à
+/// l'appelant pour calculer une progression (`step`/`total`).
+pub const SAVE_STEPS_TOTAL: u32 = 5;
 
 /// Résout le dossier d'un type de document (`cv` ou `lettre_motivation`)
 /// propre à une session de candidature.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session propriétaire des documents.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"` — le nom du dossier correspond exactement.
 ///
 /// # Returns
 ///
 /// Chemin absolu vers `documents/sessions/<session_id>/<doc_type>/`.
-fn resolve_doc_dir(app: &tauri::AppHandle, session_id: i64, doc_type: &str) -> PathBuf {
-    resolve_data_dir(app)
+fn resolve_doc_dir(data_dir: &Path, session_id: i64, doc_type: &str) -> PathBuf {
+    data_dir
         .join("documents")
         .join("sessions")
         .join(session_id.to_string())
@@ -85,7 +61,7 @@ fn doc_backup_basename(doc_type: &str) -> &'static str {
 /// # Returns
 ///
 /// Timestamp en millisecondes sous forme de chaîne, ou chaîne vide si indisponible.
-fn updated_at_millis(path: &std::path::Path) -> String {
+fn updated_at_millis(path: &Path) -> String {
     std::fs::metadata(path)
         .and_then(|m| m.modified())
         .map(|t| {
@@ -101,15 +77,21 @@ fn updated_at_millis(path: &std::path::Path) -> String {
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `pool` - Pool de connexions SQLite.
+/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 ///
 /// # Returns
 ///
 /// `Some(DocumentReferenceView)` si un fichier de référence existe, `None` sinon.
-pub async fn get_reference(app: &tauri::AppHandle, session_id: i64, doc_type: &str) -> Option<DocumentReferenceView> {
-    let doc_dir = resolve_doc_dir(app, session_id, doc_type);
+pub async fn get_reference(
+    pool: &SqlitePool,
+    data_dir: &Path,
+    session_id: i64,
+    doc_type: &str,
+) -> Option<DocumentReferenceView> {
+    let doc_dir = resolve_doc_dir(data_dir, session_id, doc_type);
     let typ_path = doc_dir.join("reference.typ");
     if !typ_path.exists() {
         return None;
@@ -118,8 +100,7 @@ pub async fn get_reference(app: &tauri::AppHandle, session_id: i64, doc_type: &s
     // Lecture DB best-effort : prépare l'enrichissement futur de la réponse
     // (ex. style_analysis), sans influencer le comportement actuel — le
     // filesystem reste la source de vérité de l'existence du document.
-    let pool = app.state::<DbState>().pool.clone();
-    if let Err(e) = db::documents::get_by_session_and_type(&pool, session_id, doc_type).await {
+    if let Err(e) = db::documents::get_by_session_and_type(pool, session_id, doc_type).await {
         eprintln!("Lecture DB du document ({doc_type}, session {session_id}) échouée : {e}");
     }
 
@@ -141,21 +122,28 @@ pub async fn get_reference(app: &tauri::AppHandle, session_id: i64, doc_type: &s
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `pool` - Pool de connexions SQLite.
+/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
+/// * `fonts_dir` - Dossier des polices importées, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `filename` - Nom du fichier fourni par l'utilisateur (doit finir par `.typ`).
 /// * `content` - Contenu Typst du document.
+/// * `on_progress` - Callback appelée à chaque étape (`step` 1-based, libellé), pour reporter la progression à l'appelant.
 ///
 /// # Returns
 ///
 /// `DocumentReferenceView` pointant vers les fichiers `.typ` et `.pdf` sauvegardés.
+#[allow(clippy::too_many_arguments)]
 pub async fn save_reference(
-    app: tauri::AppHandle,
+    pool: &SqlitePool,
+    data_dir: &Path,
+    fonts_dir: &Path,
     session_id: i64,
     doc_type: &'static str,
     filename: String,
     content: String,
+    on_progress: impl Fn(u32, &str),
 ) -> Result<DocumentReferenceView, AppError> {
     // ------------------------------------------------------------------
     // 1. Validation
@@ -171,13 +159,12 @@ pub async fn save_reference(
     //    écriture disque : si l'appel échoue ou renvoie un format
     //    inattendu, rien n'est créé (ni dossier, ni backup, ni fichier).
     // ------------------------------------------------------------------
-    let pool = app.state::<DbState>().pool.clone();
-    let model = db::settings::resolve_llm_model(&pool, crate::llm::client::DEFAULT_MODEL).await?;
+    let model = db::settings::resolve_llm_model(pool, crate::llm::client::DEFAULT_MODEL).await?;
 
-    emit_save_progress(&app, session_id, doc_type, 1, "Analyse du style (IA)…");
+    on_progress(1, "Analyse du style (IA)…");
     let style_analysis = crate::llm::analyze_style(&content, doc_type, &model).await?;
 
-    let doc_dir = resolve_doc_dir(&app, session_id, doc_type);
+    let doc_dir = resolve_doc_dir(data_dir, session_id, doc_type);
     std::fs::create_dir_all(&doc_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
 
@@ -187,7 +174,7 @@ pub async fn save_reference(
     // ------------------------------------------------------------------
     // 2. Sauvegarde de l'ancienne référence (si elle existe) dans backup/<timestamp>/
     // ------------------------------------------------------------------
-    emit_save_progress(&app, session_id, doc_type, 2, "Sauvegarde de l'historique…");
+    on_progress(2, "Sauvegarde de l'historique…");
     if typ_path.exists() {
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -209,17 +196,17 @@ pub async fn save_reference(
     // ------------------------------------------------------------------
     // 3. Écriture du nouveau fichier .typ
     // ------------------------------------------------------------------
-    emit_save_progress(&app, session_id, doc_type, 3, "Écriture du fichier…");
+    on_progress(3, "Écriture du fichier…");
     std::fs::write(&typ_path, content.as_bytes())
         .map_err(|e| AppError::Validation(format!("Écriture du fichier impossible : {}", e)))?;
 
     // ------------------------------------------------------------------
     // 4. Compilation en PDF
     // ------------------------------------------------------------------
-    emit_save_progress(&app, session_id, doc_type, 4, "Compilation en PDF…");
+    on_progress(4, "Compilation en PDF…");
     let root = doc_dir.clone();
-    let fonts_dir = crate::documents::fonts::resolve_fonts_dir(&app);
-    let pdf_bytes = tauri::async_runtime::spawn_blocking(move || compile_to_pdf(content, root, fonts_dir))
+    let fonts_dir = fonts_dir.to_path_buf();
+    let pdf_bytes = tokio::task::spawn_blocking(move || compile_to_pdf(content, root, fonts_dir))
         .await
         .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
         .map_err(AppError::Validation)?;
@@ -232,9 +219,9 @@ pub async fn save_reference(
     //    vérité, on ne veut pas perdre un fichier correctement sauvegardé
     //    à cause d'une erreur DB)
     // ------------------------------------------------------------------
-    emit_save_progress(&app, session_id, doc_type, 5, "Enregistrement en base…");
+    on_progress(5, "Enregistrement en base…");
     if let Err(e) = db::documents::upsert(
-        &pool,
+        pool,
         session_id,
         doc_type,
         &filename,
@@ -258,7 +245,8 @@ pub async fn save_reference(
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
+/// * `fonts_dir` - Dossier des polices importées, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 ///
@@ -266,11 +254,12 @@ pub async fn save_reference(
 ///
 /// PDF encodé en base64, prêt à être affiché côté frontend.
 pub async fn compile_reference(
-    app: tauri::AppHandle,
+    data_dir: &Path,
+    fonts_dir: &Path,
     session_id: i64,
     doc_type: &'static str,
 ) -> Result<String, AppError> {
-    let doc_dir = resolve_doc_dir(&app, session_id, doc_type);
+    let doc_dir = resolve_doc_dir(data_dir, session_id, doc_type);
     let typ_path = doc_dir.join("reference.typ");
     if !typ_path.exists() {
         return Err(AppError::NotFound("Aucun fichier de référence trouvé.".to_string()));
@@ -279,9 +268,9 @@ pub async fn compile_reference(
     let content = std::fs::read_to_string(&typ_path)
         .map_err(|e| AppError::Validation(format!("Impossible de lire le fichier : {}", e)))?;
     let root = doc_dir;
-    let fonts_dir = crate::documents::fonts::resolve_fonts_dir(&app);
+    let fonts_dir = fonts_dir.to_path_buf();
 
-    let pdf_bytes = tauri::async_runtime::spawn_blocking(move || compile_to_pdf(content, root, fonts_dir))
+    let pdf_bytes = tokio::task::spawn_blocking(move || compile_to_pdf(content, root, fonts_dir))
         .await
         .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
         .map_err(AppError::Validation)?;
@@ -339,7 +328,7 @@ pub fn read_document_base64(path: &str) -> Result<String, AppError> {
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `staged_path` - Chemin temporaire du fichier mis en scène, s'il y en a un.
@@ -349,7 +338,7 @@ pub fn read_document_base64(path: &str) -> Result<String, AppError> {
 ///
 /// `Some(chemin_final)` si un document était en attente, `None` sinon.
 pub fn finalize_candidature_document(
-    app: &tauri::AppHandle,
+    data_dir: &Path,
     session_id: i64,
     doc_type: &str,
     staged_path: Option<String>,
@@ -364,7 +353,7 @@ pub fn finalize_candidature_document(
             "Le document sélectionné est introuvable.".to_string(),
         ));
     }
-    let artefact_dir = resolve_doc_dir(app, session_id, doc_type).join("artefact");
+    let artefact_dir = resolve_doc_dir(data_dir, session_id, doc_type).join("artefact");
     std::fs::create_dir_all(&artefact_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
     let dest = artefact_dir.join(format!("{}.pdf", candidature_id));
@@ -392,21 +381,35 @@ fn sanitize_filename(name: &str) -> String {
         .to_string()
 }
 
-/// Copie le CV et la lettre de motivation d'une candidature vers un
-/// sous-dossier `<poste>_<entreprise>_<id>` du dossier de téléchargements de
-/// l'utilisateur — logique commune aux trois façons de postuler.
+/// Construit le nom du sous-dossier de destination `<poste>_<entreprise>_<id>`
+/// utilisé pour exporter les documents d'une candidature vers le dossier de
+/// téléchargements de l'utilisateur.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
-/// * `detail` - Détail de la candidature (poste, entreprise, chemins des documents).
+/// * `detail` - Détail de la candidature (poste, entreprise, id).
 ///
 /// # Returns
 ///
-/// Le dossier de destination, une fois les deux fichiers copiés, ou
-/// `AppError::Validation` si un document est manquant (candidature sans
-/// CV/lettre) ou introuvable sur le disque.
-fn export_documents(app: &tauri::AppHandle, detail: &CandidatureDetail) -> Result<PathBuf, AppError> {
+/// Nom de dossier assaini, sûr sur tous les OS.
+pub fn build_export_dir_name(detail: &CandidatureDetail) -> String {
+    let entreprise = detail.entreprise.as_deref().unwrap_or("entreprise");
+    sanitize_filename(&format!("{}_{}_{}", detail.poste, entreprise, detail.id))
+}
+
+/// Copie le CV et la lettre de motivation d'une candidature vers `dest_dir`
+/// — logique commune aux trois façons de postuler.
+///
+/// # Arguments
+///
+/// * `dest_dir` - Dossier de destination, déjà résolu par l'appelant (dossier de téléchargements + nom de sous-dossier).
+/// * `detail` - Détail de la candidature (chemins des documents).
+///
+/// # Returns
+///
+/// `Ok(())` une fois les deux fichiers copiés, ou `AppError::Validation` si un
+/// document est manquant (candidature sans CV/lettre) ou introuvable sur le disque.
+pub fn copy_candidature_documents(dest_dir: &Path, detail: &CandidatureDetail) -> Result<(), AppError> {
     let cv_path = detail.cv_path.as_deref().ok_or_else(|| {
         AppError::Validation("Aucun CV disponible pour cette candidature.".to_string())
     })?;
@@ -414,15 +417,7 @@ fn export_documents(app: &tauri::AppHandle, detail: &CandidatureDetail) -> Resul
         AppError::Validation("Aucune lettre de motivation disponible pour cette candidature.".to_string())
     })?;
 
-    let download_dir = app
-        .path()
-        .download_dir()
-        .map_err(|e| AppError::Validation(format!("Dossier de téléchargements introuvable : {}", e)))?;
-
-    let entreprise = detail.entreprise.as_deref().unwrap_or("entreprise");
-    let folder_name = sanitize_filename(&format!("{}_{}_{}", detail.poste, entreprise, detail.id));
-    let dest_dir = download_dir.join(folder_name);
-    std::fs::create_dir_all(&dest_dir)
+    std::fs::create_dir_all(dest_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
 
     std::fs::copy(cv_path, dest_dir.join("CV.pdf"))
@@ -430,49 +425,25 @@ fn export_documents(app: &tauri::AppHandle, detail: &CandidatureDetail) -> Resul
     std::fs::copy(lettre_path, dest_dir.join("Lettre_de_motivation.pdf"))
         .map_err(|e| AppError::Validation(format!("Copie de la lettre de motivation impossible : {}", e)))?;
 
-    Ok(dest_dir)
-}
-
-/// Exporte le CV et la lettre de motivation d'une candidature vers le dossier
-/// de téléchargements de l'utilisateur — utilisé par « Postuler sans message ».
-///
-/// # Arguments
-///
-/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
-/// * `detail` - Détail de la candidature (poste, entreprise, chemins des documents).
-///
-/// # Returns
-///
-/// `Ok(())` une fois les deux fichiers copiés.
-pub fn export_for_apply(app: &tauri::AppHandle, detail: &CandidatureDetail) -> Result<(), AppError> {
-    export_documents(app, detail)?;
     Ok(())
 }
 
-/// Exporte le CV, la lettre de motivation et un message de candidature rédigé
-/// par l'IA (mail ou message court) vers le dossier de téléchargements de
-/// l'utilisateur — utilisé par « Postuler par mail » et « Postuler par message ».
+/// Écrit le message de candidature rédigé par l'IA (mail ou message court)
+/// dans le dossier d'export — utilisé par « Postuler par mail » et « Postuler
+/// par message », après `copy_candidature_documents`.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
-/// * `detail` - Détail de la candidature (poste, entreprise, chemins des documents).
+/// * `dest_dir` - Dossier de destination (même que `copy_candidature_documents`).
 /// * `message` - Contenu texte du message rédigé par l'IA.
 /// * `message_filename` - Nom du fichier `.txt` à créer (ex. `Mail_de_candidature.txt`).
 ///
 /// # Returns
 ///
-/// `Ok(())` une fois les trois fichiers écrits.
-pub fn export_for_apply_with_message(
-    app: &tauri::AppHandle,
-    detail: &CandidatureDetail,
-    message: &str,
-    message_filename: &str,
-) -> Result<(), AppError> {
-    let dest_dir = export_documents(app, detail)?;
+/// `Ok(())` une fois le fichier écrit.
+pub fn write_export_message(dest_dir: &Path, message: &str, message_filename: &str) -> Result<(), AppError> {
     std::fs::write(dest_dir.join(message_filename), message)
-        .map_err(|e| AppError::Validation(format!("Écriture du message impossible : {}", e)))?;
-    Ok(())
+        .map_err(|e| AppError::Validation(format!("Écriture du message impossible : {}", e)))
 }
 
 /// Sauvegarde un document généré par le pipeline IA (`llm::pipeline`) à
@@ -482,7 +453,7 @@ pub fn export_for_apply_with_message(
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `candidature_id` - Identifiant de la candidature à laquelle rattacher le document.
@@ -493,14 +464,14 @@ pub fn export_for_apply_with_message(
 ///
 /// Chemin absolu du PDF sauvegardé.
 pub fn save_generated_document(
-    app: &tauri::AppHandle,
+    data_dir: &Path,
     session_id: i64,
     doc_type: &str,
     candidature_id: i64,
     typst: &str,
     pdf: &[u8],
 ) -> Result<String, AppError> {
-    let artefact_dir = resolve_doc_dir(app, session_id, doc_type).join("artefact");
+    let artefact_dir = resolve_doc_dir(data_dir, session_id, doc_type).join("artefact");
     std::fs::create_dir_all(&artefact_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
 
