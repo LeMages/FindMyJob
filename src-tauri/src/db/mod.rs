@@ -3,13 +3,21 @@
 
 pub mod candidatures;
 pub mod common;
+pub mod contacts;
+pub mod documents;
 pub mod experiences;
+pub mod export;
 pub mod formations;
 pub mod init;
+pub mod interviews;
 pub mod langues;
+pub mod profile;
 pub mod projets;
 pub mod sessions;
+pub mod settings;
 pub mod skills;
+pub mod status_history;
+pub mod timeline_events;
 pub mod users;
 
 pub use init::{list_tables, resolve_data_dir, resolve_db_path, DbState};

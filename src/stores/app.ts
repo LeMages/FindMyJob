@@ -11,23 +11,19 @@ import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import type {
-  Screen, PopupKey, EventType,
-  BoardCard, Session,
-  Recruiter, AppEvent, NewContact,
-  DragState, DragPopupState,
+  Screen, PopupKey,
+  BoardCard, Session, UpdateSessionInput,
+  CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
+  NewContact, NewTimelineEvent,
+  UpdateCandidatureInput,
 } from '@/types'
+import { extractErrorMessage } from '@/composables/useErrorMessage'
 
 // ---------------------------------------------------------------------------
 // Sessions — chargées depuis le backend
 // ---------------------------------------------------------------------------
 
 const backendSessions = ref<Session[]>([])
-
-// Recruteurs de démonstration — pas encore de commande Tauri dédiée, à
-// remplacer quand la gestion des contacts recruteur sera implémentée côté backend.
-const MOCK_RECRUITERS: Recruiter[] = [
-  { id: 1, nom: 'Sophie Lecomte', poste: 'Tech Recruiter', email: 's.lecomte@criteo.com' },
-]
 
 // ---------------------------------------------------------------------------
 // Reactive state — UI state always lives here; data will move to backend
@@ -49,14 +45,15 @@ const state = reactive({
 
   // Detail page state
   detailPopup: null as PopupKey,
-  detailRecruiters: [...MOCK_RECRUITERS] as Recruiter[],
-  detailEvents: [] as AppEvent[],
-  nextEventId: 1,
+  detailCandidature: null as CandidatureDetail | null,
+  detailContacts: [] as ContactView[],
+  detailHistory: [] as StatusHistoryView[],
+  detailCvInfo: null as DocumentFileInfo | null,
+  detailLettreInfo: null as DocumentFileInfo | null,
+  detailLoading: false,
+  detailError: null as string | null,
+  detailStatusHistoryContent: null as string | null,
   nextRecruiterId: 10,
-
-  // Drag & drop
-  dragState: null as DragState | null,
-  dragPopup: null as DragPopupState | null,
 
   // Trash popup
   trashPopup: false,
@@ -87,14 +84,6 @@ export const allSessions = computed<(Session & { count: number; hasAccepted: boo
 export const currentSession = computed(() =>
   allSessions.value.find(s => s.id === state.sessionId) ?? allSessions.value[0] ?? null,
 )
-
-// Corbeille de session : pas encore de commande Tauri dédiée (candidatures
-// refusées/abandonnées ne sont pas encore listées séparément côté backend).
-export const currentTrashedList = computed<BoardCard[]>(() => [])
-
-// Colonne du kanban où se trouve la candidature sélectionnée : à recalculer
-// une fois le statut de candidature exposé par le backend au DetailView.
-export const selectedCardColumn = computed<string>(() => '')
 
 // ---------------------------------------------------------------------------
 // Actions
@@ -130,6 +119,38 @@ export function setUserInfo(displayName: string, initials: string) {
  */
 export function navigate(screen: Screen) {
   state.screen = screen
+}
+
+/**
+ * Met à jour un ou plusieurs champs éditables d'une session (titre, contexte,
+ * statut, zone cible) et synchronise la liste des sessions. Fusionne le
+ * correctif avec les valeurs actuelles avant envoi, car le backend attend le
+ * jeu complet des champs éditables.
+ *
+ * @param id - Identifiant de la session à modifier.
+ * @param patch - Champs modifiés à envoyer au backend.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function updateSession(id: number, patch: Partial<UpdateSessionInput>): Promise<string | null> {
+  const current = backendSessions.value.find(s => s.id === id)
+  if (!current) return null
+
+  const input: UpdateSessionInput = {
+    nom: current.nom,
+    contexte: current.contexte,
+    statut: current.statut,
+    zone: current.zone,
+    ...patch,
+  }
+
+  try {
+    const updated = await invoke<Session>('update_session', { id, input })
+    const idx = backendSessions.value.findIndex(s => s.id === id)
+    if (idx !== -1) backendSessions.value[idx] = updated
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, 'Impossible de mettre à jour la session.')
+  }
 }
 
 /**
@@ -197,15 +218,131 @@ export async function confirmDeleteSession() {
 }
 
 /**
- * Ouvre le détail d'une candidature.
+ * Ouvre le détail d'une candidature et charge ses données depuis le backend.
  *
  * @param card - Candidature à afficher.
  */
 export function openCard(card: BoardCard) {
   state.selectedCard = card
   state.screen = 'detail'
-  state.detailEvents = []
-  state.detailRecruiters = [...MOCK_RECRUITERS]
+  state.detailCandidature = null
+  state.detailContacts = []
+  state.detailHistory = []
+  state.detailCvInfo = null
+  state.detailLettreInfo = null
+  state.detailError = null
+  void loadCardDetail(card.id)
+}
+
+/**
+ * Charge le détail complet d'une candidature (infos, contacts, historique,
+ * état des documents joints) depuis le backend.
+ *
+ * @param id - Identifiant de la candidature à charger.
+ */
+async function loadCardDetail(id: number) {
+  state.detailLoading = true
+  state.detailError = null
+  try {
+    const [candidature, contacts, history] = await Promise.all([
+      invoke<CandidatureDetail>('get_candidature', { id }),
+      invoke<ContactView[]>('get_contacts', { candidatureId: id }),
+      invoke<StatusHistoryView[]>('get_status_history', { candidatureId: id }),
+    ])
+    state.detailCandidature = candidature
+    state.detailContacts = contacts
+    state.detailHistory = history
+
+    const [cvInfo, lettreInfo] = await Promise.all([
+      candidature.cv_path
+        ? invoke<DocumentFileInfo>('get_document_info', { path: candidature.cv_path })
+        : Promise.resolve(null),
+      candidature.lettre_motivation_path
+        ? invoke<DocumentFileInfo>('get_document_info', { path: candidature.lettre_motivation_path })
+        : Promise.resolve(null),
+    ])
+    state.detailCvInfo = cvInfo
+    state.detailLettreInfo = lettreInfo
+  } catch (e: unknown) {
+    state.detailError = extractErrorMessage(e, 'Impossible de charger la candidature.')
+  } finally {
+    state.detailLoading = false
+  }
+}
+
+/**
+ * Recharge le détail de la candidature actuellement ouverte (candidature,
+ * timeline de suivi) depuis le backend. Utilisé après l'ajout d'un événement
+ * à la timeline, qui peut avoir changé le statut de la candidature.
+ */
+export async function reloadDetail(): Promise<void> {
+  const current = state.detailCandidature
+  if (!current) return
+  await loadCardDetail(current.id)
+}
+
+/**
+ * Ajoute un événement à la timeline de suivi de la candidature ouverte
+ * (relance, entretien, message, appel, note...), puis recharge le détail en
+ * cas de succès — l'événement peut avoir changé le statut de la candidature.
+ *
+ * @param event - Événement à ajouter (voir `get_available_events` pour les
+ *   types disponibles selon le statut courant).
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function addTimelineEvent(event: NewTimelineEvent): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  try {
+    await invoke<void>('add_timeline_event', { candidatureId: current.id, event })
+    await reloadDetail()
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, "Impossible d'ajouter l'événement.")
+  }
+}
+
+/**
+ * Met à jour un ou plusieurs champs éditables de la candidature ouverte
+ * (détails du poste, notes). Fusionne le correctif avec les valeurs actuelles
+ * avant envoi, car le backend attend le jeu complet des champs éditables.
+ * N'a d'effet que si la candidature est encore au statut « à postuler ».
+ *
+ * @param patch - Champs modifiés à envoyer au backend.
+ * @returns Message d'erreur en cas d'échec, sinon `null` (affiché par le champ appelant).
+ */
+export async function updateDetailCandidature(patch: Partial<UpdateCandidatureInput>): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  const input: UpdateCandidatureInput = {
+    poste: current.poste,
+    entreprise: current.entreprise,
+    localisation: current.localisation,
+    type_contrat: current.type_contrat,
+    source: current.source,
+    remuneration: current.remuneration,
+    url_offre: current.url_offre,
+    notes: current.notes,
+    ...patch,
+  }
+
+  try {
+    const updated = await invoke<CandidatureDetail>('update_candidature', { id: current.id, input })
+    state.detailCandidature = updated
+    if (state.selectedCard && state.selectedCard.id === updated.id) {
+      state.selectedCard = {
+        ...state.selectedCard,
+        role: updated.poste,
+        company: updated.entreprise ?? '—',
+        location: updated.localisation ?? '',
+      }
+    }
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, 'Impossible de mettre à jour la candidature.')
+  }
 }
 
 /** Ajoute un contact vide au formulaire de nouvelle candidature. */
@@ -221,36 +358,6 @@ export function addContact() {
 export function removeContact(index: number) {
   if (state.newContacts.length <= 1) return
   state.newContacts.splice(index, 1)
-}
-
-/**
- * Démarre le glisser-déposer d'une candidature dans le kanban.
- *
- * @param fromColIndex - Index de la colonne d'origine.
- * @param cardIndex - Index de la carte dans la colonne d'origine.
- */
-export function startDrag(fromColIndex: number, cardIndex: number) {
-  state.dragState = { fromColIndex, cardIndex }
-}
-
-/**
- * Termine le glisser-déposer sur une colonne cible.
- *
- * @param _toColIndex - Index de la colonne cible (popup de confirmation à implémenter).
- */
-export function showDragPopup(_toColIndex: number) {
-  state.dragState = null
-}
-
-/** Confirme le déplacement de candidature en attente. */
-export function confirmDrag() {
-  state.dragPopup = null
-}
-
-/** Annule le déplacement de candidature en cours. */
-export function cancelDrag() {
-  state.dragPopup = null
-  state.dragState = null
 }
 
 /** Ouvre la corbeille de la session courante. */
@@ -278,51 +385,111 @@ export function closeDetailPopup() {
 }
 
 /**
- * Ajoute un événement au suivi de la candidature ouverte.
+ * Ouvre la popup de lecture du contenu associé à une entrée de l'historique
+ * de statut (mail ou message envoyé lors du changement de statut).
  *
- * @param type - Type d'événement à ajouter.
+ * @param content - Contenu à afficher.
  */
-export function addEvent(type: EventType) {
-  state.detailEvents.push({ id: state.nextEventId++, type })
-  state.detailPopup = null
+export function openStatusHistoryPopup(content: string) {
+  state.detailStatusHistoryContent = content
+  state.detailPopup = 'statusHistoryContent'
 }
 
-/**
- * Retire un événement du suivi de la candidature ouverte.
- *
- * @param id - Identifiant de l'événement à retirer.
- */
-export function removeEvent(id: number) {
-  state.detailEvents = state.detailEvents.filter((e: AppEvent) => e.id !== id)
-}
-
+// Ajout de recruteur non persistant en base : la commande Tauri `create_contact`
+// reste à implémenter (voir plan de gate suivante). En attendant, on affiche le
+// contact ajouté localement pour ne pas régresser l'UI existante.
 /** Ajoute un recruteur de démonstration au suivi de la candidature ouverte. */
 export function addRecruiter() {
-  state.detailRecruiters.push({
+  state.detailContacts.push({
     id: state.nextRecruiterId++,
+    candidature_id: state.detailCandidature?.id ?? 0,
     nom: 'Nouveau Recruteur',
-    poste: 'Chargé·e RH',
+    role: 'Chargé·e RH',
     email: 'recruiter@entreprise.com',
+    telephone: null,
+    notes: null,
+    created_at: new Date().toISOString(),
   })
   state.detailPopup = null
 }
 
-/** Envoie la candidature ouverte à la corbeille et retourne au suivi. */
-export function trashCard() {
-  state.selectedCard = null
-  state.screen = 'tracking'
+/**
+ * Abandonne la candidature ouverte (statut « à postuler ») et retourne au
+ * suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function deleteCandidature(): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  try {
+    await invoke<void>('abandon_candidature', { id: current.id })
+    state.detailPopup = null
+    state.selectedCard = null
+    state.screen = 'tracking'
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, 'Impossible de supprimer la candidature.')
+  }
 }
 
-/** Marque la candidature ouverte comme acceptée et retourne au suivi. */
-export function acceptCard() {
-  state.selectedCard = null
-  state.screen = 'tracking'
+/**
+ * Invoque une commande Tauri « postuler » (mail, message ou sans message)
+ * pour la candidature ouverte, puis retourne au suivi de la session en cas
+ * de succès.
+ *
+ * @param command - Nom de la commande Tauri à invoquer (reçoit `{ id }`).
+ * @param errorFallback - Message d'erreur par défaut si l'erreur n'est pas exploitable.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+async function applyVia(command: string, errorFallback: string): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+
+  try {
+    await invoke<void>(command, { id: current.id })
+    state.detailPopup = null
+    state.selectedCard = null
+    state.screen = 'tracking'
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, errorFallback)
+  }
 }
 
-/** Annule l'acceptation de la candidature ouverte et retourne au suivi. */
-export function cancelAcceptation() {
-  state.selectedCard = null
-  state.screen = 'tracking'
+/**
+ * Postule sans message : exporte le CV et la lettre de motivation de la
+ * candidature ouverte vers le dossier de téléchargements, marque la
+ * candidature comme postulée, puis retourne au suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function applyWithoutMessage(): Promise<string | null> {
+  return applyVia('postuler_sans_message', 'Impossible de postuler sans message.')
+}
+
+/**
+ * Postule par mail : fait rédiger un mail de candidature par l'IA, exporte
+ * CV, lettre de motivation et mail vers le dossier de téléchargements,
+ * marque la candidature comme postulée, puis retourne au suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function applyByMail(): Promise<string | null> {
+  return applyVia('postuler_par_mail', 'Impossible de postuler par mail.')
+}
+
+/**
+ * Postule par message : fait rédiger un message court (LinkedIn ou
+ * équivalent) par l'IA, exporte CV, lettre de motivation et message vers le
+ * dossier de téléchargements, marque la candidature comme postulée, puis
+ * retourne au suivi de la session.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function applyByMessage(): Promise<string | null> {
+  return applyVia('postuler_par_message', 'Impossible de postuler par message.')
 }
 
 // Expose raw state for components that need it

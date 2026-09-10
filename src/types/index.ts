@@ -15,6 +15,9 @@ export interface UpdateUserInfoInput {
   email: string | null
   telephone: string | null
   permis: boolean | null
+  linkedin: string | null
+  github: string | null
+  portfolio: string | null
 }
 
 export interface CreateUserInput {
@@ -47,10 +50,10 @@ export interface UserView {
 }
 // ── Suivi de candidatures (kanban) ───────────────────────────────────────────
 
-export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'addEvent' | null
-export type EventType = 'mail_relance' | 'mail_reponse' | 'entretien'
+export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'statusHistoryContent' | 'confirmDelete' | 'apply' | null
 
 export interface BoardCard {
+  id: number
   company: string
   role: string
   location: string
@@ -58,38 +61,28 @@ export interface BoardCard {
   meta: string
 }
 
-export interface BoardColumn {
-  title: string
-  cards: BoardCard[]
-}
+export type SessionStatut = 'active' | 'pause' | 'termine'
 
 export interface Session {
   id: number
   nom: string
+  contexte: string | null
+  statut: SessionStatut
+  zone: string | null
   candidature_count: number
   has_accepted: boolean
   created_at: string
 }
 
-export interface Recruiter {
-  id: number
+export interface UpdateSessionInput {
   nom: string
-  poste: string
-  email: string
-}
-
-export interface AppEvent {
-  id: number
-  type: EventType
+  contexte: string | null
+  statut: SessionStatut
+  zone: string | null
 }
 
 export interface NewContact {
   id: number
-}
-
-export interface DragState {
-  fromColIndex: number
-  cardIndex: number
 }
 
 // ── Profil : expériences, compétences, langues, formations, projets ──────────
@@ -188,8 +181,6 @@ export interface ProfileDto {
   projets: ProjetView[]
   skills: SkillView[]
   langues: LangView[]
-  cv_reference: DocumentReferenceView | null
-  lettre_motivation_reference: DocumentReferenceView | null
 }
 
 // ── Candidatures ──────────────────────────────────────────────────────────────
@@ -205,6 +196,7 @@ export interface CandidatureView {
   type_contrat: string | null
   date_candidature: string | null
   next_relance: string | null
+  derniere_maj_statut: string
   cv_path: string | null
   lettre_motivation_path: string | null
   created_at: string
@@ -225,11 +217,156 @@ export interface CreateCandidatureInput {
   session_id: number | null
 }
 
-export interface DragPopupState {
-  card: BoardCard
-  fromColTitle: string
-  toColTitle: string
-  fromColIndex: number
-  toColIndex: number
-  cardIndex: number
+/** Champs extraits d'une offre scrapée (voir `scrape_offer`), pour pré-remplir le formulaire. */
+export interface ScrapedOfferFields {
+  poste: string | null
+  entreprise: string | null
+  localisation: string | null
+  type_contrat: string | null
+  remuneration: string | null
+  description_offre: string | null
+}
+
+export interface UpdateCandidatureInput {
+  poste: string
+  entreprise: string | null
+  localisation: string | null
+  type_contrat: string | null
+  source: string | null
+  remuneration: string | null
+  url_offre: string | null
+  notes: string | null
+}
+
+export interface CandidatureDetail {
+  id: number
+  session_id: number | null
+  poste: string
+  entreprise: string | null
+  localisation: string | null
+  status: string
+  source: string | null
+  type_contrat: string | null
+  remuneration: string | null
+  url_offre: string | null
+  description_offre: string | null
+  notes: string | null
+  date_candidature: string | null
+  next_relance: string | null
+  cv_path: string | null
+  lettre_motivation_path: string | null
+  created_at: string
+}
+
+export interface ContactView {
+  id: number
+  candidature_id: number
+  nom: string | null
+  role: string | null
+  email: string | null
+  telephone: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface StatusHistoryView {
+  id: number
+  candidature_id: number
+  event_type: string
+  ancien_status: string | null
+  /** `null` si l'événement ne change pas le statut (message, appel, note...). */
+  nouveau_status: string | null
+  content: string | null
+  interview_id: number | null
+  changed_at: string
+}
+
+/** Événement proposable pour le statut courant d'une candidature (voir `get_available_events`). */
+export interface AvailableEvent {
+  event_type: string
+  label: string
+  changes_status: boolean
+  target_status: string | null
+}
+
+/** Entretien rattaché à une candidature. */
+export interface InterviewView {
+  id: number
+  candidature_id: number
+  type: string | null
+  date_entretien: string | null
+  lieu: string | null
+  issue: string
+  notes: string | null
+  contact_id: number | null
+}
+
+/** Données de l'entretien à créer, pour un événement `entretien_planifie`. */
+export interface NewInterviewData {
+  type: string
+  date_entretien: string | null
+  lieu: string | null
+  modalite: string | null
+  contact_id: number | null
+}
+
+/** Entretien enrichi de sa candidature, pour la vue planning. */
+export interface PlanningInterviewView {
+  id: number
+  candidature_id: number
+  entreprise: string | null
+  poste: string
+  type: string | null
+  date_entretien: string | null
+  lieu: string | null
+  modalite: string | null
+  issue: string
+  notes: string | null
+}
+
+/** Entrée soumise pour ajouter un événement à la timeline d'une candidature. */
+export interface NewTimelineEvent {
+  event_type: string
+  content: string | null
+  interview_data: NewInterviewData | null
+  interview_id: number | null
+  interview_issue: string | null
+}
+
+export interface DocumentFileInfo {
+  exists: boolean
+  size: number
+}
+
+// ── Paramètres ────────────────────────────────────────────────────────────────
+
+/** Thème d'affichage de l'application. */
+export type ThemeSetting = 'clair' | 'sombre' | 'systeme'
+
+/** Résultat de la commande de diagnostic `db_status`. */
+export interface DbStatusResult {
+  db_path: string
+  tables: string[]
+}
+
+/** Statut de la clé API Anthropic, sans jamais exposer sa valeur réelle. */
+export interface ApiKeyStatus {
+  exists: boolean
+  source: 'env' | 'keyring'
+}
+
+/** Résultat d'un test de connexion à l'API Claude. */
+export interface TestConnectionResult {
+  success: boolean
+  model: string
+  message: string
+  latency_ms: number
+}
+
+// ── Polices ───────────────────────────────────────────────────────────────────
+
+/** Famille de polices importée par l'utilisateur pour la compilation Typst. */
+export interface FontFamilyView {
+  name: string
+  file_count: number
 }

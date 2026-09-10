@@ -154,12 +154,12 @@ defineExpose({ hasChanges, reset, save })
 </script>
 
 <template>
-  <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+  <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
     <div :class="editMode ? 'flex items-center justify-between mb-[14px]' : ''">
       <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">COMPÉTENCES</div>
       <button
         v-if="editMode"
-        class="h-[30px] px-3 text-[12px] rounded-lg border border-neutral-300 bg-white font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        class="h-[30px] px-3 text-[12px] rounded-lg border border-neutral-300 bg-surface-2 font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         type="button"
         @click="openAdd"
       >
@@ -197,7 +197,7 @@ defineExpose({ hasChanges, reset, save })
             </span>
             <div class="flex flex-row gap-[5px] flex-none self-center ml-[6px]">
               <button
-                class="w-[30px] h-[30px] rounded-7 border border-neutral-200 bg-neutral-50 flex items-center justify-center cursor-pointer flex-none text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950 hover:border-neutral-300"
+                class="w-[30px] h-[30px] rounded-7 border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer flex-none text-neutral-600 hover:bg-surface-3 hover:text-neutral-950 hover:border-neutral-300"
                 type="button"
                 title="Modifier"
                 @click="openEdit(s)"
@@ -230,7 +230,7 @@ defineExpose({ hasChanges, reset, save })
 
   <!-- Popup ajout/modification de compétence -->
   <div v-if="modalOpen" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]">
-    <div class="bg-white rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[440px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6">
+    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[440px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6">
       <div class="flex items-center justify-between mb-5">
         <div class="text-[17px] font-semibold">
           {{ editTarget.kind === 'new' ? 'Ajouter une compétence' : 'Modifier une compétence' }}
@@ -240,7 +240,7 @@ defineExpose({ hasChanges, reset, save })
 
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom de la compétence *</label>
-        <input v-model="draft.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Python, Vue.js, Figma…" />
+        <input v-model="draft.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Python, Vue.js, Figma…" />
       </div>
 
       <div class="mb-0">
@@ -248,7 +248,7 @@ defineExpose({ hasChanges, reset, save })
         <div class="relative">
           <input
             v-model="draft.domaine"
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             placeholder="Langages, Frameworks, Outils…"
             autocomplete="off"
             @focus="domainDropdownOpen = true"
@@ -257,12 +257,12 @@ defineExpose({ hasChanges, reset, save })
           />
           <div
             v-if="domainDropdownOpen && (filteredDomains.length > 0 || draft.domaine.trim())"
-            class="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-neutral-300 rounded-lg shadow-[0_4px_20px_rgba(0,0,0,.12)] z-[200] overflow-hidden max-h-[200px] overflow-y-auto"
+            class="absolute top-[calc(100%+4px)] left-0 right-0 bg-surface-3 border border-neutral-300 rounded-lg shadow-[0_4px_20px_rgba(0,0,0,.12)] z-[200] overflow-hidden max-h-[200px] overflow-y-auto"
           >
             <div
               v-for="d in filteredDomains"
               :key="d"
-              class="px-[13px] py-[9px] text-[13.5px] cursor-pointer text-neutral-950 hover:bg-neutral-50"
+              class="px-[13px] py-[9px] text-[13.5px] cursor-pointer text-neutral-950 hover:bg-surface-2"
               @mousedown.prevent="pickDomain(d)"
             >{{ d }}</div>
             <div
@@ -282,7 +282,7 @@ defineExpose({ hasChanges, reset, save })
 
       <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
         <button
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           type="button"
           @click="close"
         >Annuler</button>

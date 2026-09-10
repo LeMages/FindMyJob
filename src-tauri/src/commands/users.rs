@@ -1,10 +1,9 @@
 //! Commandes Tauri pour l'utilisateur unique de l'application et l'agrégation
-//! de son profil complet (expériences, formations, projets, compétences, langues, documents).
+//! de son profil complet (expériences, formations, projets, compétences, langues).
 
 // Importation des modules internes
 use crate::db::init::DbState;
-use crate::db::{experiences, formations, langues, projets, skills, users};
-use crate::documents;
+use crate::db::{profile, users};
 use crate::error::AppError;
 use crate::models::{CreateUserInput, ProfileDto, UpdateUserInfoInput, UserView};
 
@@ -55,43 +54,18 @@ pub async fn get_user(state: tauri::State<'_, DbState>) -> Result<UserView, AppE
 }
 
 /// Récupère le profil complet de l'utilisateur : informations, expériences,
-/// formations, projets, compétences, langues et références de documents.
+/// formations, projets, compétences et langues.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri (résolution des chemins de documents).
 /// * `state` - État partagé (pool de connexions).
 ///
 /// # Returns
 ///
 /// `ProfileDto` agrégeant l'ensemble des données du profil.
 #[tauri::command]
-pub async fn get_profile(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, DbState>,
-) -> Result<ProfileDto, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    let uid = user.id;
-
-    let profile_experiences = experiences::list_for_user(&state.pool, uid).await?;
-    let profile_formations = formations::list_for_user(&state.pool, uid).await?;
-    let profile_projets = projets::list_for_user(&state.pool, uid).await?;
-    let profile_skills = skills::list_for_user(&state.pool, uid).await?;
-    let profile_langues = langues::list_for_user(&state.pool, uid).await?;
-
-    let cv_reference = documents::get_reference(&app, "cv");
-    let lettre_motivation_reference = documents::get_reference(&app, "lettre_motivation");
-
-    Ok(ProfileDto {
-        user,
-        experiences: profile_experiences,
-        formations: profile_formations,
-        projets: profile_projets,
-        skills: profile_skills,
-        langues: profile_langues,
-        cv_reference,
-        lettre_motivation_reference,
-    })
+pub async fn get_profile(state: tauri::State<'_, DbState>) -> Result<ProfileDto, AppError> {
+    profile::build_profile(&state.pool).await
 }
 
 /// Met à jour la description libre du profil.

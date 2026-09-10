@@ -11,6 +11,9 @@ pub enum AppError {
     Validation(String),
     Conflict(String),
     NotFound(String),
+    Config(String),
+    Llm(String),
+    Scraping(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -19,7 +22,10 @@ impl std::fmt::Display for AppError {
             AppError::Database(m)
             | AppError::Validation(m)
             | AppError::Conflict(m)
-            | AppError::NotFound(m) => write!(f, "{}", m),
+            | AppError::NotFound(m)
+            | AppError::Config(m)
+            | AppError::Llm(m)
+            | AppError::Scraping(m) => write!(f, "{}", m),
         }
     }
 }

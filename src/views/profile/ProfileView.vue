@@ -2,9 +2,9 @@
 /**
  * Vue « Profil » : affiche et permet d'éditer les informations de
  * l'utilisateur (identité, description, expériences, formations, projets,
- * compétences, langues, CV et lettre de motivation). La persistance de
- * chaque section est déléguée aux composants sous `components/` ; cette vue
- * ne fait que les composer et orchestrer la sauvegarde globale.
+ * compétences, langues). La persistance de chaque section est déléguée aux
+ * composants sous `components/` ; cette vue ne fait que les composer et
+ * orchestrer la sauvegarde globale.
  */
 
 // Importation des modules Vue / framework
@@ -19,7 +19,6 @@ import FormationsSection from './components/FormationsSection.vue'
 import ProjetsSection from './components/ProjetsSection.vue'
 import SkillsSection from './components/SkillsSection.vue'
 import LanguesSection from './components/LanguesSection.vue'
-import DocumentReferenceEditor from '@/components/DocumentReferenceEditor.vue'
 import type {
   ProfileDto,
   UserView,
@@ -29,12 +28,28 @@ import type {
   ProjetView,
   SkillView,
   LangView,
-  DocumentReferenceView,
 } from '@/types/index'
 
 const profile = ref<ProfileDto | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
+const linkError = ref<string | null>(null)
+
+/**
+ * Ouvre une URL du profil (LinkedIn, GitHub, portfolio) dans le navigateur
+ * par défaut de l'utilisateur, via la commande Tauri `open_url` — un simple
+ * `<a target="_blank">` ne fonctionne pas dans la webview.
+ *
+ * @param url - URL à ouvrir.
+ */
+async function openExternalLink(url: string): Promise<void> {
+  linkError.value = null
+  try {
+    await invoke('open_url', { url })
+  } catch (e: unknown) {
+    linkError.value = extractErrorMessage(e, "Impossible d'ouvrir ce lien.")
+  }
+}
 
 // ── Mode édition ────────────────────────────────────────────────────────────
 
@@ -49,9 +64,21 @@ interface UserInfoDraft {
   email: string
   telephone: string
   permis: boolean
+  linkedin: string
+  github: string
+  portfolio: string
 }
 
-const draftUserInfo = ref<UserInfoDraft>({ prenom: '', nom: '', email: '', telephone: '', permis: false })
+const draftUserInfo = ref<UserInfoDraft>({
+  prenom: '',
+  nom: '',
+  email: '',
+  telephone: '',
+  permis: false,
+  linkedin: '',
+  github: '',
+  portfolio: '',
+})
 
 function isUserInfoDirty(): boolean {
   const u = profile.value?.user
@@ -61,7 +88,10 @@ function isUserInfoDirty(): boolean {
     draftUserInfo.value.nom !== (u.nom ?? '') ||
     draftUserInfo.value.email !== (u.email ?? '') ||
     draftUserInfo.value.telephone !== (u.telephone ?? '') ||
-    draftUserInfo.value.permis !== (u.permis ?? false)
+    draftUserInfo.value.permis !== (u.permis ?? false) ||
+    draftUserInfo.value.linkedin !== (u.linkedin ?? '') ||
+    draftUserInfo.value.github !== (u.github ?? '') ||
+    draftUserInfo.value.portfolio !== (u.portfolio ?? '')
   )
 }
 
@@ -72,8 +102,6 @@ const formationsSection = ref<InstanceType<typeof FormationsSection> | null>(nul
 const projetsSection = ref<InstanceType<typeof ProjetsSection> | null>(null)
 const skillsSection = ref<InstanceType<typeof SkillsSection> | null>(null)
 const languesSection = ref<InstanceType<typeof LanguesSection> | null>(null)
-const cvEditor = ref<InstanceType<typeof DocumentReferenceEditor> | null>(null)
-const lettreEditor = ref<InstanceType<typeof DocumentReferenceEditor> | null>(null)
 
 const isDirty = computed(() =>
   isUserInfoDirty() ||
@@ -82,9 +110,7 @@ const isDirty = computed(() =>
   (formationsSection.value?.hasChanges ?? false) ||
   (projetsSection.value?.hasChanges ?? false) ||
   (skillsSection.value?.hasChanges ?? false) ||
-  (languesSection.value?.hasChanges ?? false) ||
-  (cvEditor.value?.hasChanges ?? false) ||
-  (lettreEditor.value?.hasChanges ?? false),
+  (languesSection.value?.hasChanges ?? false),
 )
 
 function enterEditMode() {
@@ -95,6 +121,9 @@ function enterEditMode() {
     email: u?.email ?? '',
     telephone: u?.telephone ?? '',
     permis: u?.permis ?? false,
+    linkedin: u?.linkedin ?? '',
+    github: u?.github ?? '',
+    portfolio: u?.portfolio ?? '',
   }
   draftDescription.value = u?.description ?? ''
   saveError.value = null
@@ -107,8 +136,6 @@ function cancelEdit() {
   projetsSection.value?.reset()
   skillsSection.value?.reset()
   languesSection.value?.reset()
-  cvEditor.value?.reset()
-  lettreEditor.value?.reset()
   saveError.value = null
   editMode.value = false
 }
@@ -125,16 +152,43 @@ function syncUserInfo(u: UserView) {
   setUserInfo(name, initials || '?')
 }
 
+/**
+ * Vérifie qu'une valeur non vide est une URL valide.
+ *
+ * @param value - Valeur saisie (déjà trim).
+ * @returns `true` si `value` est vide ou constitue une URL valide.
+ */
+function isValidUrlOrEmpty(value: string): boolean {
+  if (!value) return true
+  try {
+    new URL(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Sauvegarde les informations de contact du profil, si elles ont changé. */
 async function saveUserInfo(): Promise<void> {
   if (!isUserInfoDirty()) return
   const d = draftUserInfo.value
+  const linkedin = d.linkedin.trim()
+  const github = d.github.trim()
+  const portfolio = d.portfolio.trim()
+
+  if (!isValidUrlOrEmpty(linkedin)) throw new Error('Le lien LinkedIn n\'est pas une URL valide.')
+  if (!isValidUrlOrEmpty(github)) throw new Error('Le lien GitHub n\'est pas une URL valide.')
+  if (!isValidUrlOrEmpty(portfolio)) throw new Error('Le lien portfolio n\'est pas une URL valide.')
+
   const input: UpdateUserInfoInput = {
     prenom: d.prenom.trim() || null,
     nom: d.nom.trim() || null,
     email: d.email.trim() || null,
     telephone: d.telephone.trim() || null,
     permis: d.permis,
+    linkedin: linkedin || null,
+    github: github || null,
+    portfolio: portfolio || null,
   }
   const updated = await invoke<UserView>('update_user_info', { input })
   profile.value!.user = updated
@@ -154,9 +208,7 @@ async function saveDescription(): Promise<void> {
 /**
  * Orchestre la sauvegarde de toutes les sections du profil : informations
  * utilisateur, description, puis chaque liste éditable (expériences,
- * formations, projets, compétences, langues). Les documents (CV, lettre) sont
- * déjà persistés au moment de leur sélection — seule leur marque « modifié »
- * est réinitialisée ici.
+ * formations, projets, compétences, langues).
  */
 async function saveAll() {
   if (!isDirty.value || saving.value) return
@@ -185,23 +237,12 @@ async function saveAll() {
       if (langues) profile.value.langues = langues as LangView[]
     }
 
-    // 3. Documents — déjà persistés à la sélection, on efface juste la marque « modifié »
-    cvEditor.value?.reset()
-    lettreEditor.value?.reset()
     editMode.value = false
   } catch (e: unknown) {
     saveError.value = extractErrorMessage(e, 'Erreur lors de la sauvegarde.')
   } finally {
     saving.value = false
   }
-}
-
-function onCvReferenceSaved(reference: DocumentReferenceView) {
-  if (profile.value) profile.value.cv_reference = reference
-}
-
-function onLettreReferenceSaved(reference: DocumentReferenceView) {
-  if (profile.value) profile.value.lettre_motivation_reference = reference
 }
 
 onMounted(async () => {
@@ -240,7 +281,7 @@ const initials = computed(() => {
     <div class="text-[13px] text-neutral-500 mt-[5px] font-mono mb-[18px]">Ces informations pré-remplissent tes candidatures.</div>
 
     <!-- Header -->
-    <div class="flex items-center gap-5 bg-white border border-neutral-200 rounded-xl p-6">
+    <div class="flex items-center gap-5 bg-surface-1 border border-neutral-200 rounded-xl p-6">
       <div class="w-[84px] h-[84px] rounded-full flex-none flex items-center justify-center font-semibold text-[26px] bg-neutral-200 text-neutral-700">
         {{ initials }}
       </div>
@@ -252,39 +293,79 @@ const initials = computed(() => {
           <span v-if="profile.user.email">{{ profile.user.email }}</span>
           <span v-if="profile.user.telephone">{{ profile.user.telephone }}</span>
           <span v-if="profile.user.ville">{{ profile.user.ville }}</span>
-          <span v-if="profile.user.github">{{ profile.user.github }}</span>
-          <span v-if="profile.user.linkedin">{{ profile.user.linkedin }}</span>
+          <a
+            v-if="profile.user.linkedin"
+            href="#"
+            :title="profile.user.linkedin"
+            class="inline-flex items-center gap-1.5 hover:text-neutral-900 cursor-pointer"
+            @click.prevent="openExternalLink(profile.user.linkedin!)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+              <rect width="4" height="12" x="2" y="9" />
+              <circle cx="4" cy="4" r="2" />
+            </svg>
+            LinkedIn
+          </a>
+          <a
+            v-if="profile.user.github"
+            href="#"
+            :title="profile.user.github"
+            class="inline-flex items-center gap-1.5 hover:text-neutral-900 cursor-pointer"
+            @click.prevent="openExternalLink(profile.user.github!)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+              <path d="M9 18c-4.51 2-5-2-7-2" />
+            </svg>
+            GitHub
+          </a>
+          <a
+            v-if="profile.user.portfolio"
+            href="#"
+            :title="profile.user.portfolio"
+            class="inline-flex items-center gap-1.5 hover:text-neutral-900 cursor-pointer"
+            @click.prevent="openExternalLink(profile.user.portfolio!)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+              <path d="M2 12h20" />
+            </svg>
+            Portfolio
+          </a>
           <span v-if="profile.user.permis === true">Permis B</span>
         </div>
+        <div v-if="linkError" class="text-[12px] text-red-500 mt-[7px]">{{ linkError }}</div>
       </div>
       <button
         v-if="!editMode"
-        class="h-9 px-4 rounded-lg border border-neutral-300 bg-white text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-neutral-100"
+        class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         @click="enterEditMode"
       >Modifier</button>
     </div>
 
     <!-- Section infos de base (visible uniquement en mode édition) -->
-    <div v-if="editMode" class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px] mt-[18px]">
+    <div v-if="editMode" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px] mt-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">INFORMATIONS</div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Prénom</label>
-          <input v-model="draftUserInfo.prenom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom" />
+          <input v-model="draftUserInfo.prenom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom" />
         </div>
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom</label>
-          <input v-model="draftUserInfo.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom" />
+          <input v-model="draftUserInfo.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom" />
         </div>
       </div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse e-mail</label>
-          <input v-model="draftUserInfo.email" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" type="email" placeholder="prenom.nom@email.com" />
+          <input v-model="draftUserInfo.email" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" type="email" placeholder="prenom.nom@email.com" />
         </div>
         <div class="flex-1 mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Téléphone</label>
-          <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
+          <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
         </div>
       </div>
       <label class="inline-flex items-center gap-2 text-[13.5px] cursor-pointer select-none mt-0.5">
@@ -293,11 +374,50 @@ const initials = computed(() => {
       </label>
     </div>
 
+    <!-- Section liens (visible uniquement en mode édition) -->
+    <div v-if="editMode" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">LIENS</div>
+      <div class="flex gap-[14px]">
+        <div class="flex-1">
+          <label class="text-[12px] text-neutral-600 mb-[5px] flex items-center gap-1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+              <rect width="4" height="12" x="2" y="9" />
+              <circle cx="4" cy="4" r="2" />
+            </svg>
+            LinkedIn
+          </label>
+          <input v-model="draftUserInfo.linkedin" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://linkedin.com/in/..." />
+        </div>
+        <div class="flex-1">
+          <label class="text-[12px] text-neutral-600 mb-[5px] flex items-center gap-1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+              <path d="M9 18c-4.51 2-5-2-7-2" />
+            </svg>
+            GitHub
+          </label>
+          <input v-model="draftUserInfo.github" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://github.com/..." />
+        </div>
+        <div class="flex-1">
+          <label class="text-[12px] text-neutral-600 mb-[5px] flex items-center gap-1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+              <path d="M2 12h20" />
+            </svg>
+            Portfolio
+          </label>
+          <input v-model="draftUserInfo.portfolio" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://monsite.com" />
+        </div>
+      </div>
+    </div>
+
     <div class="grid grid-cols-[1fr_300px] gap-6 mt-[18px] items-start">
       <!-- ── Colonne gauche ── -->
       <div>
         <!-- À propos -->
-        <div class="bg-white border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+        <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
           <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">À PROPOS</div>
           <template v-if="!editMode">
             <div v-if="profile.user.description" class="text-[13px] text-neutral-700 mt-[7px] leading-[1.55]">{{ profile.user.description }}</div>
@@ -306,7 +426,7 @@ const initials = computed(() => {
           <textarea
             v-else
             v-model="draftDescription"
-            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-neutral-50 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
+            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
             placeholder="Décris ton parcours, tes objectifs…"
           />
         </div>
@@ -320,26 +440,11 @@ const initials = computed(() => {
       <div>
         <SkillsSection ref="skillsSection" :items="profile.skills" :edit-mode="editMode" />
         <LanguesSection ref="languesSection" :items="profile.langues" :edit-mode="editMode" />
-
-        <DocumentReferenceEditor
-          ref="cvEditor"
-          doc-type="cv"
-          :reference="profile.cv_reference"
-          :edit-mode="editMode"
-          @update:reference="onCvReferenceSaved"
-        />
-        <DocumentReferenceEditor
-          ref="lettreEditor"
-          doc-type="lettre_motivation"
-          :reference="profile.lettre_motivation_reference"
-          :edit-mode="editMode"
-          @update:reference="onLettreReferenceSaved"
-        />
       </div>
     </div>
 
     <!-- Edit footer -->
-    <div v-if="editMode" class="fixed bottom-0 left-[264px] right-0 h-[60px] bg-white border-t border-neutral-200 flex items-center gap-[10px] px-9 z-10">
+    <div v-if="editMode" class="fixed bottom-0 left-[264px] right-0 h-[60px] bg-surface-1 border-t border-neutral-200 flex items-center gap-[10px] px-9 z-10">
       <span v-if="saveError" class="font-mono text-[12px] text-red-500">{{ saveError }}</span>
       <div class="flex-1 min-w-0" />
       <button

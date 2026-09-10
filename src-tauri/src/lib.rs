@@ -6,7 +6,10 @@ pub mod commands;
 pub mod db;
 pub mod documents;
 pub mod error;
+pub mod llm;
 pub mod models;
+pub mod scraping;
+pub mod security;
 
 // Importation des crates externes
 use tauri::Manager;
@@ -18,6 +21,10 @@ use db::init::{init_db, resolve_db_path, DbState};
 /// l'injecte comme état partagé, puis enregistre toutes les commandes IPC .
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Charge le .env à la racine du projet (ANTHROPIC_API_KEY, etc.) — no-op
+    // silencieux si le fichier est absent (ex. build de production packagée).
+    dotenvy::dotenv().ok();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -58,16 +65,41 @@ pub fn run() {
             commands::delete_skill,
             commands::update_skill,
             commands::create_candidature,
+            commands::scrape_offer,
+            commands::extract_offer_from_text,
             commands::get_candidatures,
-            commands::upload_candidature_cv,
-            commands::upload_candidature_lettre_motivation,
-            commands::get_cv_reference_dir,
-            commands::get_lettre_motivation_reference_dir,
-            commands::select_candidature_cv,
-            commands::select_candidature_lettre_motivation,
+            commands::get_candidature,
+            commands::update_candidature,
+            commands::abandon_candidature,
+            commands::postuler_sans_message,
+            commands::postuler_par_mail,
+            commands::postuler_par_message,
+            commands::get_contacts,
+            commands::get_status_history,
+            commands::get_available_events,
+            commands::add_timeline_event,
+            commands::get_pending_interviews,
+            commands::get_all_interviews_for_session,
+            commands::get_document_info,
+            commands::get_document_pdf,
             commands::create_session,
             commands::get_sessions,
+            commands::update_session,
             commands::delete_session,
+            commands::get_api_key_status,
+            commands::set_api_key,
+            commands::delete_api_key,
+            commands::get_llm_model,
+            commands::set_llm_model,
+            commands::get_theme,
+            commands::set_theme,
+            commands::get_documents_path,
+            commands::open_folder,
+            commands::test_api_connection,
+            commands::export_data_json,
+            commands::list_fonts,
+            commands::import_font_folder,
+            commands::delete_font,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

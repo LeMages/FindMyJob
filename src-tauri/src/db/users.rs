@@ -164,6 +164,8 @@ pub async fn update_description(
 ///
 /// Les champs `None` conservent leur valeur existante (`COALESCE`), à l'exception
 /// de `telephone` et `permis` qui sont toujours remplacés (y compris par `None`).
+/// `linkedin`, `github` et `portfolio` suivent le même comportement `COALESCE` que
+/// `prenom`/`nom`/`email` : un champ vidé côté client (`None`) ne l'efface pas en base.
 ///
 /// # Arguments
 ///
@@ -193,6 +195,9 @@ pub async fn update_user_info(
            email     = COALESCE(?, email), \
            telephone = ?, \
            permis    = ?, \
+           linkedin  = COALESCE(?, linkedin), \
+           github    = COALESCE(?, github), \
+           portfolio = COALESCE(?, portfolio), \
            updated_at = CURRENT_TIMESTAMP \
          WHERE id = (SELECT id FROM users LIMIT 1)",
     )
@@ -201,6 +206,9 @@ pub async fn update_user_info(
     .bind(email)
     .bind(normalize(input.telephone))
     .bind(permis)
+    .bind(normalize(input.linkedin))
+    .bind(normalize(input.github))
+    .bind(normalize(input.portfolio))
     .execute(pool)
     .await?;
 
