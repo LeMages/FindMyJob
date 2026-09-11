@@ -41,7 +41,7 @@ Aujourd'hui l'app appelle directement l'API Claude d'Anthropic. Une couche compa
 
 ## Base de données
 
-Les données sont stockées localement dans un fichier SQLite. Le schéma est versionné dans `db/migrations/`.
+Les données sont stockées localement dans un fichier SQLite. Le schéma est versionné dans `db/migrations/sqlite/`.
 
 | Table | Rôle |
 |---|---|
@@ -71,11 +71,13 @@ Les données sont stockées localement dans un fichier SQLite. Le schéma est ve
 - [Rust](https://rustup.rs/) (stable)
 - Dépendances système Tauri : [guide officiel](https://tauri.app/start/prerequisites/)
 
+Le projet est un monorepo Cargo workspace : le frontend et le crate Tauri vivent dans `crates/desktop/`.
+
 ### Développement
 
 ```bash
 git clone https://github.com/KanASon/FindMyJob.git
-cd FindMyJob
+cd FindMyJob/crates/desktop
 npm install
 npm run tauri dev
 ```
@@ -83,10 +85,19 @@ npm run tauri dev
 ### Build de production
 
 ```bash
+cd crates/desktop
 npm run tauri build
 ```
 
-L'installeur est généré dans `src-tauri/target/release/bundle/`.
+L'installeur est généré dans `target/release/bundle/` (à la racine du repo).
+
+### Agent de scraping
+
+`crates/agent` est un service headless (indépendant de l'app desktop) qui récupère des offres d'emploi depuis Welcome to the Jungle via leur API Algolia publique et les affiche dans la console.
+
+```bash
+cargo run -p findmyjob-agent
+```
 
 ## Convention de commits
 
