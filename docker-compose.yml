@@ -1,9 +1,35 @@
-# Placeholder : service pour le futur agent FindMyJob (headless).
-# À compléter une fois le crate crates/agent implémenté (base de données,
-# ports, variables d'environnement).
-
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-findmyjob}
+      POSTGRES_USER: ${DB_USER:-findmyjob}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-findmyjob}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-findmyjob}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   agent:
     build:
       context: .
       dockerfile: Dockerfile.agent
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-findmyjob}
+      DB_PASSWORD: ${DB_PASSWORD:-findmyjob}
+      DB_DATABASE: ${DB_DATABASE:-findmyjob}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      CRON_INTERVAL: ${CRON_INTERVAL:-6h}
+
+volumes:
+  pgdata:

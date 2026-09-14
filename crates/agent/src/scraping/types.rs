@@ -1,24 +1,31 @@
 //! Types partagés entre toutes les sources de scraping d'offres d'emploi.
 
-// Importation des modules externes
+// Importation des crates externes
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 
 /// Une offre d'emploi normalisée, indépendamment de sa source.
 ///
 /// Attributes:
+///     source: Identifiant de la source ("wttj", "indeed"...).
+///     source_id: Identifiant de l'offre côté source (slug, ID...), si connu.
 ///     title: Intitulé du poste.
 ///     company: Nom de l'entreprise.
 ///     location: Localisation affichée (ville, pays...).
 ///     url: Lien vers l'offre sur le site source.
 ///     contract_type: Type de contrat (stage, alternance, CDI...), si connu.
 ///     posted_at: Date de publication, si connue.
+///     scraped_at: Date à laquelle l'offre a été récupérée.
 pub struct ScrapedOffer {
+    pub source: String,
+    pub source_id: Option<String>,
     pub title: String,
     pub company: String,
     pub location: String,
     pub url: String,
     pub contract_type: Option<String>,
-    pub posted_at: Option<String>,
+    pub posted_at: Option<DateTime<Utc>>,
+    pub scraped_at: DateTime<Utc>,
 }
 
 /// Une recherche d'offres à exécuter sur une source.

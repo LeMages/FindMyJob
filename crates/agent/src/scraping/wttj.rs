@@ -6,6 +6,7 @@ use std::time::Duration;
 
 // Importation des crates externes
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
@@ -178,14 +179,24 @@ impl From<AlgoliaHit> for ScrapedOffer {
             "https://www.welcometothejungle.com/fr/companies/{}/jobs/{}",
             hit.organization.slug, hit.slug
         );
+        // Format Algolia non garanti par contrat : on tombe sur `None` plutôt
+        // que de paniquer si `published_at` n'est pas au format RFC 3339.
+        let posted_at = hit
+            .published_at
+            .as_deref()
+            .and_then(|raw| DateTime::parse_from_rfc3339(raw).ok())
+            .map(|dt| dt.with_timezone(&Utc));
 
         Self {
+            source: "wttj".to_string(),
+            source_id: Some(hit.slug),
             title: hit.name,
             company: hit.organization.name,
             location,
             url,
             contract_type: hit.contract_type_names.and_then(|names| names.fr),
-            posted_at: hit.published_at,
+            posted_at,
+            scraped_at: Utc::now(),
         }
     }
 }

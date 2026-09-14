@@ -9,3 +9,6 @@ serde_json = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 async-trait = "0.1"
+sqlx = { workspace = true, features = ["postgres", "chrono"] }
+chrono = { workspace = true, features = ["serde"] }
+dotenvy = { workspace = true }
