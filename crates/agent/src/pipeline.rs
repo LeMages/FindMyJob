@@ -1,20 +1,21 @@
 //! Orchestration du pipeline de génération de documents (CV + lettre de
-//! motivation) pour une candidature : enchaîne les 6 appels LLM du module
-//! `llm`, compile le Typst produit en PDF, et retry une fois la compilation
-//! en cas d'échec. Tout est synchrone dans l'appelant (pas de queue).
+//! motivation) pour une candidature : enchaîne les 6 appels LLM du crate
+//! `findmyjob-core` (module `llm`), compile le Typst produit en PDF, et
+//! retry une fois la compilation en cas d'échec. Tout est synchrone dans
+//! l'appelant (pas de queue).
 
 // Importation des modules standard
 use std::path::{Path, PathBuf};
 
 // Importation des crates externes
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 // Importation des modules internes
 use crate::db;
 use crate::documents::compile_to_pdf;
-use crate::error::AppError;
-use crate::llm::{assemble, content, matching, offer};
-use crate::models::Document;
+use findmyjob_core::error::AppError;
+use findmyjob_core::llm::{assemble, content, matching, offer};
+use findmyjob_core::models::Document;
 
 /// Documents générés et compilés pour une candidature, prêts à être
 /// sauvegardés sur disque par l'appelant.
@@ -31,7 +32,7 @@ pub struct GeneratedDocuments {
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `label` - Libellé lisible du type de document, pour le message d'erreur.
@@ -40,7 +41,7 @@ pub struct GeneratedDocuments {
 ///
 /// Le `Document` de référence, garanti avec `style_analysis: Some(_)`.
 async fn require_reference(
-    pool: &SqlitePool,
+    pool: &PgPool,
     session_id: i64,
     doc_type: &str,
     label: &str,
@@ -118,7 +119,7 @@ async fn compile_with_retry(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `fonts_dir` - Dossier des polices importées par l'utilisateur, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session (fournit les documents de référence).
 /// * `description_offre` - Texte brut de l'offre d'emploi.
@@ -127,7 +128,7 @@ async fn compile_with_retry(
 ///
 /// `GeneratedDocuments` avec le Typst et le PDF de chaque document.
 pub async fn generate_documents(
-    pool: &SqlitePool,
+    pool: &PgPool,
     fonts_dir: &Path,
     session_id: i64,
     description_offre: &str,
@@ -138,7 +139,7 @@ pub async fn generate_documents(
     // 1. Profil candidat, modèle configuré, documents de référence
     // ------------------------------------------------------------------
     let profile = db::profile::build_profile(pool).await?;
-    let model = db::settings::resolve_llm_model(pool, crate::llm::client::DEFAULT_MODEL).await?;
+    let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
 
     let cv_doc = require_reference(pool, session_id, "cv", "CV").await?;
     let lm_doc = require_reference(pool, session_id, "lettre_motivation", "lettre de motivation").await?;

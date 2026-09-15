@@ -1,35 +1,37 @@
 //! Accès et logique de persistance pour les contacts recruteur.
 
 // Importation des crates externes
-use sqlx::{Row, SqlitePool};
+use sqlx::{PgPool, Row};
 
 // Importation des modules internes
-use crate::error::AppError;
-use crate::models::ContactView;
+use crate::db::common::map_db_err;
+use findmyjob_core::error::AppError;
+use findmyjob_core::models::ContactView;
 
 /// Liste les contacts recruteur d'une candidature.
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `candidature_id` - Identifiant de la candidature.
 ///
 /// # Returns
 ///
 /// Contacts triés par date de création croissante.
 pub async fn list_for_candidature(
-    pool: &SqlitePool,
+    pool: &PgPool,
     candidature_id: i64,
 ) -> Result<Vec<ContactView>, AppError> {
     let rows = sqlx::query(
         "SELECT id, candidature_id, nom, role, email, telephone, notes, created_at \
          FROM contacts \
-         WHERE candidature_id = ? \
+         WHERE candidature_id = $1 \
          ORDER BY created_at",
     )
     .bind(candidature_id)
     .fetch_all(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     rows.iter()
         .map(|r| -> Result<ContactView, sqlx::Error> {
@@ -45,5 +47,5 @@ pub async fn list_for_candidature(
             })
         })
         .collect::<Result<_, _>>()
-        .map_err(AppError::from)
+        .map_err(map_db_err)
 }

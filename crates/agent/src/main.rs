@@ -1,9 +1,23 @@
 //! Agent FindMyJob (service headless) : scraping d'offres d'emploi.
 
 // Importation des modules internes
+//
+// `db` (au-delà de `offers`), `documents`, `pipeline` et `security` sont
+// migrés depuis `findmyjob-core` (étape 3b) mais pas encore appelés depuis
+// `main` : leur mise en service (endpoints/commandes) est une étape
+// ultérieure. `#[allow(dead_code)]` évite les faux positifs du lint
+// (un binaire, contrairement à une lib, considère tout `pub` non atteint
+// depuis `main` comme mort).
+#[allow(dead_code)]
 mod db;
+#[allow(dead_code, unused_imports)]
+mod documents;
 mod logging;
+#[allow(dead_code)]
+mod pipeline;
 mod scraping;
+#[allow(dead_code)]
+mod security;
 
 use scraping::types::{JobScraper, SearchQuery};
 use scraping::wttj::WttjScraper;

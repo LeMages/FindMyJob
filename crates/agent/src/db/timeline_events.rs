@@ -4,13 +4,13 @@
 //! de l'entretien concerné, et de `status_history`).
 
 // Importation des crates externes
-use sqlx::{Row, SqlitePool};
+use sqlx::{PgPool, Row};
 
 // Importation des modules internes
-use crate::db::common::normalize;
+use crate::db::common::{map_db_err, normalize};
 use crate::db::{interviews, status_history};
-use crate::error::AppError;
-use crate::models::{AvailableEvent, EventType, NewTimelineEvent};
+use findmyjob_core::error::AppError;
+use findmyjob_core::models::{AvailableEvent, EventType, NewTimelineEvent};
 
 /// Statuts non terminaux d'une candidature — un événement de timeline ne peut
 /// être ajouté que tant que la candidature est dans l'un de ces statuts.
@@ -97,7 +97,7 @@ fn push_event(events: &mut Vec<AvailableEvent>, event_type: EventType, label: &s
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `candidature_id` - Identifiant de la candidature concernée.
 /// * `event` - Événement soumis par le frontend.
@@ -109,28 +109,29 @@ fn push_event(events: &mut Vec<AvailableEvent>, event_type: EventType, label: &s
 /// manque, ou `AppError::Conflict` si l'événement n'est pas autorisé pour le
 /// statut courant.
 pub async fn add_event(
-    pool: &SqlitePool,
+    pool: &PgPool,
     user_id: i64,
     candidature_id: i64,
     event: NewTimelineEvent,
 ) -> Result<(), AppError> {
     let event_type = EventType::try_from(event.event_type.as_str())?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = pool.begin().await.map_err(map_db_err)?;
 
     // ------------------------------------------------------------------
     // 1. La candidature doit exister, et l'événement doit être autorisé pour
     //    son statut courant — `available_events` reste la seule source de
     //    vérité, jamais de confiance dans ce qu'envoie le frontend.
     // ------------------------------------------------------------------
-    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = ? AND user_id = ?")
+    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1 AND user_id = $2")
         .bind(candidature_id)
         .bind(user_id)
         .fetch_optional(&mut *tx)
-        .await?
+        .await
+        .map_err(map_db_err)?
         .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?
         .try_get("status")
-        .map_err(AppError::from)?;
+        .map_err(map_db_err)?;
 
     let has_pending = interviews::count_pending(&mut *tx, candidature_id).await? > 0;
     let allowed = available_events(&ancien_status, has_pending);
@@ -174,7 +175,7 @@ pub async fn add_event(
                 &mut tx,
                 candidature_id,
                 &type_entretien,
-                normalize(data.date_entretien).as_deref(),
+                data.date_entretien,
                 normalize(data.lieu).as_deref(),
                 modalite.as_deref(),
                 data.contact_id,
@@ -204,12 +205,13 @@ pub async fn add_event(
     // ------------------------------------------------------------------
     let nouveau_status = event_type.changes_status();
     if let Some(target) = nouveau_status {
-        sqlx::query("UPDATE candidatures SET status = ? WHERE id = ? AND user_id = ?")
+        sqlx::query("UPDATE candidatures SET status = $1 WHERE id = $2 AND user_id = $3")
             .bind(target)
             .bind(candidature_id)
             .bind(user_id)
             .execute(&mut *tx)
-            .await?;
+            .await
+            .map_err(map_db_err)?;
     }
 
     // ------------------------------------------------------------------
@@ -226,7 +228,7 @@ pub async fn add_event(
     )
     .await?;
 
-    tx.commit().await?;
+    tx.commit().await.map_err(map_db_err)?;
 
     Ok(())
 }

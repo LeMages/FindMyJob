@@ -6,22 +6,22 @@
 //! Chaque session de candidature a son propre CV et sa propre lettre de
 //! motivation : tout est stocké sous `documents/sessions/<session_id>/`.
 //!
-//! La résolution de chemins liée à `tauri::AppHandle` (dossier de données,
-//! dossier de téléchargements) et l'émission d'événements de progression
-//! vivent dans `crates/desktop/src-tauri/src/documents/storage.rs`, qui
-//! délègue à ce module une fois ces chemins résolus.
+//! La résolution de chemins liée au dossier de données applicatif (et
+//! l'émission d'événements de progression pour un éventuel appelant
+//! interactif) vit chez l'appelant ; ce module reçoit ces chemins déjà résolus.
 
 // Importation des modules standard
 use std::path::{Path, PathBuf};
 
 // Importation des crates externes
-use sqlx::SqlitePool;
+use chrono::{DateTime, Utc};
+use sqlx::PgPool;
 
 // Importation des modules internes
 use crate::db;
 use crate::documents::typst::compile_to_pdf;
-use crate::error::AppError;
-use crate::models::{CandidatureDetail, DocumentFileInfo, DocumentReferenceView};
+use findmyjob_core::error::AppError;
+use findmyjob_core::models::{CandidatureDetail, DocumentFileInfo, DocumentReferenceView};
 
 /// Nombre total d'étapes du flux de `save_reference`, communiqué à
 /// l'appelant pour calculer une progression (`step`/`total`).
@@ -52,7 +52,7 @@ fn doc_backup_basename(doc_type: &str) -> &'static str {
     if doc_type == "lettre_motivation" { "lettre" } else { "cv" }
 }
 
-/// Formate la date de dernière modification d'un fichier en millisecondes epoch.
+/// Date de dernière modification d'un fichier, pour affichage côté frontend.
 ///
 /// # Arguments
 ///
@@ -60,24 +60,20 @@ fn doc_backup_basename(doc_type: &str) -> &'static str {
 ///
 /// # Returns
 ///
-/// Timestamp en millisecondes sous forme de chaîne, ou chaîne vide si indisponible.
-fn updated_at_millis(path: &Path) -> String {
+/// Date de dernière modification, ou l'instant courant si indisponible
+/// (fichier tout juste créé, métadonnées inaccessibles).
+fn file_updated_at(path: &Path) -> DateTime<Utc> {
     std::fs::metadata(path)
         .and_then(|m| m.modified())
-        .map(|t| {
-            t.duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-                .to_string()
-        })
-        .unwrap_or_default()
+        .map(DateTime::<Utc>::from)
+        .unwrap_or_else(|_| Utc::now())
 }
 
 /// Récupère la référence de document existante (si un fichier `reference.typ` a déjà été sauvegardé).
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
@@ -86,7 +82,7 @@ fn updated_at_millis(path: &Path) -> String {
 ///
 /// `Some(DocumentReferenceView)` si un fichier de référence existe, `None` sinon.
 pub async fn get_reference(
-    pool: &SqlitePool,
+    pool: &PgPool,
     data_dir: &Path,
     session_id: i64,
     doc_type: &str,
@@ -108,7 +104,7 @@ pub async fn get_reference(
     Some(DocumentReferenceView {
         file_path: typ_path.to_string_lossy().to_string(),
         pdf_path: pdf_path.to_string_lossy().to_string(),
-        updated_at: updated_at_millis(&typ_path),
+        updated_at: file_updated_at(&typ_path),
     })
 }
 
@@ -122,7 +118,7 @@ pub async fn get_reference(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
 /// * `fonts_dir` - Dossier des polices importées, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session propriétaire.
@@ -136,7 +132,7 @@ pub async fn get_reference(
 /// `DocumentReferenceView` pointant vers les fichiers `.typ` et `.pdf` sauvegardés.
 #[allow(clippy::too_many_arguments)]
 pub async fn save_reference(
-    pool: &SqlitePool,
+    pool: &PgPool,
     data_dir: &Path,
     fonts_dir: &Path,
     session_id: i64,
@@ -159,10 +155,10 @@ pub async fn save_reference(
     //    écriture disque : si l'appel échoue ou renvoie un format
     //    inattendu, rien n'est créé (ni dossier, ni backup, ni fichier).
     // ------------------------------------------------------------------
-    let model = db::settings::resolve_llm_model(pool, crate::llm::client::DEFAULT_MODEL).await?;
+    let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
 
     on_progress(1, "Analyse du style (IA)…");
-    let style_analysis = crate::llm::analyze_style(&content, doc_type, &model).await?;
+    let style_analysis = findmyjob_core::llm::analyze_style(&content, doc_type, &model).await?;
 
     let doc_dir = resolve_doc_dir(data_dir, session_id, doc_type);
     std::fs::create_dir_all(&doc_dir)
@@ -237,7 +233,7 @@ pub async fn save_reference(
     Ok(DocumentReferenceView {
         file_path: typ_path.to_string_lossy().to_string(),
         pdf_path: pdf_path.to_string_lossy().to_string(),
-        updated_at: updated_at_millis(&typ_path),
+        updated_at: file_updated_at(&typ_path),
     })
 }
 
@@ -446,7 +442,7 @@ pub fn write_export_message(dest_dir: &Path, message: &str, message_filename: &s
         .map_err(|e| AppError::Validation(format!("Écriture du message impossible : {}", e)))
 }
 
-/// Sauvegarde un document généré par le pipeline IA (`llm::pipeline`) à
+/// Sauvegarde un document généré par le pipeline IA (`crate::pipeline`) à
 /// l'emplacement définitif d'une candidature : le code Typst est conservé à
 /// côté du PDF pour le debug/la traçabilité, sous le même nom que
 /// `finalize_candidature_document` (`artefact/<candidature_id>.*`).

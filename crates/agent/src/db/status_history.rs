@@ -1,17 +1,18 @@
 //! Accès et logique de persistance pour la timeline de suivi des candidatures.
 
 // Importation des crates externes
-use sqlx::{Row, SqlitePool};
+use sqlx::{PgPool, Row};
 
 // Importation des modules internes
-use crate::error::AppError;
-use crate::models::{EventType, StatusHistoryView};
+use crate::db::common::map_db_err;
+use findmyjob_core::error::AppError;
+use findmyjob_core::models::{EventType, StatusHistoryView};
 
 /// Enregistre un événement dans la timeline de suivi d'une candidature.
 ///
 /// # Arguments
 ///
-/// * `tx` - Transaction SQLite active (l'écriture doit rester atomique avec
+/// * `tx` - Transaction PostgreSQL active (l'écriture doit rester atomique avec
 ///   les autres effets de l'événement : changement de statut, entretien...).
 /// * `candidature_id` - Identifiant de la candidature concernée.
 /// * `event_type` - Type de l'événement (voir `EventType`).
@@ -26,7 +27,7 @@ use crate::models::{EventType, StatusHistoryView};
 ///
 /// `Ok(())` une fois l'entrée insérée.
 pub async fn record(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     candidature_id: i64,
     event_type: EventType,
     ancien_status: Option<&str>,
@@ -37,7 +38,7 @@ pub async fn record(
     sqlx::query(
         "INSERT INTO status_history \
            (candidature_id, event_type, ancien_status, nouveau_status, content, interview_id) \
-         VALUES (?, ?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
     .bind(candidature_id)
     .bind(event_type.as_str())
@@ -46,7 +47,8 @@ pub async fn record(
     .bind(content)
     .bind(interview_id)
     .execute(&mut **tx)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
     Ok(())
 }
 
@@ -54,26 +56,27 @@ pub async fn record(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `candidature_id` - Identifiant de la candidature.
 ///
 /// # Returns
 ///
 /// Entrées triées par date de changement croissante.
 pub async fn list_for_candidature(
-    pool: &SqlitePool,
+    pool: &PgPool,
     candidature_id: i64,
 ) -> Result<Vec<StatusHistoryView>, AppError> {
     let rows = sqlx::query(
         "SELECT id, candidature_id, event_type, ancien_status, nouveau_status, content, \
-                interview_id, CAST(changed_at AS TEXT) AS changed_at \
+                interview_id, changed_at \
          FROM status_history \
-         WHERE candidature_id = ? \
+         WHERE candidature_id = $1 \
          ORDER BY changed_at",
     )
     .bind(candidature_id)
     .fetch_all(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     rows.iter()
         .map(|r| -> Result<StatusHistoryView, sqlx::Error> {
@@ -89,5 +92,5 @@ pub async fn list_for_candidature(
             })
         })
         .collect::<Result<_, _>>()
-        .map_err(AppError::from)
+        .map_err(map_db_err)
 }

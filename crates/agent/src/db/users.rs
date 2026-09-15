@@ -1,13 +1,13 @@
 //! Accès et logique de persistance pour l'utilisateur unique de l'application.
 
 // Importation des crates externes
-use sqlx::sqlite::SqliteRow;
-use sqlx::{Row, SqlitePool};
+use sqlx::postgres::PgRow;
+use sqlx::{PgPool, Row};
 
 // Importation des modules internes
-use crate::db::common::normalize;
-use crate::error::AppError;
-use crate::models::{CreateUserInput, UpdateUserInfoInput, UserView};
+use crate::db::common::{map_db_err, normalize};
+use findmyjob_core::error::AppError;
+use findmyjob_core::models::{CreateUserInput, UpdateUserInfoInput, UserView};
 
 /// Construit un `UserView` à partir d'une ligne SQL brute.
 ///
@@ -18,8 +18,7 @@ use crate::models::{CreateUserInput, UpdateUserInfoInput, UserView};
 /// # Returns
 ///
 /// `UserView` reconstruit, ou erreur si une colonne attendue est absente.
-fn row_to_user(row: &SqliteRow) -> Result<UserView, sqlx::Error> {
-    let permis_int: Option<i64> = row.try_get("permis")?;
+fn row_to_user(row: &PgRow) -> Result<UserView, sqlx::Error> {
     Ok(UserView {
         id: row.try_get("id")?,
         nom: row.try_get("nom")?,
@@ -27,7 +26,7 @@ fn row_to_user(row: &SqliteRow) -> Result<UserView, sqlx::Error> {
         email: row.try_get("email")?,
         telephone: row.try_get("telephone")?,
         ville: row.try_get("ville")?,
-        permis: permis_int.map(|n| n != 0),
+        permis: row.try_get("permis")?,
         description: row.try_get("description")?,
         linkedin: row.try_get("linkedin")?,
         github: row.try_get("github")?,
@@ -41,37 +40,39 @@ fn row_to_user(row: &SqliteRow) -> Result<UserView, sqlx::Error> {
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 ///
 /// # Returns
 ///
 /// `UserView`, ou `AppError::NotFound` si le profil n'a pas encore été créé.
-pub async fn fetch_first_user(pool: &SqlitePool) -> Result<UserView, AppError> {
+pub async fn fetch_first_user(pool: &PgPool) -> Result<UserView, AppError> {
     let row = sqlx::query(
         "SELECT id, nom, prenom, email, telephone, ville, permis, description, \
          linkedin, github, portfolio, created_at, updated_at \
          FROM users LIMIT 1",
     )
     .fetch_optional(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
     let row = row.ok_or_else(|| AppError::NotFound("Profil introuvable.".to_string()))?;
-    row_to_user(&row).map_err(AppError::from)
+    row_to_user(&row).map_err(map_db_err)
 }
 
 /// Indique si un utilisateur a déjà été créé (utilisé pour déclencher l'onboarding).
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 ///
 /// # Returns
 ///
 /// `true` si un utilisateur existe.
-pub async fn user_exists(pool: &SqlitePool) -> Result<bool, AppError> {
-    let n: i64 = sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM users)")
+pub async fn user_exists(pool: &PgPool) -> Result<bool, AppError> {
+    let n: bool = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users)")
         .fetch_one(pool)
-        .await?;
-    Ok(n != 0)
+        .await
+        .map_err(map_db_err)?;
+    Ok(n)
 }
 
 /// Crée l'utilisateur unique de l'application.
@@ -81,17 +82,18 @@ pub async fn user_exists(pool: &SqlitePool) -> Result<bool, AppError> {
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `input` - Données saisies lors de l'onboarding.
 ///
 /// # Returns
 ///
 /// `UserView` fraîchement créé.
-pub async fn insert_user(pool: &SqlitePool, input: CreateUserInput) -> Result<UserView, AppError> {
-    let n: i64 = sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM users)")
+pub async fn insert_user(pool: &PgPool, input: CreateUserInput) -> Result<UserView, AppError> {
+    let exists: bool = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users)")
         .fetch_one(pool)
-        .await?;
-    if n != 0 {
+        .await
+        .map_err(map_db_err)?;
+    if exists {
         return Err(AppError::Conflict("Un utilisateur existe déjà.".to_string()));
     }
 
@@ -112,25 +114,24 @@ pub async fn insert_user(pool: &SqlitePool, input: CreateUserInput) -> Result<Us
         return Err(AppError::Validation("L'e-mail doit contenir un @.".to_string()));
     }
 
-    let permis: Option<i64> = input.permis.map(|b| if b { 1 } else { 0 });
-
     sqlx::query(
         "INSERT INTO users \
            (nom, prenom, email, telephone, ville, permis, description, linkedin, github, portfolio) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
     )
     .bind(&nom)
     .bind(&prenom)
     .bind(&email)
     .bind(normalize(input.telephone))
     .bind(normalize(input.ville))
-    .bind(permis)
+    .bind(input.permis)
     .bind(normalize(input.description))
     .bind(normalize(input.linkedin))
     .bind(normalize(input.github))
     .bind(normalize(input.portfolio))
     .execute(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     fetch_first_user(pool).await
 }
@@ -139,24 +140,25 @@ pub async fn insert_user(pool: &SqlitePool, input: CreateUserInput) -> Result<Us
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `description` - Nouvelle description (normalisée avant écriture).
 ///
 /// # Returns
 ///
 /// `UserView` mis à jour.
 pub async fn update_description(
-    pool: &SqlitePool,
+    pool: &PgPool,
     description: Option<String>,
 ) -> Result<UserView, AppError> {
     let value = normalize(description);
     sqlx::query(
-        "UPDATE users SET description = ?, updated_at = CURRENT_TIMESTAMP \
+        "UPDATE users SET description = $1 \
          WHERE id = (SELECT id FROM users LIMIT 1)",
     )
     .bind(&value)
     .execute(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
     fetch_first_user(pool).await
 }
 
@@ -169,14 +171,14 @@ pub async fn update_description(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `input` - Champs à mettre à jour.
 ///
 /// # Returns
 ///
 /// `UserView` mis à jour.
 pub async fn update_user_info(
-    pool: &SqlitePool,
+    pool: &PgPool,
     input: UpdateUserInfoInput,
 ) -> Result<UserView, AppError> {
     let email = normalize(input.email);
@@ -186,31 +188,29 @@ pub async fn update_user_info(
         }
     }
 
-    let permis: Option<i64> = input.permis.map(|b| if b { 1 } else { 0 });
-
     sqlx::query(
         "UPDATE users SET \
-           prenom    = COALESCE(?, prenom), \
-           nom       = COALESCE(?, nom), \
-           email     = COALESCE(?, email), \
-           telephone = ?, \
-           permis    = ?, \
-           linkedin  = COALESCE(?, linkedin), \
-           github    = COALESCE(?, github), \
-           portfolio = COALESCE(?, portfolio), \
-           updated_at = CURRENT_TIMESTAMP \
+           prenom    = COALESCE($1, prenom), \
+           nom       = COALESCE($2, nom), \
+           email     = COALESCE($3, email), \
+           telephone = $4, \
+           permis    = $5, \
+           linkedin  = COALESCE($6, linkedin), \
+           github    = COALESCE($7, github), \
+           portfolio = COALESCE($8, portfolio) \
          WHERE id = (SELECT id FROM users LIMIT 1)",
     )
     .bind(normalize(input.prenom))
     .bind(normalize(input.nom))
     .bind(email)
     .bind(normalize(input.telephone))
-    .bind(permis)
+    .bind(input.permis)
     .bind(normalize(input.linkedin))
     .bind(normalize(input.github))
     .bind(normalize(input.portfolio))
     .execute(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     fetch_first_user(pool).await
 }

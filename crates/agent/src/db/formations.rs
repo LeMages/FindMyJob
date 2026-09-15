@@ -1,34 +1,33 @@
 //! Accès et logique de persistance pour les formations du profil.
 
 // Importation des crates externes
-use sqlx::{Row, SqlitePool};
+use sqlx::{PgPool, Row};
 
 // Importation des modules internes
-use crate::db::common::{delete_owned_row, normalize};
-use crate::error::AppError;
-use crate::models::{CreateFormationInput, FormationView};
+use crate::db::common::{delete_owned_row, map_db_err, normalize};
+use findmyjob_core::error::AppError;
+use findmyjob_core::models::{CreateFormationInput, FormationView};
 
 /// Liste les formations d'un utilisateur, les plus récentes en premier.
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `user_id` - Identifiant de l'utilisateur.
 ///
 /// # Returns
 ///
 /// Formations triées par date de fin puis de début décroissantes.
-pub async fn list_for_user(pool: &SqlitePool, user_id: i64) -> Result<Vec<FormationView>, AppError> {
+pub async fn list_for_user(pool: &PgPool, user_id: i64) -> Result<Vec<FormationView>, AppError> {
     let rows = sqlx::query(
-        "SELECT id, titre, ecole, \
-                CAST(date_debut AS TEXT) as date_debut, \
-                CAST(date_fin   AS TEXT) as date_fin \
-         FROM formations WHERE user_id = ? \
-         ORDER BY COALESCE(date_fin, '9999-12-31') DESC, date_debut DESC",
+        "SELECT id, titre, ecole, date_debut, date_fin \
+         FROM formations WHERE user_id = $1 \
+         ORDER BY COALESCE(date_fin, DATE '9999-12-31') DESC, date_debut DESC",
     )
     .bind(user_id)
     .fetch_all(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     rows.iter()
         .map(|r| -> Result<FormationView, sqlx::Error> {
@@ -41,14 +40,14 @@ pub async fn list_for_user(pool: &SqlitePool, user_id: i64) -> Result<Vec<Format
             })
         })
         .collect::<Result<_, _>>()
-        .map_err(AppError::from)
+        .map_err(map_db_err)
 }
 
 /// Ajoute une formation au profil d'un utilisateur.
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `input` - Données de la formation à créer.
 ///
@@ -56,7 +55,7 @@ pub async fn list_for_user(pool: &SqlitePool, user_id: i64) -> Result<Vec<Format
 ///
 /// `FormationView` fraîchement créée.
 pub async fn insert(
-    pool: &SqlitePool,
+    pool: &PgPool,
     user_id: i64,
     input: CreateFormationInput,
 ) -> Result<FormationView, AppError> {
@@ -67,25 +66,24 @@ pub async fn insert(
 
     let row = sqlx::query(
         "INSERT INTO formations (user_id, titre, ecole, date_debut, date_fin) \
-         VALUES (?, ?, ?, ?, ?) \
-         RETURNING id, titre, ecole, \
-                   CAST(date_debut AS TEXT) as date_debut, \
-                   CAST(date_fin   AS TEXT) as date_fin",
+         VALUES ($1, $2, $3, $4, $5) \
+         RETURNING id, titre, ecole, date_debut, date_fin",
     )
     .bind(user_id)
     .bind(&titre)
     .bind(normalize(input.ecole))
-    .bind(normalize(input.date_debut))
-    .bind(normalize(input.date_fin))
+    .bind(input.date_debut)
+    .bind(input.date_fin)
     .fetch_one(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     Ok(FormationView {
-        id: row.try_get("id").map_err(AppError::from)?,
-        titre: row.try_get("titre").map_err(AppError::from)?,
-        ecole: row.try_get("ecole").map_err(AppError::from)?,
-        date_debut: row.try_get("date_debut").map_err(AppError::from)?,
-        date_fin: row.try_get("date_fin").map_err(AppError::from)?,
+        id: row.try_get("id").map_err(map_db_err)?,
+        titre: row.try_get("titre").map_err(map_db_err)?,
+        ecole: row.try_get("ecole").map_err(map_db_err)?,
+        date_debut: row.try_get("date_debut").map_err(map_db_err)?,
+        date_fin: row.try_get("date_fin").map_err(map_db_err)?,
     })
 }
 
@@ -93,7 +91,7 @@ pub async fn insert(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `id` - Identifiant de la formation à modifier.
 /// * `input` - Nouvelles données de la formation.
 ///
@@ -101,7 +99,7 @@ pub async fn insert(
 ///
 /// `FormationView` mise à jour, ou `AppError::NotFound` si absente.
 pub async fn update(
-    pool: &SqlitePool,
+    pool: &PgPool,
     id: i64,
     input: CreateFormationInput,
 ) -> Result<FormationView, AppError> {
@@ -112,29 +110,27 @@ pub async fn update(
 
     let row = sqlx::query(
         "UPDATE formations \
-         SET titre = ?, ecole = ?, date_debut = ?, date_fin = ?, \
-             updated_at = CURRENT_TIMESTAMP \
-         WHERE id = ? AND user_id = (SELECT id FROM users LIMIT 1) \
-         RETURNING id, titre, ecole, \
-                   CAST(date_debut AS TEXT) as date_debut, \
-                   CAST(date_fin   AS TEXT) as date_fin",
+         SET titre = $1, ecole = $2, date_debut = $3, date_fin = $4 \
+         WHERE id = $5 AND user_id = (SELECT id FROM users LIMIT 1) \
+         RETURNING id, titre, ecole, date_debut, date_fin",
     )
     .bind(&titre)
     .bind(normalize(input.ecole))
-    .bind(normalize(input.date_debut))
-    .bind(normalize(input.date_fin))
+    .bind(input.date_debut)
+    .bind(input.date_fin)
     .bind(id)
     .fetch_optional(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     let row = row.ok_or_else(|| AppError::NotFound("Formation introuvable.".to_string()))?;
 
     Ok(FormationView {
-        id: row.try_get("id").map_err(AppError::from)?,
-        titre: row.try_get("titre").map_err(AppError::from)?,
-        ecole: row.try_get("ecole").map_err(AppError::from)?,
-        date_debut: row.try_get("date_debut").map_err(AppError::from)?,
-        date_fin: row.try_get("date_fin").map_err(AppError::from)?,
+        id: row.try_get("id").map_err(map_db_err)?,
+        titre: row.try_get("titre").map_err(map_db_err)?,
+        ecole: row.try_get("ecole").map_err(map_db_err)?,
+        date_debut: row.try_get("date_debut").map_err(map_db_err)?,
+        date_fin: row.try_get("date_fin").map_err(map_db_err)?,
     })
 }
 
@@ -142,12 +138,12 @@ pub async fn update(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `id` - Identifiant de la formation à supprimer.
 ///
 /// # Returns
 ///
 /// `Ok(())` si supprimée, `AppError::NotFound` si absente.
-pub async fn delete(pool: &SqlitePool, id: i64) -> Result<(), AppError> {
+pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
     delete_owned_row(pool, "formations", id, "Formation introuvable.").await
 }

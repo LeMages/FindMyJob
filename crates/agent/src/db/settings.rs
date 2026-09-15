@@ -2,10 +2,11 @@
 //! table `settings`. Utilisée notamment pour le modèle Claude sélectionné.
 
 // Importation des crates externes
-use sqlx::{Row, SqlitePool};
+use sqlx::{PgPool, Row};
 
 // Importation des modules internes
-use crate::error::AppError;
+use crate::db::common::map_db_err;
+use findmyjob_core::error::AppError;
 
 /// Clé du paramètre stockant l'identifiant du modèle Claude sélectionné.
 pub const KEY_LLM_MODEL: &str = "llm_model";
@@ -23,20 +24,21 @@ pub const DEFAULT_THEME: &str = "systeme";
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `cle` - Clé du paramètre recherché.
 ///
 /// # Returns
 ///
 /// La valeur associée, ou `None` si la clé n'existe pas encore en base.
-pub async fn get(pool: &SqlitePool, cle: &str) -> Result<Option<String>, AppError> {
-    let row = sqlx::query("SELECT valeur FROM settings WHERE cle = ?")
+pub async fn get(pool: &PgPool, cle: &str) -> Result<Option<String>, AppError> {
+    let row = sqlx::query("SELECT valeur FROM settings WHERE cle = $1")
         .bind(cle)
         .fetch_optional(pool)
-        .await?;
+        .await
+        .map_err(map_db_err)?;
 
     match row {
-        Some(row) => Ok(row.try_get("valeur").map_err(AppError::from)?),
+        Some(row) => Ok(row.try_get("valeur").map_err(map_db_err)?),
         None => Ok(None),
     }
 }
@@ -45,22 +47,23 @@ pub async fn get(pool: &SqlitePool, cle: &str) -> Result<Option<String>, AppErro
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `cle` - Clé du paramètre à écrire.
 /// * `valeur` - Nouvelle valeur du paramètre.
 ///
 /// # Returns
 ///
 /// `Ok(())` si l'écriture a réussi.
-pub async fn set(pool: &SqlitePool, cle: &str, valeur: &str) -> Result<(), AppError> {
+pub async fn set(pool: &PgPool, cle: &str, valeur: &str) -> Result<(), AppError> {
     sqlx::query(
-        "INSERT INTO settings (cle, valeur) VALUES (?, ?) \
-         ON CONFLICT(cle) DO UPDATE SET valeur = excluded.valeur",
+        "INSERT INTO settings (cle, valeur) VALUES ($1, $2) \
+         ON CONFLICT (cle) DO UPDATE SET valeur = excluded.valeur",
     )
     .bind(cle)
     .bind(valeur)
     .execute(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     Ok(())
 }
@@ -70,13 +73,13 @@ pub async fn set(pool: &SqlitePool, cle: &str, valeur: &str) -> Result<(), AppEr
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `default` - Modèle de repli si aucune valeur n'est configurée.
 ///
 /// # Returns
 ///
 /// Identifiant du modèle Claude à utiliser pour les appels LLM.
-pub async fn resolve_llm_model(pool: &SqlitePool, default: &str) -> Result<String, AppError> {
+pub async fn resolve_llm_model(pool: &PgPool, default: &str) -> Result<String, AppError> {
     Ok(get(pool, KEY_LLM_MODEL).await?.unwrap_or_else(|| default.to_string()))
 }
 
@@ -85,11 +88,11 @@ pub async fn resolve_llm_model(pool: &SqlitePool, default: &str) -> Result<Strin
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 ///
 /// # Returns
 ///
 /// Le thème à appliquer (`"clair"`, `"sombre"` ou `"systeme"`).
-pub async fn resolve_theme(pool: &SqlitePool) -> Result<String, AppError> {
+pub async fn resolve_theme(pool: &PgPool) -> Result<String, AppError> {
     Ok(get(pool, KEY_THEME).await?.unwrap_or_else(|| DEFAULT_THEME.to_string()))
 }

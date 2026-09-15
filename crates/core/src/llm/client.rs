@@ -113,11 +113,13 @@ pub async fn call_claude_with_tokens_meta(
     model: &str,
 ) -> Result<(String, Option<String>), AppError> {
     // ------------------------------------------------------------------
-    // 1. Clé API — .env en développement, trousseau OS en production
-    //    (voir `security::get_api_key`)
+    // 1. Clé API — lue directement depuis l'environnement du processus.
+    //    `core` ignore d'où vient cette variable (.env en développement,
+    //    trousseau OS en production) : cette résolution vit dans le
+    //    `security` de l'appelant (ex. `findmyjob-agent`).
     // ------------------------------------------------------------------
-    let api_key = crate::security::get_api_key()?
-        .ok_or_else(|| AppError::Config("Aucune clé API Anthropic configurée.".to_string()))?;
+    let api_key = std::env::var("ANTHROPIC_API_KEY")
+        .map_err(|_| AppError::Config("Aucune clé API Anthropic configurée.".to_string()))?;
 
     // ------------------------------------------------------------------
     // 2. Construction du corps de la requête

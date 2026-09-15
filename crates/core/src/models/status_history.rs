@@ -1,5 +1,7 @@
 //! DTO représentant une entrée de la timeline de suivi d'une candidature.
 
+use chrono::{DateTime, Utc};
+
 #[derive(serde::Serialize)]
 pub struct StatusHistoryView {
     pub id: i64,
@@ -16,5 +18,5 @@ pub struct StatusHistoryView {
     /// Entretien concerné, uniquement pour `entretien_planifie` /
     /// `entretien_passe`.
     pub interview_id: Option<i64>,
-    pub changed_at: String,
+    pub changed_at: DateTime<Utc>,
 }

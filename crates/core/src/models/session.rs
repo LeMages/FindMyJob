@@ -1,5 +1,7 @@
 //! DTOs liés aux sessions de candidature.
 
+use chrono::{DateTime, Utc};
+
 #[derive(serde::Serialize)]
 pub struct SessionView {
     pub id: i64,
@@ -9,7 +11,7 @@ pub struct SessionView {
     pub zone: Option<String>,
     pub candidature_count: i64,
     pub has_accepted: bool,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(serde::Deserialize)]

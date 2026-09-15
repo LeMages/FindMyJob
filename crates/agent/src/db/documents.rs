@@ -4,11 +4,39 @@
 //! `style_analysis`.
 
 // Importation des crates externes
-use sqlx::SqlitePool;
+use sqlx::postgres::PgRow;
+use sqlx::{PgPool, Row};
 
 // Importation des modules internes
-use crate::error::AppError;
-use crate::models::Document;
+use crate::db::common::map_db_err;
+use findmyjob_core::error::AppError;
+use findmyjob_core::models::Document;
+
+/// Construit un `Document` à partir d'une ligne SQL brute.
+///
+/// Mapping manuel (pas de `#[derive(sqlx::FromRow)]` sur `Document` : ce
+/// type vit dans `findmyjob-core`, qui n'a aucune dépendance à `sqlx`).
+///
+/// # Arguments
+///
+/// * `row` - Ligne issue d'une requête `SELECT`/`RETURNING` sur `documents`.
+///
+/// # Returns
+///
+/// `Document` reconstruit, ou erreur si une colonne attendue est absente.
+fn row_to_document(row: &PgRow) -> Result<Document, sqlx::Error> {
+    Ok(Document {
+        id: row.try_get("id")?,
+        session_id: row.try_get("session_id")?,
+        doc_type: row.try_get("doc_type")?,
+        original_filename: row.try_get("original_filename")?,
+        file_path: row.try_get("file_path")?,
+        pdf_path: row.try_get("pdf_path")?,
+        style_analysis: row.try_get("style_analysis")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
 
 /// Insère ou met à jour le document de référence d'un type donné pour une session.
 ///
@@ -18,7 +46,7 @@ use crate::models::Document;
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `original_filename` - Nom du fichier tel qu'uploadé par l'utilisateur.
@@ -30,7 +58,7 @@ use crate::models::Document;
 ///
 /// `Document` créé ou mis à jour.
 pub async fn upsert(
-    pool: &SqlitePool,
+    pool: &PgPool,
     session_id: i64,
     doc_type: &str,
     original_filename: &str,
@@ -38,15 +66,14 @@ pub async fn upsert(
     pdf_path: Option<&str>,
     style_analysis: Option<&str>,
 ) -> Result<Document, AppError> {
-    let doc = sqlx::query_as::<_, Document>(
+    let row = sqlx::query(
         "INSERT INTO documents (session_id, doc_type, original_filename, file_path, pdf_path, style_analysis) \
-         VALUES (?, ?, ?, ?, ?, ?) \
-         ON CONFLICT(session_id, doc_type) DO UPDATE SET \
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         ON CONFLICT (session_id, doc_type) DO UPDATE SET \
              original_filename = excluded.original_filename, \
              file_path = excluded.file_path, \
              pdf_path = excluded.pdf_path, \
-             style_analysis = excluded.style_analysis, \
-             updated_at = datetime('now') \
+             style_analysis = excluded.style_analysis \
          RETURNING id, session_id, doc_type, original_filename, file_path, pdf_path, \
                    style_analysis, created_at, updated_at",
     )
@@ -57,16 +84,17 @@ pub async fn upsert(
     .bind(pdf_path)
     .bind(style_analysis)
     .fetch_one(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
-    Ok(doc)
+    row_to_document(&row).map_err(map_db_err)
 }
 
 /// Récupère le document de référence d'un type donné pour une session.
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 ///
@@ -74,20 +102,20 @@ pub async fn upsert(
 ///
 /// `Some(Document)` si un document est tracké en base, `None` sinon.
 pub async fn get_by_session_and_type(
-    pool: &SqlitePool,
+    pool: &PgPool,
     session_id: i64,
     doc_type: &str,
 ) -> Result<Option<Document>, AppError> {
-    let doc = sqlx::query_as::<_, Document>(
+    let row = sqlx::query(
         "SELECT id, session_id, doc_type, original_filename, file_path, pdf_path, \
                 style_analysis, created_at, updated_at \
-         FROM documents WHERE session_id = ? AND doc_type = ?",
+         FROM documents WHERE session_id = $1 AND doc_type = $2",
     )
     .bind(session_id)
     .bind(doc_type)
     .fetch_optional(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
-    Ok(doc)
+    row.as_ref().map(row_to_document).transpose().map_err(map_db_err)
 }
-

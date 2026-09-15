@@ -31,9 +31,3 @@ impl std::fmt::Display for AppError {
 }
 
 impl std::error::Error for AppError {}
-
-impl From<sqlx::Error> for AppError {
-    fn from(e: sqlx::Error) -> Self {
-        AppError::Database(e.to_string())
-    }
-}

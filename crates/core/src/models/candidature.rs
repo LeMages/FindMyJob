@@ -1,5 +1,7 @@
 //! DTOs liés aux candidatures.
 
+use chrono::{DateTime, NaiveDate, Utc};
+
 #[derive(serde::Serialize)]
 pub struct CandidatureView {
     pub id: i64,
@@ -10,14 +12,14 @@ pub struct CandidatureView {
     pub status: String,
     pub source: Option<String>,
     pub type_contrat: Option<String>,
-    pub date_candidature: Option<String>,
-    pub next_relance: Option<String>,
+    pub date_candidature: Option<NaiveDate>,
+    pub next_relance: Option<NaiveDate>,
     /// Horodatage du dernier changement de statut (issu de `status_history`),
     /// utilisé pour calculer l'inactivité affichée dans la vue pipeline.
-    pub derniere_maj_statut: String,
+    pub derniere_maj_statut: DateTime<Utc>,
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Vue complète d'une candidature, utilisée par la page de détail (contient
@@ -37,11 +39,11 @@ pub struct CandidatureDetail {
     pub url_offre: Option<String>,
     pub description_offre: Option<String>,
     pub notes: Option<String>,
-    pub date_candidature: Option<String>,
-    pub next_relance: Option<String>,
+    pub date_candidature: Option<NaiveDate>,
+    pub next_relance: Option<NaiveDate>,
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(serde::Deserialize)]

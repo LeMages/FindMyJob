@@ -1,5 +1,7 @@
 //! DTO représentant un contact recruteur rattaché à une candidature.
 
+use chrono::{DateTime, Utc};
+
 #[derive(serde::Serialize)]
 pub struct ContactView {
     pub id: i64,
@@ -9,5 +11,5 @@ pub struct ContactView {
     pub email: Option<String>,
     pub telephone: Option<String>,
     pub notes: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }

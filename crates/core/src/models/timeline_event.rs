@@ -1,6 +1,8 @@
 //! DTOs pour la timeline de suivi d'une candidature : liste des événements
 //! proposables pour le statut courant, et entrée soumise pour en ajouter un.
 
+use chrono::{DateTime, Utc};
+
 /// Événement proposable à l'utilisateur pour le statut courant d'une
 /// candidature (voir `db::timeline_events::available_events`).
 #[derive(serde::Serialize)]
@@ -17,7 +19,7 @@ pub struct AvailableEvent {
 pub struct NewInterviewData {
     #[serde(rename = "type")]
     pub type_entretien: String,
-    pub date_entretien: Option<String>,
+    pub date_entretien: Option<DateTime<Utc>>,
     pub lieu: Option<String>,
     pub modalite: Option<String>,
     pub contact_id: Option<i64>,

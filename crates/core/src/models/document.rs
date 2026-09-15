@@ -1,11 +1,13 @@
 //! DTO représentant un document de référence (CV ou lettre de motivation)
 //! stocké sur le disque au format Typst (.typ) et compilé en PDF.
 
+use chrono::{DateTime, Utc};
+
 #[derive(serde::Serialize, Clone)]
 pub struct DocumentReferenceView {
     pub file_path: String,
     pub pdf_path: String,
-    pub updated_at: String,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Étape de progression émise pendant la sauvegarde d'un document de
@@ -53,7 +55,7 @@ pub struct DocumentFileInfo {
 /// * `style_analysis` - Cache JSON de l'analyse de style LLM (étape 0), `None` pour l'instant.
 /// * `created_at` - Date de création (ISO 8601).
 /// * `updated_at` - Date de dernière mise à jour (ISO 8601).
-#[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct Document {
     pub id: i64,
     pub session_id: i64,
@@ -62,6 +64,6 @@ pub struct Document {
     pub file_path: String,
     pub pdf_path: Option<String>,
     pub style_analysis: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

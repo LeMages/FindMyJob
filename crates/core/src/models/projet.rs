@@ -1,5 +1,7 @@
 //! DTOs liés aux projets personnels du profil.
 
+use chrono::NaiveDate;
+
 #[derive(serde::Serialize)]
 pub struct ProjetView {
     pub id: i64,
@@ -8,8 +10,8 @@ pub struct ProjetView {
     pub stack: Option<String>,
     pub url: Option<String>,
     pub pour_qui: Option<String>,
-    pub date_debut: Option<String>,
-    pub date_fin: Option<String>,
+    pub date_debut: Option<NaiveDate>,
+    pub date_fin: Option<NaiveDate>,
 }
 
 #[derive(serde::Deserialize)]
@@ -19,6 +21,6 @@ pub struct CreateProjetInput {
     pub stack: Option<String>,
     pub url: Option<String>,
     pub pour_qui: Option<String>,
-    pub date_debut: Option<String>,
-    pub date_fin: Option<String>,
+    pub date_debut: Option<NaiveDate>,
+    pub date_fin: Option<NaiveDate>,
 }

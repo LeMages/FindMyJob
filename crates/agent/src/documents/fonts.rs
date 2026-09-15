@@ -1,14 +1,14 @@
 //! Gestion des polices utilisateur importées pour la compilation Typst :
 //! liste, import depuis un dossier source (ex. archive Google Fonts
-//! décompressée), suppression. Le filesystem fait foi — pas de table SQLite
+//! décompressée), suppression. Le filesystem fait foi — pas de table SQL
 //! associée.
 
 // Importation des modules standard
 use std::path::{Path, PathBuf};
 
 // Importation des modules internes
-use crate::error::AppError;
-use crate::models::FontFamilyView;
+use findmyjob_core::error::AppError;
+use findmyjob_core::models::FontFamilyView;
 
 /// Extensions de fichiers de police acceptées, comparées en minuscule.
 const FONT_EXTENSIONS: [&str; 2] = ["ttf", "otf"];

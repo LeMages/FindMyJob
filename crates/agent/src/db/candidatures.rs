@@ -1,13 +1,13 @@
 //! Accès et logique de persistance pour les candidatures.
 
 // Importation des crates externes
-use sqlx::{Row, SqlitePool};
+use sqlx::{PgPool, Row};
 
 // Importation des modules internes
-use crate::db::common::normalize;
+use crate::db::common::{map_db_err, normalize};
 use crate::db::status_history;
-use crate::error::AppError;
-use crate::models::{
+use findmyjob_core::error::AppError;
+use findmyjob_core::models::{
     CandidatureDetail, CandidatureView, CreateCandidatureInput, EventType, UpdateCandidatureInput,
 };
 
@@ -18,7 +18,7 @@ const TYPES_CONTRAT_VALIDES: [&str; 6] = ["stage", "alternance", "cdi", "cdd", "
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `input` - Données de la candidature à créer.
 ///
@@ -26,7 +26,7 @@ const TYPES_CONTRAT_VALIDES: [&str; 6] = ["stage", "alternance", "cdi", "cdd", "
 ///
 /// `CandidatureView` fraîchement créée (chemins de documents à `None`).
 pub async fn insert(
-    pool: &SqlitePool,
+    pool: &PgPool,
     user_id: i64,
     input: &CreateCandidatureInput,
 ) -> Result<CandidatureView, AppError> {
@@ -58,18 +58,15 @@ pub async fn insert(
     //    transaction — la candidature ne doit jamais exister sans que son
     //    passage au statut « à postuler » soit tracé.
     // ------------------------------------------------------------------
-    let mut tx = pool.begin().await?;
+    let mut tx = pool.begin().await.map_err(map_db_err)?;
 
     let row = sqlx::query(
         "INSERT INTO candidatures \
            (user_id, poste, entreprise, localisation, type, source, remuneration, \
             url_offre, description_offre, notes, session_id) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
          RETURNING id, session_id, poste, entreprise, localisation, status, source, \
-                   type AS type_contrat, \
-                   CAST(date_candidature AS TEXT) AS date_candidature, \
-                   CAST(next_relance     AS TEXT) AS next_relance, \
-                   created_at",
+                   type AS type_contrat, date_candidature, next_relance, created_at",
     )
     .bind(user_id)
     .bind(&poste)
@@ -83,28 +80,29 @@ pub async fn insert(
     .bind(normalize(input.notes.clone()))
     .bind(input.session_id)
     .fetch_one(&mut *tx)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     // Reconstruction du DTO — cv_path / lettre_motivation_path ne sont pas
     // dans la clause RETURNING : ils sont renseignés après coup, une fois
     // les fichiers finalisés (voir set_documents).
     let view = CandidatureView {
-        id: row.try_get("id").map_err(AppError::from)?,
-        session_id: row.try_get("session_id").map_err(AppError::from)?,
-        poste: row.try_get("poste").map_err(AppError::from)?,
-        entreprise: row.try_get("entreprise").map_err(AppError::from)?,
-        localisation: row.try_get("localisation").map_err(AppError::from)?,
-        status: row.try_get("status").map_err(AppError::from)?,
-        source: row.try_get("source").map_err(AppError::from)?,
-        type_contrat: row.try_get("type_contrat").map_err(AppError::from)?,
-        date_candidature: row.try_get("date_candidature").map_err(AppError::from)?,
-        next_relance: row.try_get("next_relance").map_err(AppError::from)?,
+        id: row.try_get("id").map_err(map_db_err)?,
+        session_id: row.try_get("session_id").map_err(map_db_err)?,
+        poste: row.try_get("poste").map_err(map_db_err)?,
+        entreprise: row.try_get("entreprise").map_err(map_db_err)?,
+        localisation: row.try_get("localisation").map_err(map_db_err)?,
+        status: row.try_get("status").map_err(map_db_err)?,
+        source: row.try_get("source").map_err(map_db_err)?,
+        type_contrat: row.try_get("type_contrat").map_err(map_db_err)?,
+        date_candidature: row.try_get("date_candidature").map_err(map_db_err)?,
+        next_relance: row.try_get("next_relance").map_err(map_db_err)?,
         // À la création, l'unique entrée d'historique (insérée juste après)
         // partage le même horodatage que `created_at`.
-        derniere_maj_statut: row.try_get("created_at").map_err(AppError::from)?,
+        derniere_maj_statut: row.try_get("created_at").map_err(map_db_err)?,
         cv_path: None,
         lettre_motivation_path: None,
-        created_at: row.try_get("created_at").map_err(AppError::from)?,
+        created_at: row.try_get("created_at").map_err(map_db_err)?,
     };
 
     status_history::record(
@@ -118,7 +116,7 @@ pub async fn insert(
     )
     .await?;
 
-    tx.commit().await?;
+    tx.commit().await.map_err(map_db_err)?;
 
     Ok(view)
 }
@@ -129,7 +127,7 @@ pub async fn insert(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `id` - Identifiant de la candidature à modifier.
 /// * `input` - Nouvelles valeurs des champs éditables.
@@ -139,7 +137,7 @@ pub async fn insert(
 /// `CandidatureDetail` mise à jour, `AppError::NotFound` si la candidature
 /// n'existe pas, ou `AppError::Conflict` si son statut ne permet plus l'édition.
 pub async fn update(
-    pool: &SqlitePool,
+    pool: &PgPool,
     user_id: i64,
     id: i64,
     input: &UpdateCandidatureInput,
@@ -147,14 +145,15 @@ pub async fn update(
     // ------------------------------------------------------------------
     // 1. La candidature doit exister et être encore au statut « à postuler »
     // ------------------------------------------------------------------
-    let status: String = sqlx::query("SELECT status FROM candidatures WHERE id = ? AND user_id = ?")
+    let status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1 AND user_id = $2")
         .bind(id)
         .bind(user_id)
         .fetch_optional(pool)
-        .await?
+        .await
+        .map_err(map_db_err)?
         .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?
         .try_get("status")
-        .map_err(AppError::from)?;
+        .map_err(map_db_err)?;
 
     if status != "a_postuler" {
         return Err(AppError::Conflict(
@@ -188,14 +187,12 @@ pub async fn update(
     // ------------------------------------------------------------------
     let row = sqlx::query(
         "UPDATE candidatures \
-         SET poste = ?, entreprise = ?, localisation = ?, type = ?, source = ?, \
-             remuneration = ?, url_offre = ?, notes = ? \
-         WHERE id = ? AND user_id = ? \
+         SET poste = $1, entreprise = $2, localisation = $3, type = $4, source = $5, \
+             remuneration = $6, url_offre = $7, notes = $8 \
+         WHERE id = $9 AND user_id = $10 \
          RETURNING id, session_id, poste, entreprise, localisation, status, source, \
                    type AS type_contrat, remuneration, url_offre, description_offre, notes, \
-                   CAST(date_candidature AS TEXT) AS date_candidature, \
-                   CAST(next_relance     AS TEXT) AS next_relance, \
-                   cv_path, lettre_motivation_path, created_at",
+                   date_candidature, next_relance, cv_path, lettre_motivation_path, created_at",
     )
     .bind(&poste)
     .bind(&entreprise)
@@ -208,26 +205,27 @@ pub async fn update(
     .bind(id)
     .bind(user_id)
     .fetch_one(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     Ok(CandidatureDetail {
-        id: row.try_get("id").map_err(AppError::from)?,
-        session_id: row.try_get("session_id").map_err(AppError::from)?,
-        poste: row.try_get("poste").map_err(AppError::from)?,
-        entreprise: row.try_get("entreprise").map_err(AppError::from)?,
-        localisation: row.try_get("localisation").map_err(AppError::from)?,
-        status: row.try_get("status").map_err(AppError::from)?,
-        source: row.try_get("source").map_err(AppError::from)?,
-        type_contrat: row.try_get("type_contrat").map_err(AppError::from)?,
-        remuneration: row.try_get("remuneration").map_err(AppError::from)?,
-        url_offre: row.try_get("url_offre").map_err(AppError::from)?,
-        description_offre: row.try_get("description_offre").map_err(AppError::from)?,
-        notes: row.try_get("notes").map_err(AppError::from)?,
-        date_candidature: row.try_get("date_candidature").map_err(AppError::from)?,
-        next_relance: row.try_get("next_relance").map_err(AppError::from)?,
-        cv_path: row.try_get("cv_path").map_err(AppError::from)?,
-        lettre_motivation_path: row.try_get("lettre_motivation_path").map_err(AppError::from)?,
-        created_at: row.try_get("created_at").map_err(AppError::from)?,
+        id: row.try_get("id").map_err(map_db_err)?,
+        session_id: row.try_get("session_id").map_err(map_db_err)?,
+        poste: row.try_get("poste").map_err(map_db_err)?,
+        entreprise: row.try_get("entreprise").map_err(map_db_err)?,
+        localisation: row.try_get("localisation").map_err(map_db_err)?,
+        status: row.try_get("status").map_err(map_db_err)?,
+        source: row.try_get("source").map_err(map_db_err)?,
+        type_contrat: row.try_get("type_contrat").map_err(map_db_err)?,
+        remuneration: row.try_get("remuneration").map_err(map_db_err)?,
+        url_offre: row.try_get("url_offre").map_err(map_db_err)?,
+        description_offre: row.try_get("description_offre").map_err(map_db_err)?,
+        notes: row.try_get("notes").map_err(map_db_err)?,
+        date_candidature: row.try_get("date_candidature").map_err(map_db_err)?,
+        next_relance: row.try_get("next_relance").map_err(map_db_err)?,
+        cv_path: row.try_get("cv_path").map_err(map_db_err)?,
+        lettre_motivation_path: row.try_get("lettre_motivation_path").map_err(map_db_err)?,
+        created_at: row.try_get("created_at").map_err(map_db_err)?,
     })
 }
 
@@ -235,7 +233,7 @@ pub async fn update(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `id` - Identifiant de la candidature.
 /// * `cv_path` - Chemin final du CV, si fourni.
 /// * `lettre_motivation_path` - Chemin final de la lettre de motivation, si fournie.
@@ -244,17 +242,18 @@ pub async fn update(
 ///
 /// `Ok(())` une fois la mise à jour effectuée.
 pub async fn set_documents(
-    pool: &SqlitePool,
+    pool: &PgPool,
     id: i64,
     cv_path: &Option<String>,
     lettre_motivation_path: &Option<String>,
 ) -> Result<(), AppError> {
-    sqlx::query("UPDATE candidatures SET cv_path = ?, lettre_motivation_path = ? WHERE id = ?")
+    sqlx::query("UPDATE candidatures SET cv_path = $1, lettre_motivation_path = $2 WHERE id = $3")
         .bind(cv_path)
         .bind(lettre_motivation_path)
         .bind(id)
         .execute(pool)
-        .await?;
+        .await
+        .map_err(map_db_err)?;
     Ok(())
 }
 
@@ -265,7 +264,7 @@ pub async fn set_documents(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `id` - Identifiant de la candidature à abandonner.
 ///
@@ -273,23 +272,25 @@ pub async fn set_documents(
 ///
 /// `Ok(())` une fois le changement de statut effectué, ou `AppError::NotFound`
 /// si la candidature n'existe pas.
-pub async fn abandon(pool: &SqlitePool, user_id: i64, id: i64) -> Result<(), AppError> {
-    let mut tx = pool.begin().await?;
+pub async fn abandon(pool: &PgPool, user_id: i64, id: i64) -> Result<(), AppError> {
+    let mut tx = pool.begin().await.map_err(map_db_err)?;
 
-    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = ? AND user_id = ?")
+    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1 AND user_id = $2")
         .bind(id)
         .bind(user_id)
         .fetch_optional(&mut *tx)
-        .await?
+        .await
+        .map_err(map_db_err)?
         .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?
         .try_get("status")
-        .map_err(AppError::from)?;
+        .map_err(map_db_err)?;
 
-    sqlx::query("UPDATE candidatures SET status = 'abandon' WHERE id = ? AND user_id = ?")
+    sqlx::query("UPDATE candidatures SET status = 'abandon' WHERE id = $1 AND user_id = $2")
         .bind(id)
         .bind(user_id)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .map_err(map_db_err)?;
 
     status_history::record(
         &mut tx,
@@ -302,7 +303,7 @@ pub async fn abandon(pool: &SqlitePool, user_id: i64, id: i64) -> Result<(), App
     )
     .await?;
 
-    tx.commit().await?;
+    tx.commit().await.map_err(map_db_err)?;
 
     Ok(())
 }
@@ -314,7 +315,7 @@ pub async fn abandon(pool: &SqlitePool, user_id: i64, id: i64) -> Result<(), App
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `id` - Identifiant de la candidature à marquer comme postulée.
 /// * `content` - Message (mail ou message de candidature) envoyé, `None` si
@@ -326,21 +327,22 @@ pub async fn abandon(pool: &SqlitePool, user_id: i64, id: i64) -> Result<(), App
 /// si la candidature n'existe pas, ou `AppError::Conflict` si elle n'est plus
 /// au statut « à postuler ».
 pub async fn mark_postule(
-    pool: &SqlitePool,
+    pool: &PgPool,
     user_id: i64,
     id: i64,
     content: Option<&str>,
 ) -> Result<(), AppError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = pool.begin().await.map_err(map_db_err)?;
 
-    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = ? AND user_id = ?")
+    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1 AND user_id = $2")
         .bind(id)
         .bind(user_id)
         .fetch_optional(&mut *tx)
-        .await?
+        .await
+        .map_err(map_db_err)?
         .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?
         .try_get("status")
-        .map_err(AppError::from)?;
+        .map_err(map_db_err)?;
 
     if ancien_status != "a_postuler" {
         return Err(AppError::Conflict(
@@ -348,11 +350,12 @@ pub async fn mark_postule(
         ));
     }
 
-    sqlx::query("UPDATE candidatures SET status = 'postule' WHERE id = ? AND user_id = ?")
+    sqlx::query("UPDATE candidatures SET status = 'postule' WHERE id = $1 AND user_id = $2")
         .bind(id)
         .bind(user_id)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .map_err(map_db_err)?;
 
     status_history::record(
         &mut tx,
@@ -365,7 +368,7 @@ pub async fn mark_postule(
     )
     .await?;
 
-    tx.commit().await?;
+    tx.commit().await.map_err(map_db_err)?;
 
     Ok(())
 }
@@ -374,7 +377,7 @@ pub async fn mark_postule(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `session_id` - Identifiant de la session.
 ///
@@ -382,30 +385,29 @@ pub async fn mark_postule(
 ///
 /// Candidatures triées par date de création décroissante.
 pub async fn list_for_session(
-    pool: &SqlitePool,
+    pool: &PgPool,
     user_id: i64,
     session_id: i64,
 ) -> Result<Vec<CandidatureView>, AppError> {
     let rows = sqlx::query(
         "SELECT id, session_id, poste, entreprise, localisation, status, source, \
-                type AS type_contrat, \
-                CAST(date_candidature AS TEXT) AS date_candidature, \
-                CAST(next_relance     AS TEXT) AS next_relance, \
-                CAST(COALESCE( \
+                type AS type_contrat, date_candidature, next_relance, \
+                COALESCE( \
                     (SELECT MAX(changed_at) FROM status_history \
                      WHERE status_history.candidature_id = candidatures.id), \
                     created_at \
-                ) AS TEXT) AS derniere_maj_statut, \
+                ) AS derniere_maj_statut, \
                 cv_path, lettre_motivation_path, \
                 created_at \
          FROM candidatures \
-         WHERE user_id = ? AND session_id = ? \
+         WHERE user_id = $1 AND session_id = $2 \
          ORDER BY created_at DESC",
     )
     .bind(user_id)
     .bind(session_id)
     .fetch_all(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     rows.iter()
         .map(|r| -> Result<CandidatureView, sqlx::Error> {
@@ -427,7 +429,7 @@ pub async fn list_for_session(
             })
         })
         .collect::<Result<_, _>>()
-        .map_err(AppError::from)
+        .map_err(map_db_err)
 }
 
 /// Récupère le détail complet d'une candidature (tous les champs, pour la
@@ -435,7 +437,7 @@ pub async fn list_for_session(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `id` - Identifiant de la candidature.
 ///
@@ -443,44 +445,44 @@ pub async fn list_for_session(
 ///
 /// `CandidatureDetail` correspondante, ou `AppError::NotFound` si elle n'existe pas.
 pub async fn fetch_detail(
-    pool: &SqlitePool,
+    pool: &PgPool,
     user_id: i64,
     id: i64,
 ) -> Result<CandidatureDetail, AppError> {
     let row = sqlx::query(
         "SELECT id, session_id, poste, entreprise, localisation, status, source, \
                 type AS type_contrat, remuneration, url_offre, description_offre, notes, \
-                CAST(date_candidature AS TEXT) AS date_candidature, \
-                CAST(next_relance     AS TEXT) AS next_relance, \
+                date_candidature, next_relance, \
                 cv_path, lettre_motivation_path, \
                 created_at \
          FROM candidatures \
-         WHERE id = ? AND user_id = ?",
+         WHERE id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(user_id)
     .fetch_optional(pool)
-    .await?
+    .await
+    .map_err(map_db_err)?
     .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?;
 
     Ok(CandidatureDetail {
-        id: row.try_get("id").map_err(AppError::from)?,
-        session_id: row.try_get("session_id").map_err(AppError::from)?,
-        poste: row.try_get("poste").map_err(AppError::from)?,
-        entreprise: row.try_get("entreprise").map_err(AppError::from)?,
-        localisation: row.try_get("localisation").map_err(AppError::from)?,
-        status: row.try_get("status").map_err(AppError::from)?,
-        source: row.try_get("source").map_err(AppError::from)?,
-        type_contrat: row.try_get("type_contrat").map_err(AppError::from)?,
-        remuneration: row.try_get("remuneration").map_err(AppError::from)?,
-        url_offre: row.try_get("url_offre").map_err(AppError::from)?,
-        description_offre: row.try_get("description_offre").map_err(AppError::from)?,
-        notes: row.try_get("notes").map_err(AppError::from)?,
-        date_candidature: row.try_get("date_candidature").map_err(AppError::from)?,
-        next_relance: row.try_get("next_relance").map_err(AppError::from)?,
-        cv_path: row.try_get("cv_path").map_err(AppError::from)?,
-        lettre_motivation_path: row.try_get("lettre_motivation_path").map_err(AppError::from)?,
-        created_at: row.try_get("created_at").map_err(AppError::from)?,
+        id: row.try_get("id").map_err(map_db_err)?,
+        session_id: row.try_get("session_id").map_err(map_db_err)?,
+        poste: row.try_get("poste").map_err(map_db_err)?,
+        entreprise: row.try_get("entreprise").map_err(map_db_err)?,
+        localisation: row.try_get("localisation").map_err(map_db_err)?,
+        status: row.try_get("status").map_err(map_db_err)?,
+        source: row.try_get("source").map_err(map_db_err)?,
+        type_contrat: row.try_get("type_contrat").map_err(map_db_err)?,
+        remuneration: row.try_get("remuneration").map_err(map_db_err)?,
+        url_offre: row.try_get("url_offre").map_err(map_db_err)?,
+        description_offre: row.try_get("description_offre").map_err(map_db_err)?,
+        notes: row.try_get("notes").map_err(map_db_err)?,
+        date_candidature: row.try_get("date_candidature").map_err(map_db_err)?,
+        next_relance: row.try_get("next_relance").map_err(map_db_err)?,
+        cv_path: row.try_get("cv_path").map_err(map_db_err)?,
+        lettre_motivation_path: row.try_get("lettre_motivation_path").map_err(map_db_err)?,
+        created_at: row.try_get("created_at").map_err(map_db_err)?,
     })
 }
 
@@ -488,20 +490,21 @@ pub async fn fetch_detail(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `id` - Identifiant de la candidature.
 ///
 /// # Returns
 ///
 /// Statut brut de la candidature, ou `AppError::NotFound` si elle n'existe pas.
-pub async fn fetch_status(pool: &SqlitePool, user_id: i64, id: i64) -> Result<String, AppError> {
-    sqlx::query("SELECT status FROM candidatures WHERE id = ? AND user_id = ?")
+pub async fn fetch_status(pool: &PgPool, user_id: i64, id: i64) -> Result<String, AppError> {
+    sqlx::query("SELECT status FROM candidatures WHERE id = $1 AND user_id = $2")
         .bind(id)
         .bind(user_id)
         .fetch_optional(pool)
-        .await?
+        .await
+        .map_err(map_db_err)?
         .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?
         .try_get("status")
-        .map_err(AppError::from)
+        .map_err(map_db_err)
 }

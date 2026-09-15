@@ -1,5 +1,7 @@
 //! DTOs liés à l'utilisateur unique de l'application (profil).
 
+use chrono::{DateTime, Utc};
+
 #[derive(serde::Deserialize)]
 pub struct CreateUserInput {
     pub nom: String,
@@ -27,8 +29,8 @@ pub struct UserView {
     pub linkedin: Option<String>,
     pub github: Option<String>,
     pub portfolio: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(serde::Deserialize)]

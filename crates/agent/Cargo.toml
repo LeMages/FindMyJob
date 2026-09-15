@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+findmyjob-core = { path = "../core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
@@ -12,3 +13,8 @@ async-trait = "0.1"
 sqlx = { workspace = true, features = ["postgres", "chrono"] }
 chrono = { workspace = true, features = ["serde"] }
 dotenvy = { workspace = true }
+typst-as-lib = { workspace = true }
+typst-pdf = { workspace = true }
+base64 = { workspace = true }
+keyring = { workspace = true }
+scraper = { workspace = true }
