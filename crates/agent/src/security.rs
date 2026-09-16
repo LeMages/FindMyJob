@@ -1,56 +1,59 @@
-//! Gestion de la clé API Anthropic : `.env` en développement (chargé par
-//! `dotenvy`, voir `main.rs`), trousseau de l'OS (`keyring`) en production.
-//! La clé n'est jamais persistée en base de données.
+//! Gestion de la clé API Anthropic sur un serveur headless.
+//!
+//! Contrairement au desktop (trousseau OS en release, `.env` en debug), un
+//! serveur n'a pas de session utilisateur OS ni de distinction debug/release
+//! pertinente : la clé vit uniquement dans la variable d'environnement du
+//! processus `ANTHROPIC_API_KEY`, chargée depuis `.env` au démarrage
+//! (`dotenvy`, voir `main.rs`) et modifiable à chaud via l'API. Elle n'est
+//! jamais persistée en base de données ni sur disque.
+//!
+//! `findmyjob_core::llm::client` lit directement `ANTHROPIC_API_KEY` depuis
+//! l'environnement du processus à chaque appel : ce module est donc la seule
+//! source de vérité de cette variable, jamais un état séparé qu'il faudrait
+//! resynchroniser.
 
-use findmyjob_core::error::AppError;
+const API_KEY_VAR: &str = "ANTHROPIC_API_KEY";
 
-#[cfg(not(debug_assertions))]
-const KEYRING_SERVICE: &str = "FindMyJob";
-#[cfg(not(debug_assertions))]
-const KEYRING_USER: &str = "anthropic_api_key";
-
-#[cfg(not(debug_assertions))]
-fn keyring_entry() -> Result<keyring::Entry, AppError> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
-        .map_err(|e| AppError::Config(format!("Trousseau OS inaccessible : {e}")))
+/// Récupère la clé API actuellement configurée.
+///
+/// # Returns
+///
+/// `Some(clé)` si `ANTHROPIC_API_KEY` est définie et non vide, `None` sinon.
+pub fn get_api_key() -> Option<String> {
+    std::env::var(API_KEY_VAR).ok().filter(|k| !k.is_empty())
 }
 
-pub fn get_api_key() -> Result<Option<String>, AppError> {
-    #[cfg(debug_assertions)]
-    { Ok(std::env::var("ANTHROPIC_API_KEY").ok()) }
-    #[cfg(not(debug_assertions))]
-    {
-        match keyring_entry()?.get_password() {
-            Ok(key) => Ok(Some(key)),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(AppError::Config(format!("Lecture du trousseau OS impossible : {e}"))),
-        }
+/// Configure la clé API en mémoire (variable d'environnement du processus).
+///
+/// # Arguments
+///
+/// * `key` - Nouvelle clé API Anthropic.
+pub fn set_api_key(key: &str) {
+    // SAFETY: écriture rare (appel API explicite de l'utilisateur), jamais
+    // sur le chemin chaud des appels LLM (qui ne font que lire la variable).
+    unsafe {
+        std::env::set_var(API_KEY_VAR, key);
     }
 }
 
-pub fn set_api_key(key: &str) -> Result<(), AppError> {
-    #[cfg(debug_assertions)]
-    { let _ = key; Err(AppError::Config("En développement, configurez ANTHROPIC_API_KEY dans le fichier .env.".to_string())) }
-    #[cfg(not(debug_assertions))]
-    { keyring_entry()?.set_password(key).map_err(|e| AppError::Config(format!("Écriture du trousseau OS impossible : {e}"))) }
-}
-
-pub fn delete_api_key() -> Result<(), AppError> {
-    #[cfg(debug_assertions)]
-    { Err(AppError::Config("En développement, configurez ANTHROPIC_API_KEY dans le fichier .env.".to_string())) }
-    #[cfg(not(debug_assertions))]
-    {
-        match keyring_entry()?.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(AppError::Config(format!("Suppression du trousseau OS impossible : {e}"))),
-        }
+/// Supprime la clé API configurée.
+pub fn delete_api_key() {
+    // SAFETY: voir `set_api_key` — même écriture rare et hors chemin chaud.
+    unsafe {
+        std::env::remove_var(API_KEY_VAR);
     }
 }
 
+/// Indique si une clé API est actuellement configurée.
 pub fn has_api_key() -> bool {
-    matches!(get_api_key(), Ok(Some(_)))
+    get_api_key().is_some()
 }
 
+/// Source de la clé API actuellement configurée.
+///
+/// # Returns
+///
+/// Toujours `"env"` sur un serveur headless (pas de trousseau OS).
 pub fn key_source() -> &'static str {
-    if cfg!(debug_assertions) { "env" } else { "keyring" }
+    "env"
 }

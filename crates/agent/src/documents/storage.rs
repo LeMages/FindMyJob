@@ -25,6 +25,11 @@ use findmyjob_core::models::{CandidatureDetail, DocumentFileInfo, DocumentRefere
 
 /// Nombre total d'étapes du flux de `save_reference`, communiqué à
 /// l'appelant pour calculer une progression (`step`/`total`).
+///
+/// Non utilisé par l'API HTTP de l'étape 3d (pas de canal de progression
+/// exposé, voir `api::documents::save_cv`) — conservé pour un futur appelant
+/// interactif (desktop).
+#[allow(dead_code)]
 pub const SAVE_STEPS_TOTAL: u32 = 5;
 
 /// Résout le dossier d'un type de document (`cv` ou `lettre_motivation`)
@@ -333,6 +338,11 @@ pub fn read_document_base64(path: &str) -> Result<String, AppError> {
 /// # Returns
 ///
 /// `Some(chemin_final)` si un document était en attente, `None` sinon.
+///
+/// Non utilisé par l'API HTTP de l'étape 3d (flux d'export local desktop,
+/// voir la note du module `documents::mod`) — conservé pour un futur
+/// appelant desktop.
+#[allow(dead_code)]
 pub fn finalize_candidature_document(
     data_dir: &Path,
     session_id: i64,
@@ -369,6 +379,10 @@ pub fn finalize_candidature_document(
 /// # Returns
 ///
 /// Nom assaini, débarrassé des espaces superflus en tête/fin.
+///
+/// Non utilisé par l'API HTTP de l'étape 3d (appelée uniquement par
+/// `build_export_dir_name`, voir sa note) — conservé pour un futur appelant desktop.
+#[allow(dead_code)]
 fn sanitize_filename(name: &str) -> String {
     name.chars()
         .map(|c| if r#"<>:"/\|?*"#.contains(c) { '_' } else { c })
@@ -388,6 +402,11 @@ fn sanitize_filename(name: &str) -> String {
 /// # Returns
 ///
 /// Nom de dossier assaini, sûr sur tous les OS.
+///
+/// Non utilisé par l'API HTTP de l'étape 3d (flux d'export local desktop,
+/// voir la note du module `documents::mod`) — conservé pour un futur
+/// appelant desktop.
+#[allow(dead_code)]
 pub fn build_export_dir_name(detail: &CandidatureDetail) -> String {
     let entreprise = detail.entreprise.as_deref().unwrap_or("entreprise");
     sanitize_filename(&format!("{}_{}_{}", detail.poste, entreprise, detail.id))
@@ -405,6 +424,11 @@ pub fn build_export_dir_name(detail: &CandidatureDetail) -> String {
 ///
 /// `Ok(())` une fois les deux fichiers copiés, ou `AppError::Validation` si un
 /// document est manquant (candidature sans CV/lettre) ou introuvable sur le disque.
+///
+/// Non utilisé par l'API HTTP de l'étape 3d (flux d'export local desktop,
+/// voir la note du module `documents::mod`) — conservé pour un futur
+/// appelant desktop.
+#[allow(dead_code)]
 pub fn copy_candidature_documents(dest_dir: &Path, detail: &CandidatureDetail) -> Result<(), AppError> {
     let cv_path = detail.cv_path.as_deref().ok_or_else(|| {
         AppError::Validation("Aucun CV disponible pour cette candidature.".to_string())
@@ -437,6 +461,11 @@ pub fn copy_candidature_documents(dest_dir: &Path, detail: &CandidatureDetail) -
 /// # Returns
 ///
 /// `Ok(())` une fois le fichier écrit.
+///
+/// Non utilisé par l'API HTTP de l'étape 3d (flux d'export local desktop,
+/// voir la note du module `documents::mod`) — conservé pour un futur
+/// appelant desktop.
+#[allow(dead_code)]
 pub fn write_export_message(dest_dir: &Path, message: &str, message_filename: &str) -> Result<(), AppError> {
     std::fs::write(dest_dir.join(message_filename), message)
         .map_err(|e| AppError::Validation(format!("Écriture du message impossible : {}", e)))

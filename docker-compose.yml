@@ -22,6 +22,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    ports:
+      - "${API_PORT:-3000}:3000"
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -30,6 +32,13 @@ services:
       DB_DATABASE: ${DB_DATABASE:-findmyjob}
       LLM_API_KEY: ${LLM_API_KEY:-}
       CRON_INTERVAL: ${CRON_INTERVAL:-6h}
+      API_TOKEN: ${API_TOKEN:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DATA_DIR: /app/data
+      FONTS_DIR: /app/data/fonts
+    volumes:
+      - agent-data:/app/data
 
 volumes:
   pgdata:
+  agent-data:
