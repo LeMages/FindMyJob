@@ -1,8 +1,7 @@
 //! Commandes Tauri pour les langues du profil.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{langues, users};
+use crate::api_client::ApiClient;
 use crate::error::AppError;
 use crate::models::{CreateLangInput, LangView};
 
@@ -10,7 +9,7 @@ use crate::models::{CreateLangInput, LangView};
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `input` - Données de la langue à créer.
 ///
 /// # Returns
@@ -18,18 +17,17 @@ use crate::models::{CreateLangInput, LangView};
 /// `LangView` fraîchement créée.
 #[tauri::command]
 pub async fn add_lang(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     input: CreateLangInput,
 ) -> Result<LangView, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    langues::insert(&state.pool, user.id, input).await
+    api.post("/api/langues", &input).await
 }
 
 /// Met à jour une langue existante.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `id` - Identifiant de la langue à modifier.
 /// * `input` - Nouvelles données de la langue.
 ///
@@ -38,24 +36,24 @@ pub async fn add_lang(
 /// `LangView` mise à jour.
 #[tauri::command]
 pub async fn update_lang(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     id: i64,
     input: CreateLangInput,
 ) -> Result<LangView, AppError> {
-    langues::update(&state.pool, id, input).await
+    api.put(&format!("/api/langues/{id}"), &input).await
 }
 
 /// Supprime une langue du profil.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `id` - Identifiant de la langue à supprimer.
 ///
 /// # Returns
 ///
 /// `Ok(())` si supprimée.
 #[tauri::command]
-pub async fn delete_lang(state: tauri::State<'_, DbState>, id: i64) -> Result<(), AppError> {
-    langues::delete(&state.pool, id).await
+pub async fn delete_lang(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
+    api.delete(&format!("/api/langues/{id}")).await
 }

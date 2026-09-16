@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Utc};
 
-#[derive(serde::Serialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct DocumentReferenceView {
     pub file_path: String,
     pub pdf_path: String,
@@ -33,7 +33,7 @@ pub struct DocumentSaveProgress {
 /// État sur disque d'un document joint à une candidature (CV / lettre de
 /// motivation), utilisé pour afficher honnêtement sa présence dans la page
 /// de détail — le fichier peut avoir été déplacé ou supprimé après coup.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct DocumentFileInfo {
     pub exists: bool,
     pub size: i64,

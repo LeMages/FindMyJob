@@ -1,8 +1,7 @@
 //! Commandes Tauri pour les entretiens rattachés à une candidature.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{interviews, users};
+use crate::api_client::ApiClient;
 use crate::error::AppError;
 use crate::models::{InterviewView, PlanningInterviewView};
 
@@ -11,7 +10,7 @@ use crate::models::{InterviewView, PlanningInterviewView};
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `candidature_id` - Identifiant de la candidature.
 ///
 /// # Returns
@@ -19,10 +18,11 @@ use crate::models::{InterviewView, PlanningInterviewView};
 /// Entretiens au statut `en_attente`, triés par date d'entretien croissante.
 #[tauri::command]
 pub async fn get_pending_interviews(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     candidature_id: i64,
 ) -> Result<Vec<InterviewView>, AppError> {
-    interviews::list_pending_for_candidature(&state.pool, candidature_id).await
+    api.get(&format!("/api/candidatures/{candidature_id}/interviews/pending"))
+        .await
 }
 
 /// Liste tous les entretiens planifiés d'une session, enrichis de leur
@@ -30,7 +30,7 @@ pub async fn get_pending_interviews(
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `session_id` - Identifiant de la session.
 ///
 /// # Returns
@@ -38,9 +38,8 @@ pub async fn get_pending_interviews(
 /// Entretiens dont la date est renseignée, triés par date croissante.
 #[tauri::command]
 pub async fn get_all_interviews_for_session(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     session_id: i64,
 ) -> Result<Vec<PlanningInterviewView>, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    interviews::list_for_session(&state.pool, user.id, session_id).await
+    api.get(&format!("/api/sessions/{session_id}/interviews")).await
 }

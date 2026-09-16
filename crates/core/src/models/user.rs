@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CreateUserInput {
     pub nom: String,
     pub prenom: String,
@@ -16,7 +16,7 @@ pub struct CreateUserInput {
     pub portfolio: Option<String>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct UserView {
     pub id: i64,
     pub nom: Option<String>,
@@ -33,7 +33,7 @@ pub struct UserView {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct UpdateUserInfoInput {
     pub prenom: Option<String>,
     pub nom: Option<String>,

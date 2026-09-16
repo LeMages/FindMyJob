@@ -1,8 +1,7 @@
 //! Commandes Tauri pour les formations du profil.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{formations, users};
+use crate::api_client::ApiClient;
 use crate::error::AppError;
 use crate::models::{CreateFormationInput, FormationView};
 
@@ -10,7 +9,7 @@ use crate::models::{CreateFormationInput, FormationView};
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `input` - Données de la formation à créer.
 ///
 /// # Returns
@@ -18,18 +17,17 @@ use crate::models::{CreateFormationInput, FormationView};
 /// `FormationView` fraîchement créée.
 #[tauri::command]
 pub async fn add_formation(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     input: CreateFormationInput,
 ) -> Result<FormationView, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    formations::insert(&state.pool, user.id, input).await
+    api.post("/api/formations", &input).await
 }
 
 /// Met à jour une formation existante.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `id` - Identifiant de la formation à modifier.
 /// * `input` - Nouvelles données de la formation.
 ///
@@ -38,24 +36,24 @@ pub async fn add_formation(
 /// `FormationView` mise à jour.
 #[tauri::command]
 pub async fn update_formation(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     id: i64,
     input: CreateFormationInput,
 ) -> Result<FormationView, AppError> {
-    formations::update(&state.pool, id, input).await
+    api.put(&format!("/api/formations/{id}"), &input).await
 }
 
 /// Supprime une formation du profil.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `id` - Identifiant de la formation à supprimer.
 ///
 /// # Returns
 ///
 /// `Ok(())` si supprimée.
 #[tauri::command]
-pub async fn delete_formation(state: tauri::State<'_, DbState>, id: i64) -> Result<(), AppError> {
-    formations::delete(&state.pool, id).await
+pub async fn delete_formation(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
+    api.delete(&format!("/api/formations/{id}")).await
 }

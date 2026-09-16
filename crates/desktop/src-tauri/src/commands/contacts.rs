@@ -1,8 +1,7 @@
 //! Commandes Tauri pour les contacts recruteur.
 
 // Importation des modules internes
-use crate::db::contacts;
-use crate::db::init::DbState;
+use crate::api_client::ApiClient;
 use crate::error::AppError;
 use crate::models::ContactView;
 
@@ -10,7 +9,7 @@ use crate::models::ContactView;
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `candidature_id` - Identifiant de la candidature.
 ///
 /// # Returns
@@ -18,8 +17,8 @@ use crate::models::ContactView;
 /// Contacts triés par date de création croissante.
 #[tauri::command]
 pub async fn get_contacts(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     candidature_id: i64,
 ) -> Result<Vec<ContactView>, AppError> {
-    contacts::list_for_candidature(&state.pool, candidature_id).await
+    api.get(&format!("/api/candidatures/{candidature_id}/contacts")).await
 }

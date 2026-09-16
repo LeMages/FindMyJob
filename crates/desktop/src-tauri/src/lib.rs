@@ -1,39 +1,31 @@
 //! Point d'entrée de la bibliothèque Tauri : déclaration des modules et
-//! configuration de l'application (état partagé, commandes exposées à l'IPC).
+//! configuration de l'application (client API partagé, commandes exposées à l'IPC).
 
 // Importation des modules internes
+pub mod api_client;
 pub mod commands;
-pub mod db;
-pub mod documents;
 pub mod error;
-pub mod llm;
 pub mod models;
-pub mod scraping;
-pub mod security;
 
 // Importation des crates externes
-use tauri::Manager;
+use api_client::ApiClient;
 
-// Importation des modules internes (usage local à run())
-use db::init::{resolve_db_path, DbState};
-
-/// Configure et lance l'application Tauri : initialise la base de données,
-/// l'injecte comme état partagé, puis enregistre toutes les commandes IPC .
+/// Configure et lance l'application Tauri : construit le client HTTP vers
+/// l'agent, l'injecte comme état partagé, puis enregistre toutes les
+/// commandes IPC.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Charge le .env à la racine du projet (ANTHROPIC_API_KEY, etc.) — no-op
+    // Charge le .env à la racine du projet (API_URL, API_TOKEN, etc.) — no-op
     // silencieux si le fichier est absent (ex. build de production packagée).
     dotenvy::dotenv().ok();
 
+    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let api_token = std::env::var("API_TOKEN").ok().filter(|t| !t.is_empty());
+    let client = ApiClient::new(&api_url, api_token);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .setup(|app| {
-            let db_path = resolve_db_path(app.handle());
-            let pool = tauri::async_runtime::block_on(findmyjob_core::db::init_db(&db_path))
-                .map_err(|e| e.to_string())?;
-            app.manage(DbState { pool, db_path });
-            Ok(())
-        })
+        .manage(client)
         .invoke_handler(tauri::generate_handler![
             commands::db_status,
             commands::user_exists,

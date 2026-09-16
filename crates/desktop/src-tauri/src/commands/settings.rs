@@ -2,25 +2,24 @@
 //! chemins de stockage, test de connexion.
 
 // Importation des modules standard
-use std::path::Path;
-use std::time::Instant;
+use std::path::{Path, PathBuf};
+
+// Importation des crates externes
+use serde_json::json;
 
 // Importation des modules internes
-use crate::db::init::{resolve_data_dir, DbState};
-use crate::db::settings;
+use crate::api_client::ApiClient;
 use crate::error::AppError;
-use crate::llm::client::{self, DEFAULT_MODEL};
-use crate::security;
 
 /// Statut de la clé API, sans jamais exposer sa valeur réelle.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ApiKeyStatus {
     exists: bool,
-    source: &'static str,
+    source: String,
 }
 
 /// Résultat du test de connexion à l'API Claude.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct TestConnectionResult {
     success: bool,
     model: String,
@@ -28,115 +27,145 @@ pub struct TestConnectionResult {
     latency_ms: u64,
 }
 
-/// Retourne le statut de la clé API Anthropic configurée, sans jamais
-/// révéler sa valeur.
+/// Résout le dossier de données de l'application (documents, base de
+/// données de développement). En debug, un dossier `dev-data/` à la racine
+/// du dépôt ; en release, le dossier de données applicatif standard de l'OS.
 ///
-/// # Returns
-///
-/// `ApiKeyStatus` indiquant si une clé existe et sa source (`.env` en
-/// développement, trousseau OS en production).
-#[tauri::command]
-pub fn get_api_key_status() -> Result<ApiKeyStatus, AppError> {
-    Ok(ApiKeyStatus {
-        exists: security::has_api_key(),
-        source: security::key_source(),
-    })
+/// Seule appelante : [`get_documents_path`], purement informatif côté
+/// desktop (les documents eux-mêmes sont désormais stockés par l'agent).
+#[cfg_attr(debug_assertions, allow(unused_variables))]
+fn resolve_data_dir(app: &tauri::AppHandle) -> PathBuf {
+    #[cfg(debug_assertions)]
+    {
+        // Le CARGO_MANIFEST_DIR de ce crate est crates/desktop/src-tauri : trois
+        // parents remontent jusqu'à la racine du repo (crates/desktop/src-tauri
+        // -> crates/desktop -> crates -> racine). Ce unwrap ne peut échouer que
+        // si le crate est placé à la racine du disque.
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("dev-data")
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        use tauri::Manager;
+        app.path()
+            .app_data_dir()
+            .expect("failed to resolve app data dir")
+    }
 }
 
-/// Enregistre (ou remplace) la clé API Anthropic.
+/// Retourne le statut de la clé API Anthropic configurée côté agent, sans
+/// jamais révéler sa valeur.
 ///
 /// # Arguments
 ///
+/// * `api` - Client HTTP vers l'agent.
+///
+/// # Returns
+///
+/// `ApiKeyStatus` indiquant si une clé existe et sa source.
+#[tauri::command]
+pub async fn get_api_key_status(api: tauri::State<'_, ApiClient>) -> Result<ApiKeyStatus, AppError> {
+    api.get("/api/settings/api-key").await
+}
+
+/// Enregistre (ou remplace) la clé API Anthropic côté agent.
+///
+/// # Arguments
+///
+/// * `api` - Client HTTP vers l'agent.
 /// * `key` - Nouvelle valeur de la clé API.
 ///
 /// # Returns
 ///
 /// `Ok(())` si l'écriture a réussi.
 #[tauri::command]
-pub fn set_api_key(key: String) -> Result<(), AppError> {
+pub async fn set_api_key(api: tauri::State<'_, ApiClient>, key: String) -> Result<(), AppError> {
     let key = key.trim();
     if key.is_empty() {
         return Err(AppError::Validation("La clé API est requise.".to_string()));
     }
-    security::set_api_key(key)
+    api.put_no_content("/api/settings/api-key", &json!({ "key": key })).await
 }
 
-/// Supprime la clé API Anthropic enregistrée.
+/// Supprime la clé API Anthropic enregistrée côté agent.
+///
+/// # Arguments
+///
+/// * `api` - Client HTTP vers l'agent.
 ///
 /// # Returns
 ///
 /// `Ok(())` si la suppression a réussi.
 #[tauri::command]
-pub fn delete_api_key() -> Result<(), AppError> {
-    security::delete_api_key()
+pub async fn delete_api_key(api: tauri::State<'_, ApiClient>) -> Result<(), AppError> {
+    api.delete("/api/settings/api-key").await
 }
 
 /// Retourne l'identifiant du modèle Claude actuellement configuré.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 ///
 /// # Returns
 ///
-/// Le modèle configuré en base, ou [`DEFAULT_MODEL`] si aucun n'est enregistré.
+/// Le modèle configuré côté agent.
 #[tauri::command]
-pub async fn get_llm_model(state: tauri::State<'_, DbState>) -> Result<String, AppError> {
-    settings::resolve_llm_model(&state.pool, DEFAULT_MODEL).await
+pub async fn get_llm_model(api: tauri::State<'_, ApiClient>) -> Result<String, AppError> {
+    api.get("/api/settings/model").await
 }
 
 /// Change le modèle Claude utilisé pour les appels LLM.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `model` - Identifiant du modèle à sélectionner, doit figurer dans
-///   [`client::AVAILABLE_MODELS`].
+/// * `api` - Client HTTP vers l'agent.
+/// * `model` - Identifiant du modèle à sélectionner.
 ///
 /// # Returns
 ///
 /// `Ok(())` si le modèle a été enregistré.
 #[tauri::command]
-pub async fn set_llm_model(state: tauri::State<'_, DbState>, model: String) -> Result<(), AppError> {
-    if !client::AVAILABLE_MODELS.contains(&model.as_str()) {
-        return Err(AppError::Validation(format!("Modèle inconnu : {model}")));
-    }
-    settings::set(&state.pool, settings::KEY_LLM_MODEL, &model).await
+pub async fn set_llm_model(api: tauri::State<'_, ApiClient>, model: String) -> Result<(), AppError> {
+    api.put_no_content("/api/settings/model", &json!({ "model": model })).await
 }
 
 /// Retourne le thème d'affichage actuellement configuré.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 ///
 /// # Returns
 ///
-/// Le thème configuré en base, ou [`settings::DEFAULT_THEME`] si aucun n'est enregistré.
+/// Le thème configuré côté agent.
 #[tauri::command]
-pub async fn get_theme(state: tauri::State<'_, DbState>) -> Result<String, AppError> {
-    settings::resolve_theme(&state.pool).await
+pub async fn get_theme(api: tauri::State<'_, ApiClient>) -> Result<String, AppError> {
+    api.get("/api/settings/theme").await
 }
 
 /// Change le thème d'affichage de l'application.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `theme` - Thème à appliquer, doit figurer dans [`settings::VALID_THEMES`].
+/// * `api` - Client HTTP vers l'agent.
+/// * `theme` - Thème à appliquer.
 ///
 /// # Returns
 ///
 /// `Ok(())` si le thème a été enregistré.
 #[tauri::command]
-pub async fn set_theme(state: tauri::State<'_, DbState>, theme: String) -> Result<(), AppError> {
-    if !settings::VALID_THEMES.contains(&theme.as_str()) {
-        return Err(AppError::Validation(format!("Thème inconnu : {theme}")));
-    }
-    settings::set(&state.pool, settings::KEY_THEME, &theme).await
+pub async fn set_theme(api: tauri::State<'_, ApiClient>, theme: String) -> Result<(), AppError> {
+    api.put_no_content("/api/settings/theme", &json!({ "theme": theme })).await
 }
 
-/// Retourne le chemin du dossier de documents de l'application.
+/// Retourne le chemin du dossier de données de l'application.
 ///
 /// # Arguments
 ///
@@ -144,7 +173,7 @@ pub async fn set_theme(state: tauri::State<'_, DbState>, theme: String) -> Resul
 ///
 /// # Returns
 ///
-/// Chemin absolu du dossier de documents.
+/// Chemin absolu du dossier de données.
 #[tauri::command]
 pub fn get_documents_path(app: tauri::AppHandle) -> Result<String, AppError> {
     Ok(resolve_data_dir(&app).to_string_lossy().to_string())
@@ -172,35 +201,17 @@ pub fn open_folder(path: String) -> Result<(), AppError> {
 }
 
 /// Teste la connexion à l'API Claude avec la clé et le modèle actuellement
-/// configurés (message court, `max_tokens: 10`).
+/// configurés côté agent.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 ///
 /// # Returns
 ///
 /// `TestConnectionResult` : les échecs attendus (clé invalide, réseau, refus
 /// de l'API) sont retournés avec `success: false`, pas comme une erreur.
 #[tauri::command]
-pub async fn test_api_connection(state: tauri::State<'_, DbState>) -> Result<TestConnectionResult, AppError> {
-    let model = settings::resolve_llm_model(&state.pool, DEFAULT_MODEL).await?;
-
-    let started = Instant::now();
-    let result = client::call_claude_with_tokens(
-        "Réponds uniquement par le mot OK.",
-        "Test de connexion.",
-        None,
-        10,
-        &model,
-    )
-    .await;
-    let latency_ms = started.elapsed().as_millis() as u64;
-
-    let (success, message) = match result {
-        Ok(_) => (true, "Connexion réussie.".to_string()),
-        Err(e) => (false, e.to_string()),
-    };
-
-    Ok(TestConnectionResult { success, model, message, latency_ms })
+pub async fn test_api_connection(api: tauri::State<'_, ApiClient>) -> Result<TestConnectionResult, AppError> {
+    api.post("/api/settings/test-connection", &()).await
 }

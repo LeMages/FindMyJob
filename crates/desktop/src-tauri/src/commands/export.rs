@@ -11,17 +11,17 @@ use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
 // Importation des modules internes
-use crate::db::export::export_all_data;
-use crate::db::init::DbState;
+use crate::api_client::ApiClient;
 use crate::error::AppError;
 
-/// Exporte l'intégralité des données utilisateur (hors `embeddings`) dans un
-/// fichier JSON choisi via une boîte de dialogue native.
+/// Exporte l'intégralité des données utilisateur dans un fichier JSON choisi
+/// via une boîte de dialogue native. Les données elles-mêmes sont récupérées
+/// auprès de l'agent (`GET /api/export`).
 ///
 /// # Arguments
 ///
 /// * `app` - Handle de l'application (métadonnées de version, dialogue natif).
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 ///
 /// # Returns
 ///
@@ -30,12 +30,13 @@ use crate::error::AppError;
 #[tauri::command]
 pub async fn export_data_json(
     app: AppHandle,
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
 ) -> Result<Option<String>, AppError> {
     // ------------------------------------------------------------------
-    // 1. Assemble les données et les métadonnées d'export
+    // 1. Récupère les données auprès de l'agent et assemble les métadonnées
+    //    d'export
     // ------------------------------------------------------------------
-    let data = export_all_data(&state.pool).await?;
+    let data: serde_json::Value = api.get("/api/export").await?;
     let payload = json!({
         "export_date": Local::now().to_rfc3339(),
         "app_version": app.package_info().version.to_string(),

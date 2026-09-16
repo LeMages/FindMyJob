@@ -2,7 +2,7 @@
 
 use chrono::NaiveDate;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ExperienceView {
     pub id: i64,
     pub poste: String,
@@ -14,7 +14,7 @@ pub struct ExperienceView {
     pub type_contrat: Option<String>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CreateExperienceInput {
     pub poste: String,
     pub entreprise: Option<String>,

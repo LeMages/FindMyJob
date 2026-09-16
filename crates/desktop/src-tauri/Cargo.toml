@@ -18,7 +18,7 @@ tauri = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sqlx = { workspace = true }
+reqwest = { workspace = true }
 chrono = { workspace = true }
 open = { workspace = true }
 dotenvy = { workspace = true }

@@ -2,7 +2,7 @@
 
 use chrono::NaiveDate;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct FormationView {
     pub id: i64,
     pub titre: String,
@@ -11,7 +11,7 @@ pub struct FormationView {
     pub date_fin: Option<NaiveDate>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CreateFormationInput {
     pub titre: String,
     pub ecole: Option<String>,

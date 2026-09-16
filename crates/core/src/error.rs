@@ -4,7 +4,7 @@
 //! conflit, ressource introuvable, erreur base de données) et implémente
 //! `serde::Serialize` afin de traverser le pont IPC de Tauri.
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {
     Database(String),

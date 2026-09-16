@@ -1,8 +1,7 @@
 //! Commandes Tauri pour les projets personnels du profil.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{projets, users};
+use crate::api_client::ApiClient;
 use crate::error::AppError;
 use crate::models::{CreateProjetInput, ProjetView};
 
@@ -10,7 +9,7 @@ use crate::models::{CreateProjetInput, ProjetView};
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `input` - Données du projet à créer.
 ///
 /// # Returns
@@ -18,18 +17,17 @@ use crate::models::{CreateProjetInput, ProjetView};
 /// `ProjetView` fraîchement créé.
 #[tauri::command]
 pub async fn add_projet(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     input: CreateProjetInput,
 ) -> Result<ProjetView, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    projets::insert(&state.pool, user.id, input).await
+    api.post("/api/projets", &input).await
 }
 
 /// Met à jour un projet existant.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `id` - Identifiant du projet à modifier.
 /// * `input` - Nouvelles données du projet.
 ///
@@ -38,24 +36,24 @@ pub async fn add_projet(
 /// `ProjetView` mis à jour.
 #[tauri::command]
 pub async fn update_projet(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     id: i64,
     input: CreateProjetInput,
 ) -> Result<ProjetView, AppError> {
-    projets::update(&state.pool, id, input).await
+    api.put(&format!("/api/projets/{id}"), &input).await
 }
 
 /// Supprime un projet du profil.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `id` - Identifiant du projet à supprimer.
 ///
 /// # Returns
 ///
 /// `Ok(())` si supprimé.
 #[tauri::command]
-pub async fn delete_projet(state: tauri::State<'_, DbState>, id: i64) -> Result<(), AppError> {
-    projets::delete(&state.pool, id).await
+pub async fn delete_projet(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
+    api.delete(&format!("/api/projets/{id}")).await
 }

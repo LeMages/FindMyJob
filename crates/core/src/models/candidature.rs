@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, NaiveDate, Utc};
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CandidatureView {
     pub id: i64,
     pub session_id: Option<i64>,
@@ -25,7 +25,7 @@ pub struct CandidatureView {
 /// Vue complète d'une candidature, utilisée par la page de détail (contient
 /// les champs additionnels absents de `CandidatureView`, qui reste léger pour
 /// l'affichage en liste/kanban).
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CandidatureDetail {
     pub id: i64,
     pub session_id: Option<i64>,
@@ -46,7 +46,7 @@ pub struct CandidatureDetail {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CreateCandidatureInput {
     pub poste: String,
     pub entreprise: Option<String>,
@@ -64,7 +64,7 @@ pub struct CreateCandidatureInput {
 
 /// Champs modifiables depuis la page de détail, uniquement au statut
 /// « à_postuler » (voir `db::candidatures::update`).
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct UpdateCandidatureInput {
     pub poste: String,
     pub entreprise: Option<String>,

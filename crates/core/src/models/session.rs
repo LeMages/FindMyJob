@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct SessionView {
     pub id: i64,
     pub nom: String,
@@ -14,12 +14,12 @@ pub struct SessionView {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CreateSessionInput {
     pub nom: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct UpdateSessionInput {
     pub nom: String,
     pub contexte: Option<String>,

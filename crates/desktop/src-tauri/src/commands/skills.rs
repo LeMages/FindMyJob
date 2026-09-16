@@ -1,8 +1,7 @@
 //! Commandes Tauri pour les compétences du profil.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{skills, users};
+use crate::api_client::ApiClient;
 use crate::error::AppError;
 use crate::models::{CreateSkillInput, SkillView};
 
@@ -10,7 +9,7 @@ use crate::models::{CreateSkillInput, SkillView};
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `input` - Données de la compétence à créer.
 ///
 /// # Returns
@@ -18,18 +17,17 @@ use crate::models::{CreateSkillInput, SkillView};
 /// `SkillView` fraîchement créée.
 #[tauri::command]
 pub async fn add_skill(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     input: CreateSkillInput,
 ) -> Result<SkillView, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    skills::insert(&state.pool, user.id, input).await
+    api.post("/api/skills", &input).await
 }
 
 /// Met à jour une compétence existante.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `id` - Identifiant de la compétence à modifier.
 /// * `input` - Nouvelles données de la compétence.
 ///
@@ -38,24 +36,24 @@ pub async fn add_skill(
 /// `SkillView` mise à jour.
 #[tauri::command]
 pub async fn update_skill(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     id: i64,
     input: CreateSkillInput,
 ) -> Result<SkillView, AppError> {
-    skills::update(&state.pool, id, input).await
+    api.put(&format!("/api/skills/{id}"), &input).await
 }
 
 /// Supprime une compétence du profil.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `api` - Client HTTP vers l'agent.
 /// * `id` - Identifiant de la compétence à supprimer.
 ///
 /// # Returns
 ///
 /// `Ok(())` si supprimée.
 #[tauri::command]
-pub async fn delete_skill(state: tauri::State<'_, DbState>, id: i64) -> Result<(), AppError> {
-    skills::delete(&state.pool, id).await
+pub async fn delete_skill(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
+    api.delete(&format!("/api/skills/{id}")).await
 }

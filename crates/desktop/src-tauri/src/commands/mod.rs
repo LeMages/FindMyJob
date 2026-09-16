@@ -1,6 +1,6 @@
 //! Ré-exports publics des commandes Tauri, groupées par entité métier.
-//! Chaque commande délègue sa logique à la couche `db::` ou `documents::` —
-//! aucune requête SQL directe ici.
+//! Chaque commande délègue sa logique à l'agent via `api_client::ApiClient` —
+//! aucun accès direct à une base de données ici.
 
 pub mod candidatures;
 pub mod contacts;

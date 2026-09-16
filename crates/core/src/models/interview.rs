@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct InterviewView {
     pub id: i64,
     pub candidature_id: i64,
@@ -16,7 +16,7 @@ pub struct InterviewView {
 }
 
 /// Entretien enrichi des informations de sa candidature, pour la vue planning.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct PlanningInterviewView {
     pub id: i64,
     pub candidature_id: i64,

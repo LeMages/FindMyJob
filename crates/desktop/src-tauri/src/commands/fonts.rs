@@ -1,8 +1,11 @@
 //! Commandes Tauri pour la gestion des polices utilisateur importées pour la
 //! compilation Typst : liste, import, suppression.
 
+// Importation des crates externes
+use serde_json::json;
+
 // Importation des modules internes
-use crate::documents::fonts;
+use crate::api_client::ApiClient;
 use crate::error::AppError;
 use crate::models::FontFamilyView;
 
@@ -10,43 +13,46 @@ use crate::models::FontFamilyView;
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `api` - Client HTTP vers l'agent.
 ///
 /// # Returns
 ///
 /// Une entrée par famille de polices, triée par nom.
 #[tauri::command]
-pub fn list_fonts(app: tauri::AppHandle) -> Result<Vec<FontFamilyView>, AppError> {
-    fonts::list_fonts(&app)
+pub async fn list_fonts(api: tauri::State<'_, ApiClient>) -> Result<Vec<FontFamilyView>, AppError> {
+    api.get("/api/fonts").await
 }
 
 /// Importe le contenu d'un dossier de police (ex. archive Google Fonts
-/// décompressée) dans le dossier `polices/` de l'application.
+/// décompressée) dans le dossier de polices de l'agent.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `api` - Client HTTP vers l'agent.
 /// * `source_path` - Chemin du dossier source sélectionné par l'utilisateur.
 ///
 /// # Returns
 ///
 /// La famille de polices importée.
 #[tauri::command]
-pub fn import_font_folder(app: tauri::AppHandle, source_path: String) -> Result<FontFamilyView, AppError> {
-    fonts::import_font_folder(&app, &source_path)
+pub async fn import_font_folder(
+    api: tauri::State<'_, ApiClient>,
+    source_path: String,
+) -> Result<FontFamilyView, AppError> {
+    api.post("/api/fonts", &json!({ "source_path": source_path })).await
 }
 
 /// Supprime une famille de polices importée.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `api` - Client HTTP vers l'agent.
 /// * `name` - Nom de la famille à supprimer.
 ///
 /// # Returns
 ///
 /// `Ok(())` si le dossier a été supprimé.
 #[tauri::command]
-pub fn delete_font(app: tauri::AppHandle, name: String) -> Result<(), AppError> {
-    fonts::delete_font(&app, &name)
+pub async fn delete_font(api: tauri::State<'_, ApiClient>, name: String) -> Result<(), AppError> {
+    api.delete(&format!("/api/fonts/{name}")).await
 }

@@ -3,8 +3,11 @@
 //! Chaque document de référence (et ses pièces jointes) appartient à une
 //! session de candidature, identifiée par `session_id`.
 
+// Importation des crates externes
+use serde_json::json;
+
 // Importation des modules internes
-use crate::documents;
+use crate::api_client::ApiClient;
 use crate::error::AppError;
 use crate::models::{DocumentFileInfo, DocumentReferenceView};
 
@@ -12,7 +15,7 @@ use crate::models::{DocumentFileInfo, DocumentReferenceView};
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `api` - Client HTTP vers l'agent.
 /// * `session_id` - Identifiant de la session propriétaire.
 ///
 /// # Returns
@@ -20,10 +23,10 @@ use crate::models::{DocumentFileInfo, DocumentReferenceView};
 /// `Some(DocumentReferenceView)` si un CV de référence a été sauvegardé.
 #[tauri::command]
 pub async fn get_cv_reference(
-    app: tauri::AppHandle,
+    api: tauri::State<'_, ApiClient>,
     session_id: i64,
 ) -> Result<Option<DocumentReferenceView>, AppError> {
-    Ok(documents::get_reference(&app, session_id, "cv").await)
+    api.get(&format!("/api/sessions/{session_id}/documents/cv")).await
 }
 
 /// Récupère la référence de lettre de motivation sauvegardée pour une
@@ -31,7 +34,7 @@ pub async fn get_cv_reference(
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `api` - Client HTTP vers l'agent.
 /// * `session_id` - Identifiant de la session propriétaire.
 ///
 /// # Returns
@@ -39,10 +42,10 @@ pub async fn get_cv_reference(
 /// `Some(DocumentReferenceView)` si une lettre de référence a été sauvegardée.
 #[tauri::command]
 pub async fn get_lettre_motivation_reference(
-    app: tauri::AppHandle,
+    api: tauri::State<'_, ApiClient>,
     session_id: i64,
 ) -> Result<Option<DocumentReferenceView>, AppError> {
-    Ok(documents::get_reference(&app, session_id, "lettre_motivation").await)
+    api.get(&format!("/api/sessions/{session_id}/documents/lm")).await
 }
 
 /// Sauvegarde une nouvelle référence de CV (.typ) pour une session et la
@@ -50,7 +53,7 @@ pub async fn get_lettre_motivation_reference(
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `api` - Client HTTP vers l'agent.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `filename` - Nom du fichier fourni par l'utilisateur.
 /// * `content` - Contenu Typst du CV.
@@ -60,12 +63,16 @@ pub async fn get_lettre_motivation_reference(
 /// `DocumentReferenceView` du CV sauvegardé.
 #[tauri::command]
 pub async fn save_cv(
-    app: tauri::AppHandle,
+    api: tauri::State<'_, ApiClient>,
     session_id: i64,
     filename: String,
     content: String,
 ) -> Result<DocumentReferenceView, AppError> {
-    documents::save_reference(app, session_id, "cv", filename, content).await
+    api.post(
+        &format!("/api/sessions/{session_id}/documents/cv"),
+        &json!({ "filename": filename, "content": content }),
+    )
+    .await
 }
 
 /// Sauvegarde une nouvelle référence de lettre de motivation (.typ) pour une
@@ -73,7 +80,7 @@ pub async fn save_cv(
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `api` - Client HTTP vers l'agent.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `filename` - Nom du fichier fourni par l'utilisateur.
 /// * `content` - Contenu Typst de la lettre.
@@ -83,27 +90,32 @@ pub async fn save_cv(
 /// `DocumentReferenceView` de la lettre sauvegardée.
 #[tauri::command]
 pub async fn save_lettre_motivation(
-    app: tauri::AppHandle,
+    api: tauri::State<'_, ApiClient>,
     session_id: i64,
     filename: String,
     content: String,
 ) -> Result<DocumentReferenceView, AppError> {
-    documents::save_reference(app, session_id, "lettre_motivation", filename, content).await
+    api.post(
+        &format!("/api/sessions/{session_id}/documents/lm"),
+        &json!({ "filename": filename, "content": content }),
+    )
+    .await
 }
 
 /// Compile la référence de CV sauvegardée d'une session en PDF encodé base64.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `api` - Client HTTP vers l'agent.
 /// * `session_id` - Identifiant de la session propriétaire.
 ///
 /// # Returns
 ///
 /// PDF encodé en base64.
 #[tauri::command]
-pub async fn compile_cv(app: tauri::AppHandle, session_id: i64) -> Result<String, AppError> {
-    documents::compile_reference(app, session_id, "cv").await
+pub async fn compile_cv(api: tauri::State<'_, ApiClient>, session_id: i64) -> Result<String, AppError> {
+    api.post(&format!("/api/sessions/{session_id}/documents/cv/compile"), &())
+        .await
 }
 
 /// Compile la référence de lettre de motivation sauvegardée d'une session en
@@ -111,7 +123,7 @@ pub async fn compile_cv(app: tauri::AppHandle, session_id: i64) -> Result<String
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `api` - Client HTTP vers l'agent.
 /// * `session_id` - Identifiant de la session propriétaire.
 ///
 /// # Returns
@@ -119,26 +131,29 @@ pub async fn compile_cv(app: tauri::AppHandle, session_id: i64) -> Result<String
 /// PDF encodé en base64.
 #[tauri::command]
 pub async fn compile_lettre_motivation(
-    app: tauri::AppHandle,
+    api: tauri::State<'_, ApiClient>,
     session_id: i64,
 ) -> Result<String, AppError> {
-    documents::compile_reference(app, session_id, "lettre_motivation").await
+    api.post(&format!("/api/sessions/{session_id}/documents/lm/compile"), &())
+        .await
 }
 
-/// Résout le dossier de référence du CV d'une session (utilisé comme dossier
-/// par défaut du sélecteur de fichiers).
 /// Inspecte l'état sur disque d'un document joint à une candidature (existence, taille).
 ///
 /// # Arguments
 ///
+/// * `api` - Client HTTP vers l'agent.
 /// * `path` - Chemin absolu du document.
 ///
 /// # Returns
 ///
 /// `DocumentFileInfo` reflétant l'état réel du fichier sur disque.
 #[tauri::command]
-pub fn get_document_info(path: String) -> Result<DocumentFileInfo, AppError> {
-    Ok(documents::document_info(&path))
+pub async fn get_document_info(
+    api: tauri::State<'_, ApiClient>,
+    path: String,
+) -> Result<DocumentFileInfo, AppError> {
+    api.get_query("/api/documents/info", &[("path", path.as_str())]).await
 }
 
 /// Lit un document joint à une candidature (CV, lettre de motivation) et
@@ -146,12 +161,13 @@ pub fn get_document_info(path: String) -> Result<DocumentFileInfo, AppError> {
 ///
 /// # Arguments
 ///
+/// * `api` - Client HTTP vers l'agent.
 /// * `path` - Chemin absolu du document PDF.
 ///
 /// # Returns
 ///
 /// Contenu du PDF encodé en base64.
 #[tauri::command]
-pub fn get_document_pdf(path: String) -> Result<String, AppError> {
-    documents::read_document_base64(&path)
+pub async fn get_document_pdf(api: tauri::State<'_, ApiClient>, path: String) -> Result<String, AppError> {
+    api.get_query("/api/documents/pdf", &[("path", path.as_str())]).await
 }

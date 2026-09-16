@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct StatusHistoryView {
     pub id: i64,
     pub candidature_id: i64,

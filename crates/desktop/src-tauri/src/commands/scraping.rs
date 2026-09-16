@@ -1,21 +1,20 @@
 //! Commande Tauri pour le scraping et l'extraction automatique d'une offre.
 
+// Importation des crates externes
+use serde_json::json;
+
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::settings;
+use crate::api_client::ApiClient;
 use crate::error::AppError;
-use crate::llm::client::DEFAULT_MODEL;
-use crate::llm::scraping_extract::{extract_offer_fields, ScrapedOfferFields};
-use crate::scraping::extract::{extract_text, truncate_chars, MAX_CHARS};
-use crate::scraping::fetch::fetch_html;
+use findmyjob_core::llm::scraping_extract::ScrapedOfferFields;
 
 /// Scrape une offre d'emploi depuis son URL et en extrait les champs du
 /// formulaire de candidature (poste, entreprise, lieu, type de contrat,
-/// rémunération, description) via l'API Claude.
+/// rémunération, description) via l'agent.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions, pour le modèle configuré).
+/// * `api` - Client HTTP vers l'agent.
 /// * `url` - URL de la page d'offre à analyser.
 ///
 /// # Returns
@@ -24,20 +23,15 @@ use crate::scraping::fetch::fetch_html;
 /// vide, si le site bloque l'accès, ou si l'extraction LLM échoue.
 #[tauri::command]
 pub async fn scrape_offer(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     url: String,
 ) -> Result<ScrapedOfferFields, AppError> {
     let url = url.trim();
     if url.is_empty() {
-        return Err(AppError::Validation(
-            "L'URL de l'offre est requise.".to_string(),
-        ));
+        return Err(AppError::Validation("L'URL de l'offre est requise.".to_string()));
     }
 
-    let html = fetch_html(url).await?;
-    let text = extract_text(&html)?;
-    let model = settings::resolve_llm_model(&state.pool, DEFAULT_MODEL).await?;
-    extract_offer_fields(&text, &model).await
+    api.post("/api/scraping/url", &json!({ "url": url })).await
 }
 
 /// Extrait les champs du formulaire de candidature depuis un texte d'offre
@@ -46,7 +40,7 @@ pub async fn scrape_offer(
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions, pour le modèle configuré).
+/// * `api` - Client HTTP vers l'agent.
 /// * `text` - Texte de l'offre collé par l'utilisateur.
 ///
 /// # Returns
@@ -55,17 +49,13 @@ pub async fn scrape_offer(
 /// vide ou si l'extraction LLM échoue.
 #[tauri::command]
 pub async fn extract_offer_from_text(
-    state: tauri::State<'_, DbState>,
+    api: tauri::State<'_, ApiClient>,
     text: String,
 ) -> Result<ScrapedOfferFields, AppError> {
     let text = text.trim();
     if text.is_empty() {
-        return Err(AppError::Validation(
-            "Le texte de l'offre est vide.".to_string(),
-        ));
+        return Err(AppError::Validation("Le texte de l'offre est vide.".to_string()));
     }
 
-    let truncated = truncate_chars(text, MAX_CHARS);
-    let model = settings::resolve_llm_model(&state.pool, DEFAULT_MODEL).await?;
-    extract_offer_fields(&truncated, &model).await
+    api.post("/api/scraping/text", &json!({ "text": text })).await
 }

@@ -1,12 +1,12 @@
 //! DTOs liés aux compétences du profil.
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CreateSkillInput {
     pub nom: String,
     pub domaine: String,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct SkillView {
     pub id: i64,
     pub domaine: String,

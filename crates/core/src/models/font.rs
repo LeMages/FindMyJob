@@ -7,7 +7,7 @@
 ///
 /// * `name` - Nom du sous-dossier (nom de la famille, ex. `Roboto`).
 /// * `file_count` - Nombre de fichiers `.ttf`/`.otf` trouvés dans le dossier.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct FontFamilyView {
     pub name: String,
     pub file_count: usize,

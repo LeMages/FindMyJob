@@ -2,7 +2,7 @@
 
 use chrono::NaiveDate;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ProjetView {
     pub id: i64,
     pub titre: String,
@@ -14,7 +14,7 @@ pub struct ProjetView {
     pub date_fin: Option<NaiveDate>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CreateProjetInput {
     pub titre: String,
     pub description: Option<String>,
