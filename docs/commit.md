@@ -29,38 +29,19 @@ If the diff is large, break it down file by file:
 git diff -- <file>
 ```
 
-### 3. Identify logical units
+### 3. Prepare a single commit
 
-Group related changes into **separate commits**. One commit = one logical change. Never bundle unrelated changes together.
+All staged changes go into **one single commit**. Do not split into multiple commits — group everything into one logical unit.
 
-Examples of logical units:
-- A new feature (component + its styles + its types)
-- A bug fix (the fix + its related adjustments)
-- A refactor of a single module
-- A dependency update
+### 4. Provide the commit command
 
-### 4. Provide the commit content
-
-For each commit, give me:
-
-```
-Type: <conventional commit type>
-Scope: <scope>
-Message: <full commit message>
-Body (if needed): <description>
-```
-
-And the ready-to-paste command:
+Provide the full ready-to-execute command (staging + commit) and **copy it to the clipboard**:
 
 ```bash
-git commit -m "<type>(<scope>): <message>" -m "<body>"
+git add <files> && git commit -m "<type>(<scope>): <message>"
 ```
 
-If files need to be staged selectively, tell me which files to stage for each commit:
-
-```bash
-git add <file1> <file2>
-```
+Add a `-m "<body>"` only if the subject line isn't self-explanatory.
 
 ## Conventional Commits Convention
 
@@ -105,6 +86,7 @@ style(ui): fix inconsistent spacing in sidebar
 ## Reminders
 
 - ❌ **NEVER run `git commit` or `git push`**
-- ✅ Only provide the text and commands for me to copy-paste
-- ✅ If changes should be split into multiple commits, specify the staging order
+- ❌ **NEVER add co-authorship mentions** (`Co-authored-by`, `Co-written-by`, etc.) in commit messages or trailers — the commit is authored solely by the user
+- ✅ Always provide **one single commit** for all staged changes
+- ✅ Provide the full command (git add + git commit) and **copy it to the clipboard**
 - ✅ If something is unclear about the intent of a change, **ask me before proposing a commit message**

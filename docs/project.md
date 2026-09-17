@@ -1,337 +1,317 @@
-# FindMyJob, document de contexte projet
+# FindMyJob — project reference
 
-Ce document rassemble toutes les décisions de cadrage du projet FindMyJob. Il sert à reprendre une conversation avec une IA sans avoir à tout réexpliquer. Il décrit le quoi, le pourquoi, et l'état d'avancement réel du code.
+This document is the technical reference for FindMyJob. It exists so a conversation with an AI assistant (or a new contributor) can resume without re-explaining the project from scratch. It describes the what, the why, and the actual state of the code.
 
-Dernière mise à jour : 19 août 2026, contre l'état du code sur `fix/logo`.
+Last updated: 2026-09-17, against the `refactor/cargo-workspace` branch, after the split from a single Tauri+SQLite app into a 3-crate workspace with a headless agent backend.
 
 ## 1. Vision
 
-FindMyJob est un logiciel desktop open source qui aide les étudiants à suivre leurs candidatures (stage, alternance, CDI). L'objectif n'est pas un simple gestionnaire CRUD, mais un outil augmenté par l'IA qui supprime les tâches pénibles de la recherche (saisie des offres, relances, adaptation du CV).
+FindMyJob is an open-source desktop application that helps students track job applications (internships, apprenticeships, permanent contracts). The goal is not a plain CRUD tracker but an AI-augmented tool that removes the tedious parts of a job search: entering offer details by hand, tailoring a CV and cover letter, drafting an application message.
 
-Public cible : étudiants en recherche de stage, marché français en priorité. Le projet est né d'un besoin personnel (l'auteur est étudiant en ingénierie informatique) et passé en open source pour aider les gens dans la même situation.
+Target audience: students looking for internships, French market first. The project started as a personal need (the author is a computer engineering student) and was open-sourced to help people in the same situation.
 
-Principe directeur de conception : penser le périmètre et le schéma le plus complètement possible en amont pour éviter les migrations. Avancer gate par gate, valider chaque fondation avant de construire dessus.
+Guiding principle: think the scope and schema through as completely as possible upfront to avoid churn later. Move gate by gate, validate each foundation before building on top of it.
 
-## 2. Stack technique
+## 2. Tech stack
 
-| Couche | Technologie |
-|--------|-------------|
-| Application desktop | Tauri 2 (Windows / macOS / Linux) |
-| Frontend | Vue 3.5 + TypeScript 5 + Vite 6, Tailwind CSS 4 via `@tailwindcss/vite` (pas de fichier `tailwind.config`) |
-| Backend | Rust, édition 2021 |
-| Base de données | SQLite locale, via sqlx 0.8 (`sqlite`, `runtime-tokio-rustls`, `migrate`) |
-| Compilation de documents | `typst-as-lib` 0.16 (`typst-kit-fonts`, `typst-kit-embed-fonts`) + `typst-pdf` 0.15 |
-| IA | API Messages d'Anthropic (Claude, modèle par défaut `claude-sonnet-4-6`), appels HTTP directs via `reqwest` 0.12 (rustls) |
-
-Le modèle est sélectionnable dans les paramètres (`AVAILABLE_MODELS` = `claude-sonnet-4-6` / `claude-haiku-4-5-20251001`, `llm/client.rs`, résolu via `get_llm_model`/`set_llm_model`).
-
-Autres dépendances notables : `tauri-plugin-dialog` (sélecteur de fichiers natif), `dotenvy` (chargement du `.env`), `base64` (échange de PDF en base64 sur l'IPC), `open` (ouverture de dossiers/URL dans l'explorateur système), `scraper` (extraction HTML des offres d'emploi), `keyring` (trousseau OS pour la clé API Anthropic en release), `chrono` (manipulation de dates).
-
-Pas de vue-router : la navigation est un routeur maison par `state.screen` (`src/stores/app.ts` + `src/App.vue`). Pas de Pinia : le store est un simple objet `reactive` exporté (`src/stores/app.ts`).
-
-## 3. Architecture du code
-
-### Backend (`src-tauri/src/`)
-
-```
-commands/    couche IPC — un fichier par domaine, 18 fichiers (mod.rs + 17 modules),
-             #[tauri::command] uniquement
-db/          accès SQLite — un fichier par table + common.rs (utilitaires), profile.rs
-             (agrégat profil complet), timeline_events.rs (règles de timeline)
-models/      DTO sérialisables, miroir des lignes SQL / réponses IPC
-documents/   stockage disque + compilation Typst (storage.rs, typst.rs)
-llm/         intégration API Claude (client, pipeline, prompts par étape)
-scraping/    récupération HTML (fetch.rs) + extraction de texte (extract.rs),
-             pour l'import d'offre depuis une URL
-security.rs  clé API Anthropic : .env en dev, trousseau OS (keyring) en release
-error.rs     AppError, type d'erreur commun sérialisé vers le frontend
-```
-
-`commands/` est fin : chaque commande extrait l'utilisateur courant, délègue à `db::` ou `llm::`, et retourne un DTO ou une `AppError`. La logique métier (transitions de statut, contraintes) vit dans `db/`, jamais dans `commands/`.
-
-### Frontend (`src/`)
-
-```
-views/<nom_vue>/XxxView.vue      une vue = un dossier, composants propres dans components/
-views/<nom_vue>/components/      composants spécifiques à cette vue
-components/                      composants partagés entre plusieurs vues
-composables/                     logique réutilisable côté vue (formatage, listes éditables)
-stores/app.ts                    état applicatif global (reactive + fonctions exportées)
-types/index.ts                   DTOs miroir des structs Rust, écrits à la main (voir section 4)
-```
-
-### Commandes IPC enregistrées
-
-62 commandes sont enregistrées dans `generate_handler!` (`src-tauri/src/lib.rs:38-99`), regroupées par domaine :
-
-| Domaine | Commandes |
+| Layer | Technology |
 |---|---|
-| Système | `db_status`, `open_url` |
-| Utilisateur / onboarding | `user_exists`, `create_user`, `get_user`, `update_user_info` |
-| Profil | `get_profile`, `update_description` |
-| Expériences / formations / langues / projets / skills | `add_*`, `delete_*`, `update_*` (5 tables × 3 verbes) |
-| Documents de référence (session) | `get_cv_reference`, `get_lettre_motivation_reference`, `save_cv`, `save_lettre_motivation`, `compile_cv`, `compile_lettre_motivation` |
-| Documents (aperçu, session ou candidature) | `get_document_info`, `get_document_pdf` |
-| Candidatures | `create_candidature`, `get_candidatures`, `get_candidature`, `update_candidature`, `abandon_candidature`, `postuler_sans_message`, `postuler_par_mail`, `postuler_par_message` |
-| Scraping / import d'offre | `scrape_offer`, `extract_offer_from_text` |
-| Contacts | `get_contacts` |
-| Timeline / suivi | `get_status_history`, `get_available_events`, `add_timeline_event`, `get_pending_interviews`, `get_all_interviews_for_session` |
-| Sessions | `create_session`, `get_sessions`, `update_session`, `delete_session` |
-| Paramètres | `get_api_key_status`, `set_api_key`, `delete_api_key`, `get_llm_model`, `set_llm_model`, `get_theme`, `set_theme`, `get_documents_path`, `open_folder`, `test_api_connection` |
-| Export | `export_data_json` |
+| Desktop shell | Tauri 2 (Windows / macOS / Linux) |
+| Frontend | Vue 3.5 + TypeScript 5 + Vite 6, Tailwind CSS 4 via `@tailwindcss/vite` (no `tailwind.config` file) |
+| Backend (headless) | Rust, Axum 0.8, `tokio-cron-scheduler` for the offers pipeline |
+| Database | PostgreSQL 16 + pgvector (`pgvector/pgvector:pg16`), accessed via sqlx 0.8 (`postgres`, `runtime-tokio-rustls`, `migrate`) |
+| Document compilation | `typst-as-lib` 0.16 + `typst-pdf` 0.15 (CV/cover-letter PDF generation, no external `typst` binary) |
+| AI | Anthropic Claude Messages API, called in raw HTTP via `reqwest` 0.12 (rustls) — no official Rust SDK |
+| Deployment (agent) | Docker Compose (`postgres` + `agent` services), `Dockerfile.agent` |
 
-## 4. Frontière front / back (thin client)
+The Claude model is selectable in settings: `AVAILABLE_MODELS = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]`, default `DEFAULT_MODEL = "claude-sonnet-4-6"` (`crates/core/src/llm/client.rs`), resolved per request via `crates/agent/src/db/settings.rs::resolve_llm_model`.
 
-Principe directeur : **thin client**. Vue est une couche de rendu et d'interaction, Rust est le cerveau. Aucune vérité métier n'est décidée côté Vue. On s'appuie au maximum sur Rust ; utiliser la réactivité de Vue n'est pas un contournement de cette règle (voir ligne de partage).
+Other notable dependencies: `tauri-plugin-dialog` (native file picker), `dotenvy` (`.env` loading), `base64` (PDF bytes over the API/IPC), `open` (opening folders/URLs from the OS), `scraper` (HTML parsing for offer scraping and extraction), `chrono` (dates), `toml` (agent static config).
 
-### Ligne de partage : état du monde vs état de la vue
+No vue-router: navigation is a homemade router via `state.screen` (`crates/desktop/src/stores/app.ts` + `src/App.vue`). No Pinia: the store is a plain exported `reactive` object.
 
-- **État du monde (Rust)** : tout ce qui est *vrai* sur les données (candidatures, profil, règles de relance, validité des transitions de statut, stats). C'est le modèle métier, il vit en Rust et nulle part ailleurs.
-- **État de la vue (Vue)** : ce qui est à l'écran à l'instant T (onglet actif, modale ouverte, contenu d'un formulaire non encore soumis, filtre sélectionné). Reste en Vue. La réactivité Vue (`ref`, `computed`, `watch`) gère l'état de la vue : ce n'est pas de la logique métier et c'est autorisé.
+## 3. Workspace architecture
 
-### Règle de pont
+FindMyJob is a Cargo workspace with three members, declared in the root `Cargo.toml`:
 
-**Tout ce que Rust calcule, il l'envoie déjà calculé dans le DTO. Vue affiche, ne recalcule jamais une valeur métier.**
-
-- Les commandes Tauri renvoient des DTO prêts à afficher, avec les champs dérivés déjà dedans, pas des lignes SQL brutes.
-- Si une règle dépend d'un setting, le calcul vit en Rust pour rester à un seul endroit.
-
-Cette règle n'est aujourd'hui **pas totalement respectée** : voir section 11 (dette technique) pour les calculs métier repassés côté Vue dans `TrackingView.vue`.
-
-### Contrat de commande (fail fast)
-
-- Chaque commande renvoie `Result<Dto, AppError>`, `AppError` étant un enum sérialisé en `{ "kind": "Validation" | "Conflict" | "NotFound" | "Config" | "Llm" | "Database", "message": "..." }` (`src-tauri/src/error.rs`).
-- Vue reçoit une erreur typée et l'affiche via `extractErrorMessage` (`src/composables/useErrorMessage.ts`). Pas de `try/catch` qui avale, pas de fallback silencieux sur valeur vide.
-
-### Exemple de référence : ajout d'un événement de timeline
-
-L'exemple historique était le drag & drop du kanban ; le suivi n'étant plus un kanban (voir section 6), l'exemple de référence est désormais l'ajout d'un événement de timeline :
-
-1. Le frontend appelle `get_available_events(candidature_id)`, qui renvoie la liste des événements légaux pour le statut courant (`db::timeline_events::available_events`, seule source de vérité).
-2. L'utilisateur choisit un événement dans `AddEventPopup.vue`, remplit les champs requis selon son type.
-3. Le frontend appelle `add_timeline_event(candidature_id, event)`. Rust **revalide** que l'événement est autorisé pour le statut courant (ne fait jamais confiance à ce que le frontend envoie), applique ses effets (création/mise à jour d'un entretien, changement de statut) et écrit `status_history`, le tout dans une seule transaction (`db/timeline_events.rs:110-224`).
-4. Si Rust refuse (`AppError::Conflict`), le frontend affiche l'erreur sans avoir modifié son état local.
-
-Vue propose, Rust dispose : Vue ne connaît pas les transitions légales, elle les redemande à chaque fois via `get_available_events`.
-
-### Synchronisation du contrat (types) — décision toujours ouverte
-
-Source de vérité voulue du contrat IPC = les structs Rust. En pratique, `src/types/index.ts` est **toujours écrit à la main**, en miroir manuel des DTOs Rust, sans génération automatique. La décision reste ouverte :
-- `tauri-specta` v2 : génère types ET wrappers de commandes typés, une signature Rust qui change casse la compile du front. Toujours en RC, à épingler strictement avec `=` dans `Cargo.toml`.
-- `ts-rs` : génère seulement les types TS, plus stable, mais les `invoke` restent manuels.
-
-## 5. Modèle de données
-
-### Emplacement
-
-La base ne doit jamais être à côté de l'exécutable. Logique conditionnelle (`src-tauri/src/db/init.rs:39-84`) :
-- Build debug : `./dev-data/findmyjob.db` (relatif au projet, pour inspection facile en dev). `dev-data/` est gitignore.
-- Build release : `app.path().app_data_dir()` de Tauri.
-
-### Initialisation au démarrage (`init_db`, `db/init.rs:99-135`)
-
-L'initialisation ouvre **deux pools successifs** sur le même fichier :
-1. Un pool de migration avec `foreign_keys(false)` : plusieurs migrations recréent une table parente pour changer un `CHECK` ou une contrainte `NOT NULL` (seule façon de faire en SQLite), ce qui échouerait avec `FOREIGN KEY constraint failed` si les clés étrangères étaient actives pendant le `DROP TABLE`. `sqlx::migrate!("../db/migrations")` s'exécute sur ce pool, puis il est fermé.
-2. Le pool applicatif, avec `foreign_keys(true)`, utilisé pour toute la durée de vie de l'app.
-
-Les deux pools sont en mode WAL (`SqliteJournalMode::Wal`). Les dossiers de documents (`documents/sessions/<session_id>/...`) sont créés à la volée par `documents::storage`, pas à l'initialisation (les sessions n'existent pas encore à ce stade).
-
-### Arborescence des données sur disque
-
-```
-<app_data_dir ou ./dev-data>/
-  findmyjob.db
-  documents/
-    sessions/
-      <session_id>/
-        cv/
-          reference.typ, reference.pdf
-          backup/<timestamp>/cv.typ, cv.pdf
-          artefact/<candidature_id>.typ, <candidature_id>.pdf, pending_<ts>_<filename>
-        lettre_motivation/   (même structure que cv/)
+```toml
+[workspace]
+members = ["crates/core", "crates/agent", "crates/desktop/src-tauri"]
 ```
 
-### Schéma
+### `crates/core` — `findmyjob-core`
 
-La source de vérité du schéma est les **migrations sqlx** dans `db/migrations/` (**17 migrations**, `0001` à `0017`), appliquées au boot par `sqlx::migrate!("../db/migrations")`. `db/schema.dbml` est tenu synchronisé avec ces migrations. `db/schema.png` reste une image statique, non régénérée automatiquement — vérifier qu'elle correspond avant de s'y fier.
+Pure business logic: models, LLM calls, HTML scraping helpers. No database dependency, no Tauri, no Axum — deliberately so it can be shared unmodified by both the agent (server-side) and the desktop app (client-side).
 
-Tables réelles : `users`, `lang`, `formations`, `projets`, `experiences`, `skills`, `sessions`, `candidatures`, `status_history`, `contacts`, `interviews`, `documents`, `emails`, `embeddings`, `settings`.
+```
+crates/core/src/
+  lib.rs
+  error.rs        AppError shared by both crates that use core
+  llm/            Claude client, prompt assembly per pipeline step, matching, style analysis
+  models/         serde DTOs re-exported for both the API and the Tauri commands
+  scraping/       HTML fetch (fetch.rs) + text extraction (extract.rs)
+```
 
-Points de modélisation importants :
-- **Entreprise dénormalisée** : les tables `companies` et `company_locations` ont été abandonnées dans le schéma final. La candidature porte directement `entreprise` (texte) et `localisation` (texte).
-- **users** : porte `permis` (boolean), `description` (texte libre), identité et liens (LinkedIn, GitHub, portfolio).
-- **lang** : langues parlées par l'utilisateur (`nom`, `level`), liée à `users`.
-- **formations** : diplômes/écoles du profil (`titre`, `ecole`, dates), liée à `users` (migration `0003`).
-- **sessions** : session de recherche de candidatures (`nom`, `contexte`, `statut`, `zone`), liée à `users` (migration `0008`, enrichie en `0010`). Regroupe un ensemble de candidatures et possède ses propres CV/LM de référence.
-- **documents** : refondue en `0009`/`0011`. Liée à `sessions` (`session_id`), pas aux candidatures ni aux users. Colonnes : `doc_type` (`cv`/`lettre_motivation`), `file_path`, `pdf_path`, `style_analysis` (cache de l'analyse de style LLM, calculé à la sauvegarde de la référence), `UNIQUE(session_id, doc_type)`. Le rôle « document rattaché à une candidature » est porté par `candidatures.cv_path`/`lettre_motivation_path`, pas par cette table.
-- **candidatures** : porte `entreprise`, `localisation`, `remuneration`, `url_offre`, `description_offre` (texte brut de l'annonce), `type` (incluant `interim` depuis `0005`), `status` (11 valeurs, voir section 6), `source`, `session_id`, `cv_path`/`lettre_motivation_path`, `date_candidature`, `next_relance`, `last_relance`, `notes`. Recréée trois fois (`0014`, `0015`, `0017`) pour étendre le `CHECK(status)`.
-- **status_history** : devenue **timeline unifiée** en migration `0014` — chaque ligne est un événement typé (`event_type` NOT NULL), qu'il change le statut ou non. `nouveau_status` est désormais **nullable** (un événement comme « appel » ou « note » n'en écrit aucun). Porte aussi `content` (message associé, migration `0013`) et `interview_id` (lien optionnel vers un entretien, migration `0014`).
-- **interviews** : porte `contact_id` (migration `0014`, lien optionnel vers le contact rencontré) et `modalite` (migration `0016`, `visio`/`presentiel`/`telephone`, distincte de `lieu` qui reste du texte libre).
-- **skills** : liste à plat, une ligne par skill avec un champ `domaine` texte. Pas de table de liaison projet-skill.
-- **contacts** : interlocuteurs associés à une candidature (RH, manager…).
-- **emails** : tous les mails envoyés depuis l'app. La table de liaison `email_attachments` a été supprimée (migrations `0009`/`0011`).
-- **settings** : clé-valeur, **utilisée** par `db/settings.rs` pour le modèle LLM (`llm_model`) et le thème (`theme`), branchée sur la page Settings.
-- **embeddings** : présente dans le schéma mais **morte** — ni écrite ni lue par le code actuel (voir section 11).
+### `crates/agent` — `findmyjob-agent`
 
-## 6. Cycle de vie d'une candidature
+Headless binary crate: an Axum HTTP server that owns all persistence, the offers pipeline (scraping, filtering, scoring), the documents pipeline (Typst generation), and the cron scheduler. This is where the business rules live.
 
-### Statuts (11 valeurs, `candidatures.status`)
+```
+crates/agent/src/
+  main.rs, config.rs, pipeline.rs, scheduler.rs, security.rs, logging.rs
+  api/            22 route modules + mod.rs (router, auth middleware, CORS, error mapping)
+  db/             one file per table + common.rs, config.rs, export.rs, init.rs
+  documents/      Typst compilation + on-disk document storage (fonts.rs, storage.rs, typst.rs)
+  filtering/      mechanical filter + LLM scoring for scraped offers
+  scraping/       job board scrapers (wttj.rs today) behind a JobScraper trait
+```
+
+### `crates/desktop` — Vue 3 frontend + Tauri shell
+
+The Vue frontend lives at `crates/desktop/` itself; the Tauri Rust backend is nested one level deeper, at `crates/desktop/src-tauri/`.
+
+```
+crates/desktop/
+  package.json, vite.config.ts, tsconfig*.json
+  src/
+    views/<view_name>/XxxView.vue      one view = one folder, view-specific components inside
+    components/                        components shared across views
+    composables/                       reusable view-layer logic (formatting, editable lists)
+    stores/app.ts                      global reactive app state
+    types/index.ts                     TS DTOs hand-mirrored from crates/core models
+  src-tauri/
+    src/
+      main.rs, lib.rs, error.rs
+      api_client.rs                    reqwest-based HTTP client to the agent, bearer-token auth
+      commands/                        one #[tauri::command] file per domain, delegates to api_client
+      models/mod.rs                    `pub use findmyjob_core::models::*;` — no local duplication
+    tauri.conf.json, capabilities/, icons/
+```
+
+`crates/desktop/src-tauri/Cargo.toml` has no `sqlx`/`rusqlite` dependency at all — the desktop app never touches a database directly. Its `api_client.rs` doc comment sums up the design: *"HTTP client to the agent's REST API (findmyjob-agent), replacing direct database access from the desktop app."*
+
+## 4. Frontend/backend boundary (thin-client principle)
+
+Guiding principle: **thin client**. Vue is a rendering and interaction layer; the agent is the brain. No business truth is decided in Vue, and the desktop Tauri commands are themselves thin — they only translate a Tauri invocation into an HTTP call to the agent and back.
+
+- **World state (agent)**: everything that is *true* about the data (applications, profile, status transitions, timeline rules). This is the business model — it lives in `crates/agent` and nowhere else.
+- **View state (Vue)**: what's on screen right now (active tab, open modal, unsaved form content, selected filter). Stays in Vue. Vue's reactivity (`ref`, `computed`, `watch`) manages view state; that is not business logic and is expected.
+
+**Everything the agent computes, it sends already computed in the DTO. Vue displays, it never recomputes a business value.**
+
+- API responses are display-ready DTOs with derived fields already included, not raw SQL rows.
+- If a rule depends on a setting, the computation lives in the agent to stay in a single place.
+- The desktop's Tauri commands (`crates/desktop/src-tauri/src/commands/`) are a proxy layer over `api_client::ApiClient` — they do not reimplement any rule the agent already enforces.
+
+### Reference example: adding a timeline event
+
+1. The frontend calls the `get_available_events` Tauri command, which proxies to `GET /api/candidatures/{id}/events` (backed by `crates/agent/src/db/timeline_events.rs`, the sole source of truth for which events are legal in the current status).
+2. The user picks an event in `AddEventPopup.vue` and fills in the fields required for that event type.
+3. The frontend calls `add_timeline_event`, which proxies to `POST /api/candidatures/{id}/events`. The agent **revalidates** that the event is allowed for the current status (never trusts what the client sent), applies its side effects (creating/updating an interview, changing the status), and writes to `status_history`, all in one transaction.
+4. If the agent rejects the event, the frontend surfaces the error without having mutated its local state.
+
+Vue proposes, the agent disposes: Vue never hardcodes the legal transitions, it asks the agent every time via `get_available_events`.
+
+### Type contract (kept manual, not generated)
+
+The desired source of truth for the API contract is the Rust DTOs in `crates/core::models`. In practice, `crates/desktop/src/types/index.ts` is written by hand, mirroring those DTOs manually, with no code generation. This is a known, open decision — not yet worth the churn of introducing `tauri-specta` or `ts-rs` given the API now goes through HTTP rather than direct IPC calls.
+
+## 5. Data model
+
+The database is PostgreSQL 16 with the pgvector extension available (image `pgvector/pgvector:pg16`, run via `docker-compose.yml`). The agent owns the connection pool (`sqlx::PgPool`) exclusively — nothing else touches the database directly.
+
+Migrations live in `db/migrations/postgres/` (sqlx migrate, applied at agent startup via `db::init::init_db`):
+
+- `0001_create_offers.sql` — creates the `vector` extension and the `offers` table.
+- `0002_app_schema.sql` — the bulk of the application schema: `users`, `lang`, `projets`, `experiences`, `formations`, `skills`, `sessions`, `candidatures`, `contacts`, `interviews`, `status_history`, `documents`, `emails`, `embeddings`, `settings`, plus a `trigger_set_updated_at()` function attached to most tables.
+- `0003_offers_add_description.sql` — adds `offers.description`.
+- `0004_cleanup_schema.sql` — drops `candidatures.last_relance`/`next_relance`, `offers.embedding`, and the unused `emails`/`embeddings` tables. The `vector` extension from `0001` stays loaded even though no column uses it anymore.
+
+The full, authoritative schema (tables, columns, enums, foreign keys) is kept in `db/schema.dbml`, generated from the migrations — read it for exact column types and constraints rather than duplicating them here. A rendered diagram sits alongside it at `db/schema.png`.
+
+Table summary:
+
+| Table | Role |
+|---|---|
+| `users` | Single user's profile (name, contact info, driving license, LinkedIn/GitHub/portfolio links) |
+| `lang` | Languages spoken by the user, with proficiency level |
+| `formations` | Degrees and schools in the profile |
+| `projets` | Personal projects attached to the profile |
+| `experiences` | Work experience entries in the profile |
+| `skills` | Skills, grouped by a free-text domain |
+| `sessions` | A search "session" (context, zone, status) grouping a set of applications, with its own reference CV/cover letter |
+| `candidatures` | Core entity — one row per application (company, status, metadata, generated document paths) |
+| `status_history` | Unified timeline of events for an application (status changes, follow-ups, interviews, messages, calls, notes) |
+| `contacts` | People associated with an application (recruiter, manager…) — read-only today, see §12 |
+| `interviews` | Scheduled or completed interviews for an application |
+| `documents` | Reference CV / cover letter for a session (file path + cached LLM style analysis) |
+| `settings` | Key-value app settings (LLM model, theme) |
+| `offers` | Scraped job listings feeding the offers pipeline (source, score, status) — see §7 |
+
+## 6. Application lifecycle
+
+### Statuses (11 values, `candidatures.status`)
 
 `a_postuler`, `postule`, `relance`, `entretien`, `entretien_passe`, `offre`, `refus`, `abandon`, `ghosting`, `accepte`, `offre_refusee`.
 
-`entretien_passe` (migration `0017`) distingue un entretien à venir d'un entretien déjà passé mais sans retour de l'entreprise.
+`entretien_passe` distinguishes an upcoming interview from one already completed but with no response from the company yet. `offre` is an intermediate status: receiving an offer is not terminal, it can still be accepted (`accepte`) or declined (`offre_refusee`). The negative terminal statuses (`abandon`, `refus`, `ghosting`, `offre_refusee`) move the application to the trash view on the frontend (`TRASHED_STATUSES` in `crates/desktop/src/composables/candidature_display.ts`); `accepte` is terminal but stays visible since it's a positive outcome.
 
-`offre` est un statut **intermédiaire** depuis la migration `0015` : recevoir une offre n'est pas terminal, elle peut encore être acceptée (`accepte`) ou déclinée (`offre_refusee`). Les statuts terminaux négatifs (`abandon`, `refus`, `ghosting`, `offre_refusee`) envoient la candidature en corbeille côté frontend (`TRASHED_STATUSES`, `src/composables/candidature_display.ts:20`) ; `accepte` est terminal mais reste affiché car c'est une issue positive.
-
-### Types d'événements de timeline (15 valeurs, `models/event_type.rs`)
+### Timeline event types (15 values, `crates/core/src/models/event_type.rs`)
 
 `creation`, `candidature_envoyee`, `relance`, `entretien_planifie`, `entretien_passe`, `offre_recue`, `refus_recu`, `ghosting`, `desistement`, `accepter_offre`, `decliner_offre`, `message_envoye`, `message_recu`, `appel`, `note`.
 
-Chacun a un effet optionnel sur le statut (`EventType::changes_status`) : par exemple `entretien_planifie` → `entretien`, `accepter_offre` → `accepte`, tandis que `message_envoye`, `appel` ou `note` ne changent jamais le statut. `creation` et `candidature_envoyee` ne sont jamais proposés par `get_available_events` : ils sont gérés par les flux existants (création de la candidature, flux « Postuler »).
+Each event has an optional effect on the status (`EventType::changes_status`), e.g. `entretien_planifie` → `entretien`, `accepter_offre` → `accepte`, while `message_envoye`, `appel`, or `note` never change the status. `creation` and `candidature_envoyee` are never offered by `get_available_events` — they're driven by the existing creation and "apply" flows instead. This column has no SQL `CHECK` on purpose: `EventType` is the sole source of validation, in Rust.
 
-### Événements proposables selon le statut courant
+### Which events are offered for a given status
 
-`db::timeline_events::available_events` (`src-tauri/src/db/timeline_events.rs:36-80`) est la seule source de vérité. Une candidature dans un statut non terminal (`STATUTS_NON_TERMINAUX` = `a_postuler`, `postule`, `relance`, `entretien`, `entretien_passe`, `offre`) peut toujours recevoir `message_envoye`, `message_recu`, `appel`, `note`, `desistement` ; les autres événements ne sont proposés que pour un sous-ensemble précis de statuts :
-- `relance` : depuis `postule`, `relance`, `entretien_passe`.
-- `entretien_planifie` : depuis `postule`, `relance`, `entretien`, `entretien_passe`.
-- `entretien_passe` (l'événement) : depuis `entretien` ou `entretien_passe`, seulement s'il existe un entretien `en_attente`.
-- `offre_recue` : depuis `entretien` ou `entretien_passe`.
-- `refus_recu` : depuis `postule`, `relance`, `entretien`, `entretien_passe`.
-- `ghosting` : depuis `postule`, `relance`, `entretien_passe`.
-- `accepter_offre` / `decliner_offre` : uniquement depuis `offre`.
+`crates/agent/src/db/timeline_events.rs::available_events` is the sole source of truth. A non-terminal application (`a_postuler`, `postule`, `relance`, `entretien`, `entretien_passe`, `offre`) can always receive `message_envoye`, `message_recu`, `appel`, `note`, `desistement`; the remaining events are only offered for a specific subset of statuses (e.g. `relance` from `postule`/`relance`/`entretien_passe`, `accepter_offre`/`decliner_offre` only from `offre`).
 
-### Flux « Postuler »
+### The "apply" flow
 
-Trois commandes couvrent le passage de `a_postuler` à `postule` (`commands/candidatures.rs:174-255`), toutes en trois temps : récupérer le détail, exporter les documents, marquer postulée.
+Three commands cover the transition from `a_postuler` to `postule` (`crates/agent/src/api/candidatures.rs`), each in three steps: fetch the application detail, export the documents, mark it applied.
 
-- `postuler_sans_message` : exporte CV + lettre vers `~/Downloads/<poste>_<entreprise>_<id>/` (noms de fichiers assainis, `sanitize_filename`).
-- `postuler_par_mail` : fait rédiger un mail par l'IA (`llm::generate_application_email`), l'exporte en plus (`Mail_de_candidature.txt`).
-- `postuler_par_message` : fait rédiger un message court par l'IA (`llm::generate_application_message`), l'exporte en plus (`Message_candidature.txt`).
+- `postuler` (no message) — exports the CV and cover letter to disk.
+- `postuler/mail` — has the AI draft an application email (`core::llm::candidature_message::generate_application_email`) before exporting.
+- `postuler/message` — has the AI draft a short application message before exporting.
 
-Les trois appellent ensuite `candidatures::mark_postule`, qui refuse (`AppError::Conflict`) si la candidature n'est plus au statut `a_postuler`, et enregistre l'événement `candidature_envoyee` avec le contenu du message le cas échéant.
+All three then record the `candidature_envoyee` event and refuse (`AppError::Conflict`) if the application is no longer in the `a_postuler` status.
 
-### Canal de candidature (`candidatures.source`)
+## 7. Offers pipeline (backend-only, no desktop UI yet)
 
-`SOURCE_OPTIONS` (`src/composables/candidature_display.ts:47-55`) propose 7 valeurs : Plateforme en ligne, Site carrière de l'entreprise, Mail, Cooptation / Réseau, Forum / Salon emploi, École, Autre. Contrairement à la décision d'origine (stocker un code normalisé), c'est aujourd'hui le **label complet** qui est stocké en base — pas de valeur normalisée séparée du libellé affiché.
+`crates/agent/src/scheduler.rs::run_pipeline` runs three steps in sequence, each logging failures to file and continuing regardless of the previous step's outcome:
 
-## 7. Documents et compilation Typst
+1. **Scraping** — `crates/agent/src/scraping/wttj.rs` queries Welcome to the Jungle's public Algolia search API directly (index `wk_cms_jobs_production`), not HTML scraping (the WTTJ site itself sits behind an AWS WAF JS challenge, the Algolia endpoint doesn't). One query per `[[searches]]` entry in `agent.toml`, paginated up to 5 pages of 30 hits. Results are normalized into `ScrapedOffer` and inserted via `db::offers::insert_offers`.
+2. **Mechanical filtering** — `crates/agent/src/filtering/mechanical.rs` dismisses (`status = "dismissed"`, `score = -1.0`) offers whose contract type isn't in `agent.toml`'s allow-list, whose title/description contains an excluded keyword, or that are older than `max_days_old`.
+3. **LLM scoring** — `crates/agent/src/filtering/scoring.rs` batches the remaining unscored offers (5 at a time) and calls Claude with a structured-output schema (score 0.0–1.0 + reason), persisting `score`/`status = "reviewed"`. One retry on malformed JSON, exponential backoff on HTTP 429.
 
-Chaque session de candidature a son propre CV et sa propre lettre de motivation de référence, stockés sous `documents/sessions/<session_id>/{cv,lettre_motivation}/` (voir arborescence section 5). Un seul document de référence par type et par session (`UNIQUE(session_id, doc_type)`).
+The scheduler runs the full pipeline once at startup (in a background task, without blocking the HTTP server bind) and then on a cron schedule via `tokio_cron_scheduler`, expression `"0 0 12,18 * * *"` (every day at noon and 6pm) — hardcoded in `scheduler.rs`, not configurable through `agent.toml` or an env var.
 
-- **Sauvegarde d'une référence** (`documents::storage::save_reference`) : analyse de style via Claude en premier (bloquant, avant toute écriture disque — un échec ne crée rien), puis sauvegarde de l'ancienne référence dans `backup/<timestamp>/`, écriture du nouveau `.typ`, compilation en `.pdf`, puis trace best-effort en DB (le filesystem reste la source de vérité ; un échec d'écriture DB est loggué mais ne fait pas échouer la sauvegarde).
-- **Compilation** : `typst-as-lib` en `spawn_blocking` (opération CPU-bound), résolution des imports/images relatifs par rapport au dossier du document.
-- **Progression** : chaque étape de `save_reference` émet un événement Tauri `document-save-progress` (5 étapes), écouté par `DocumentReferenceEditor.vue` pour afficher une barre de progression filtrée sur `session_id` + `doc_type`.
-- **Documents joints à une candidature** : mis en scène (`upload_candidature_*` / `select_candidature_*`) sous `artefact/pending_<timestamp>_<filename>`, puis finalisés (`finalize_candidature_document`) sous `artefact/<candidature_id>.pdf` une fois la candidature créée. Les documents générés par le pipeline IA suivent le même schéma de nommage (`save_generated_document`), avec le `.typ` conservé à côté du `.pdf` pour la traçabilité/debug.
+`agent.toml` (path from `AGENT_CONFIG_PATH`, loaded once at startup, not hot-reloaded) drives *what* gets searched/filtered/scored:
 
-## 8. Couche IA
+```toml
+[profile]
+summary = "..."          # free-text profile, injected into the scoring prompt
 
-### Client HTTP (`src-tauri/src/llm/client.rs`)
+[filters]
+contract_types = [...]    # allow-list, case-insensitive substring match
+exclude_keywords = [...]
+max_days_old = 60
 
-Appels directs à l'API Messages d'Anthropic (`https://api.anthropic.com/v1/messages`, `anthropic-version: 2023-06-01`), modèle par défaut `claude-sonnet-4-6` (`DEFAULT_MODEL`, sélectionnable via les paramètres), en HTTP brut via `reqwest`. Pas de SDK officiel Rust pour l'API Anthropic. La clé API est récupérée via `security::get_api_key()` à chaque appel (voir section 9) : `.env` en développement, trousseau OS en release — jamais lue directement dans l'environnement en production.
+[[searches]]               # repeatable
+keywords = "..."
+location = "..."
+country_code = "..."
+```
 
-- `thinking: { type: "disabled" }` sur chaque requête : le pipeline est une génération structurée en un seul tour, le thinking ne sert à rien ici et partage le même budget de tokens que la sortie visible — l'avoir activé par défaut tronquait les réponses avant même le contenu utile.
-- `output_config.format` (structured outputs / JSON Schema) activé dès qu'un schéma est fourni, pour garantir une réponse JSON strictement conforme (analyse d'offre, matching, analyse de style, contenu CV/LM).
-- `MAX_TOKENS = 8192` par défaut (réponses JSON courtes) ; un plafond explicite plus élevé est utilisé pour les étapes produisant du Typst complet (`ASSEMBLE_MAX_TOKENS = 8192` dans `llm/assemble.rs`, via `call_claude_with_tokens`).
-- Deux cas d'échec explicites, plutôt qu'une erreur de parsing cryptique en aval : `stop_reason == "refusal"` (classifieur de sécurité) et `stop_reason == "max_tokens"` (réponse tronquée) renvoient tous deux une `AppError::Llm` claire.
+The API exposes the resulting queue (`GET /api/offers`, `GET /api/offers/{id}`, `POST /api/offers/{id}/dismiss`, `POST /api/offers/{id}/applied`), but as of this writing there is no corresponding Tauri command, no `invoke()` call, and no TypeScript type anywhere in `crates/desktop` — the pipeline is fully implemented and running, with no way to see its output from the desktop app yet.
 
-### Pipeline de tailoring CV / lettre de motivation (`llm/pipeline.rs::generate_documents`)
+## 8. Documents pipeline (CV / cover letter tailoring)
 
-Enchaîne 6 étapes pour produire un CV et une lettre adaptés à l'offre, avant toute persistance (rien n'est écrit tant que le pipeline n'a pas réussi de bout en bout — `commands/candidatures.rs:30-91`) :
+Each session owns one reference CV and one reference cover letter, stored under `documents/sessions/<session_id>/{cv,lettre_motivation}/` on the agent's `DATA_DIR`. One reference document per type and per session.
 
-0. **Analyse de style** — hors pipeline à proprement parler, calculée une fois à la sauvegarde du document de référence (`llm::analyze_style`, mise en cache dans `documents.style_analysis`).
-1. **Analyse d'offre** (`llm::offer::analyze_offer`) — extrait titre, compétences requises/préférées, niveau d'expérience, mots-clés, langue de l'offre.
-2. **Matching profil** (`llm::matching::match_profile`) — décide quelles expériences, projets et compétences mettre en avant, à partir de l'analyse d'offre et du profil complet.
-3. **Rédaction du contenu** (`llm::content::generate_cv_content` / `generate_lm_content`) — séquentiel actuellement, voir dette technique (section 11).
-4. **Assemblage Typst** (`llm::assemble::assemble_typst`) — CV et lettre en parallèle (`tokio::try_join!`), injecte les vraies coordonnées du candidat (`build_sender_block`) pour éviter les placeholders.
-5. **Compilation PDF avec retry** — un seul retry par document : en cas d'échec de compilation, `assemble::fix_typst` tente une correction à partir des erreurs du compilateur et du document Typst de référence, puis recompile une fois.
+- **Saving a reference** (`crates/agent/src/documents/storage.rs::save_reference`) — style analysis via Claude runs first and blocks the write: a failed analysis writes nothing to disk. The previous reference (if any) is backed up under `backup/<timestamp>/` before the new `.typ` is written and compiled to `.pdf`.
+- **Style analysis** (`crates/core/src/llm/style.rs::analyze_style`) sends the `.typ` source to Claude with a JSON schema covering section order, formatting (bullet style, person, tense, length), tone, design (layout, icons, photo, color), and Typst-specific patterns (custom functions/packages/fonts). The result is cached in `documents.style_analysis` and reused by the generation pipeline.
+- **Generation pipeline** (`crates/agent/src/pipeline.rs::generate_documents`, triggered from `POST /api/candidatures` when the session's references are already style-analyzed) chains:
+  1. Offer analysis (`core::llm::offer::analyze_offer`).
+  2. Profile matching (`core::llm::matching::match_profile`) — which experiences/projects/skills to foreground.
+  3. Content generation (`core::llm::content::generate_cv_content` / `generate_lm_content`) — **currently sequential**, not `tokio::try_join!`; see §12 for why.
+  4. Typst assembly (`core::llm::assemble::assemble_typst`) for CV and cover letter in parallel (`tokio::try_join!`), injecting the candidate's real contact details to avoid placeholders.
+  5. Compilation with one retry: on a Typst compile error, `core::llm::assemble::fix_typst` attempts a fix from the compiler errors plus the reference document as a style guide, then recompiles once more before giving up.
+- **Compilation** itself uses the `typst-as-lib` crate (`crates/agent/src/documents/typst.rs`) inside `spawn_blocking` — no external `typst` binary is shelled out — with a filesystem resolver rooted at the document's folder and fonts drawn from system fonts, `typst-kit` embedded fonts, and any fonts imported via `POST /api/fonts`.
+- **Generated artifacts** for a specific application live under `.../artefact/<candidature_id>.{typ,pdf}`, with the `.typ` kept alongside the `.pdf` for debugging.
 
-### Rédaction de messages de candidature (`llm/candidature_message.rs`)
+## 9. AI layer
 
-Deux fonctions (`generate_application_email`, `generate_application_message`), texte brut prêt à copier-coller, un seul appel Claude chacune, sans structured output. Règles communes : ne reformuler que ce qui existe dans le profil, pas de placeholders, pas de markdown, signature minimale (prénom + nom uniquement).
+### HTTP client (`crates/core/src/llm/client.rs`)
 
-### Décisions hors MVP — non implémentées
+Raw HTTP calls to Anthropic's Messages API (`https://api.anthropic.com/v1/messages`, header `anthropic-version: 2023-06-01`) via `reqwest` — there is no official Rust SDK for the Anthropic API. The key is read from `ANTHROPIC_API_KEY` on every call; on the agent side, `crates/agent/src/security.rs` is the sole writer/reader-of-record (backed by `.env` in development, mutable at runtime through `PUT /api/settings/api-key`).
 
-- **Couche provider-agnostic** : idée initiale d'une couche unique compatible OpenAI avec base URL configurable (Ollama Cloud puis mode local llama.cpp en une URL de plus, sans réécriture). Pas implémentée aujourd'hui.
-  - Pistes Ollama Cloud envisagées à l'époque : free tier suffisant pour un usage par à-coups (quotas en temps GPU, limites de session toutes les 5h, limites hebdo tous les 7 jours, modèles de niveau 1/2), mais pas de SLA (panne connue d'avril 2026) — d'où l'intérêt d'un mode local en vrai fallback. Chaque utilisateur utiliserait son propre compte/clé pour scaler sans clé centralisée.
-  - Ne pas bundler de runtime IA dans l'installeur en V1 : approche cloud-first, installeur léger, sidecar llama.cpp éventuel plus tard pour un mode local zéro-setup.
-- **Embeddings** : table `embeddings` présente dans le schéma mais ni écrite ni lue. Le matching profil↔offre se fait aujourd'hui **par appel LLM**, pas par similarité vectorielle. Piste repoussée : modèle bge-m3, cosinus en brute-force dans le Rust, vecteurs en BLOB dans SQLite.
+- `thinking` is explicitly disabled on every request: the pipeline is a single-turn structured generation, and extended thinking shares the same output token budget as the visible response — leaving it on by default truncated responses before any useful content.
+- Structured outputs (JSON Schema) are used wherever a schema is provided, to guarantee a strictly conformant response (offer analysis, matching, style analysis, CV/LM content).
+- `MAX_TOKENS = 8192` by default; a higher explicit cap is used for steps producing full Typst documents.
+- Two explicit failure cases are turned into a clear `AppError::Llm` rather than a downstream JSON-parsing error: `stop_reason == "refusal"` (safety classifier) and `stop_reason == "max_tokens"` (truncated response).
 
-## 9. Sécurité des secrets
+### Application message drafting (`core::llm::candidature_message`)
 
-Gérée par `src-tauri/src/security.rs`, avec un comportement différent selon le mode de compilation (`#[cfg(debug_assertions)]`) :
+Two functions (`generate_application_email`, `generate_application_message`), plain text ready to paste, one Claude call each, no structured output. Shared rules: only rephrase what already exists in the profile, no placeholders, no markdown, minimal signature (first + last name only).
 
-- **Développement** : la clé `ANTHROPIC_API_KEY` vit dans un fichier `.env` à la racine du projet, gitignoré, chargé au démarrage via `dotenvy::dotenv().ok()` (`src-tauri/src/lib.rs:26`, silencieux si absent). `.env.example` documente la variable sans valeur. `set_api_key`/`delete_api_key` échouent volontairement en dev (message renvoyant à l'édition manuelle du `.env`).
-- **Release** : la clé vit dans le **trousseau de l'OS** (Keychain macOS, Credential Manager Windows, Secret Service Linux) via la crate `keyring`, service `"FindMyJob"`, entrée `"anthropic_api_key"`. `get_api_key`/`set_api_key`/`delete_api_key`/`has_api_key` passent tous par cette entrée.
+## 10. REST API (`crates/agent/src/api/`)
 
-Dans les deux cas, la clé n'est **jamais** stockée en base de données ni dans la table `settings`. `key_source()` renvoie `"env"` ou `"keyring"` pour affichage dans les paramètres (`get_api_key_status`), sans jamais révéler la valeur.
+All routes are mounted under `/api` (`crates/agent/src/api/mod.rs`), protected by a bearer-token middleware (`API_TOKEN` env var) except `GET /api/system/health`. If `API_TOKEN` is unset, the middleware lets every request through (dev-mode warning printed at startup). CORS is permissive unless `CORS_ALLOWED_ORIGINS` restricts it to a comma-separated origin list.
 
-## 10. Fonctionnalités
+| Module | Routes (summary) |
+|---|---|
+| `users` | user existence check, create, get current, update description/info |
+| `profile` | aggregated profile (all sub-entities in one response) |
+| `experiences` / `formations` / `langues` / `projets` / `skills` | create / update / delete per sub-entity |
+| `sessions` | list / create / update / delete |
+| `candidatures` | list by session, create, get, update, abandon, apply (no message / by mail / by message) |
+| `contacts` | list for an application (read-only, no create route yet) |
+| `status_history` | history for an application |
+| `timeline_events` | list available events, add an event |
+| `interviews` | pending interviews for an application, all interviews for a session |
+| `offers` | list, get, dismiss, mark applied |
+| `scraping` | on-demand extraction from a URL or pasted text |
+| `documents` | save/fetch CV & cover letter references, compile to PDF, inspect/read any document file |
+| `fonts` | list / import / delete a server-filesystem font family |
+| `settings` | Anthropic API key status/set/delete, LLM model, theme, connection test |
+| `system` | DB diagnostics, full JSON export, health check (unauthenticated) |
 
-### Implémenté et branché de bout en bout
+## 11. Desktop ↔ agent bridge
 
-- Onboarding et profil complet : expériences, formations, langues, projets, skills (CRUD complet, table `users` + tables liées).
-- Sessions de candidature : CRUD, paramètres de session (contexte, zone, statut), CV/lettre de motivation de référence par session (import `.typ`, compilation, analyse de style via Claude, historique de sauvegarde, aperçu PDF).
-- Candidatures : création avec génération IA obligatoire (CV + lettre adaptés, pipeline complet, échec bloquant la création), liste en tableau par session, détail éditable tant que « à postuler » (règle `editable` dans `DetailView.vue`), timeline d'événements typés, gestion d'entretiens, corbeille pour les statuts terminaux négatifs.
-- Flux « Postuler » : sans message, par mail (rédigé par l'IA), par message court (rédigé par l'IA) — export systématique des documents vers le dossier de téléchargements.
-- Aperçu PDF des documents (référence et joints), via `get_document_pdf` / `compile_cv` / `compile_lettre_motivation` encodés en base64.
-- Import d'offre depuis une URL ou un texte collé : `scrape_offer` (récupération HTML via `scraping::fetch` + extraction de texte via `scraping::extract`, puis extraction structurée par l'IA) ou `extract_offer_from_text` (texte collé directement) préremplissent le formulaire de nouvelle candidature (`NewApplicationView.vue`, flux en 3 étapes : URL → texte collé en repli → formulaire manuel). Champs extraits (`ScrapedOfferFields`) : poste, entreprise, localisation, type de contrat, rémunération, description de l'offre — validation manuelle ensuite, pas de date limite ni de stack extraites séparément.
-- Planning des entretiens : vues semaine/mois (`PlanningPanel.vue`, `PlanningWeekView.vue`, `PlanningMonthView.vue`) listant tous les entretiens d'une session (`get_all_interviews_for_session`).
-- Page Settings (`SettingsView.vue`) entièrement branchée : gestion de la clé API Anthropic (statut, définition, suppression), sélection du modèle LLM, test de connexion, chemins de stockage (DB, dossier documents, ouverture dans l'explorateur), thème clair/sombre/système, export JSON complet des données (`export_data_json`).
-- CI/CD : lint + clippy + tests (voir section 12 pour le détail réel), Conventional Commits, flux de branches `feature/* → dev → staging → main`.
+`crates/desktop/src-tauri/src/api_client.rs` implements a small `reqwest`-based `ApiClient` (GET/POST/PUT/PATCH/DELETE + no-content variants), injected as `tauri::State<ApiClient>`, carrying the bearer token and base URL (`API_URL` env var, e.g. `http://localhost:3000`).
 
-### Partiel / en maquette
+Every file under `crates/desktop/src-tauri/src/commands/` follows the same shape: an `async fn` taking `api: State<'_, ApiClient>`, calling the matching `/api/...` route, and returning the deserialized DTO or a mapped `AppError` — there is no SQL, no business rule, and no direct database access anywhere in the desktop crate. `crates/desktop/src-tauri/src/models/mod.rs` re-exports `findmyjob_core::models::*` rather than duplicating any type.
 
-- **Contacts recruteur** : lecture fonctionnelle (`get_contacts`), mais l'ajout depuis la page détail (`addRecruiter` dans `stores/app.ts`) pousse un contact factice **purement local**, jamais persisté — aucune commande `create_contact` n'existe côté backend.
-- **Relances** : colonnes `next_relance`, `last_relance`, `date_candidature` présentes dans le schéma et lues dans tous les DTO, mais **jamais écrites** par le code actuel. Le suivi de relance reste manuel (statut `relance` + événement de timeline du même nom).
+## 12. Features — implemented, partial, and planned
 
-### Prévu / hors MVP
+### Implemented end-to-end
 
-- Relances intelligentes : détection automatique des candidatures en attente et génération du mail de relance adapté au statut (à distinguer du statut/événement `relance` déjà existant, qui reste manuel).
-- Matching profil vers offre en tant que feature autonome (classement des projets par pertinence), distinct de l'étape interne du pipeline de tailoring (`llm::matching::match_profile`, déjà utilisée en interne pour la génération de documents).
-- Recherche d'offres en ligne (moteur de recherche intégré permettant de parcourir des offres, distinct de l'import d'une URL déjà connue, celui-ci étant implémenté).
-- Mode IA local (détection d'un Ollama déjà installé, puis sidecar llama.cpp).
-- Synchronisation multi-appareils, mobile, intégrations mail/calendrier.
+- Onboarding and full profile management (experiences, formations, languages, projects, skills).
+- Sessions: CRUD, reference CV/cover letter per session (import, compile, style analysis, backup history, PDF preview).
+- Applications: creation with mandatory AI-generated documents (failure blocks creation), table view per session, editable detail while `a_postuler`, typed timeline, interview management, trash for negative terminal statuses.
+- Apply flow: no message / by mail / by message, all exporting documents to disk.
+- Offer import from a pasted URL or pasted text, prefilling the new-application form.
+- Interview planning (week/month views).
+- Settings: Anthropic API key, LLM model selection, connection test, theme, full JSON export.
+- Offers pipeline: scraping (WTTJ/Algolia), mechanical filtering, LLM scoring, scheduled runs — **backend only**, see §7.
+- CI/CD: lint + clippy on every PR to `dev`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
 
-## 11. Dette technique et écarts connus
+### Partial
 
-- **Diagnostic temporaire en cours dans le pipeline IA** : `llm/pipeline.rs:156-162` porte un bloc commenté `[DIAG-TEMP]` — la rédaction du contenu CV et lettre de motivation a été repassée en **séquentiel** au lieu de `tokio::try_join!`, pour tester une hypothèse de race de concurrence. À revert une fois le diagnostic conclu. La branche `fix/generation_document` porte aussi des commits de logging temporaire (`debug(assemble): log CV assembly input/output for truncation diagnosis`) liés au même sujet.
-- **Code mort du drag & drop kanban** : le suivi des candidatures est aujourd'hui un tableau (`TrackingView.vue`), plus un kanban. Restent inutilisés : `startDrag`, `showDragPopup`, `confirmDrag`, `cancelDrag`, `state.dragState`, `state.dragPopup` (`src/stores/app.ts:374-396`), les types `DragState`/`DragPopupState` (`src/types/index.ts`), le composant `DragPopup.vue`, ainsi que `KANBAN_COLUMNS` et `columnTitleForStatus` (`composables/candidature_display.ts`) sans plus aucun appelant.
-- **Règle thin-client partiellement contournée** : `TrackingView.vue` calcule côté Vue des valeurs qui devraient être des flags dérivés fournis par Rust — `inactivityDays`/`inactivityColor` (prédicat métier sur le nombre de jours d'inactivité), `sessionIsAccepted`, et le filtrage corbeille par `TRASHED_STATUSES`. Contraire à la règle de pont de la section 4.
-- **Table morte** : `embeddings` existe dans le schéma mais n'est ni écrite ni lue par le code applicatif (`settings`, en revanche, est utilisée — voir section 5).
-- **Relances jamais écrites** : `mark_postule` ne pose même pas `date_candidature` au passage à `postule` ; `next_relance`/`last_relance` ne sont mis à jour nulle part.
-- **Formulaire de nouvelle candidature incomplet** : les champs de contact recruteur dans `NewApplicationView.vue` n'ont aucun `v-model`, donc ne sont jamais envoyés à la création.
-- **Zéro test dans le dépôt** alors que `.github/workflows/ci.yml` lance `cargo test` sur chaque PR vers `dev` — le job passe systématiquement à vide — et que le README annonce « CI : lint + clippy + tests ».
-- **Documentation** : `db/schema.dbml` a été resynchronisé avec les migrations `0001` à `0017` lors de cette mise à jour ; `db/schema.png` reste une image statique non régénérée, à vérifier séparément avant de s'y fier.
+- **Recruiter contacts**: reading works (`GET /api/candidatures/{id}/contacts`), but there is no `POST` route on the agent, and the desktop's "add contact" action (`addRecruiter` in `crates/desktop/src/stores/app.ts`) is an explicit local-only stub — nothing is persisted.
+- **Offers pipeline UI**: the backend pipeline described in §7 runs on schedule and populates the `offers` table, but nothing in the desktop app surfaces it yet.
 
-## 12. Dépôt, CI/CD et conventions de travail
+### Planned / out of MVP scope
 
-### Dépôt GitHub
+- A persisted contact-creation flow (agent route + Tauri command + UI), completing the item above.
+- A desktop UI for the offers queue (browse, dismiss, mark applied).
+- Smart follow-ups: automatic detection of stale applications and a drafted follow-up message (distinct from the existing manual `relance` status/event).
+- A standalone profile-to-offer matching feature (project ranking by relevance), distinct from the internal matching step already used inside the tailoring pipeline (`core::llm::matching::match_profile`).
+- A provider-agnostic LLM layer (OpenAI-compatible, configurable base URL) to support Ollama Cloud or a local runtime — not implemented; the provider is Anthropic-specific today (see `CLAUDE.md`).
+- Multi-device sync, mobile client, mail/calendar integrations.
 
-- Privé d'abord, public à la sortie de la V1.
-- Public : lecture / clone / fork ouverts à tous, aucun push direct par des tiers. Les contributions passent par fork + pull request, mergées à la discrétion de l'auteur.
-- Option à activer si besoin : branch protection sur main.
-- Avant de passer public : vérifier qu'aucun secret n'a été commité dans l'historique. `.gitignore` propre, secrets hors repo, `.env.example` vide pour la doc.
-- Description du repo : « Logiciel open source pour suivre ses candidatures de stage, d'alternance et de CDI, avec assistance IA. »
-- Topics : tauri, vue, rust, sqlite, job-search, ai, open-source.
+## 13. Repository, CI/CD, and conventions
 
-### Convention de commits
+### Commit convention
 
-Conventional Commits pour automatiser le versioning : format `<type>(<scope optionnel>): <description>`.
-- `feat:` → version mineure, `fix:` → patch, `feat!:`/`fix!:`/`BREAKING CHANGE` → version majeure.
-- Autres types (pas de release) : `docs:`, `style:`, `refactor:`, `test:`, `chore:`.
+Conventional Commits drive automated versioning: `<type>(<scope>): <description>`. `feat:` bumps minor, `fix:` bumps patch, `feat!:`/`fix!:`/a `BREAKING CHANGE` footer bumps major. `docs:`, `style:`, `refactor:`, `test:`, `chore:` don't trigger a release. Full detail in `docs/commit.md`; pull request conventions in `docs/pull_request.md`.
 
-Détail complet dans `docs/commit.md`. Conventions de pull request dans `docs/pull_request.md`.
+### Branch flow and CI (as actually configured)
 
-### Flux de branches et CI (workflows réels)
+- `feature/*` → PR to `dev` — `.github/workflows/ci.yml`: `frontend` job (`npm run lint` + `npm run build`, working directory `crates/desktop`), `rust` job (`cargo clippy --workspace -- -D warnings` + `cargo test --workspace`, on `ubuntu-22.04`).
+- `dev` → PR to `staging`, `staging` → PR to `main` — `.github/workflows/gatekeeper.yml` blocks any other source branch (only `staging` can merge into `main`, only `dev` can merge into `staging`).
+- Push to `main` — `.github/workflows/release.yml`: `semantic-release` (`.releaserc.json`) determines the version, then a Tauri build matrix (macOS ARM64/x64, Ubuntu 22.04, Windows) and a GitHub release if a version was computed.
 
-- `feature/*` → PR vers `dev` — `.github/workflows/ci.yml` : job `frontend` (lint ESLint + `vue-tsc` via `npm run build`), job `rust` (`cargo clippy -- -D warnings` + `cargo test`, sur `ubuntu-22.04`).
-- `dev` → PR vers `staging`, `staging` → PR vers `main` — `.github/workflows/gatekeeper.yml` bloque toute autre branche source (seule `staging` peut être mergée dans `main`, seule `dev` peut être mergée dans `staging`).
-- Push sur `main` — `.github/workflows/release.yml` : `semantic-release` (config `.releaserc.json`, plugins commit-analyzer / release-notes-generator / exec / github) détermine la version, puis build Tauri matriciel (macOS ARM64 + x64, Ubuntu 22.04, Windows) et publication de release GitHub si une version a été calculée.
+### Local and deployed running
 
-### Conventions de travail
+- Agent: `docker compose up -d` runs Postgres (`pgvector/pgvector:pg16`) and the agent (`Dockerfile.agent`) together, or `cargo run -p findmyjob-agent` against a Postgres reachable via `.env`.
+- Desktop: `cd crates/desktop && npm install && npm run tauri dev`, pointed at the agent via `API_URL`.
 
-- Avancer gate par gate, mesurer avant de décider.
-- Prompts Claude Code chirurgicaux et scopés (« ne crée rien de plus que X »), pour garder le contrôle de l'architecture.
-- Pas de refactor opportuniste.
-- Préférer échouer vite plutôt qu'une dégradation silencieuse.
-- Style de rédaction des livrables : pas de tirets cadratins.
+## 14. Known gaps and points of attention
+
+- `crates/agent/src/pipeline.rs:169` carries a `[DIAG-TEMP]` comment: CV/cover-letter content generation was deliberately made sequential instead of `tokio::try_join!`, to rule out a concurrency race during a specific diagnosis. Not yet reverted — check whether the diagnosis concluded before "fixing" it back to parallel.
+- CI's `rust` job runs `cargo test --workspace` on every PR, but the repository currently has zero `#[test]`/`#[tokio::test]` functions — the job passes vacuously and should not be read as real coverage.
+- The root `Cargo.toml` still declares the `sqlite` feature on the shared `sqlx` dependency even though no crate uses SQLite anymore (only `postgres` is actually pulled in, by `crates/agent`) — harmless but worth cleaning up.
+- The `vector` (pgvector) Postgres extension is loaded by migration `0001` but nothing uses it: the one column that did, `offers.embedding`, was dropped by migration `0004`. Profile-to-offer matching goes through an LLM call today, not vector similarity.
+- `db/schema.png` is a static image, not regenerated automatically from `db/schema.dbml` — verify it still matches before relying on it visually.
