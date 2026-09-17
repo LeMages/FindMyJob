@@ -11,8 +11,7 @@ use crate::scraping::types::ScrapedOffer;
 use findmyjob_core::error::AppError;
 
 /// Vue d'une offre scrapée, exposée par l'API agent-specific `/api/offers`
-/// (offres recommandées). N'expose pas `embedding` (donnée technique interne
-/// au scoring, étape 3).
+/// (offres recommandées).
 #[derive(serde::Serialize)]
 pub struct OfferView {
     pub id: i64,

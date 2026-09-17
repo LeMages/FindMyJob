@@ -18,9 +18,10 @@ use findmyjob_core::error::AppError;
 /// Tables applicatives incluses dans l'export, dans l'ordre d'apparition
 /// dans le JSON produit.
 ///
-/// `embeddings` (données techniques vectorielles) et `email_attachments`
-/// (table supprimée par la migration SQLite `0009_refactor_documents.sql`,
-/// n'existe plus) sont volontairement absentes.
+/// `embeddings` et `emails` (tables supprimées par la migration
+/// `0004_cleanup_schema.sql`) et `email_attachments` (table supprimée par la
+/// migration SQLite `0009_refactor_documents.sql`, n'existe plus) sont
+/// volontairement absentes.
 const EXPORTED_TABLES: &[&str] = &[
     "users",
     "lang",
@@ -34,7 +35,6 @@ const EXPORTED_TABLES: &[&str] = &[
     "contacts",
     "interviews",
     "documents",
-    "emails",
     "settings",
 ];
 

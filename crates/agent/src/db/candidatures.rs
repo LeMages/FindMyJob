@@ -66,7 +66,7 @@ pub async fn insert(
             url_offre, description_offre, notes, session_id) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
          RETURNING id, session_id, poste, entreprise, localisation, status, source, \
-                   type AS type_contrat, date_candidature, next_relance, created_at",
+                   type AS type_contrat, date_candidature, created_at",
     )
     .bind(user_id)
     .bind(&poste)
@@ -96,7 +96,6 @@ pub async fn insert(
         source: row.try_get("source").map_err(map_db_err)?,
         type_contrat: row.try_get("type_contrat").map_err(map_db_err)?,
         date_candidature: row.try_get("date_candidature").map_err(map_db_err)?,
-        next_relance: row.try_get("next_relance").map_err(map_db_err)?,
         // À la création, l'unique entrée d'historique (insérée juste après)
         // partage le même horodatage que `created_at`.
         derniere_maj_statut: row.try_get("created_at").map_err(map_db_err)?,
@@ -192,7 +191,7 @@ pub async fn update(
          WHERE id = $9 AND user_id = $10 \
          RETURNING id, session_id, poste, entreprise, localisation, status, source, \
                    type AS type_contrat, remuneration, url_offre, description_offre, notes, \
-                   date_candidature, next_relance, cv_path, lettre_motivation_path, created_at",
+                   date_candidature, cv_path, lettre_motivation_path, created_at",
     )
     .bind(&poste)
     .bind(&entreprise)
@@ -222,7 +221,6 @@ pub async fn update(
         description_offre: row.try_get("description_offre").map_err(map_db_err)?,
         notes: row.try_get("notes").map_err(map_db_err)?,
         date_candidature: row.try_get("date_candidature").map_err(map_db_err)?,
-        next_relance: row.try_get("next_relance").map_err(map_db_err)?,
         cv_path: row.try_get("cv_path").map_err(map_db_err)?,
         lettre_motivation_path: row.try_get("lettre_motivation_path").map_err(map_db_err)?,
         created_at: row.try_get("created_at").map_err(map_db_err)?,
@@ -391,7 +389,7 @@ pub async fn list_for_session(
 ) -> Result<Vec<CandidatureView>, AppError> {
     let rows = sqlx::query(
         "SELECT id, session_id, poste, entreprise, localisation, status, source, \
-                type AS type_contrat, date_candidature, next_relance, \
+                type AS type_contrat, date_candidature, \
                 COALESCE( \
                     (SELECT MAX(changed_at) FROM status_history \
                      WHERE status_history.candidature_id = candidatures.id), \
@@ -421,7 +419,6 @@ pub async fn list_for_session(
                 source: r.try_get("source")?,
                 type_contrat: r.try_get("type_contrat")?,
                 date_candidature: r.try_get("date_candidature")?,
-                next_relance: r.try_get("next_relance")?,
                 derniere_maj_statut: r.try_get("derniere_maj_statut")?,
                 cv_path: r.try_get("cv_path")?,
                 lettre_motivation_path: r.try_get("lettre_motivation_path")?,
@@ -452,7 +449,7 @@ pub async fn fetch_detail(
     let row = sqlx::query(
         "SELECT id, session_id, poste, entreprise, localisation, status, source, \
                 type AS type_contrat, remuneration, url_offre, description_offre, notes, \
-                date_candidature, next_relance, \
+                date_candidature, \
                 cv_path, lettre_motivation_path, \
                 created_at \
          FROM candidatures \
@@ -479,7 +476,6 @@ pub async fn fetch_detail(
         description_offre: row.try_get("description_offre").map_err(map_db_err)?,
         notes: row.try_get("notes").map_err(map_db_err)?,
         date_candidature: row.try_get("date_candidature").map_err(map_db_err)?,
-        next_relance: row.try_get("next_relance").map_err(map_db_err)?,
         cv_path: row.try_get("cv_path").map_err(map_db_err)?,
         lettre_motivation_path: row.try_get("lettre_motivation_path").map_err(map_db_err)?,
         created_at: row.try_get("created_at").map_err(map_db_err)?,

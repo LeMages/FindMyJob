@@ -195,7 +195,6 @@ export interface CandidatureView {
   source: string | null
   type_contrat: string | null
   date_candidature: string | null
-  next_relance: string | null
   derniere_maj_statut: string
   cv_path: string | null
   lettre_motivation_path: string | null
@@ -252,7 +251,6 @@ export interface CandidatureDetail {
   description_offre: string | null
   notes: string | null
   date_candidature: string | null
-  next_relance: string | null
   cv_path: string | null
   lettre_motivation_path: string | null
   created_at: string

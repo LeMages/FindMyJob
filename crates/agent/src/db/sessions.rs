@@ -148,7 +148,7 @@ pub async fn update(
 }
 
 /// Supprime une session et toutes les données qui en dépendent (candidatures,
-/// emails, historique de statut, contacts, entretiens).
+/// historique de statut, contacts, entretiens).
 ///
 /// # Arguments
 ///
@@ -170,15 +170,6 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
     // 2. Suppression des dépendances des candidatures de la session
     //    (ordre imposé par les contraintes de clé étrangère)
     // ------------------------------------------------------------------
-    sqlx::query(
-        "DELETE FROM emails \
-         WHERE candidature_id IN (SELECT id FROM candidatures WHERE session_id = $1)",
-    )
-    .bind(id)
-    .execute(&mut *tx)
-    .await
-    .map_err(map_db_err)?;
-
     sqlx::query(
         "DELETE FROM status_history \
          WHERE candidature_id IN (SELECT id FROM candidatures WHERE session_id = $1)",
