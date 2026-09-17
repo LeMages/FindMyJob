@@ -3,51 +3,15 @@
 
 // Importation des modules internes
 mod api;
+mod config;
 mod db;
 mod documents;
+mod filtering;
 mod logging;
 mod pipeline;
+mod scheduler;
 mod scraping;
 mod security;
-
-use scraping::types::{JobScraper, SearchQuery};
-use scraping::wttj::WttjScraper;
-
-/// Lance une passe de scraping WTTJ et insère les offres trouvées en base.
-///
-/// Séparé de `main` pour être lancé en tâche de fond (`tokio::spawn`), sans
-/// bloquer le démarrage du serveur HTTP.
-///
-/// # Arguments
-///
-/// * `pool` - Pool de connexions PostgreSQL.
-async fn run_scraping_once(pool: sqlx::PgPool) {
-    let scraper = WttjScraper::new();
-    let queries = vec![SearchQuery {
-        keywords: "Stage Data Engineer".to_string(),
-        location: Some("Paris".to_string()),
-        country_code: Some("FR".to_string()),
-    }];
-
-    // `JobScraper::scrape` retourne `Box<dyn Error>` (non `Send`) : converti en
-    // `String` avant le prochain `await`, pour que le futur de cette tâche de
-    // fond (lancée via `tokio::spawn`, qui exige `Send`) reste valide.
-    let scrape_result = scraper.scrape(&queries).await.map_err(|e| e.to_string());
-
-    match scrape_result {
-        Ok(offers) => match db::offers::insert_offers(&pool, &offers).await {
-            Ok(inserted) => {
-                let duplicates = offers.len() as u64 - inserted;
-                println!("Scraping : {inserted} nouvelles offres insérées ({duplicates} doublons ignorés)");
-            }
-            Err(e) => {
-                eprintln!("Erreur insertion des offres scrapées: {e}");
-                logging::log_error_to_file("insertion offres", &e);
-            }
-        },
-        Err(e) => eprintln!("Erreur scraping: {e}"),
-    }
-}
 
 #[tokio::main]
 async fn main() {
@@ -55,8 +19,8 @@ async fn main() {
 
     // Connexion Postgres injoignable au démarrage : on préfère planter tout
     // de suite plutôt que de tourner sans persistance possible.
-    let config = db::DbConfig::from_env();
-    let pool = db::init_db(&config).await.expect("Failed to connect to database");
+    let db_config = db::DbConfig::from_env();
+    let pool = db::init_db(&db_config).await.expect("Failed to connect to database");
 
     // ------------------------------------------------------------------
     // Dossiers de données (documents générés, polices), créés au démarrage
@@ -75,9 +39,14 @@ async fn main() {
 
     let state = api::AppState { pool: pool.clone(), data_dir, fonts_dir };
 
-    // Scraping initial en tâche de fond, ne bloque pas le démarrage du serveur.
-    // TODO(étape ultérieure): remplacer par un scheduler périodique (cron).
-    tokio::spawn(run_scraping_once(pool));
+    // Pipeline scraping → filtre mécanique → scoring LLM : exécution immédiate
+    // en tâche de fond, puis cron à 12h et 18h. Le `JobScheduler` doit rester
+    // en vie jusqu'à l'arrêt du process (lié dans `main`, pas droppé plus tôt).
+    let agent_config =
+        config::AgentConfig::load().expect("Impossible de charger la configuration agent (agent.toml)");
+    let _scheduler = scheduler::start(pool.clone(), agent_config)
+        .await
+        .expect("Impossible de démarrer le scheduler");
 
     let app = api::router(state);
 

@@ -16,6 +16,7 @@ use chrono::{DateTime, Utc};
 ///     contract_type: Type de contrat (stage, alternance, CDI...), si connu.
 ///     posted_at: Date de publication, si connue.
 ///     scraped_at: Date à laquelle l'offre a été récupérée.
+///     description: Texte de l'offre (profil recherché, missions...), si connu.
 pub struct ScrapedOffer {
     pub source: String,
     pub source_id: Option<String>,
@@ -26,6 +27,7 @@ pub struct ScrapedOffer {
     pub contract_type: Option<String>,
     pub posted_at: Option<DateTime<Utc>>,
     pub scraped_at: DateTime<Utc>,
+    pub description: Option<String>,
 }
 
 /// Une recherche d'offres à exécuter sur une source.

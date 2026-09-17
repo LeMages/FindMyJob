@@ -14,7 +14,7 @@ FindMyJob is an open-source desktop app (Tauri 2) that helps students track job 
 | Frontend | Vue 3 + TypeScript + Vite + Tailwind CSS |
 | Backend | Rust (Tauri commands) |
 | Database | SQLite (local, single-user) |
-| AI | OpenAI-compatible API → Ollama Cloud free tier, configurable base URL |
+| AI | Anthropic Claude (Messages API), appelée en HTTP brut via `reqwest` — endpoint et modèle fixes, pas de base URL configurable |
 
 ## Commands
 
@@ -65,7 +65,7 @@ Return types must implement `serde::Serialize`; error types must implement `serd
 
 ### AI layer
 
-The AI base URL is user-configurable (settings). Prompts are sent as standard OpenAI chat completions. The layer must remain provider-agnostic so switching from Ollama Cloud to a local runtime requires only a base URL change in settings.
+Calls go to Anthropic's Claude Messages API (`crates/core/src/llm/client.rs`), authenticated via `ANTHROPIC_API_KEY`. The model is selectable among `AVAILABLE_MODELS` (stored per-user setting, falls back to `DEFAULT_MODEL`), but the provider itself is not interchangeable — the endpoint, auth headers, and structured-output format are Anthropic-specific.
 
 ## Code Conventions
 

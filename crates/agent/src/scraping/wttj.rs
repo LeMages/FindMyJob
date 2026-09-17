@@ -28,8 +28,9 @@ const PAGE_DELAY: Duration = Duration::from_millis(500);
 
 /// Une offre telle que renvoyée par l'index Algolia `wk_cms_jobs_production`.
 ///
-/// Ne modélise que les champs utilisés par [`ScrapedOffer`] — la réponse
-/// complète contient bien plus de champs (images, secteurs, salaire...).
+/// Ne modélise que les champs utilisés par [`ScrapedOffer`] (dont `profile`,
+/// le texte de l'offre) — la réponse complète contient bien plus de champs
+/// (images, secteurs, salaire...).
 #[derive(Deserialize)]
 struct AlgoliaHit {
     slug: String,
@@ -38,6 +39,9 @@ struct AlgoliaHit {
     office: Option<AlgoliaOffice>,
     contract_type_names: Option<AlgoliaContractTypeNames>,
     published_at: Option<String>,
+    /// Texte de l'offre (profil recherché, missions...), en Markdown déjà
+    /// en texte plat — aucun nettoyage HTML nécessaire.
+    profile: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -197,6 +201,7 @@ impl From<AlgoliaHit> for ScrapedOffer {
             contract_type: hit.contract_type_names.and_then(|names| names.fr),
             posted_at,
             scraped_at: Utc::now(),
+            description: hit.profile,
         }
     }
 }

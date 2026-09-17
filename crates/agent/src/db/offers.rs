@@ -71,8 +71,8 @@ pub async fn insert_offers(pool: &PgPool, offers: &[ScrapedOffer]) -> Result<u64
 
     for offer in offers {
         let result = sqlx::query(
-            "INSERT INTO offers (source, source_id, title, company, location, url, contract_type, posted_at, scraped_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+            "INSERT INTO offers (source, source_id, title, company, location, url, contract_type, posted_at, scraped_at, description) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
              ON CONFLICT (url) DO NOTHING",
         )
         .bind(&offer.source)
@@ -84,6 +84,7 @@ pub async fn insert_offers(pool: &PgPool, offers: &[ScrapedOffer]) -> Result<u64
         .bind(&offer.contract_type)
         .bind(offer.posted_at)
         .bind(offer.scraped_at)
+        .bind(&offer.description)
         .execute(pool)
         .await?;
 
@@ -197,4 +198,84 @@ pub async fn dismiss(pool: &PgPool, id: i64) -> Result<(), AppError> {
 /// `Ok(())` si la mise à jour a réussi, `AppError::NotFound` sinon.
 pub async fn mark_applied(pool: &PgPool, id: i64) -> Result<(), AppError> {
     set_status(pool, id, "applied").await
+}
+
+/// Vue minimale d'une offre non encore scorée, utilisée par le filtre
+/// mécanique et le scoring LLM (`filtering::mechanical`, `filtering::scoring`).
+/// Distincte d'`OfferView` : expose `description`, absente de la réponse API.
+pub struct UnscoredOffer {
+    pub id: i64,
+    pub title: String,
+    pub company: String,
+    pub location: String,
+    pub contract_type: Option<String>,
+    pub description: Option<String>,
+    pub posted_at: Option<DateTime<Utc>>,
+}
+
+/// Construit un `UnscoredOffer` à partir d'une ligne SQL brute.
+///
+/// # Arguments
+///
+/// * `row` - Ligne issue d'une requête `SELECT` sur `offers`.
+///
+/// # Returns
+///
+/// `UnscoredOffer` reconstruit, ou erreur si une colonne attendue est absente.
+fn row_to_unscored_offer(row: &PgRow) -> Result<UnscoredOffer, sqlx::Error> {
+    Ok(UnscoredOffer {
+        id: row.try_get("id")?,
+        title: row.try_get("title")?,
+        company: row.try_get("company")?,
+        location: row.try_get("location")?,
+        contract_type: row.try_get("contract_type")?,
+        description: row.try_get("description")?,
+        posted_at: row.try_get("posted_at")?,
+    })
+}
+
+/// Liste les offres pas encore traitées par le pipeline de scoring
+/// (`score IS NULL`) — inclut celles pas encore vues par le filtre
+/// mécanique et celles qui l'ont passé mais pas encore été scorées par le LLM.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions PostgreSQL.
+///
+/// # Returns
+///
+/// Les offres non scorées, sans ordre garanti.
+pub async fn get_unscored_offers(pool: &PgPool) -> Result<Vec<UnscoredOffer>, AppError> {
+    let rows = sqlx::query(
+        "SELECT id, title, company, location, contract_type, description, posted_at \
+         FROM offers WHERE score IS NULL",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(map_db_err)?;
+
+    rows.iter().map(row_to_unscored_offer).collect::<Result<_, _>>().map_err(map_db_err)
+}
+
+/// Fixe le score et le statut d'une offre (filtre mécanique ou scoring LLM).
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions PostgreSQL.
+/// * `id` - Identifiant de l'offre.
+/// * `score` - Score attribué (`-1.0` pour un rejet mécanique, `0..1` pour le LLM).
+/// * `status` - Nouveau statut (`"dismissed"` ou `"reviewed"`).
+///
+/// # Returns
+///
+/// `Ok(())` si la mise à jour a réussi.
+pub async fn set_score(pool: &PgPool, id: i64, score: f32, status: &str) -> Result<(), AppError> {
+    sqlx::query("UPDATE offers SET score = $1, status = $2, updated_at = NOW() WHERE id = $3")
+        .bind(score)
+        .bind(status)
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(map_db_err)?;
+    Ok(())
 }
