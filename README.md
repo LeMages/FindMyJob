@@ -27,6 +27,20 @@ crates/desktop  Tauri 2 + Vue 3 app — thin HTTP client of the agent, no direct
 
 The desktop app never talks to the database directly: it calls the agent's REST API over HTTP. See [`docs/project.md`](docs/project.md) for the full technical reference (data model, pipelines, API routes, conventions).
 
+## Database
+
+The database is a single PostgreSQL instance split into two schemas:
+
+**Profile** — User identity, skills, education, and app settings.
+
+![Profile schema](db/schema_profile.png)
+
+**Search** — Job search sessions, scraped offers, applications, interviews, and documents.
+
+![Search schema](db/schema_search.png)
+
+See [`db/schema.dbml`](db/schema.dbml) for the full column-level reference.
+
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 18+

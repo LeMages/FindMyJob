@@ -1,52 +1,27 @@
 // ============================================
 // FindMyJob - Schéma de base de données (PostgreSQL)
-// Généré à partir de db/migrations/postgres/0001 à 0004.
-// Généré le 2026-09-17.
+// Mis à jour le 2026-09-18.
+//
+// Deux schémas Postgres :
+//   - profile : données de l'utilisateur (CV, compétences, parcours, settings)
+//   - search  : recherche d'emploi (sessions, candidatures, offres)
+//
+// App mono-utilisateur : les tables du schéma search ne portent pas
+// de user_id. Le profil est récupéré directement (un seul user).
 //
 // Triggers `updated_at` (fonction trigger_set_updated_at(), BEFORE UPDATE) :
 // users, projets, experiences, formations, skills, sessions, candidatures,
 // contacts, interviews, documents, settings.
 // offers et status_history n'ont pas de trigger updated_at.
-//
-// Note : l'extension `vector` (pgvector) est créée par la migration 0001
-// pour offers.embedding ; cette colonne a été supprimée par la migration
-// 0004_cleanup_schema.sql, l'extension reste donc chargée sans colonne
-// vector(...) qui l'utilise.
 // ============================================
 
-// ============================================
-// Offres scrapées
-// ============================================
 
-Table offers {
-  id integer [pk, increment]
-  source varchar [not null]           // plateforme d'origine (WTTJ, LinkedIn...)
-  source_id varchar                   // identifiant chez la plateforme source
-  title text [not null]
-  company text [not null]
-  location text [not null]
-  url text [not null, unique]         // uq_offers_url
-  contract_type varchar
-  posted_at timestamp
-  scraped_at timestamp [not null, default: `now()`]
-  status varchar [not null, default: 'new']
-  score real                          // score de pertinence calculé par le pipeline
-  description text                    // migration 0003
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+// ****************************************************
+//                 SCHÉMA : PROFILE
+// Données stables de l'utilisateur (CV, parcours, config)
+// ****************************************************
 
-  indexes {
-    status [name: 'idx_offers_status']
-    source [name: 'idx_offers_source']
-    posted_at [name: 'idx_offers_posted_at']
-  }
-}
-
-// ============================================
-// Profil utilisateur
-// ============================================
-
-Table users {
+Table profile.users {
   id integer [pk, increment]
   nom text
   prenom text
@@ -62,16 +37,16 @@ Table users {
   updated_at timestamp [not null, default: `now()`]
 }
 
-Table lang {
+Table profile.lang {
   id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
+  user_id integer [ref: > profile.users.id, not null]
   nom text
   level text
 }
 
-Table formations {
+Table profile.formations {
   id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
+  user_id integer [ref: > profile.users.id, not null]
   titre text [not null]
   ecole text
   date_debut date
@@ -80,22 +55,21 @@ Table formations {
   updated_at timestamp [not null, default: `now()`]
 }
 
-Table projets {
+Table profile.projets {
   id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
+  user_id integer [ref: > profile.users.id, not null]
   titre text [not null]
   description text
   stack text          // technologies utilisées, texte libre
   url text            // repo ou démo
-  pour_qui text        // client / employeur / projet perso
+  pour_qui text       // client / employeur / projet perso
   date_debut date
   date_fin date
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null, default: `now()`]
 }
 
-// Distinct de candidature_type : ordre et valeurs légèrement différents
-// (pas de "freelance" ici).
+// Distinct de candidature_type : pas de "freelance" ici.
 Enum experience_type_contrat {
   stage
   alternance
@@ -104,9 +78,9 @@ Enum experience_type_contrat {
   cdi
 }
 
-Table experiences {
+Table profile.experiences {
   id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
+  user_id integer [ref: > profile.users.id, not null]
   poste text [not null]
   entreprise text
   lieu text
@@ -118,17 +92,31 @@ Table experiences {
   updated_at timestamp [not null, default: `now()`]
 }
 
-Table skills {
+Table profile.skills {
   id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
+  user_id integer [ref: > profile.users.id, not null]
   domaine text [not null]   // "Langages", "Data & ML", "Data Engineering"...
   nom text [not null]       // "Python", "PyTorch"...
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null, default: `now()`]
 }
 
+Table profile.settings {
+  id integer [pk, increment]
+  cle text [not null, unique]   // "llm_model", "theme"
+  valeur text
+  updated_at timestamp [not null, default: `now()`]
+}
+
+
+// ****************************************************
+//                 SCHÉMA : SEARCH
+// Recherche d'emploi (sessions, offres, candidatures)
+// Mono-utilisateur : pas de user_id sur ces tables.
+// ****************************************************
+
 // ============================================
-// Sessions de candidature
+// Sessions
 // ============================================
 
 Enum session_statut {
@@ -137,9 +125,8 @@ Enum session_statut {
   termine
 }
 
-Table sessions {
+Table search.sessions {
   id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
   nom text [not null]
   contexte text
   statut session_statut [not null, default: 'active']
@@ -147,7 +134,37 @@ Table sessions {
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null, default: `now()`]
 
-  Note: 'Regroupe un ensemble de candidatures. Possède son propre CV et sa\npropre lettre de motivation de référence, tracés dans documents.'
+  Note: 'Regroupe un ensemble de candidatures et d offres pour une recherche\nciblée (zone géographique, type de poste). Possède son propre CV et sa\npropre lettre de motivation de référence, tracés dans documents.'
+}
+
+// ============================================
+// Offres scrapées — liées à une session
+// ============================================
+
+Table search.offers {
+  id integer [pk, increment]
+  session_id integer [ref: > search.sessions.id, not null]
+  source varchar [not null]           // plateforme d'origine (WTTJ, LinkedIn...)
+  source_id varchar                   // identifiant chez la plateforme source
+  title text [not null]
+  company text [not null]
+  location text [not null]
+  url text [not null, unique]         // uq_offers_url
+  contract_type varchar
+  posted_at timestamp
+  scraped_at timestamp [not null, default: `now()`]
+  status varchar [not null, default: 'new']
+  score real                          // score de pertinence calculé par le pipeline
+  description text
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null, default: `now()`]
+
+  indexes {
+    status [name: 'idx_offers_status']
+    source [name: 'idx_offers_source']
+    posted_at [name: 'idx_offers_posted_at']
+    session_id [name: 'idx_offers_session_id']
+  }
 }
 
 // ============================================
@@ -177,10 +194,9 @@ Enum candidature_status {
   offre_refusee
 }
 
-Table candidatures {
+Table search.candidatures {
   id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
-  session_id integer [ref: > sessions.id]
+  session_id integer [ref: > search.sessions.id, not null]
   poste text [not null]
   type candidature_type
   status candidature_status [not null, default: 'a_postuler']
@@ -190,9 +206,8 @@ Table candidatures {
   entreprise text
   localisation text
   remuneration text
-  date_candidature date       // colonne présente mais jamais écrite par le code actuel
   notes text
-  cv_path text                    // chemin du CV généré/joint
+  cv_path text                // chemin du CV généré/joint
   lettre_motivation_path text
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null, default: `now()`]
@@ -200,14 +215,14 @@ Table candidatures {
 
 // status_history est une timeline unifiée : event_type n'a pas de CHECK SQL,
 // la validation vit côté Rust (EventType, crates/core/src/models/event_type.rs).
-Table status_history {
+Table search.status_history {
   id integer [pk, increment]
-  candidature_id integer [ref: > candidatures.id, not null]
+  candidature_id integer [ref: > search.candidatures.id, not null]
   event_type text [not null]           // voir EventType côté Rust, pas de CHECK SQL
   ancien_status candidature_status
   nouveau_status candidature_status    // nullable : un événement ne change pas toujours le statut
   content text                         // mail/message associé à l'événement
-  interview_id integer [ref: > interviews.id]
+  interview_id integer [ref: > search.interviews.id]
   changed_at timestamp [not null, default: `now()`]
 }
 
@@ -215,9 +230,9 @@ Table status_history {
 // Contacts & entretiens
 // ============================================
 
-Table contacts {
+Table search.contacts {
   id integer [pk, increment]
-  candidature_id integer [ref: > candidatures.id, not null]
+  candidature_id integer [ref: > search.candidatures.id, not null]
   nom text
   role text         // "RH", "Manager", "Lead Tech"
   email text
@@ -241,18 +256,16 @@ Enum interview_issue {
   negatif
 }
 
-// Modalité structurée de l'entretien, distincte de `lieu` qui reste du
-// texte libre (adresse, lien de visio, numéro).
 Enum interview_modalite {
   visio
   presentiel
   telephone
 }
 
-Table interviews {
+Table search.interviews {
   id integer [pk, increment]
-  candidature_id integer [ref: > candidatures.id, not null]
-  contact_id integer [ref: > contacts.id]
+  candidature_id integer [ref: > search.candidatures.id, not null]
+  contact_id integer [ref: > search.contacts.id]
   type interview_type
   modalite interview_modalite
   date_entretien timestamp
@@ -266,42 +279,27 @@ Table interviews {
 // ============================================
 // Documents (CV / LM) — fichiers sur disque
 // ============================================
-// Un document de référence par type et par session, contenu sur le
-// filesystem, métadonnées et cache d'analyse de style en base. Le document
-// rattaché à une candidature (généré ou joint) est tracé par
-// candidatures.cv_path / lettre_motivation_path, pas par cette table.
+// Un document de référence par type et par session. Le document rattaché
+// à une candidature (généré ou joint) est tracé par candidatures.cv_path /
+// lettre_motivation_path, pas par cette table.
 
 Enum document_type {
   cv
   lettre_motivation
 }
 
-Table documents {
+Table search.documents {
   id integer [pk, increment]
-  session_id integer [ref: > sessions.id, not null]   // ON DELETE CASCADE
+  session_id integer [ref: > search.sessions.id, not null]   // ON DELETE CASCADE
   doc_type document_type [not null]
   original_filename text [not null]
   file_path text [not null]
   pdf_path text
-  style_analysis text   // cache de l'analyse de style LLM, calculé à la sauvegarde de la référence
+  style_analysis text   // cache de l'analyse de style LLM
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null, default: `now()`]
 
   indexes {
     (session_id, doc_type) [unique, name: 'uq_documents_session_doctype']
   }
-}
-
-// ============================================
-// Paramètres de l'app (clé-valeur)
-// ============================================
-// Utilisée par crates/agent/src/db/settings.rs : get/set génériques, plus
-// des résolveurs typés pour le modèle LLM et le thème, lus/écrits par la
-// page Settings.
-
-Table settings {
-  id integer [pk, increment]
-  cle text [not null, unique]   // "llm_model", "theme"
-  valeur text
-  updated_at timestamp [not null, default: `now()`]
 }
