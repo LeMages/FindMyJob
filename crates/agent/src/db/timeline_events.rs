@@ -98,7 +98,6 @@ fn push_event(events: &mut Vec<AvailableEvent>, event_type: EventType, label: &s
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `candidature_id` - Identifiant de la candidature concernée.
 /// * `event` - Événement soumis par le frontend.
 ///
@@ -110,7 +109,6 @@ fn push_event(events: &mut Vec<AvailableEvent>, event_type: EventType, label: &s
 /// statut courant.
 pub async fn add_event(
     pool: &PgPool,
-    user_id: i64,
     candidature_id: i64,
     event: NewTimelineEvent,
 ) -> Result<(), AppError> {
@@ -123,9 +121,8 @@ pub async fn add_event(
     //    son statut courant — `available_events` reste la seule source de
     //    vérité, jamais de confiance dans ce qu'envoie le frontend.
     // ------------------------------------------------------------------
-    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1 AND user_id = $2")
+    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1")
         .bind(candidature_id)
-        .bind(user_id)
         .fetch_optional(&mut *tx)
         .await
         .map_err(map_db_err)?
@@ -205,10 +202,9 @@ pub async fn add_event(
     // ------------------------------------------------------------------
     let nouveau_status = event_type.changes_status();
     if let Some(target) = nouveau_status {
-        sqlx::query("UPDATE candidatures SET status = $1 WHERE id = $2 AND user_id = $3")
+        sqlx::query("UPDATE candidatures SET status = $1 WHERE id = $2")
             .bind(target)
             .bind(candidature_id)
-            .bind(user_id)
             .execute(&mut *tx)
             .await
             .map_err(map_db_err)?;

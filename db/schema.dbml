@@ -138,6 +138,24 @@ Table search.sessions {
 }
 
 // ============================================
+// Requêtes de recherche d'une session — pilotent le scraping (remplace la
+// config statique [[searches]] d'agent.toml)
+// ============================================
+
+Table search.search_queries {
+  id integer [pk, increment]
+  session_id integer [ref: > search.sessions.id, not null]
+  keywords text [not null]
+  location text
+  country_code text
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    session_id [name: 'idx_search_queries_session_id']
+  }
+}
+
+// ============================================
 // Offres scrapées — liées à une session
 // ============================================
 

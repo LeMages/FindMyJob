@@ -62,13 +62,14 @@ fn should_dismiss(offer: &UnscoredOffer, filters: &FilterConfig) -> bool {
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
+/// * `session_id` - Session dont les offres non scorées doivent être filtrées.
 /// * `filters` - Règles de filtrage configurées (`agent.toml`).
 ///
 /// # Returns
 ///
 /// Nombre d'offres écartées.
-pub async fn run(pool: &PgPool, filters: &FilterConfig) -> Result<u64, AppError> {
-    let candidates = db::offers::get_unscored_offers(pool).await?;
+pub async fn run(pool: &PgPool, session_id: i64, filters: &FilterConfig) -> Result<u64, AppError> {
+    let candidates = db::offers::get_unscored_offers(pool, session_id).await?;
     let mut dismissed = 0u64;
 
     for offer in &candidates {

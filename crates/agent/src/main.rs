@@ -37,13 +37,16 @@ async fn main() {
         eprintln!("[WARN] API_TOKEN non configuré : l'API accepte les requêtes sans authentification.");
     }
 
-    let state = api::AppState { pool: pool.clone(), data_dir, fonts_dir };
-
-    // Pipeline scraping → filtre mécanique → scoring LLM : exécution immédiate
-    // en tâche de fond, puis cron à 12h et 18h. Le `JobScheduler` doit rester
-    // en vie jusqu'à l'arrêt du process (lié dans `main`, pas droppé plus tôt).
+    // Chargée une fois, partagée entre l'état HTTP (déclenchement manuel d'une
+    // recherche) et le scheduler (job cron).
     let agent_config =
         config::AgentConfig::load().expect("Impossible de charger la configuration agent (agent.toml)");
+
+    let state = api::AppState { pool: pool.clone(), data_dir, fonts_dir, config: agent_config.clone() };
+
+    // Job cron (12h/18h) itérant sur les sessions actives. Le `JobScheduler`
+    // doit rester en vie jusqu'à l'arrêt du process (lié dans `main`, pas
+    // droppé plus tôt).
     let _scheduler = scheduler::start(pool.clone(), agent_config)
         .await
         .expect("Impossible de démarrer le scheduler");

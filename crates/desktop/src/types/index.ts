@@ -81,6 +81,21 @@ export interface UpdateSessionInput {
   zone: string | null
 }
 
+export interface SearchQueryView {
+  id: number
+  session_id: number
+  keywords: string
+  location: string | null
+  country_code: string | null
+  created_at: string
+}
+
+export interface CreateSearchQueryInput {
+  keywords: string
+  location: string | null
+  country_code: string | null
+}
+
 export interface NewContact {
   id: number
 }

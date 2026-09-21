@@ -16,6 +16,7 @@ import type {
   CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
   NewContact, NewTimelineEvent,
   UpdateCandidatureInput,
+  SearchQueryView, CreateSearchQueryInput,
 } from '@/types'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 
@@ -24,6 +25,13 @@ import { extractErrorMessage } from '@/composables/useErrorMessage'
 // ---------------------------------------------------------------------------
 
 const backendSessions = ref<Session[]>([])
+
+// ---------------------------------------------------------------------------
+// Requêtes de recherche de la session courante — chargées depuis le backend
+// ---------------------------------------------------------------------------
+
+const sessionSearchQueries = ref<SearchQueryView[]>([])
+const searchRunning = ref(false)
 
 // ---------------------------------------------------------------------------
 // Reactive state — UI state always lives here; data will move to backend
@@ -214,6 +222,76 @@ export async function confirmDeleteSession() {
     state.screen = 'tracking'
   } catch (e) {
     console.error('Impossible de supprimer la session', e)
+  }
+}
+
+/**
+ * Charge les requêtes de recherche d'une session depuis le backend.
+ *
+ * @param sessionId - Identifiant de la session.
+ */
+export async function loadSearchQueries(sessionId: number) {
+  try {
+    sessionSearchQueries.value = await invoke<SearchQueryView[]>('get_search_queries', { sessionId })
+  } catch (e) {
+    console.error('Impossible de charger les recherches', e)
+  }
+}
+
+/**
+ * Ajoute une requête de recherche à une session via le backend.
+ *
+ * @param sessionId - Identifiant de la session.
+ * @param input - Mots-clés et critères de la requête.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function addSearchQuery(
+  sessionId: number,
+  input: CreateSearchQueryInput,
+): Promise<string | null> {
+  try {
+    const created = await invoke<SearchQueryView>('create_search_query', { sessionId, input })
+    sessionSearchQueries.value = [...sessionSearchQueries.value, created]
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, "Impossible d'ajouter la recherche.")
+  }
+}
+
+/**
+ * Supprime une requête de recherche d'une session via le backend.
+ *
+ * @param sessionId - Identifiant de la session.
+ * @param id - Identifiant de la requête à supprimer.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function removeSearchQuery(sessionId: number, id: number): Promise<string | null> {
+  try {
+    await invoke('delete_search_query', { sessionId, id })
+    sessionSearchQueries.value = sessionSearchQueries.value.filter(q => q.id !== id)
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, 'Impossible de supprimer la recherche.')
+  }
+}
+
+/**
+ * Déclenche une recherche complète (scraping + filtre + scoring) pour une
+ * session. Bascule `searchRunning` pendant toute la durée de l'appel, pour
+ * que le bouton "Rechercher" affiche un état de chargement.
+ *
+ * @param sessionId - Identifiant de la session.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function runSessionSearch(sessionId: number): Promise<string | null> {
+  searchRunning.value = true
+  try {
+    await invoke('run_session_search', { sessionId })
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, 'Impossible de lancer la recherche.')
+  } finally {
+    searchRunning.value = false
   }
 }
 
@@ -493,4 +571,4 @@ export async function applyByMessage(): Promise<string | null> {
 }
 
 // Expose raw state for components that need it
-export { state }
+export { state, sessionSearchQueries, searchRunning }

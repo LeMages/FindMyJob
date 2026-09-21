@@ -9,7 +9,6 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 
 // Importation des modules internes
-use crate::api::common::current_user_id;
 use crate::api::error::ApiError;
 use crate::api::AppState;
 use crate::{db, documents, pipeline};
@@ -33,8 +32,7 @@ async fn list_for_session(
     State(state): State<AppState>,
     Path(session_id): Path<i64>,
 ) -> Result<Json<Vec<CandidatureView>>, ApiError> {
-    let user_id = current_user_id(&state.pool).await?;
-    Ok(Json(db::candidatures::list_for_session(&state.pool, user_id, session_id).await?))
+    Ok(Json(db::candidatures::list_for_session(&state.pool, session_id).await?))
 }
 
 /// Indique si les deux documents de référence (CV et lettre de motivation)
@@ -62,9 +60,8 @@ async fn create_candidature(
     State(state): State<AppState>,
     Json(input): Json<CreateCandidatureInput>,
 ) -> Result<Json<CandidatureView>, ApiError> {
-    let user_id = current_user_id(&state.pool).await?;
     let description_offre = input.description_offre.clone();
-    let mut view = db::candidatures::insert(&state.pool, user_id, &input).await?;
+    let mut view = db::candidatures::insert(&state.pool, &input).await?;
 
     if let Some(session_id) = view.session_id {
         if references_ready(&state.pool, session_id).await? {
@@ -104,8 +101,7 @@ async fn get_candidature(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<CandidatureDetail>, ApiError> {
-    let user_id = current_user_id(&state.pool).await?;
-    Ok(Json(db::candidatures::fetch_detail(&state.pool, user_id, id).await?))
+    Ok(Json(db::candidatures::fetch_detail(&state.pool, id).await?))
 }
 
 async fn update_candidature(
@@ -113,42 +109,37 @@ async fn update_candidature(
     Path(id): Path<i64>,
     Json(input): Json<UpdateCandidatureInput>,
 ) -> Result<Json<CandidatureDetail>, ApiError> {
-    let user_id = current_user_id(&state.pool).await?;
-    Ok(Json(db::candidatures::update(&state.pool, user_id, id, &input).await?))
+    Ok(Json(db::candidatures::update(&state.pool, id, &input).await?))
 }
 
 async fn abandon_candidature(State(state): State<AppState>, Path(id): Path<i64>) -> Result<(), ApiError> {
-    let user_id = current_user_id(&state.pool).await?;
-    db::candidatures::abandon(&state.pool, user_id, id).await?;
+    db::candidatures::abandon(&state.pool, id).await?;
     Ok(())
 }
 
 async fn postuler_sans_message(State(state): State<AppState>, Path(id): Path<i64>) -> Result<(), ApiError> {
-    let user_id = current_user_id(&state.pool).await?;
-    db::candidatures::mark_postule(&state.pool, user_id, id, None).await?;
+    db::candidatures::mark_postule(&state.pool, id, None).await?;
     Ok(())
 }
 
 async fn postuler_par_mail(State(state): State<AppState>, Path(id): Path<i64>) -> Result<(), ApiError> {
-    let user_id = current_user_id(&state.pool).await?;
-    let detail = db::candidatures::fetch_detail(&state.pool, user_id, id).await?;
+    let detail = db::candidatures::fetch_detail(&state.pool, id).await?;
     let profile = db::profile::build_profile(&state.pool).await?;
     let model =
         db::settings::resolve_llm_model(&state.pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
 
     let email = findmyjob_core::llm::generate_application_email(&profile, &detail, &model).await?;
-    db::candidatures::mark_postule(&state.pool, user_id, id, Some(&email)).await?;
+    db::candidatures::mark_postule(&state.pool, id, Some(&email)).await?;
     Ok(())
 }
 
 async fn postuler_par_message(State(state): State<AppState>, Path(id): Path<i64>) -> Result<(), ApiError> {
-    let user_id = current_user_id(&state.pool).await?;
-    let detail = db::candidatures::fetch_detail(&state.pool, user_id, id).await?;
+    let detail = db::candidatures::fetch_detail(&state.pool, id).await?;
     let profile = db::profile::build_profile(&state.pool).await?;
     let model =
         db::settings::resolve_llm_model(&state.pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
 
     let message = findmyjob_core::llm::generate_application_message(&profile, &detail, &model).await?;
-    db::candidatures::mark_postule(&state.pool, user_id, id, Some(&message)).await?;
+    db::candidatures::mark_postule(&state.pool, id, Some(&message)).await?;
     Ok(())
 }

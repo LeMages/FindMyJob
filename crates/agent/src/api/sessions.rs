@@ -6,7 +6,6 @@ use axum::routing::{get, put};
 use axum::{Json, Router};
 
 // Importation des modules internes
-use crate::api::common::current_user_id;
 use crate::api::error::ApiError;
 use crate::api::AppState;
 use crate::db;
@@ -20,16 +19,14 @@ pub fn router() -> Router<AppState> {
 }
 
 async fn list_sessions(State(state): State<AppState>) -> Result<Json<Vec<SessionView>>, ApiError> {
-    let user_id = current_user_id(&state.pool).await?;
-    Ok(Json(db::sessions::list_for_user(&state.pool, user_id).await?))
+    Ok(Json(db::sessions::list_all(&state.pool).await?))
 }
 
 async fn create_session(
     State(state): State<AppState>,
     Json(input): Json<CreateSessionInput>,
 ) -> Result<Json<SessionView>, ApiError> {
-    let user_id = current_user_id(&state.pool).await?;
-    Ok(Json(db::sessions::insert(&state.pool, user_id, &input.nom).await?))
+    Ok(Json(db::sessions::insert(&state.pool, &input.nom).await?))
 }
 
 async fn update_session(

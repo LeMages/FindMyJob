@@ -176,14 +176,15 @@ async fn score_batch(
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
+/// * `session_id` - Session dont les offres non scorées doivent être scorées.
 /// * `profile` - Profil candidat configuré (`agent.toml`), injecté dans le prompt.
 /// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
 /// Nombre d'offres scorées avec succès.
-pub async fn run(pool: &PgPool, profile: &ProfileConfig, model: &str) -> Result<u64, AppError> {
-    let candidates = db::offers::get_unscored_offers(pool).await?;
+pub async fn run(pool: &PgPool, session_id: i64, profile: &ProfileConfig, model: &str) -> Result<u64, AppError> {
+    let candidates = db::offers::get_unscored_offers(pool, session_id).await?;
     let batches: Vec<&[UnscoredOffer]> = candidates.chunks(BATCH_SIZE).collect();
     let mut scored = 0u64;
 

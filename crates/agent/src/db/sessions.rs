@@ -5,7 +5,7 @@ use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row};
 
 // Importation des modules internes
-use crate::db::common::{assert_owned_by_user, map_db_err, normalize};
+use crate::db::common::{map_db_err, normalize};
 use findmyjob_core::error::AppError;
 use findmyjob_core::models::{SessionView, UpdateSessionInput};
 
@@ -52,23 +52,21 @@ fn row_to_session_view(row: &PgRow) -> Result<SessionView, AppError> {
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `nom` - Nom de la session.
 ///
 /// # Returns
 ///
 /// `SessionView` fraîchement créée (compteurs à zéro).
-pub async fn insert(pool: &PgPool, user_id: i64, nom: &str) -> Result<SessionView, AppError> {
+pub async fn insert(pool: &PgPool, nom: &str) -> Result<SessionView, AppError> {
     let nom = nom.trim().to_string();
     if nom.is_empty() {
         return Err(AppError::Validation("Le nom de la session est requis.".to_string()));
     }
 
     let row = sqlx::query(
-        "INSERT INTO sessions (user_id, nom) VALUES ($1, $2) \
+        "INSERT INTO sessions (nom) VALUES ($1) \
          RETURNING id, nom, contexte, statut, zone, created_at",
     )
-    .bind(user_id)
     .bind(&nom)
     .fetch_one(pool)
     .await
@@ -86,20 +84,19 @@ pub async fn insert(pool: &PgPool, user_id: i64, nom: &str) -> Result<SessionVie
     })
 }
 
-/// Liste les sessions d'un utilisateur avec leurs statistiques agrégées.
+/// Liste toutes les sessions avec leurs statistiques agrégées.
 ///
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur.
 ///
 /// # Returns
 ///
 /// Sessions triées par date de création décroissante, avec le nombre de
 /// candidatures et si la session comporte une candidature acceptée/refusée/abandonnée.
-pub async fn list_for_user(pool: &PgPool, user_id: i64) -> Result<Vec<SessionView>, AppError> {
-    let sql = format!("{SELECT_WITH_STATS} WHERE s.user_id = $1 ORDER BY s.created_at DESC");
-    let rows = sqlx::query(&sql).bind(user_id).fetch_all(pool).await.map_err(map_db_err)?;
+pub async fn list_all(pool: &PgPool) -> Result<Vec<SessionView>, AppError> {
+    let sql = format!("{SELECT_WITH_STATS} ORDER BY s.created_at DESC");
+    let rows = sqlx::query(&sql).fetch_all(pool).await.map_err(map_db_err)?;
 
     rows.iter().map(row_to_session_view).collect()
 }
@@ -130,9 +127,7 @@ pub async fn update(
     let contexte = normalize(input.contexte.clone());
     let zone = normalize(input.zone.clone());
 
-    assert_owned_by_user(pool, "sessions", id, "Session introuvable.").await?;
-
-    sqlx::query("UPDATE sessions SET nom = $1, contexte = $2, statut = $3, zone = $4 WHERE id = $5")
+    let result = sqlx::query("UPDATE sessions SET nom = $1, contexte = $2, statut = $3, zone = $4 WHERE id = $5")
         .bind(&nom)
         .bind(&contexte)
         .bind(&input.statut)
@@ -141,6 +136,10 @@ pub async fn update(
         .execute(pool)
         .await
         .map_err(map_db_err)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("Session introuvable.".to_string()));
+    }
 
     let sql = format!("{SELECT_WITH_STATS} WHERE s.id = $1");
     let row = sqlx::query(&sql).bind(id).fetch_one(pool).await.map_err(map_db_err)?;
@@ -159,15 +158,10 @@ pub async fn update(
 ///
 /// `Ok(())` si la suppression (transactionnelle) a réussi, `AppError::NotFound` si absente.
 pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
-    // ------------------------------------------------------------------
-    // 1. Vérification de propriété
-    // ------------------------------------------------------------------
-    assert_owned_by_user(pool, "sessions", id, "Session introuvable.").await?;
-
     let mut tx = pool.begin().await.map_err(map_db_err)?;
 
     // ------------------------------------------------------------------
-    // 2. Suppression des dépendances des candidatures de la session
+    // 1. Suppression des dépendances des candidatures de la session
     //    (ordre imposé par les contraintes de clé étrangère)
     // ------------------------------------------------------------------
     sqlx::query(
@@ -198,7 +192,7 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
     .map_err(map_db_err)?;
 
     // ------------------------------------------------------------------
-    // 3. Suppression des candidatures puis de la session elle-même
+    // 2. Suppression des candidatures puis de la session elle-même
     // ------------------------------------------------------------------
     sqlx::query("DELETE FROM candidatures WHERE session_id = $1")
         .bind(id)
@@ -206,11 +200,15 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
         .await
         .map_err(map_db_err)?;
 
-    sqlx::query("DELETE FROM sessions WHERE id = $1")
+    let result = sqlx::query("DELETE FROM sessions WHERE id = $1")
         .bind(id)
         .execute(&mut *tx)
         .await
         .map_err(map_db_err)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("Session introuvable.".to_string()));
+    }
 
     tx.commit().await.map_err(map_db_err)?;
 

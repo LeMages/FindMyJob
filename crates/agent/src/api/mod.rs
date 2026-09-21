@@ -11,6 +11,8 @@ use sqlx::PgPool;
 use tower_http::cors::CorsLayer;
 
 // Importation des modules internes
+use crate::config::AgentConfig;
+
 mod auth;
 mod candidatures;
 mod common;
@@ -26,6 +28,7 @@ mod offers;
 mod profile;
 mod projets;
 mod scraping;
+mod search_queries;
 mod sessions;
 mod settings;
 mod skills;
@@ -40,6 +43,7 @@ pub struct AppState {
     pub pool: PgPool,
     pub data_dir: PathBuf,
     pub fonts_dir: PathBuf,
+    pub config: AgentConfig,
 }
 
 /// Construit la couche CORS : permissive si `CORS_ALLOWED_ORIGINS` n'est pas
@@ -81,6 +85,7 @@ pub fn router(state: AppState) -> Router {
         .merge(projets::router())
         .merge(skills::router())
         .merge(sessions::router())
+        .merge(search_queries::router())
         .merge(candidatures::router())
         .merge(contacts::router())
         .merge(status_history::router())

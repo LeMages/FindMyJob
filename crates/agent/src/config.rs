@@ -1,11 +1,12 @@
-//! Configuration statique de l'agent (profil candidat, filtres, recherches
-//! de scraping), chargée depuis un fichier TOML au démarrage.
+//! Configuration statique de l'agent (profil candidat, filtres de scoring),
+//! chargée depuis un fichier TOML au démarrage. Les requêtes de recherche
+//! (mots-clés à scraper) ne sont plus dans ce fichier — elles sont propres à
+//! chaque session, voir `db::search_queries`.
 
 // Importation des crates externes
 use serde::Deserialize;
 
 // Importation des modules internes
-use crate::scraping::types::SearchQuery;
 use findmyjob_core::error::AppError;
 
 /// Chemin par défaut du fichier de configuration, utilisé si
@@ -18,12 +19,10 @@ const DEFAULT_CONFIG_PATH: &str = "./agent.toml";
 /// Attributes:
 ///     profile: Profil du candidat, injecté dans le prompt de scoring.
 ///     filters: Règles du filtre mécanique appliqué avant le scoring LLM.
-///     searches: Recherches à exécuter sur WTTJ à chaque passe du pipeline.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AgentConfig {
     pub profile: ProfileConfig,
     pub filters: FilterConfig,
-    pub searches: Vec<SearchConfig>,
 }
 
 /// Profil du candidat, tel que décrit dans `agent.toml`.
@@ -52,19 +51,6 @@ pub struct FilterConfig {
     pub max_days_old: u64,
 }
 
-/// Une recherche à exécuter sur WTTJ, telle que décrite dans `agent.toml`.
-///
-/// Attributes:
-///     keywords: Mots-clés de recherche.
-///     location: Ville ou zone recherchée, si précisée.
-///     country_code: Code pays ISO (ex: "FR"), si précisé.
-#[derive(Debug, Clone, Deserialize)]
-pub struct SearchConfig {
-    pub keywords: String,
-    pub location: Option<String>,
-    pub country_code: Option<String>,
-}
-
 impl AgentConfig {
     /// Charge la configuration depuis `AGENT_CONFIG_PATH` (défaut
     /// [`DEFAULT_CONFIG_PATH`]).
@@ -81,11 +67,5 @@ impl AgentConfig {
 
         toml::from_str(&raw)
             .map_err(|e| AppError::Config(format!("Configuration agent invalide ({path}): {e}")))
-    }
-}
-
-impl From<SearchConfig> for SearchQuery {
-    fn from(cfg: SearchConfig) -> Self {
-        SearchQuery { keywords: cfg.keywords, location: cfg.location, country_code: cfg.country_code }
     }
 }

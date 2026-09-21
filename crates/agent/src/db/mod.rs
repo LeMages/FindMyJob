@@ -14,6 +14,7 @@ pub mod langues;
 pub mod offers;
 pub mod profile;
 pub mod projets;
+pub mod search_queries;
 pub mod sessions;
 pub mod settings;
 pub mod skills;

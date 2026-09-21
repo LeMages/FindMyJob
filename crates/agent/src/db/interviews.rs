@@ -71,7 +71,6 @@ pub async fn list_pending_for_candidature(
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `session_id` - Identifiant de la session.
 ///
 /// # Returns
@@ -79,7 +78,6 @@ pub async fn list_pending_for_candidature(
 /// Entretiens dont la date est renseignée, triés par date croissante.
 pub async fn list_for_session(
     pool: &PgPool,
-    user_id: i64,
     session_id: i64,
 ) -> Result<Vec<PlanningInterviewView>, AppError> {
     let rows = sqlx::query(
@@ -89,10 +87,9 @@ pub async fn list_for_session(
                 i.lieu, i.modalite, i.issue, i.notes \
          FROM interviews i \
          JOIN candidatures c ON c.id = i.candidature_id \
-         WHERE c.user_id = $1 AND c.session_id = $2 AND i.date_entretien IS NOT NULL \
+         WHERE c.session_id = $1 AND i.date_entretien IS NOT NULL \
          ORDER BY i.date_entretien",
     )
-    .bind(user_id)
     .bind(session_id)
     .fetch_all(pool)
     .await

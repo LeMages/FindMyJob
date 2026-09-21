@@ -19,7 +19,6 @@ const TYPES_CONTRAT_VALIDES: [&str; 6] = ["stage", "alternance", "cdi", "cdd", "
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `input` - Données de la candidature à créer.
 ///
 /// # Returns
@@ -27,7 +26,6 @@ const TYPES_CONTRAT_VALIDES: [&str; 6] = ["stage", "alternance", "cdi", "cdd", "
 /// `CandidatureView` fraîchement créée (chemins de documents à `None`).
 pub async fn insert(
     pool: &PgPool,
-    user_id: i64,
     input: &CreateCandidatureInput,
 ) -> Result<CandidatureView, AppError> {
     // ------------------------------------------------------------------
@@ -62,13 +60,12 @@ pub async fn insert(
 
     let row = sqlx::query(
         "INSERT INTO candidatures \
-           (user_id, poste, entreprise, localisation, type, source, remuneration, \
+           (poste, entreprise, localisation, type, source, remuneration, \
             url_offre, description_offre, notes, session_id) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
          RETURNING id, session_id, poste, entreprise, localisation, status, source, \
                    type AS type_contrat, date_candidature, created_at",
     )
-    .bind(user_id)
     .bind(&poste)
     .bind(&entreprise)
     .bind(&localisation)
@@ -127,7 +124,6 @@ pub async fn insert(
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `id` - Identifiant de la candidature à modifier.
 /// * `input` - Nouvelles valeurs des champs éditables.
 ///
@@ -137,16 +133,14 @@ pub async fn insert(
 /// n'existe pas, ou `AppError::Conflict` si son statut ne permet plus l'édition.
 pub async fn update(
     pool: &PgPool,
-    user_id: i64,
     id: i64,
     input: &UpdateCandidatureInput,
 ) -> Result<CandidatureDetail, AppError> {
     // ------------------------------------------------------------------
     // 1. La candidature doit exister et être encore au statut « à postuler »
     // ------------------------------------------------------------------
-    let status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1 AND user_id = $2")
+    let status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1")
         .bind(id)
-        .bind(user_id)
         .fetch_optional(pool)
         .await
         .map_err(map_db_err)?
@@ -188,7 +182,7 @@ pub async fn update(
         "UPDATE candidatures \
          SET poste = $1, entreprise = $2, localisation = $3, type = $4, source = $5, \
              remuneration = $6, url_offre = $7, notes = $8 \
-         WHERE id = $9 AND user_id = $10 \
+         WHERE id = $9 \
          RETURNING id, session_id, poste, entreprise, localisation, status, source, \
                    type AS type_contrat, remuneration, url_offre, description_offre, notes, \
                    date_candidature, cv_path, lettre_motivation_path, created_at",
@@ -202,7 +196,6 @@ pub async fn update(
     .bind(normalize(input.url_offre.clone()))
     .bind(normalize(input.notes.clone()))
     .bind(id)
-    .bind(user_id)
     .fetch_one(pool)
     .await
     .map_err(map_db_err)?;
@@ -263,19 +256,17 @@ pub async fn set_documents(
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `id` - Identifiant de la candidature à abandonner.
 ///
 /// # Returns
 ///
 /// `Ok(())` une fois le changement de statut effectué, ou `AppError::NotFound`
 /// si la candidature n'existe pas.
-pub async fn abandon(pool: &PgPool, user_id: i64, id: i64) -> Result<(), AppError> {
+pub async fn abandon(pool: &PgPool, id: i64) -> Result<(), AppError> {
     let mut tx = pool.begin().await.map_err(map_db_err)?;
 
-    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1 AND user_id = $2")
+    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1")
         .bind(id)
-        .bind(user_id)
         .fetch_optional(&mut *tx)
         .await
         .map_err(map_db_err)?
@@ -283,9 +274,8 @@ pub async fn abandon(pool: &PgPool, user_id: i64, id: i64) -> Result<(), AppErro
         .try_get("status")
         .map_err(map_db_err)?;
 
-    sqlx::query("UPDATE candidatures SET status = 'abandon' WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE candidatures SET status = 'abandon' WHERE id = $1")
         .bind(id)
-        .bind(user_id)
         .execute(&mut *tx)
         .await
         .map_err(map_db_err)?;
@@ -314,7 +304,6 @@ pub async fn abandon(pool: &PgPool, user_id: i64, id: i64) -> Result<(), AppErro
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `id` - Identifiant de la candidature à marquer comme postulée.
 /// * `content` - Message (mail ou message de candidature) envoyé, `None` si
 ///   la candidature a été postulée sans message.
@@ -326,15 +315,13 @@ pub async fn abandon(pool: &PgPool, user_id: i64, id: i64) -> Result<(), AppErro
 /// au statut « à postuler ».
 pub async fn mark_postule(
     pool: &PgPool,
-    user_id: i64,
     id: i64,
     content: Option<&str>,
 ) -> Result<(), AppError> {
     let mut tx = pool.begin().await.map_err(map_db_err)?;
 
-    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1 AND user_id = $2")
+    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1")
         .bind(id)
-        .bind(user_id)
         .fetch_optional(&mut *tx)
         .await
         .map_err(map_db_err)?
@@ -348,9 +335,8 @@ pub async fn mark_postule(
         ));
     }
 
-    sqlx::query("UPDATE candidatures SET status = 'postule' WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE candidatures SET status = 'postule' WHERE id = $1")
         .bind(id)
-        .bind(user_id)
         .execute(&mut *tx)
         .await
         .map_err(map_db_err)?;
@@ -376,7 +362,6 @@ pub async fn mark_postule(
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `session_id` - Identifiant de la session.
 ///
 /// # Returns
@@ -384,7 +369,6 @@ pub async fn mark_postule(
 /// Candidatures triées par date de création décroissante.
 pub async fn list_for_session(
     pool: &PgPool,
-    user_id: i64,
     session_id: i64,
 ) -> Result<Vec<CandidatureView>, AppError> {
     let rows = sqlx::query(
@@ -398,10 +382,9 @@ pub async fn list_for_session(
                 cv_path, lettre_motivation_path, \
                 created_at \
          FROM candidatures \
-         WHERE user_id = $1 AND session_id = $2 \
+         WHERE session_id = $1 \
          ORDER BY created_at DESC",
     )
-    .bind(user_id)
     .bind(session_id)
     .fetch_all(pool)
     .await
@@ -435,7 +418,6 @@ pub async fn list_for_session(
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `id` - Identifiant de la candidature.
 ///
 /// # Returns
@@ -443,7 +425,6 @@ pub async fn list_for_session(
 /// `CandidatureDetail` correspondante, ou `AppError::NotFound` si elle n'existe pas.
 pub async fn fetch_detail(
     pool: &PgPool,
-    user_id: i64,
     id: i64,
 ) -> Result<CandidatureDetail, AppError> {
     let row = sqlx::query(
@@ -453,10 +434,9 @@ pub async fn fetch_detail(
                 cv_path, lettre_motivation_path, \
                 created_at \
          FROM candidatures \
-         WHERE id = $1 AND user_id = $2",
+         WHERE id = $1",
     )
     .bind(id)
-    .bind(user_id)
     .fetch_optional(pool)
     .await
     .map_err(map_db_err)?
@@ -487,16 +467,14 @@ pub async fn fetch_detail(
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `id` - Identifiant de la candidature.
 ///
 /// # Returns
 ///
 /// Statut brut de la candidature, ou `AppError::NotFound` si elle n'existe pas.
-pub async fn fetch_status(pool: &PgPool, user_id: i64, id: i64) -> Result<String, AppError> {
-    sqlx::query("SELECT status FROM candidatures WHERE id = $1 AND user_id = $2")
+pub async fn fetch_status(pool: &PgPool, id: i64) -> Result<String, AppError> {
+    sqlx::query("SELECT status FROM candidatures WHERE id = $1")
         .bind(id)
-        .bind(user_id)
         .fetch_optional(pool)
         .await
         .map_err(map_db_err)?

@@ -60,20 +60,22 @@ fn row_to_offer(row: &PgRow) -> Result<OfferView, sqlx::Error> {
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
+/// * `session_id` - Session à laquelle rattacher les offres insérées.
 /// * `offers` - Offres à insérer.
 ///
 /// # Returns
 ///
 /// Nombre d'offres effectivement insérées (nouvelles).
-pub async fn insert_offers(pool: &PgPool, offers: &[ScrapedOffer]) -> Result<u64, sqlx::Error> {
+pub async fn insert_offers(pool: &PgPool, session_id: i64, offers: &[ScrapedOffer]) -> Result<u64, sqlx::Error> {
     let mut inserted = 0u64;
 
     for offer in offers {
         let result = sqlx::query(
-            "INSERT INTO offers (source, source_id, title, company, location, url, contract_type, posted_at, scraped_at, description) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
+            "INSERT INTO offers (session_id, source, source_id, title, company, location, url, contract_type, posted_at, scraped_at, description) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
              ON CONFLICT (url) DO NOTHING",
         )
+        .bind(session_id)
         .bind(&offer.source)
         .bind(&offer.source_id)
         .bind(&offer.title)
@@ -240,15 +242,17 @@ fn row_to_unscored_offer(row: &PgRow) -> Result<UnscoredOffer, sqlx::Error> {
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
+/// * `session_id` - Session dont on veut les offres non scorées.
 ///
 /// # Returns
 ///
-/// Les offres non scorées, sans ordre garanti.
-pub async fn get_unscored_offers(pool: &PgPool) -> Result<Vec<UnscoredOffer>, AppError> {
+/// Les offres non scorées de la session, sans ordre garanti.
+pub async fn get_unscored_offers(pool: &PgPool, session_id: i64) -> Result<Vec<UnscoredOffer>, AppError> {
     let rows = sqlx::query(
         "SELECT id, title, company, location, contract_type, description, posted_at \
-         FROM offers WHERE score IS NULL",
+         FROM offers WHERE session_id = $1 AND score IS NULL",
     )
+    .bind(session_id)
     .fetch_all(pool)
     .await
     .map_err(map_db_err)?;

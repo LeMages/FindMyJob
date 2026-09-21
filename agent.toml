@@ -12,23 +12,3 @@ Zones géographiques : Montréal, Genève/Lausanne, Paris.
 contract_types = ["stage", "internship", "apprenticeship", "alternance", "intern"]
 exclude_keywords = ["senior", "lead", "principal", "manager", "directeur", "10 ans", "8 ans", "7 ans", "6 ans", "5 ans d'expérience", "confirmé"]
 max_days_old = 60
-
-[[searches]]
-keywords = "Stage Data Engineer"
-location = "Paris"
-country_code = "FR"
-
-[[searches]]
-keywords = "Data Engineer Intern"
-location = "Montreal"
-country_code = "CA"
-
-[[searches]]
-keywords = "Stage Data Engineer"
-location = "Genève"
-country_code = "CH"
-
-[[searches]]
-keywords = "Stage ML Engineer"
-location = "Paris"
-country_code = "FR"
