@@ -1,13 +1,3 @@
-[profile]
-summary = """
-Étudiant en 5ème année Data Engineering & ML à EFREI Paris.
-Recherche un stage de 6 mois en Data Engineering à partir de mars 2027.
-Stack : Rust, Python, SQL, PostgreSQL, Docker, GitHub Actions.
-Expérience : stage Data Engineer & ML chez Need4Viz (Paris, 6 mois).
-Échange universitaire à Concordia University (Montréal).
-Zones géographiques : Montréal, Genève/Lausanne, Paris.
-"""
-
 [filters]
 contract_types = ["stage", "internship", "apprenticeship", "alternance", "intern"]
 exclude_keywords = ["senior", "lead", "principal", "manager", "directeur", "10 ans", "8 ans", "7 ans", "6 ans", "5 ans d'expérience", "confirmé"]

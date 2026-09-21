@@ -182,16 +182,13 @@ All three then record the `candidature_envoyee` event and refuse (`AppError::Con
 
 1. **Scraping** — `crates/agent/src/scraping/wttj.rs` queries Welcome to the Jungle's public Algolia search API directly (index `wk_cms_jobs_production`), not HTML scraping (the WTTJ site itself sits behind an AWS WAF JS challenge, the Algolia endpoint doesn't). One query per `[[searches]]` entry in `agent.toml`, paginated up to 5 pages of 30 hits. Results are normalized into `ScrapedOffer` and inserted via `db::offers::insert_offers`.
 2. **Mechanical filtering** — `crates/agent/src/filtering/mechanical.rs` dismisses (`status = "dismissed"`, `score = -1.0`) offers whose contract type isn't in `agent.toml`'s allow-list, whose title/description contains an excluded keyword, or that are older than `max_days_old`.
-3. **LLM scoring** — `crates/agent/src/filtering/scoring.rs` batches the remaining unscored offers (5 at a time) and calls Claude with a structured-output schema (score 0.0–1.0 + reason), persisting `score`/`status = "reviewed"`. One retry on malformed JSON, exponential backoff on HTTP 429.
+3. **LLM scoring** — `crates/agent/src/filtering/scoring.rs` batches the remaining unscored offers (5 at a time) and calls Claude, with a system prompt built from the DB profile (`db::profile::build_profile`) and the session's `zone`/`contexte` (`filtering/profile_summary.rs`), with a structured-output schema (score 0.0–1.0 + reason), persisting `score`/`status = "reviewed"`. One retry on malformed JSON, exponential backoff on HTTP 429.
 
 The scheduler runs the full pipeline once at startup (in a background task, without blocking the HTTP server bind) and then on a cron schedule via `tokio_cron_scheduler`, expression `"0 0 12,18 * * *"` (every day at noon and 6pm) — hardcoded in `scheduler.rs`, not configurable through `agent.toml` or an env var.
 
 `agent.toml` (path from `AGENT_CONFIG_PATH`, loaded once at startup, not hot-reloaded) drives *what* gets searched/filtered/scored:
 
 ```toml
-[profile]
-summary = "..."          # free-text profile, injected into the scoring prompt
-
 [filters]
 contract_types = [...]    # allow-list, case-insensitive substring match
 exclude_keywords = [...]

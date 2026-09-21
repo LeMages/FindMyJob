@@ -30,7 +30,7 @@ crates/desktop  Vue 3 frontend at crates/desktop/, Tauri backend nested at crate
 | HTTP client to the agent | `crates/desktop/src-tauri/src/api_client.rs` |
 | TypeScript types | `crates/desktop/src/types/index.ts` (hand-mirrored from `crates/core::models`, no codegen) |
 | Vue views and components | `crates/desktop/src/views/<view_name>/` (one folder per view) and `crates/desktop/src/components/` (shared) |
-| Agent static config (profile summary, search filters) | `agent.toml`, loaded from `AGENT_CONFIG_PATH` |
+| Agent static config (mechanical filters) | `agent.toml`, loaded from `AGENT_CONFIG_PATH` |
 
 ## Code conventions
 
@@ -79,7 +79,7 @@ npm install
 npm run tauri dev
 ```
 
-To iterate on the agent alone, without Docker: `cargo run -p findmyjob-agent` against a Postgres reachable via the `DB_*` vars in `.env`. Agent config beyond env vars (search queries, filters, profile summary for scoring) lives in `agent.toml`, loaded from `AGENT_CONFIG_PATH` and **not** hot-reloaded — restart the agent after editing it.
+To iterate on the agent alone, without Docker: `cargo run -p findmyjob-agent` against a Postgres reachable via the `DB_*` vars in `.env`. Agent config beyond env vars (mechanical filters; the candidate profile lives in the DB) lives in `agent.toml`, loaded from `AGENT_CONFIG_PATH` and **not** hot-reloaded — restart the agent after editing it.
 
 `npm`/`vite`/`tauri` commands must be run from `crates/desktop/`, not the repo root — there is no root `package.json`.
 

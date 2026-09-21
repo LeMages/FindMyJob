@@ -19,5 +19,6 @@ typst-as-lib = { workspace = true }
 typst-pdf = { workspace = true }
 base64 = { workspace = true }
 scraper = { workspace = true }
+percent-encoding = "2.3"
 toml = "0.8"
 tokio-cron-scheduler = "0.13"

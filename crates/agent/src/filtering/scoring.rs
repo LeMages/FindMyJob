@@ -16,7 +16,6 @@ use serde::Deserialize;
 use sqlx::PgPool;
 
 // Importation des modules internes
-use crate::config::ProfileConfig;
 use crate::db;
 use crate::db::offers::UnscoredOffer;
 use findmyjob_core::error::AppError;
@@ -72,15 +71,15 @@ fn scoring_schema() -> serde_json::Value {
     })
 }
 
-/// Construit le prompt système, à partir du profil candidat configuré.
-fn system_prompt(profile: &ProfileConfig) -> String {
+/// Construit le prompt système, à partir du contexte candidat pré-formaté
+/// (voir [`crate::filtering::profile_summary::format_scoring_context`]).
+fn system_prompt(scoring_context: &str) -> String {
     format!(
         "Tu es un assistant de matching emploi. Tu évalues la pertinence d'offres d'emploi par rapport au profil d'un candidat.\n\n\
-         Profil du candidat :\n{}\n\n\
+         {scoring_context}\n\n\
          Pour chaque offre, donne un score de pertinence de 0.0 à 1.0 \
          (0.0-0.3 : pas pertinent, 0.3-0.6 : partiellement pertinent, 0.6-0.8 : pertinent, 0.8-1.0 : très pertinent) \
-         et une justification courte.",
-        profile.summary
+         et une justification courte."
     )
 }
 
@@ -125,7 +124,7 @@ fn truncate_chars(s: &str, max_chars: usize) -> String {
 /// # Arguments
 ///
 /// * `batch` - Offres à scorer (5 maximum).
-/// * `profile` - Profil candidat, injecté dans le prompt système.
+/// * `scoring_context` - Profil candidat + recherche en cours, injectés dans le prompt système.
 /// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
@@ -133,10 +132,10 @@ fn truncate_chars(s: &str, max_chars: usize) -> String {
 /// Les entrées de score correspondant exactement aux ids du batch.
 async fn score_batch(
     batch: &[&UnscoredOffer],
-    profile: &ProfileConfig,
+    scoring_context: &str,
     model: &str,
 ) -> Result<Vec<ScoreEntry>, AppError> {
-    let system = system_prompt(profile);
+    let system = system_prompt(scoring_context);
     let message = user_message(batch);
     let expected_ids: HashSet<i64> = batch.iter().map(|o| o.id).collect();
 
@@ -177,13 +176,13 @@ async fn score_batch(
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
 /// * `session_id` - Session dont les offres non scorées doivent être scorées.
-/// * `profile` - Profil candidat configuré (`agent.toml`), injecté dans le prompt.
+/// * `scoring_context` - Texte profil + recherche en cours (issu de la DB), injecté dans le prompt.
 /// * `model` - Identifiant du modèle Claude à utiliser.
 ///
 /// # Returns
 ///
 /// Nombre d'offres scorées avec succès.
-pub async fn run(pool: &PgPool, session_id: i64, profile: &ProfileConfig, model: &str) -> Result<u64, AppError> {
+pub async fn run(pool: &PgPool, session_id: i64, scoring_context: &str, model: &str) -> Result<u64, AppError> {
     let candidates = db::offers::get_unscored_offers(pool, session_id).await?;
     let batches: Vec<&[UnscoredOffer]> = candidates.chunks(BATCH_SIZE).collect();
     let mut scored = 0u64;
@@ -191,7 +190,7 @@ pub async fn run(pool: &PgPool, session_id: i64, profile: &ProfileConfig, model:
     for (i, chunk) in batches.iter().enumerate() {
         let refs: Vec<&UnscoredOffer> = chunk.iter().collect();
 
-        match score_batch(&refs, profile, model).await {
+        match score_batch(&refs, scoring_context, model).await {
             Ok(entries) => {
                 for entry in entries {
                     println!(

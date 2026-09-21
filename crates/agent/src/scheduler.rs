@@ -10,6 +10,7 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 // Importation des modules internes
 use crate::config::AgentConfig;
 use crate::db;
+use crate::filtering::profile_summary::format_scoring_context;
 use crate::filtering::{mechanical, scoring};
 use crate::logging;
 use crate::scraping::types::{JobScraper, SearchQuery};
@@ -98,11 +99,50 @@ pub async fn run_search_for_session(pool: &PgPool, session_id: i64, config: &Age
         .await
         .unwrap_or_else(|_| DEFAULT_MODEL.to_string());
 
-    match scoring::run(pool, session_id, &config.profile, &model).await {
+    let Some(scoring_context) = load_scoring_context(pool, session_id).await else {
+        return;
+    };
+
+    match scoring::run(pool, session_id, &scoring_context, &model).await {
         Ok(count) => println!("[pipeline] session {session_id} : scoring LLM — {count} offre(s) scorée(s)"),
         Err(e) => {
             eprintln!("[pipeline] session {session_id} : erreur scoring LLM: {e}");
             logging::log_error_to_file("scoring LLM", &e);
+        }
+    }
+}
+
+/// Charge le profil (DB) et la session pour construire le contexte du scoring.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions PostgreSQL.
+/// * `session_id` - Session dont `zone`/`contexte` complètent le profil.
+///
+/// # Returns
+///
+/// Le texte de contexte, ou `None` (avec log) si le profil n'est pas
+/// configuré ou si une lecture échoue — les offres restent alors non scorées.
+async fn load_scoring_context(pool: &PgPool, session_id: i64) -> Option<String> {
+    let profile = match db::profile::build_profile(pool).await {
+        Ok(profile) => profile,
+        Err(AppError::NotFound(_)) => {
+            eprintln!("[pipeline] session {session_id} : Profil non configuré, scoring ignoré");
+            return None;
+        }
+        Err(e) => {
+            eprintln!("[pipeline] session {session_id} : erreur chargement du profil: {e}");
+            logging::log_error_to_file("chargement profil pour scoring", &e);
+            return None;
+        }
+    };
+
+    match db::sessions::fetch_one(pool, session_id).await {
+        Ok(session) => Some(format_scoring_context(&profile, &session)),
+        Err(e) => {
+            eprintln!("[pipeline] session {session_id} : erreur chargement de la session: {e}");
+            logging::log_error_to_file("chargement session pour scoring", &e);
+            None
         }
     }
 }

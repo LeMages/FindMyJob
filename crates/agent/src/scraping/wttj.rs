@@ -7,6 +7,7 @@ use std::time::Duration;
 // Importation des crates externes
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
@@ -117,8 +118,11 @@ impl WttjScraper {
     /// Returns:
     ///     Chaîne `params` prête à être envoyée dans le corps de la requête.
     fn build_params(query: &SearchQuery, page: u32) -> String {
-        let filters = Self::build_filters(query);
-        let keywords = &query.keywords;
+        // Encodage obligatoire : un `&` ou un espace dans les mots-clés
+        // (ex. "Data & IA") casserait le découpage des paramètres Algolia (400).
+        let raw_filters = Self::build_filters(query);
+        let filters = utf8_percent_encode(&raw_filters, NON_ALPHANUMERIC);
+        let keywords = utf8_percent_encode(&query.keywords, NON_ALPHANUMERIC);
         format!("hitsPerPage={HITS_PER_PAGE}&page={page}&query={keywords}&filters={filters}")
     }
 
