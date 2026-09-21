@@ -59,7 +59,7 @@ pub async fn insert(
     let mut tx = pool.begin().await.map_err(map_db_err)?;
 
     let row = sqlx::query(
-        "INSERT INTO candidatures \
+        "INSERT INTO search.candidatures \
            (poste, entreprise, localisation, type, source, remuneration, \
             url_offre, description_offre, notes, session_id) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
@@ -139,7 +139,7 @@ pub async fn update(
     // ------------------------------------------------------------------
     // 1. La candidature doit exister et être encore au statut « à postuler »
     // ------------------------------------------------------------------
-    let status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1")
+    let status: String = sqlx::query("SELECT status FROM search.candidatures WHERE id = $1")
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -179,7 +179,7 @@ pub async fn update(
     // 3. Mise à jour en base
     // ------------------------------------------------------------------
     let row = sqlx::query(
-        "UPDATE candidatures \
+        "UPDATE search.candidatures \
          SET poste = $1, entreprise = $2, localisation = $3, type = $4, source = $5, \
              remuneration = $6, url_offre = $7, notes = $8 \
          WHERE id = $9 \
@@ -238,7 +238,7 @@ pub async fn set_documents(
     cv_path: &Option<String>,
     lettre_motivation_path: &Option<String>,
 ) -> Result<(), AppError> {
-    sqlx::query("UPDATE candidatures SET cv_path = $1, lettre_motivation_path = $2 WHERE id = $3")
+    sqlx::query("UPDATE search.candidatures SET cv_path = $1, lettre_motivation_path = $2 WHERE id = $3")
         .bind(cv_path)
         .bind(lettre_motivation_path)
         .bind(id)
@@ -265,7 +265,7 @@ pub async fn set_documents(
 pub async fn abandon(pool: &PgPool, id: i64) -> Result<(), AppError> {
     let mut tx = pool.begin().await.map_err(map_db_err)?;
 
-    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1")
+    let ancien_status: String = sqlx::query("SELECT status FROM search.candidatures WHERE id = $1")
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
@@ -274,7 +274,7 @@ pub async fn abandon(pool: &PgPool, id: i64) -> Result<(), AppError> {
         .try_get("status")
         .map_err(map_db_err)?;
 
-    sqlx::query("UPDATE candidatures SET status = 'abandon' WHERE id = $1")
+    sqlx::query("UPDATE search.candidatures SET status = 'abandon' WHERE id = $1")
         .bind(id)
         .execute(&mut *tx)
         .await
@@ -320,7 +320,7 @@ pub async fn mark_postule(
 ) -> Result<(), AppError> {
     let mut tx = pool.begin().await.map_err(map_db_err)?;
 
-    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1")
+    let ancien_status: String = sqlx::query("SELECT status FROM search.candidatures WHERE id = $1")
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
@@ -335,7 +335,7 @@ pub async fn mark_postule(
         ));
     }
 
-    sqlx::query("UPDATE candidatures SET status = 'postule' WHERE id = $1")
+    sqlx::query("UPDATE search.candidatures SET status = 'postule' WHERE id = $1")
         .bind(id)
         .execute(&mut *tx)
         .await
@@ -375,13 +375,13 @@ pub async fn list_for_session(
         "SELECT id, session_id, poste, entreprise, localisation, status, source, \
                 type AS type_contrat, date_candidature, \
                 COALESCE( \
-                    (SELECT MAX(changed_at) FROM status_history \
+                    (SELECT MAX(changed_at) FROM search.status_history \
                      WHERE status_history.candidature_id = candidatures.id), \
                     created_at \
                 ) AS derniere_maj_statut, \
                 cv_path, lettre_motivation_path, \
                 created_at \
-         FROM candidatures \
+         FROM search.candidatures \
          WHERE session_id = $1 \
          ORDER BY created_at DESC",
     )
@@ -433,7 +433,7 @@ pub async fn fetch_detail(
                 date_candidature, \
                 cv_path, lettre_motivation_path, \
                 created_at \
-         FROM candidatures \
+         FROM search.candidatures \
          WHERE id = $1",
     )
     .bind(id)
@@ -473,7 +473,7 @@ pub async fn fetch_detail(
 ///
 /// Statut brut de la candidature, ou `AppError::NotFound` si elle n'existe pas.
 pub async fn fetch_status(pool: &PgPool, id: i64) -> Result<String, AppError> {
-    sqlx::query("SELECT status FROM candidatures WHERE id = $1")
+    sqlx::query("SELECT status FROM search.candidatures WHERE id = $1")
         .bind(id)
         .fetch_optional(pool)
         .await

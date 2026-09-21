@@ -31,7 +31,7 @@ pub const DEFAULT_THEME: &str = "systeme";
 ///
 /// La valeur associée, ou `None` si la clé n'existe pas encore en base.
 pub async fn get(pool: &PgPool, cle: &str) -> Result<Option<String>, AppError> {
-    let row = sqlx::query("SELECT valeur FROM settings WHERE cle = $1")
+    let row = sqlx::query("SELECT valeur FROM profile.settings WHERE cle = $1")
         .bind(cle)
         .fetch_optional(pool)
         .await
@@ -56,7 +56,7 @@ pub async fn get(pool: &PgPool, cle: &str) -> Result<Option<String>, AppError> {
 /// `Ok(())` si l'écriture a réussi.
 pub async fn set(pool: &PgPool, cle: &str, valeur: &str) -> Result<(), AppError> {
     sqlx::query(
-        "INSERT INTO settings (cle, valeur) VALUES ($1, $2) \
+        "INSERT INTO profile.settings (cle, valeur) VALUES ($1, $2) \
          ON CONFLICT (cle) DO UPDATE SET valeur = excluded.valeur",
     )
     .bind(cle)

@@ -21,7 +21,7 @@ use findmyjob_core::models::{CreateProjetInput, ProjetView};
 pub async fn list_for_user(pool: &PgPool, user_id: i64) -> Result<Vec<ProjetView>, AppError> {
     let rows = sqlx::query(
         "SELECT id, titre, description, stack, url, pour_qui, date_debut, date_fin \
-         FROM projets WHERE user_id = $1 \
+         FROM profile.projets WHERE user_id = $1 \
          ORDER BY COALESCE(date_fin, DATE '9999-12-31') DESC, date_debut DESC",
     )
     .bind(user_id)
@@ -68,7 +68,7 @@ pub async fn insert(
     }
 
     let row = sqlx::query(
-        "INSERT INTO projets (user_id, titre, description, stack, url, pour_qui, date_debut, date_fin) \
+        "INSERT INTO profile.projets (user_id, titre, description, stack, url, pour_qui, date_debut, date_fin) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
          RETURNING id, titre, description, stack, url, pour_qui, date_debut, date_fin",
     )
@@ -118,10 +118,10 @@ pub async fn update(
     }
 
     let row = sqlx::query(
-        "UPDATE projets \
+        "UPDATE profile.projets \
          SET titre = $1, description = $2, stack = $3, url = $4, pour_qui = $5, \
              date_debut = $6, date_fin = $7 \
-         WHERE id = $8 AND user_id = (SELECT id FROM users LIMIT 1) \
+         WHERE id = $8 AND user_id = (SELECT id FROM profile.users LIMIT 1) \
          RETURNING id, titre, description, stack, url, pour_qui, date_debut, date_fin",
     )
     .bind(&titre)
@@ -161,5 +161,5 @@ pub async fn update(
 ///
 /// `Ok(())` si supprimé, `AppError::NotFound` si absent.
 pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
-    delete_owned_row(pool, "projets", id, "Projet introuvable.").await
+    delete_owned_row(pool, "profile.projets", id, "Projet introuvable.").await
 }

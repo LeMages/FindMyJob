@@ -49,7 +49,7 @@ pub async fn fetch_first_user(pool: &PgPool) -> Result<UserView, AppError> {
     let row = sqlx::query(
         "SELECT id, nom, prenom, email, telephone, ville, permis, description, \
          linkedin, github, portfolio, created_at, updated_at \
-         FROM users LIMIT 1",
+         FROM profile.users LIMIT 1",
     )
     .fetch_optional(pool)
     .await
@@ -68,7 +68,7 @@ pub async fn fetch_first_user(pool: &PgPool) -> Result<UserView, AppError> {
 ///
 /// `true` si un utilisateur existe.
 pub async fn user_exists(pool: &PgPool) -> Result<bool, AppError> {
-    let n: bool = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users)")
+    let n: bool = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM profile.users)")
         .fetch_one(pool)
         .await
         .map_err(map_db_err)?;
@@ -89,7 +89,7 @@ pub async fn user_exists(pool: &PgPool) -> Result<bool, AppError> {
 ///
 /// `UserView` fraîchement créé.
 pub async fn insert_user(pool: &PgPool, input: CreateUserInput) -> Result<UserView, AppError> {
-    let exists: bool = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users)")
+    let exists: bool = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM profile.users)")
         .fetch_one(pool)
         .await
         .map_err(map_db_err)?;
@@ -115,7 +115,7 @@ pub async fn insert_user(pool: &PgPool, input: CreateUserInput) -> Result<UserVi
     }
 
     sqlx::query(
-        "INSERT INTO users \
+        "INSERT INTO profile.users \
            (nom, prenom, email, telephone, ville, permis, description, linkedin, github, portfolio) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
     )
@@ -152,8 +152,8 @@ pub async fn update_description(
 ) -> Result<UserView, AppError> {
     let value = normalize(description);
     sqlx::query(
-        "UPDATE users SET description = $1 \
-         WHERE id = (SELECT id FROM users LIMIT 1)",
+        "UPDATE profile.users SET description = $1 \
+         WHERE id = (SELECT id FROM profile.users LIMIT 1)",
     )
     .bind(&value)
     .execute(pool)
@@ -189,7 +189,7 @@ pub async fn update_user_info(
     }
 
     sqlx::query(
-        "UPDATE users SET \
+        "UPDATE profile.users SET \
            prenom    = COALESCE($1, prenom), \
            nom       = COALESCE($2, nom), \
            email     = COALESCE($3, email), \
@@ -198,7 +198,7 @@ pub async fn update_user_info(
            linkedin  = COALESCE($6, linkedin), \
            github    = COALESCE($7, github), \
            portfolio = COALESCE($8, portfolio) \
-         WHERE id = (SELECT id FROM users LIMIT 1)",
+         WHERE id = (SELECT id FROM profile.users LIMIT 1)",
     )
     .bind(normalize(input.prenom))
     .bind(normalize(input.nom))

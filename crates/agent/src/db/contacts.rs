@@ -24,7 +24,7 @@ pub async fn list_for_candidature(
 ) -> Result<Vec<ContactView>, AppError> {
     let rows = sqlx::query(
         "SELECT id, candidature_id, nom, role, email, telephone, notes, created_at \
-         FROM contacts \
+         FROM search.contacts \
          WHERE candidature_id = $1 \
          ORDER BY created_at",
     )

@@ -9,7 +9,7 @@ use crate::db::common::map_db_err;
 use findmyjob_core::error::AppError;
 
 /// Récupère le nom de la base de données courante et la liste des tables du
-/// schéma `public`, triées par nom.
+/// schémas `profile` et `search`, triées par nom.
 ///
 /// # Arguments
 ///
@@ -23,7 +23,7 @@ pub async fn status(pool: &PgPool) -> Result<(String, Vec<String>), AppError> {
         sqlx::query_scalar("SELECT current_database()").fetch_one(pool).await.map_err(map_db_err)?;
 
     let tables: Vec<String> = sqlx::query_scalar(
-        "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename",
+        "SELECT tablename FROM pg_tables WHERE schemaname IN ('profile', 'search') ORDER BY tablename",
     )
     .fetch_all(pool)
     .await

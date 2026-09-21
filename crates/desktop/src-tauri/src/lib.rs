@@ -82,6 +82,7 @@ pub fn run() {
             commands::create_search_query,
             commands::delete_search_query,
             commands::run_session_search,
+            commands::get_session_offers,
             commands::get_api_key_status,
             commands::set_api_key,
             commands::delete_api_key,

@@ -21,7 +21,7 @@ use findmyjob_core::models::{CreateFormationInput, FormationView};
 pub async fn list_for_user(pool: &PgPool, user_id: i64) -> Result<Vec<FormationView>, AppError> {
     let rows = sqlx::query(
         "SELECT id, titre, ecole, date_debut, date_fin \
-         FROM formations WHERE user_id = $1 \
+         FROM profile.formations WHERE user_id = $1 \
          ORDER BY COALESCE(date_fin, DATE '9999-12-31') DESC, date_debut DESC",
     )
     .bind(user_id)
@@ -65,7 +65,7 @@ pub async fn insert(
     }
 
     let row = sqlx::query(
-        "INSERT INTO formations (user_id, titre, ecole, date_debut, date_fin) \
+        "INSERT INTO profile.formations (user_id, titre, ecole, date_debut, date_fin) \
          VALUES ($1, $2, $3, $4, $5) \
          RETURNING id, titre, ecole, date_debut, date_fin",
     )
@@ -109,9 +109,9 @@ pub async fn update(
     }
 
     let row = sqlx::query(
-        "UPDATE formations \
+        "UPDATE profile.formations \
          SET titre = $1, ecole = $2, date_debut = $3, date_fin = $4 \
-         WHERE id = $5 AND user_id = (SELECT id FROM users LIMIT 1) \
+         WHERE id = $5 AND user_id = (SELECT id FROM profile.users LIMIT 1) \
          RETURNING id, titre, ecole, date_debut, date_fin",
     )
     .bind(&titre)
@@ -145,5 +145,5 @@ pub async fn update(
 ///
 /// `Ok(())` si supprimée, `AppError::NotFound` si absente.
 pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
-    delete_owned_row(pool, "formations", id, "Formation introuvable.").await
+    delete_owned_row(pool, "profile.formations", id, "Formation introuvable.").await
 }

@@ -19,7 +19,7 @@ use findmyjob_core::models::{CreateLangInput, LangView};
 ///
 /// Langues triées par nom.
 pub async fn list_for_user(pool: &PgPool, user_id: i64) -> Result<Vec<LangView>, AppError> {
-    let rows = sqlx::query("SELECT id, nom, level FROM lang WHERE user_id = $1 ORDER BY nom")
+    let rows = sqlx::query("SELECT id, nom, level FROM profile.lang WHERE user_id = $1 ORDER BY nom")
         .bind(user_id)
         .fetch_all(pool)
         .await
@@ -55,7 +55,7 @@ pub async fn insert(pool: &PgPool, user_id: i64, input: CreateLangInput) -> Resu
     }
 
     let row = sqlx::query(
-        "INSERT INTO lang (user_id, nom, level) VALUES ($1, $2, $3) \
+        "INSERT INTO profile.lang (user_id, nom, level) VALUES ($1, $2, $3) \
          RETURNING id, nom, level",
     )
     .bind(user_id)
@@ -90,8 +90,8 @@ pub async fn update(pool: &PgPool, id: i64, input: CreateLangInput) -> Result<La
     }
 
     let row = sqlx::query(
-        "UPDATE lang SET nom = $1, level = $2 \
-         WHERE id = $3 AND user_id = (SELECT id FROM users LIMIT 1) \
+        "UPDATE profile.lang SET nom = $1, level = $2 \
+         WHERE id = $3 AND user_id = (SELECT id FROM profile.users LIMIT 1) \
          RETURNING id, nom, level",
     )
     .bind(&nom)
@@ -121,5 +121,5 @@ pub async fn update(pool: &PgPool, id: i64, input: CreateLangInput) -> Result<La
 ///
 /// `Ok(())` si supprimée, `AppError::NotFound` si absente.
 pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
-    delete_owned_row(pool, "lang", id, "Langue introuvable.").await
+    delete_owned_row(pool, "profile.lang", id, "Langue introuvable.").await
 }

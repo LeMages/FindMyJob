@@ -53,7 +53,7 @@ pub async fn insert(
     let country_code = normalize(input.country_code.clone());
 
     let row = sqlx::query(
-        "INSERT INTO search_queries (session_id, keywords, location, country_code) \
+        "INSERT INTO search.search_queries (session_id, keywords, location, country_code) \
          VALUES ($1, $2, $3, $4) \
          RETURNING id, session_id, keywords, location, country_code, created_at",
     )
@@ -81,7 +81,7 @@ pub async fn insert(
 pub async fn list_for_session(pool: &PgPool, session_id: i64) -> Result<Vec<SearchQueryView>, AppError> {
     let rows = sqlx::query(
         "SELECT id, session_id, keywords, location, country_code, created_at \
-         FROM search_queries WHERE session_id = $1 ORDER BY created_at",
+         FROM search.search_queries WHERE session_id = $1 ORDER BY created_at",
     )
     .bind(session_id)
     .fetch_all(pool)
@@ -103,7 +103,7 @@ pub async fn list_for_session(pool: &PgPool, session_id: i64) -> Result<Vec<Sear
 ///
 /// `Ok(())` si la suppression a réussi, `AppError::NotFound` si absente.
 pub async fn delete(pool: &PgPool, session_id: i64, id: i64) -> Result<(), AppError> {
-    let result = sqlx::query("DELETE FROM search_queries WHERE id = $1 AND session_id = $2")
+    let result = sqlx::query("DELETE FROM search.search_queries WHERE id = $1 AND session_id = $2")
         .bind(id)
         .bind(session_id)
         .execute(pool)

@@ -67,7 +67,7 @@ pub async fn upsert(
     style_analysis: Option<&str>,
 ) -> Result<Document, AppError> {
     let row = sqlx::query(
-        "INSERT INTO documents (session_id, doc_type, original_filename, file_path, pdf_path, style_analysis) \
+        "INSERT INTO search.documents (session_id, doc_type, original_filename, file_path, pdf_path, style_analysis) \
          VALUES ($1, $2, $3, $4, $5, $6) \
          ON CONFLICT (session_id, doc_type) DO UPDATE SET \
              original_filename = excluded.original_filename, \
@@ -109,7 +109,7 @@ pub async fn get_by_session_and_type(
     let row = sqlx::query(
         "SELECT id, session_id, doc_type, original_filename, file_path, pdf_path, \
                 style_analysis, created_at, updated_at \
-         FROM documents WHERE session_id = $1 AND doc_type = $2",
+         FROM search.documents WHERE session_id = $1 AND doc_type = $2",
     )
     .bind(session_id)
     .bind(doc_type)

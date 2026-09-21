@@ -36,7 +36,7 @@ pub async fn record(
     interview_id: Option<i64>,
 ) -> Result<(), AppError> {
     sqlx::query(
-        "INSERT INTO status_history \
+        "INSERT INTO search.status_history \
            (candidature_id, event_type, ancien_status, nouveau_status, content, interview_id) \
          VALUES ($1, $2, $3, $4, $5, $6)",
     )
@@ -69,7 +69,7 @@ pub async fn list_for_candidature(
     let rows = sqlx::query(
         "SELECT id, candidature_id, event_type, ancien_status, nouveau_status, content, \
                 interview_id, changed_at \
-         FROM status_history \
+         FROM search.status_history \
          WHERE candidature_id = $1 \
          ORDER BY changed_at",
     )

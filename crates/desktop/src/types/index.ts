@@ -69,6 +69,7 @@ export interface Session {
   contexte: string | null
   statut: SessionStatut
   zone: string | null
+  min_score: number
   candidature_count: number
   has_accepted: boolean
   created_at: string
@@ -79,6 +80,7 @@ export interface UpdateSessionInput {
   contexte: string | null
   statut: SessionStatut
   zone: string | null
+  min_score: number
 }
 
 export interface SearchQueryView {
@@ -87,6 +89,21 @@ export interface SearchQueryView {
   keywords: string
   location: string | null
   country_code: string | null
+  created_at: string
+}
+
+export interface OfferView {
+  id: number
+  session_id: number
+  source: string
+  title: string
+  company: string
+  location: string
+  url: string
+  contract_type: string | null
+  posted_at: string | null
+  status: string
+  score: number | null
   created_at: string
 }
 

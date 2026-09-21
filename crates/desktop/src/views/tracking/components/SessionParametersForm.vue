@@ -56,6 +56,45 @@ async function saveZone(v: string): Promise<string | null | undefined> {
   return updateSession(session.id, { zone: v })
 }
 
+/** Bornes du seuil de score (miroir de la contrainte CHECK en base et de la validation agent). */
+const MIN_SCORE_LOWER = 0.05
+const MIN_SCORE_UPPER = 1
+
+const minScoreDraft = ref('')
+const minScoreError = ref<string | null>(null)
+
+// Resynchronise le champ sur la valeur de la session courante (changement de
+// session ou sauvegarde réussie).
+watch(
+  () => currentSession.value?.min_score,
+  (v) => { minScoreDraft.value = v === undefined ? '' : String(v) },
+  { immediate: true },
+)
+
+/**
+ * Valide puis sauvegarde le seuil de score de la session courante. En cas de
+ * valeur invalide ou d'échec, affiche l'erreur et rétablit la valeur enregistrée.
+ */
+async function saveMinScore() {
+  const session = currentSession.value
+  if (!session) return
+
+  minScoreError.value = null
+  const value = Number(minScoreDraft.value)
+  if (minScoreDraft.value.trim() === '' || Number.isNaN(value) || value < MIN_SCORE_LOWER || value > MIN_SCORE_UPPER) {
+    minScoreError.value = `Le seuil doit être compris entre ${MIN_SCORE_LOWER} et ${MIN_SCORE_UPPER}.`
+    minScoreDraft.value = String(session.min_score)
+    return
+  }
+  if (value === session.min_score) return
+
+  const err = await updateSession(session.id, { min_score: value })
+  if (err) {
+    minScoreError.value = err
+    minScoreDraft.value = String(session.min_score)
+  }
+}
+
 const sessionId = computed(() => currentSession.value?.id ?? null)
 
 const cvReference = ref<DocumentReferenceView | null>(null)
@@ -191,6 +230,23 @@ async function onRunSearch() {
           :on-save="saveZone"
         />
       </div>
+    </div>
+
+    <!-- Seuil d'affichage des offres -->
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">MARCHÉ</div>
+      <label class="text-[12px] text-neutral-600 mb-[5px] block">Seuil de score minimum (0.05 à 1)</label>
+      <input
+        v-model="minScoreDraft"
+        type="number"
+        :min="MIN_SCORE_LOWER"
+        :max="MIN_SCORE_UPPER"
+        step="0.05"
+        class="w-[120px] h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-mono bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+        @blur="saveMinScore"
+        @keyup.enter="saveMinScore"
+      />
+      <div v-if="minScoreError" class="font-mono text-[12px] text-red-500 mt-[8px]">{{ minScoreError }}</div>
     </div>
 
     <!-- Recherche d'offres -->

@@ -41,7 +41,7 @@ fn validate(input: &CreateSkillInput) -> Result<(String, String), AppError> {
 /// Compétences triées par domaine puis nom.
 pub async fn list_for_user(pool: &PgPool, user_id: i64) -> Result<Vec<SkillView>, AppError> {
     let rows = sqlx::query(
-        "SELECT id, domaine, nom FROM skills WHERE user_id = $1 ORDER BY domaine, nom",
+        "SELECT id, domaine, nom FROM profile.skills WHERE user_id = $1 ORDER BY domaine, nom",
     )
     .bind(user_id)
     .fetch_all(pool)
@@ -75,7 +75,7 @@ pub async fn insert(pool: &PgPool, user_id: i64, input: CreateSkillInput) -> Res
     let (nom, domaine) = validate(&input)?;
 
     let row = sqlx::query(
-        "INSERT INTO skills (user_id, nom, domaine) VALUES ($1, $2, $3) \
+        "INSERT INTO profile.skills (user_id, nom, domaine) VALUES ($1, $2, $3) \
          RETURNING id, nom, domaine",
     )
     .bind(user_id)
@@ -107,8 +107,8 @@ pub async fn update(pool: &PgPool, id: i64, input: CreateSkillInput) -> Result<S
     let (nom, domaine) = validate(&input)?;
 
     let row = sqlx::query(
-        "UPDATE skills SET nom = $1, domaine = $2 \
-         WHERE id = $3 AND user_id = (SELECT id FROM users LIMIT 1) \
+        "UPDATE profile.skills SET nom = $1, domaine = $2 \
+         WHERE id = $3 AND user_id = (SELECT id FROM profile.users LIMIT 1) \
          RETURNING id, nom, domaine",
     )
     .bind(&nom)
@@ -138,5 +138,5 @@ pub async fn update(pool: &PgPool, id: i64, input: CreateSkillInput) -> Result<S
 ///
 /// `Ok(())` si supprimée, `AppError::NotFound` si absente.
 pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
-    delete_owned_row(pool, "skills", id, "Compétence introuvable.").await
+    delete_owned_row(pool, "profile.skills", id, "Compétence introuvable.").await
 }

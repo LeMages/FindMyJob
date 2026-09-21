@@ -67,7 +67,7 @@ pub async fn assert_owned_by_user(
     not_found_message: &str,
 ) -> Result<(), AppError> {
     let sql = format!(
-        "SELECT COUNT(*) FROM {table} WHERE id = $1 AND user_id = (SELECT id FROM users LIMIT 1)"
+        "SELECT COUNT(*) FROM {table} WHERE id = $1 AND user_id = (SELECT id FROM profile.users LIMIT 1)"
     );
     let n: i64 = sqlx::query_scalar::<_, i64>(&sql)
         .bind(id)

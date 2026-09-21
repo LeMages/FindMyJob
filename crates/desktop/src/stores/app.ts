@@ -148,6 +148,7 @@ export async function updateSession(id: number, patch: Partial<UpdateSessionInpu
     contexte: current.contexte,
     statut: current.statut,
     zone: current.zone,
+    min_score: current.min_score,
     ...patch,
   }
 

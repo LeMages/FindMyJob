@@ -42,7 +42,7 @@ fn validate_type_contrat(type_contrat: Option<String>) -> Result<Option<String>,
 pub async fn list_for_user(pool: &PgPool, user_id: i64) -> Result<Vec<ExperienceView>, AppError> {
     let rows = sqlx::query(
         "SELECT id, poste, entreprise, lieu, description, date_debut, date_fin, type_contrat \
-         FROM experiences WHERE user_id = $1 \
+         FROM profile.experiences WHERE user_id = $1 \
          ORDER BY COALESCE(date_fin, DATE '9999-12-31') DESC, date_debut DESC",
     )
     .bind(user_id)
@@ -92,7 +92,7 @@ pub async fn insert(
     let type_contrat = validate_type_contrat(input.type_contrat)?;
 
     let row = sqlx::query(
-        "INSERT INTO experiences \
+        "INSERT INTO profile.experiences \
            (user_id, poste, entreprise, lieu, description, date_debut, date_fin, type_contrat) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
          RETURNING id, poste, entreprise, lieu, description, date_debut, date_fin, type_contrat",
@@ -146,10 +146,10 @@ pub async fn update(
     let type_contrat = validate_type_contrat(input.type_contrat)?;
 
     let row = sqlx::query(
-        "UPDATE experiences \
+        "UPDATE profile.experiences \
          SET poste = $1, entreprise = $2, lieu = $3, description = $4, \
              date_debut = $5, date_fin = $6, type_contrat = $7 \
-         WHERE id = $8 AND user_id = (SELECT id FROM users LIMIT 1) \
+         WHERE id = $8 AND user_id = (SELECT id FROM profile.users LIMIT 1) \
          RETURNING id, poste, entreprise, lieu, description, date_debut, date_fin, type_contrat",
     )
     .bind(&poste)
@@ -189,5 +189,5 @@ pub async fn update(
 ///
 /// `Ok(())` si supprimée, `AppError::NotFound` si absente.
 pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
-    delete_owned_row(pool, "experiences", id, "Expérience introuvable.").await
+    delete_owned_row(pool, "profile.experiences", id, "Expérience introuvable.").await
 }

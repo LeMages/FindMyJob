@@ -12,17 +12,20 @@ use findmyjob_core::models::{SessionView, UpdateSessionInput};
 /// Valeurs acceptées pour `sessions.statut` (miroir de la contrainte CHECK en base).
 const VALID_STATUTS: [&str; 3] = ["active", "pause", "termine"];
 
+/// Bornes acceptées pour `sessions.min_score` (miroir de la contrainte CHECK en base).
+const MIN_SCORE_RANGE: std::ops::RangeInclusive<f32> = 0.05..=1.0;
+
 /// Requête agrégée sessions + statistiques (candidatures, acceptation),
 /// partagée par le listing et la mise à jour d'une session.
 const SELECT_WITH_STATS: &str =
-    "SELECT s.id, s.nom, s.contexte, s.statut, s.zone, s.created_at, \
-            (SELECT COUNT(*) FROM candidatures c \
+    "SELECT s.id, s.nom, s.contexte, s.statut, s.zone, s.min_score, s.created_at, \
+            (SELECT COUNT(*) FROM search.candidatures c \
              WHERE c.session_id = s.id \
                AND c.status NOT IN ('abandon', 'ghosting', 'refus', 'offre_refusee')) AS candidature_count, \
             (SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END \
-             FROM candidatures c \
+             FROM search.candidatures c \
              WHERE c.session_id = s.id AND c.status IN ('accepte', 'offre_refusee', 'refus')) AS has_accepted \
-     FROM sessions s";
+     FROM search.sessions s";
 
 /// Convertit une ligne de `SELECT_WITH_STATS` en `SessionView`.
 ///
@@ -41,6 +44,7 @@ fn row_to_session_view(row: &PgRow) -> Result<SessionView, AppError> {
         contexte: row.try_get("contexte").map_err(map_db_err)?,
         statut: row.try_get("statut").map_err(map_db_err)?,
         zone: row.try_get("zone").map_err(map_db_err)?,
+        min_score: row.try_get("min_score").map_err(map_db_err)?,
         candidature_count: row.try_get("candidature_count").unwrap_or(0),
         has_accepted: has_accepted_int != 0,
         created_at: row.try_get("created_at").map_err(map_db_err)?,
@@ -64,8 +68,8 @@ pub async fn insert(pool: &PgPool, nom: &str) -> Result<SessionView, AppError> {
     }
 
     let row = sqlx::query(
-        "INSERT INTO sessions (nom) VALUES ($1) \
-         RETURNING id, nom, contexte, statut, zone, created_at",
+        "INSERT INTO search.sessions (nom) VALUES ($1) \
+         RETURNING id, nom, contexte, statut, zone, min_score, created_at",
     )
     .bind(&nom)
     .fetch_one(pool)
@@ -78,6 +82,7 @@ pub async fn insert(pool: &PgPool, nom: &str) -> Result<SessionView, AppError> {
         contexte: row.try_get("contexte").map_err(map_db_err)?,
         statut: row.try_get("statut").map_err(map_db_err)?,
         zone: row.try_get("zone").map_err(map_db_err)?,
+        min_score: row.try_get("min_score").map_err(map_db_err)?,
         candidature_count: 0,
         has_accepted: false,
         created_at: row.try_get("created_at").map_err(map_db_err)?,
@@ -122,7 +127,7 @@ pub async fn fetch_one(pool: &PgPool, id: i64) -> Result<SessionView, AppError> 
     row_to_session_view(&row)
 }
 
-/// Met à jour le nom, le contexte, le statut et la zone cible d'une session existante.
+/// Met à jour le nom, le contexte, le statut, la zone cible et le seuil de score d'une session existante.
 ///
 /// # Arguments
 ///
@@ -145,14 +150,21 @@ pub async fn update(
     if !VALID_STATUTS.contains(&input.statut.as_str()) {
         return Err(AppError::Validation("Statut de session invalide.".to_string()));
     }
+    if !MIN_SCORE_RANGE.contains(&input.min_score) {
+        return Err(AppError::Validation(format!(
+            "Le seuil de score doit être compris entre 0.05 et 1 (reçu : {}).",
+            input.min_score
+        )));
+    }
     let contexte = normalize(input.contexte.clone());
     let zone = normalize(input.zone.clone());
 
-    let result = sqlx::query("UPDATE sessions SET nom = $1, contexte = $2, statut = $3, zone = $4 WHERE id = $5")
+    let result = sqlx::query("UPDATE search.sessions SET nom = $1, contexte = $2, statut = $3, zone = $4, min_score = $5 WHERE id = $6")
         .bind(&nom)
         .bind(&contexte)
         .bind(&input.statut)
         .bind(&zone)
+        .bind(input.min_score)
         .bind(id)
         .execute(pool)
         .await
@@ -186,8 +198,8 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
     //    (ordre imposé par les contraintes de clé étrangère)
     // ------------------------------------------------------------------
     sqlx::query(
-        "DELETE FROM status_history \
-         WHERE candidature_id IN (SELECT id FROM candidatures WHERE session_id = $1)",
+        "DELETE FROM search.status_history \
+         WHERE candidature_id IN (SELECT id FROM search.candidatures WHERE session_id = $1)",
     )
     .bind(id)
     .execute(&mut *tx)
@@ -195,8 +207,8 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
     .map_err(map_db_err)?;
 
     sqlx::query(
-        "DELETE FROM contacts \
-         WHERE candidature_id IN (SELECT id FROM candidatures WHERE session_id = $1)",
+        "DELETE FROM search.contacts \
+         WHERE candidature_id IN (SELECT id FROM search.candidatures WHERE session_id = $1)",
     )
     .bind(id)
     .execute(&mut *tx)
@@ -204,8 +216,8 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
     .map_err(map_db_err)?;
 
     sqlx::query(
-        "DELETE FROM interviews \
-         WHERE candidature_id IN (SELECT id FROM candidatures WHERE session_id = $1)",
+        "DELETE FROM search.interviews \
+         WHERE candidature_id IN (SELECT id FROM search.candidatures WHERE session_id = $1)",
     )
     .bind(id)
     .execute(&mut *tx)
@@ -215,13 +227,13 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
     // ------------------------------------------------------------------
     // 2. Suppression des candidatures puis de la session elle-même
     // ------------------------------------------------------------------
-    sqlx::query("DELETE FROM candidatures WHERE session_id = $1")
+    sqlx::query("DELETE FROM search.candidatures WHERE session_id = $1")
         .bind(id)
         .execute(&mut *tx)
         .await
         .map_err(map_db_err)?;
 
-    let result = sqlx::query("DELETE FROM sessions WHERE id = $1")
+    let result = sqlx::query("DELETE FROM search.sessions WHERE id = $1")
         .bind(id)
         .execute(&mut *tx)
         .await

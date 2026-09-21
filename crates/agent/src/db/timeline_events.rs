@@ -121,7 +121,7 @@ pub async fn add_event(
     //    son statut courant — `available_events` reste la seule source de
     //    vérité, jamais de confiance dans ce qu'envoie le frontend.
     // ------------------------------------------------------------------
-    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = $1")
+    let ancien_status: String = sqlx::query("SELECT status FROM search.candidatures WHERE id = $1")
         .bind(candidature_id)
         .fetch_optional(&mut *tx)
         .await
@@ -202,7 +202,7 @@ pub async fn add_event(
     // ------------------------------------------------------------------
     let nouveau_status = event_type.changes_status();
     if let Some(target) = nouveau_status {
-        sqlx::query("UPDATE candidatures SET status = $1 WHERE id = $2")
+        sqlx::query("UPDATE search.candidatures SET status = $1 WHERE id = $2")
             .bind(target)
             .bind(candidature_id)
             .execute(&mut *tx)

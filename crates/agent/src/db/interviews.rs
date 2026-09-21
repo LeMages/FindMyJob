@@ -39,7 +39,7 @@ pub async fn list_pending_for_candidature(
     let rows = sqlx::query(
         "SELECT id, candidature_id, type AS type_entretien, \
                 date_entretien, lieu, issue, notes, contact_id \
-         FROM interviews \
+         FROM search.interviews \
          WHERE candidature_id = $1 AND issue = 'en_attente' \
          ORDER BY date_entretien",
     )
@@ -85,8 +85,8 @@ pub async fn list_for_session(
                 i.type AS type_entretien, \
                 i.date_entretien, \
                 i.lieu, i.modalite, i.issue, i.notes \
-         FROM interviews i \
-         JOIN candidatures c ON c.id = i.candidature_id \
+         FROM search.interviews i \
+         JOIN search.candidatures c ON c.id = i.candidature_id \
          WHERE c.session_id = $1 AND i.date_entretien IS NOT NULL \
          ORDER BY i.date_entretien",
     )
@@ -134,7 +134,7 @@ where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
     let n: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM interviews WHERE candidature_id = $1 AND issue = 'en_attente'",
+        "SELECT COUNT(*) FROM search.interviews WHERE candidature_id = $1 AND issue = 'en_attente'",
     )
     .bind(candidature_id)
     .fetch_one(executor)
@@ -172,7 +172,7 @@ pub(crate) async fn insert(
     contact_id: Option<i64>,
 ) -> Result<i64, AppError> {
     let row = sqlx::query(
-        "INSERT INTO interviews (candidature_id, type, date_entretien, lieu, modalite, contact_id) \
+        "INSERT INTO search.interviews (candidature_id, type, date_entretien, lieu, modalite, contact_id) \
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
     )
     .bind(candidature_id)
@@ -214,7 +214,7 @@ pub(crate) async fn mark_passed(
     notes: Option<&str>,
 ) -> Result<(), AppError> {
     let result = sqlx::query(
-        "UPDATE interviews SET issue = $1, notes = $2 \
+        "UPDATE search.interviews SET issue = $1, notes = $2 \
          WHERE id = $3 AND candidature_id = $4 AND issue = 'en_attente'",
     )
     .bind(issue)

@@ -9,6 +9,7 @@ pub struct SessionView {
     pub contexte: Option<String>,
     pub statut: String,
     pub zone: Option<String>,
+    pub min_score: f32,
     pub candidature_count: i64,
     pub has_accepted: bool,
     pub created_at: DateTime<Utc>,
@@ -25,4 +26,5 @@ pub struct UpdateSessionInput {
     pub contexte: Option<String>,
     pub statut: String,
     pub zone: Option<String>,
+    pub min_score: f32,
 }

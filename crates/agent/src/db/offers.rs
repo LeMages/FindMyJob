@@ -9,23 +9,7 @@ use sqlx::{PgPool, Row};
 use crate::db::common::map_db_err;
 use crate::scraping::types::ScrapedOffer;
 use findmyjob_core::error::AppError;
-
-/// Vue d'une offre scrapée, exposée par l'API agent-specific `/api/offers`
-/// (offres recommandées).
-#[derive(serde::Serialize)]
-pub struct OfferView {
-    pub id: i64,
-    pub source: String,
-    pub title: String,
-    pub company: String,
-    pub location: String,
-    pub url: String,
-    pub contract_type: Option<String>,
-    pub posted_at: Option<DateTime<Utc>>,
-    pub status: String,
-    pub score: Option<f32>,
-    pub created_at: DateTime<Utc>,
-}
+use findmyjob_core::models::OfferView;
 
 /// Construit un `OfferView` à partir d'une ligne SQL brute.
 ///
@@ -39,6 +23,7 @@ pub struct OfferView {
 fn row_to_offer(row: &PgRow) -> Result<OfferView, sqlx::Error> {
     Ok(OfferView {
         id: row.try_get("id")?,
+        session_id: row.try_get("session_id")?,
         source: row.try_get("source")?,
         title: row.try_get("title")?,
         company: row.try_get("company")?,
@@ -71,7 +56,7 @@ pub async fn insert_offers(pool: &PgPool, session_id: i64, offers: &[ScrapedOffe
 
     for offer in offers {
         let result = sqlx::query(
-            "INSERT INTO offers (session_id, source, source_id, title, company, location, url, contract_type, posted_at, scraped_at, description) \
+            "INSERT INTO search.offers (session_id, source, source_id, title, company, location, url, contract_type, posted_at, scraped_at, description) \
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
              ON CONFLICT (url) DO NOTHING",
         )
@@ -98,24 +83,28 @@ pub async fn insert_offers(pool: &PgPool, session_id: i64, offers: &[ScrapedOffe
     Ok(inserted)
 }
 
-/// Liste les offres recommandées : non encore traitées (`new`/`reviewed`) et
-/// scorées positivement par le pipeline de matching (étape 3).
+/// Liste les offres d'une session dont le score dépasse un seuil, quel que
+/// soit leur statut.
 ///
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
+/// * `session_id` - Session dont on veut les offres.
+/// * `min_score` - Seuil exclusif : seules les offres de score strictement supérieur sont retournées.
 ///
 /// # Returns
 ///
 /// Offres triées par score décroissant, les mieux notées en premier.
-pub async fn list_new(pool: &PgPool) -> Result<Vec<OfferView>, AppError> {
+pub async fn list_for_session(pool: &PgPool, session_id: i64, min_score: f32) -> Result<Vec<OfferView>, AppError> {
     let rows = sqlx::query(
-        "SELECT id, source, title, company, location, url, contract_type, posted_at, \
+        "SELECT id, session_id, source, title, company, location, url, contract_type, posted_at, \
                 status, score, created_at \
-         FROM offers \
-         WHERE status IN ('new', 'reviewed') AND score > 0 \
+         FROM search.offers \
+         WHERE session_id = $1 AND score > $2 \
          ORDER BY score DESC",
     )
+    .bind(session_id)
+    .bind(min_score)
     .fetch_all(pool)
     .await
     .map_err(map_db_err)?;
@@ -135,9 +124,9 @@ pub async fn list_new(pool: &PgPool) -> Result<Vec<OfferView>, AppError> {
 /// `OfferView` correspondante, ou `AppError::NotFound` si elle n'existe pas.
 pub async fn fetch_one(pool: &PgPool, id: i64) -> Result<OfferView, AppError> {
     let row = sqlx::query(
-        "SELECT id, source, title, company, location, url, contract_type, posted_at, \
+        "SELECT id, session_id, source, title, company, location, url, contract_type, posted_at, \
                 status, score, created_at \
-         FROM offers WHERE id = $1",
+         FROM search.offers WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(pool)
@@ -160,7 +149,7 @@ pub async fn fetch_one(pool: &PgPool, id: i64) -> Result<OfferView, AppError> {
 ///
 /// `Ok(())` si la mise à jour a réussi, `AppError::NotFound` sinon.
 async fn set_status(pool: &PgPool, id: i64, status: &str) -> Result<(), AppError> {
-    let result = sqlx::query("UPDATE offers SET status = $1, updated_at = NOW() WHERE id = $2")
+    let result = sqlx::query("UPDATE search.offers SET status = $1, updated_at = NOW() WHERE id = $2")
         .bind(status)
         .bind(id)
         .execute(pool)
@@ -250,7 +239,7 @@ fn row_to_unscored_offer(row: &PgRow) -> Result<UnscoredOffer, sqlx::Error> {
 pub async fn get_unscored_offers(pool: &PgPool, session_id: i64) -> Result<Vec<UnscoredOffer>, AppError> {
     let rows = sqlx::query(
         "SELECT id, title, company, location, contract_type, description, posted_at \
-         FROM offers WHERE session_id = $1 AND score IS NULL",
+         FROM search.offers WHERE session_id = $1 AND score IS NULL",
     )
     .bind(session_id)
     .fetch_all(pool)
@@ -273,7 +262,7 @@ pub async fn get_unscored_offers(pool: &PgPool, session_id: i64) -> Result<Vec<U
 ///
 /// `Ok(())` si la mise à jour a réussi.
 pub async fn set_score(pool: &PgPool, id: i64, score: f32, status: &str) -> Result<(), AppError> {
-    sqlx::query("UPDATE offers SET score = $1, status = $2, updated_at = NOW() WHERE id = $3")
+    sqlx::query("UPDATE search.offers SET score = $1, status = $2, updated_at = NOW() WHERE id = $3")
         .bind(score)
         .bind(status)
         .bind(id)
