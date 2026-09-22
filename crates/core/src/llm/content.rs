@@ -247,19 +247,6 @@ Description des champs à renseigner :\n\
         "Analyse d'offre :\n{offer_analysis}\n\nStratégie de matching :\n{matching}\n\nProfil du candidat :\n{profile_json}"
     );
 
-    // DEBUG: à supprimer
-    eprintln!(
-        "[CV-INPUT] === SYSTEM PROMPT ({} chars) ===\n{}",
-        system_prompt.len(),
-        system_prompt
-    );
-    // DEBUG: à supprimer
-    eprintln!(
-        "[CV-INPUT] === USER MESSAGE ({} chars) ===\n{}",
-        user_message.len(),
-        user_message
-    );
-
     // On tolère un seul échec de validation (JSON conforme au schéma mais
     // vide) : le modèle produit parfois un contenu creux au premier essai et
     // se corrige au second. Une erreur de parsing JSON, elle, n'est jamais
@@ -267,13 +254,6 @@ Description des champs à renseigner :\n\
     let mut validation_error: Option<String> = None;
     for attempt in 1..=2u8 {
         let raw_response = call_claude(&system_prompt, &user_message, Some(cv_content_schema()), model).await?;
-
-        // DEBUG: à supprimer
-        eprintln!(
-            "[CV-RAW] === RESPONSE ({} chars, tentative {attempt}/2) ===\n{}",
-            raw_response.len(),
-            raw_response
-        );
 
         let parsed: serde_json::Value = serde_json::from_str(raw_response.trim()).map_err(|e| {
             AppError::Llm(format!(
@@ -337,26 +317,13 @@ Description des champs à renseigner :\n\
         "Analyse d'offre :\n{offer_analysis}\n\nStratégie de matching :\n{matching}\n\nProfil du candidat :\n{profile_json}"
     );
 
-    // DEBUG: à supprimer
-    eprintln!(
-        "[LM-INPUT] === SYSTEM PROMPT ({} chars) ===\n{}",
-        system_prompt.len(),
-        system_prompt
-    );
-    // DEBUG: à supprimer
-    eprintln!(
-        "[LM-INPUT] === USER MESSAGE ({} chars) ===\n{}",
-        user_message.len(),
-        user_message
-    );
-
     // On tolère un seul échec de validation (JSON conforme au schéma mais
     // vide) : le modèle produit parfois un contenu creux au premier essai et
     // se corrige au second. Une erreur de parsing JSON, elle, n'est jamais
     // retentée — c'est un problème de format, pas de contenu.
     let mut validation_error: Option<String> = None;
     for attempt in 1..=2u8 {
-        let (raw_response, stop_reason) = call_claude_with_tokens_meta(
+        let (raw_response, _stop_reason) = call_claude_with_tokens_meta(
             &system_prompt,
             &user_message,
             Some(lm_content_schema()),
@@ -364,13 +331,6 @@ Description des champs à renseigner :\n\
             model,
         )
         .await?;
-
-        // DEBUG: à supprimer
-        eprintln!(
-            "[LM-RAW] === RESPONSE ({} chars, tentative {attempt}/2) ===\n{}\n[LM-RAW] stop_reason={stop_reason:?}",
-            raw_response.len(),
-            raw_response
-        );
 
         let parsed: serde_json::Value = serde_json::from_str(raw_response.trim()).map_err(|e| {
             AppError::Llm(format!(

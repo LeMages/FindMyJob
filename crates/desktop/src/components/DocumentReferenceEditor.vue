@@ -10,7 +10,6 @@
 // Importation des modules Vue / framework
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 // Importation des modules internes
 import { extractErrorMessage } from '@/composables/useErrorMessage'
@@ -40,41 +39,6 @@ const isCv = computed(() => props.docType === 'cv')
 
 const saving = ref(false)
 const error = ref<string | null>(null)
-
-// ── Progression de la sauvegarde (événement `document-save-progress`) ───────
-
-interface DocumentSaveProgressEvent {
-  session_id: number
-  doc_type: 'cv' | 'lettre_motivation'
-  step: number
-  total: number
-  label: string
-}
-
-/** Nombre d'étapes du flux de sauvegarde, tant qu'aucun événement n'a encore été reçu. */
-const DEFAULT_PROGRESS_STEPS = 5
-
-const progressStep = ref(0)
-const progressTotal = ref(DEFAULT_PROGRESS_STEPS)
-const progressLabel = ref('')
-
-/** Texte affiché pendant la sauvegarde : étape en cours, ou fallback tant qu'aucun événement n'est reçu. */
-const progressText = computed(() =>
-  progressStep.value > 0 ? `${progressLabel.value} (${progressStep.value}/${progressTotal.value})` : 'Sauvegarde…',
-)
-
-/** Écoute la progression de la sauvegarde en cours, filtrée sur ce document précis. */
-async function listenSaveProgress(): Promise<UnlistenFn> {
-  progressStep.value = 0
-  progressTotal.value = DEFAULT_PROGRESS_STEPS
-  progressLabel.value = ''
-  return listen<DocumentSaveProgressEvent>('document-save-progress', (event) => {
-    if (event.payload.session_id !== props.sessionId || event.payload.doc_type !== props.docType) return
-    progressStep.value = event.payload.step
-    progressTotal.value = event.payload.total
-    progressLabel.value = event.payload.label
-  })
-}
 
 // ── Mode "reference" (profil) ────────────────────────────────────────────────
 
@@ -137,7 +101,6 @@ async function onFileSelected(event: Event) {
   saving.value = true
   error.value = null
 
-  const unlisten = await listenSaveProgress()
   try {
     const content = await file.text()
     const saved = await invoke<DocumentReferenceView>(saveCommand.value, {
@@ -150,7 +113,6 @@ async function onFileSelected(event: Event) {
   } catch (e: unknown) {
     error.value = extractErrorMessage(e, saveErrorFallback.value)
   } finally {
-    unlisten()
     saving.value = false
     input.value = ''
   }
@@ -259,7 +221,7 @@ defineExpose({ hasChanges, reset })
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-blue-500 flex-none">
         <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
       </svg>
-      <span>{{ progressText }}</span>
+      <span>Sauvegarde…</span>
     </div>
     <div v-if="error" class="mt-[10px] text-[12px] text-red-600">{{ error }}</div>
   </div>

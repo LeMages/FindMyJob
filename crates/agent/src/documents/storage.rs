@@ -21,7 +21,7 @@ use sqlx::PgPool;
 use crate::db;
 use crate::documents::typst::compile_to_pdf;
 use findmyjob_core::error::AppError;
-use findmyjob_core::models::{CandidatureDetail, DocumentFileInfo, DocumentReferenceView};
+use findmyjob_core::models::{DocumentFileInfo, DocumentReferenceView};
 
 /// Nombre total d'étapes du flux de `save_reference`, communiqué à
 /// l'appelant pour calculer une progression (`step`/`total`).
@@ -324,157 +324,9 @@ pub fn read_document_base64(path: &str) -> Result<String, AppError> {
     Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
 }
 
-/// Finalise un document mis en scène en le déplaçant vers son emplacement
-/// définitif, nommé d'après l'identifiant de la candidature.
-///
-/// # Arguments
-///
-/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
-/// * `session_id` - Identifiant de la session propriétaire.
-/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
-/// * `staged_path` - Chemin temporaire du fichier mis en scène, s'il y en a un.
-/// * `candidature_id` - Identifiant de la candidature à laquelle rattacher le document.
-///
-/// # Returns
-///
-/// `Some(chemin_final)` si un document était en attente, `None` sinon.
-///
-/// Non utilisé par l'API HTTP de l'étape 3d (flux d'export local desktop,
-/// voir la note du module `documents::mod`) — conservé pour un futur
-/// appelant desktop.
-#[allow(dead_code)]
-pub fn finalize_candidature_document(
-    data_dir: &Path,
-    session_id: i64,
-    doc_type: &str,
-    staged_path: Option<String>,
-    candidature_id: i64,
-) -> Result<Option<String>, AppError> {
-    let Some(staged) = staged_path else {
-        return Ok(None);
-    };
-    let staged_pb = PathBuf::from(&staged);
-    if !staged_pb.exists() {
-        return Err(AppError::Validation(
-            "Le document sélectionné est introuvable.".to_string(),
-        ));
-    }
-    let artefact_dir = resolve_doc_dir(data_dir, session_id, doc_type).join("artefact");
-    std::fs::create_dir_all(&artefact_dir)
-        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
-    let dest = artefact_dir.join(format!("{}.pdf", candidature_id));
-    std::fs::rename(&staged_pb, &dest)
-        .map_err(|e| AppError::Validation(format!("Impossible de finaliser le document : {}", e)))?;
-    Ok(Some(dest.to_string_lossy().to_string()))
-}
-
-/// Remplace les caractères invalides pour un nom de fichier/dossier Windows
-/// (`< > : " / \ | ? *`) par `_`, pour bâtir un nom de dossier sûr à partir de
-/// données utilisateur (poste, entreprise).
-///
-/// # Arguments
-///
-/// * `name` - Nom brut à assainir.
-///
-/// # Returns
-///
-/// Nom assaini, débarrassé des espaces superflus en tête/fin.
-///
-/// Non utilisé par l'API HTTP de l'étape 3d (appelée uniquement par
-/// `build_export_dir_name`, voir sa note) — conservé pour un futur appelant desktop.
-#[allow(dead_code)]
-fn sanitize_filename(name: &str) -> String {
-    name.chars()
-        .map(|c| if r#"<>:"/\|?*"#.contains(c) { '_' } else { c })
-        .collect::<String>()
-        .trim()
-        .to_string()
-}
-
-/// Construit le nom du sous-dossier de destination `<poste>_<entreprise>_<id>`
-/// utilisé pour exporter les documents d'une candidature vers le dossier de
-/// téléchargements de l'utilisateur.
-///
-/// # Arguments
-///
-/// * `detail` - Détail de la candidature (poste, entreprise, id).
-///
-/// # Returns
-///
-/// Nom de dossier assaini, sûr sur tous les OS.
-///
-/// Non utilisé par l'API HTTP de l'étape 3d (flux d'export local desktop,
-/// voir la note du module `documents::mod`) — conservé pour un futur
-/// appelant desktop.
-#[allow(dead_code)]
-pub fn build_export_dir_name(detail: &CandidatureDetail) -> String {
-    let entreprise = detail.entreprise.as_deref().unwrap_or("entreprise");
-    sanitize_filename(&format!("{}_{}_{}", detail.poste, entreprise, detail.id))
-}
-
-/// Copie le CV et la lettre de motivation d'une candidature vers `dest_dir`
-/// — logique commune aux trois façons de postuler.
-///
-/// # Arguments
-///
-/// * `dest_dir` - Dossier de destination, déjà résolu par l'appelant (dossier de téléchargements + nom de sous-dossier).
-/// * `detail` - Détail de la candidature (chemins des documents).
-///
-/// # Returns
-///
-/// `Ok(())` une fois les deux fichiers copiés, ou `AppError::Validation` si un
-/// document est manquant (candidature sans CV/lettre) ou introuvable sur le disque.
-///
-/// Non utilisé par l'API HTTP de l'étape 3d (flux d'export local desktop,
-/// voir la note du module `documents::mod`) — conservé pour un futur
-/// appelant desktop.
-#[allow(dead_code)]
-pub fn copy_candidature_documents(dest_dir: &Path, detail: &CandidatureDetail) -> Result<(), AppError> {
-    let cv_path = detail.cv_path.as_deref().ok_or_else(|| {
-        AppError::Validation("Aucun CV disponible pour cette candidature.".to_string())
-    })?;
-    let lettre_path = detail.lettre_motivation_path.as_deref().ok_or_else(|| {
-        AppError::Validation("Aucune lettre de motivation disponible pour cette candidature.".to_string())
-    })?;
-
-    std::fs::create_dir_all(dest_dir)
-        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
-
-    std::fs::copy(cv_path, dest_dir.join("CV.pdf"))
-        .map_err(|e| AppError::Validation(format!("Copie du CV impossible : {}", e)))?;
-    std::fs::copy(lettre_path, dest_dir.join("Lettre_de_motivation.pdf"))
-        .map_err(|e| AppError::Validation(format!("Copie de la lettre de motivation impossible : {}", e)))?;
-
-    Ok(())
-}
-
-/// Écrit le message de candidature rédigé par l'IA (mail ou message court)
-/// dans le dossier d'export — utilisé par « Postuler par mail » et « Postuler
-/// par message », après `copy_candidature_documents`.
-///
-/// # Arguments
-///
-/// * `dest_dir` - Dossier de destination (même que `copy_candidature_documents`).
-/// * `message` - Contenu texte du message rédigé par l'IA.
-/// * `message_filename` - Nom du fichier `.txt` à créer (ex. `Mail_de_candidature.txt`).
-///
-/// # Returns
-///
-/// `Ok(())` une fois le fichier écrit.
-///
-/// Non utilisé par l'API HTTP de l'étape 3d (flux d'export local desktop,
-/// voir la note du module `documents::mod`) — conservé pour un futur
-/// appelant desktop.
-#[allow(dead_code)]
-pub fn write_export_message(dest_dir: &Path, message: &str, message_filename: &str) -> Result<(), AppError> {
-    std::fs::write(dest_dir.join(message_filename), message)
-        .map_err(|e| AppError::Validation(format!("Écriture du message impossible : {}", e)))
-}
-
 /// Sauvegarde un document généré par le pipeline IA (`crate::pipeline`) à
 /// l'emplacement définitif d'une candidature : le code Typst est conservé à
-/// côté du PDF pour le debug/la traçabilité, sous le même nom que
-/// `finalize_candidature_document` (`artefact/<candidature_id>.*`).
+/// côté du PDF pour le debug/la traçabilité (`artefact/<candidature_id>.*`).
 ///
 /// # Arguments
 ///

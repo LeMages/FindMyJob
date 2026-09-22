@@ -21,7 +21,7 @@ pub mod user;
 
 pub use candidature::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
 pub use contact::ContactView;
-pub use document::{Document, DocumentFileInfo, DocumentReferenceView, DocumentSaveProgress};
+pub use document::{Document, DocumentFileInfo, DocumentReferenceView};
 pub use event_type::EventType;
 pub use experience::{CreateExperienceInput, ExperienceView};
 pub use font::FontFamilyView;
