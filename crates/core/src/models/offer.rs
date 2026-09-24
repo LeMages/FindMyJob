@@ -14,7 +14,12 @@ pub struct OfferView {
     pub url: String,
     pub contract_type: Option<String>,
     pub posted_at: Option<DateTime<Utc>>,
+    /// Texte brut de l'annonce — utilisé pour pré-remplir `description_offre`
+    /// du formulaire de candidature quand elle est créée depuis le Marché.
+    pub description: Option<String>,
     pub status: String,
     pub score: Option<f32>,
     pub created_at: DateTime<Utc>,
+    /// `true` si une candidature référence déjà cette offre (`offer_id`).
+    pub has_candidature: bool,
 }

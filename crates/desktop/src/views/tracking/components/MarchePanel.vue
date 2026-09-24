@@ -9,13 +9,12 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
-import { currentSession } from '@/stores/app'
+import { currentSession, navigate, startApplicationFromOffer } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
 import type { OfferView } from '@/types'
 
-// TODO: quand un bouton « Postuler » par offre sera ajouté ici
-// (création de candidature depuis le marché), le conditionner par
-// all_ready (get_documents_status), comme dans NewApplicationView.vue.
+const { documentsBlocking, missingDocumentsMessage, loadDocumentsStatus } = useDocumentsStatus()
 
 const offers = ref<OfferView[]>([])
 const loading = ref(true)
@@ -95,6 +94,9 @@ async function loadOffers() {
 
 onMounted(loadOffers)
 watch([sessionId, minScore], loadOffers)
+
+onMounted(loadDocumentsStatus)
+watch(sessionId, loadDocumentsStatus)
 </script>
 
 <template>
@@ -117,6 +119,10 @@ watch([sessionId, minScore], loadOffers)
         {{ offers.length }} offre{{ offers.length > 1 ? 's' : '' }} · score &gt; {{ Math.round((minScore ?? 0) * 100) }}
       </div>
       <div v-if="linkError" class="text-[12px] text-red-500 font-mono mb-3">{{ linkError }}</div>
+      <div v-if="documentsBlocking" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-3 text-[13px] text-amber-700 flex items-center justify-between gap-3">
+        <span>{{ missingDocumentsMessage }}</span>
+        <button class="underline font-medium whitespace-nowrap" @click="navigate('settings')">Aller aux paramètres</button>
+      </div>
       <table class="w-full text-[13px] border-collapse bg-surface-1 border border-neutral-200 rounded-10 overflow-hidden">
         <thead>
           <tr class="text-left bg-neutral-950">
@@ -126,6 +132,7 @@ watch([sessionId, minScore], loadOffers)
             <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">LOCALISATION</th>
             <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">CONTRAT</th>
             <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">SCRAPÉE LE</th>
+            <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">ACTIONS</th>
           </tr>
         </thead>
         <tbody>
@@ -140,6 +147,14 @@ watch([sessionId, minScore], loadOffers)
             <td class="py-2.5 px-4 text-neutral-600">{{ o.location }}</td>
             <td class="py-2.5 px-4 text-neutral-600">{{ o.contract_type ?? '—' }}</td>
             <td class="py-2.5 px-4 font-mono text-neutral-500">{{ formatDate(o.created_at) }}</td>
+            <td class="py-2.5 px-4">
+              <button
+                class="h-8 px-3 rounded-lg border border-neutral-950 bg-neutral-950 text-white text-[12px] font-medium cursor-pointer whitespace-nowrap hover:bg-neutral-800"
+                :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': o.has_candidature || documentsBlocking }"
+                :disabled="o.has_candidature || documentsBlocking"
+                @click="startApplicationFromOffer(o)"
+              >{{ o.has_candidature ? 'Déjà postulé' : 'Postuler' }}</button>
+            </td>
           </tr>
         </tbody>
       </table>

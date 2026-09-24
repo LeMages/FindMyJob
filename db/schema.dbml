@@ -216,6 +216,7 @@ Enum candidature_status {
 Table search.candidatures {
   id integer [pk, increment]
   session_id integer [ref: > search.sessions.id, not null]
+  offer_id integer [ref: > search.offers.id]  // offre source si créée depuis le Marché, null si saisie manuelle
   poste text [not null]
   type candidature_type
   status candidature_status [not null, default: 'a_postuler']

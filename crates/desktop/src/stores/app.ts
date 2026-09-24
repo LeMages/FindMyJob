@@ -17,6 +17,7 @@ import type {
   NewContact, NewTimelineEvent,
   UpdateCandidatureInput,
   SearchQueryView, CreateSearchQueryInput,
+  OfferView, NewApplicationPrefill,
 } from '@/types'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 
@@ -75,6 +76,9 @@ const state = reactive({
   // New application form contacts
   newContacts: [{ id: 0 }] as NewContact[],
   nextContactId: 1,
+
+  // Pré-remplissage du formulaire de nouvelle candidature depuis une offre du Marché
+  newApplicationPrefill: null as NewApplicationPrefill | null,
 })
 
 // ---------------------------------------------------------------------------
@@ -127,6 +131,25 @@ export function setUserInfo(displayName: string, initials: string) {
  */
 export function navigate(screen: Screen) {
   state.screen = screen
+}
+
+/**
+ * Prépare le formulaire de nouvelle candidature avec les données d'une
+ * offre du Marché et navigue vers ce formulaire.
+ *
+ * @param offer - Offre depuis laquelle postuler.
+ */
+export function startApplicationFromOffer(offer: OfferView) {
+  state.newApplicationPrefill = {
+    offerId: offer.id,
+    url: offer.url,
+    poste: offer.title,
+    entreprise: offer.company,
+    localisation: offer.location,
+    typeContrat: offer.contract_type,
+    description: offer.description,
+  }
+  navigate('new')
 }
 
 /**

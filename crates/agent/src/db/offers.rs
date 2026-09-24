@@ -31,9 +31,11 @@ fn row_to_offer(row: &PgRow) -> Result<OfferView, sqlx::Error> {
         url: row.try_get("url")?,
         contract_type: row.try_get("contract_type")?,
         posted_at: row.try_get("posted_at")?,
+        description: row.try_get("description")?,
         status: row.try_get("status")?,
         score: row.try_get("score")?,
         created_at: row.try_get("created_at")?,
+        has_candidature: row.try_get("has_candidature")?,
     })
 }
 
@@ -98,7 +100,8 @@ pub async fn insert_offers(pool: &PgPool, session_id: i64, offers: &[ScrapedOffe
 pub async fn list_for_session(pool: &PgPool, session_id: i64, min_score: f32) -> Result<Vec<OfferView>, AppError> {
     let rows = sqlx::query(
         "SELECT id, session_id, source, title, company, location, url, contract_type, posted_at, \
-                status, score, created_at \
+                description, status, score, created_at, \
+                EXISTS(SELECT 1 FROM search.candidatures c WHERE c.offer_id = offers.id) AS has_candidature \
          FROM search.offers \
          WHERE session_id = $1 AND score > $2 \
          ORDER BY score DESC",
@@ -125,7 +128,8 @@ pub async fn list_for_session(pool: &PgPool, session_id: i64, min_score: f32) ->
 pub async fn fetch_one(pool: &PgPool, id: i64) -> Result<OfferView, AppError> {
     let row = sqlx::query(
         "SELECT id, session_id, source, title, company, location, url, contract_type, posted_at, \
-                status, score, created_at \
+                description, status, score, created_at, \
+                EXISTS(SELECT 1 FROM search.candidatures c WHERE c.offer_id = offers.id) AS has_candidature \
          FROM search.offers WHERE id = $1",
     )
     .bind(id)
@@ -188,6 +192,32 @@ pub async fn dismiss(pool: &PgPool, id: i64) -> Result<(), AppError> {
 /// `Ok(())` si la mise à jour a réussi, `AppError::NotFound` sinon.
 pub async fn mark_applied(pool: &PgPool, id: i64) -> Result<(), AppError> {
     set_status(pool, id, "applied").await
+}
+
+/// Marque une offre comme ayant donné lieu à une candidature, dans une
+/// transaction existante — variante tx de `mark_applied`, utilisée par
+/// `db::candidatures::insert` pour que la création de la candidature et le
+/// changement de statut de l'offre restent atomiques.
+///
+/// # Arguments
+///
+/// * `tx` - Transaction PostgreSQL active.
+/// * `id` - Identifiant de l'offre.
+///
+/// # Returns
+///
+/// `Ok(())` si la mise à jour a réussi, `AppError::NotFound` sinon.
+pub async fn mark_applied_tx(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id: i64) -> Result<(), AppError> {
+    let result = sqlx::query("UPDATE search.offers SET status = 'applied', updated_at = NOW() WHERE id = $1")
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_db_err)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("Offre introuvable.".to_string()));
+    }
+    Ok(())
 }
 
 /// Vue minimale d'une offre non encore scorée, utilisée par le filtre

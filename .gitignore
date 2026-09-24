@@ -4,6 +4,9 @@ node_modules/
 # Dev database (debug builds only)
 dev-data/
 
+# Agent data directory (DATA_DIR default: ./data)
+data/
+
 # Build output
 crates/desktop/dist/
 

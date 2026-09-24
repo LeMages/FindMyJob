@@ -102,9 +102,22 @@ export interface OfferView {
   url: string
   contract_type: string | null
   posted_at: string | null
+  description: string | null
   status: string
   score: number | null
   created_at: string
+  has_candidature: boolean
+}
+
+/** Données d'une offre du Marché transmises au formulaire de nouvelle candidature. */
+export interface NewApplicationPrefill {
+  offerId: number
+  url: string
+  poste: string
+  entreprise: string
+  localisation: string
+  typeContrat: string | null
+  description: string | null
 }
 
 export interface CreateSearchQueryInput {
@@ -226,6 +239,7 @@ export interface ProfileDto {
 export interface CandidatureView {
   id: number
   session_id: number | null
+  offer_id: number | null
   poste: string
   entreprise: string | null
   localisation: string | null
@@ -252,6 +266,7 @@ export interface CreateCandidatureInput {
   cv_path: string | null
   lettre_motivation_path: string | null
   session_id: number | null
+  offer_id: number | null
 }
 
 /** Champs extraits d'une offre scrapée (voir `scrape_offer`), pour pré-remplir le formulaire. */
@@ -278,6 +293,7 @@ export interface UpdateCandidatureInput {
 export interface CandidatureDetail {
   id: number
   session_id: number | null
+  offer_id: number | null
   poste: string
   entreprise: string | null
   localisation: string | null

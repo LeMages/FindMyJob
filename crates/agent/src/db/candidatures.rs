@@ -61,9 +61,9 @@ pub async fn insert(
     let row = sqlx::query(
         "INSERT INTO search.candidatures \
            (poste, entreprise, localisation, type, source, remuneration, \
-            url_offre, description_offre, notes, session_id) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
-         RETURNING id, session_id, poste, entreprise, localisation, status, source, \
+            url_offre, description_offre, notes, session_id, offer_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+         RETURNING id, session_id, offer_id, poste, entreprise, localisation, status, source, \
                    type AS type_contrat, date_candidature, created_at",
     )
     .bind(&poste)
@@ -76,6 +76,7 @@ pub async fn insert(
     .bind(&description_offre)
     .bind(normalize(input.notes.clone()))
     .bind(input.session_id)
+    .bind(input.offer_id)
     .fetch_one(&mut *tx)
     .await
     .map_err(map_db_err)?;
@@ -86,6 +87,7 @@ pub async fn insert(
     let view = CandidatureView {
         id: row.try_get("id").map_err(map_db_err)?,
         session_id: row.try_get("session_id").map_err(map_db_err)?,
+        offer_id: row.try_get("offer_id").map_err(map_db_err)?,
         poste: row.try_get("poste").map_err(map_db_err)?,
         entreprise: row.try_get("entreprise").map_err(map_db_err)?,
         localisation: row.try_get("localisation").map_err(map_db_err)?,
@@ -111,6 +113,13 @@ pub async fn insert(
         None,
     )
     .await?;
+
+    // Candidature créée depuis une offre du Marché (bouton "Postuler") :
+    // l'offre passe au statut "applied" dans la même transaction, pour ne
+    // jamais désynchroniser candidature et offre source.
+    if let Some(offer_id) = input.offer_id {
+        crate::db::offers::mark_applied_tx(&mut tx, offer_id).await?;
+    }
 
     tx.commit().await.map_err(map_db_err)?;
 
@@ -183,7 +192,7 @@ pub async fn update(
          SET poste = $1, entreprise = $2, localisation = $3, type = $4, source = $5, \
              remuneration = $6, url_offre = $7, notes = $8 \
          WHERE id = $9 \
-         RETURNING id, session_id, poste, entreprise, localisation, status, source, \
+         RETURNING id, session_id, offer_id, poste, entreprise, localisation, status, source, \
                    type AS type_contrat, remuneration, url_offre, description_offre, notes, \
                    date_candidature, cv_path, lettre_motivation_path, created_at",
     )
@@ -203,6 +212,7 @@ pub async fn update(
     Ok(CandidatureDetail {
         id: row.try_get("id").map_err(map_db_err)?,
         session_id: row.try_get("session_id").map_err(map_db_err)?,
+        offer_id: row.try_get("offer_id").map_err(map_db_err)?,
         poste: row.try_get("poste").map_err(map_db_err)?,
         entreprise: row.try_get("entreprise").map_err(map_db_err)?,
         localisation: row.try_get("localisation").map_err(map_db_err)?,
@@ -372,7 +382,7 @@ pub async fn list_for_session(
     session_id: i64,
 ) -> Result<Vec<CandidatureView>, AppError> {
     let rows = sqlx::query(
-        "SELECT id, session_id, poste, entreprise, localisation, status, source, \
+        "SELECT id, session_id, offer_id, poste, entreprise, localisation, status, source, \
                 type AS type_contrat, date_candidature, \
                 COALESCE( \
                     (SELECT MAX(changed_at) FROM search.status_history \
@@ -395,6 +405,7 @@ pub async fn list_for_session(
             Ok(CandidatureView {
                 id: r.try_get("id")?,
                 session_id: r.try_get("session_id")?,
+                offer_id: r.try_get("offer_id")?,
                 poste: r.try_get("poste")?,
                 entreprise: r.try_get("entreprise")?,
                 localisation: r.try_get("localisation")?,
@@ -428,7 +439,7 @@ pub async fn fetch_detail(
     id: i64,
 ) -> Result<CandidatureDetail, AppError> {
     let row = sqlx::query(
-        "SELECT id, session_id, poste, entreprise, localisation, status, source, \
+        "SELECT id, session_id, offer_id, poste, entreprise, localisation, status, source, \
                 type AS type_contrat, remuneration, url_offre, description_offre, notes, \
                 date_candidature, \
                 cv_path, lettre_motivation_path, \
@@ -445,6 +456,7 @@ pub async fn fetch_detail(
     Ok(CandidatureDetail {
         id: row.try_get("id").map_err(map_db_err)?,
         session_id: row.try_get("session_id").map_err(map_db_err)?,
+        offer_id: row.try_get("offer_id").map_err(map_db_err)?,
         poste: row.try_get("poste").map_err(map_db_err)?,
         entreprise: row.try_get("entreprise").map_err(map_db_err)?,
         localisation: row.try_get("localisation").map_err(map_db_err)?,

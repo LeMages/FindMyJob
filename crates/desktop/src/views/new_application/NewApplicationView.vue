@@ -29,6 +29,7 @@ const remunerationRef = ref('')
 const urlOffreRef = ref('')
 const descriptionOffreRef = ref('')
 const notesRef = ref('')
+const offerIdRef = ref<number | null>(null)
 
 const step = ref<'url' | 'paste' | 'form'>('url')
 const scraping = ref(false)
@@ -51,6 +52,25 @@ const { documentsBlocking, missingDocumentsMessage, loadDocumentsStatus } = useD
 onMounted(loadDocumentsStatus)
 watch(() => currentSession.value?.id, loadDocumentsStatus)
 
+/**
+ * Pré-remplit le formulaire avec les données d'une offre du Marché, si le
+ * formulaire a été ouvert via le bouton "Postuler" (voir `startApplicationFromOffer`).
+ */
+onMounted(() => {
+  const prefill = state.newApplicationPrefill
+  if (!prefill) return
+  roleRef.value = prefill.poste
+  companyRef.value = prefill.entreprise
+  locationRef.value = prefill.localisation
+  typeRef.value = normalizeTypeContrat(prefill.typeContrat)
+  urlOffreRef.value = prefill.url
+  descriptionOffreRef.value = prefill.description ?? ''
+  offerIdRef.value = prefill.offerId
+  autoDetectSource(prefill.url)
+  step.value = 'form'
+  state.newApplicationPrefill = null
+})
+
 /** Valide et envoie le formulaire de nouvelle candidature au backend. */
 async function submit() {
   if (!isValid.value || documentsBlocking.value) return
@@ -71,6 +91,7 @@ async function submit() {
       cv_path: null,
       lettre_motivation_path: null,
       session_id: currentSession.value?.id ?? null,
+      offer_id: offerIdRef.value,
     }
     // 2. Création de la candidature côté backend
     await invoke<CandidatureView>('create_candidature', { input })
@@ -84,12 +105,41 @@ async function submit() {
     urlOffreRef.value = ''
     descriptionOffreRef.value = ''
     notesRef.value = ''
+    offerIdRef.value = null
     navigate('tracking')
   } catch (e: unknown) {
     saveError.value = extractErrorMessage(e, 'Erreur lors de la création de la candidature.')
   } finally {
     saving.value = false
   }
+}
+
+/**
+ * Types de contrat bruts reconnus, mappés vers les valeurs du `<select>`
+ * "Type de contrat" (`stage`/`alternance`/`interim`/`cdd`/`cdi`) — le
+ * scraping WTTJ renvoie des libellés français ("Stage", "CDI"...) qui ne
+ * correspondent pas telles quelles aux valeurs du `<select>`.
+ */
+const CONTRACT_TYPE_ALIASES: Record<string, string> = {
+  stage: 'stage',
+  alternance: 'alternance',
+  cdi: 'cdi',
+  cdd: 'cdd',
+  interim: 'interim',
+  intérim: 'interim',
+  freelance: 'freelance',
+}
+
+/**
+ * Normalise un type de contrat brut (ex. scrapé depuis une offre du Marché)
+ * vers l'une des valeurs du `<select>` "Type de contrat".
+ *
+ * @param raw - Type de contrat brut, `null` si absent.
+ * @returns Valeur du `<select>` correspondante, ou `''` si aucune ne correspond.
+ */
+function normalizeTypeContrat(raw: string | null): string {
+  if (!raw) return ''
+  return CONTRACT_TYPE_ALIASES[raw.trim().toLowerCase()] ?? ''
 }
 
 /** Domaines de job boards reconnus par `autoDetectSource`. */
