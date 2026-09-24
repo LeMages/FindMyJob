@@ -9,6 +9,7 @@ mod documents;
 mod filtering;
 mod logging;
 mod pipeline;
+mod progress;
 mod scheduler;
 mod scraping;
 mod security;
@@ -42,7 +43,13 @@ async fn main() {
     let agent_config =
         config::AgentConfig::load().expect("Impossible de charger la configuration agent (agent.toml)");
 
-    let state = api::AppState { pool: pool.clone(), data_dir, fonts_dir, config: agent_config.clone() };
+    let state = api::AppState {
+        pool: pool.clone(),
+        data_dir,
+        fonts_dir,
+        config: agent_config.clone(),
+        progress: progress::ProgressStore::new(),
+    };
 
     // Job cron (12h/18h) itérant sur les sessions actives. Le `JobScheduler`
     // doit rester en vie jusqu'à l'arrêt du process (lié dans `main`, pas

@@ -8,6 +8,9 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
+// Importation des composants
+import GenerationProgressModal from './components/GenerationProgressModal.vue'
+
 // Importation des modules internes
 import type { CandidatureView, CreateCandidatureInput, ScrapedOfferFields } from '@/types'
 import {
@@ -19,6 +22,7 @@ import {
 } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
+import { useGenerationProgress } from '@/composables/useGenerationProgress'
 
 const roleRef = ref('')
 const companyRef = ref('')
@@ -47,6 +51,45 @@ const isValid = computed(() =>
 
 const saving = ref(false)
 const saveError = ref<string | null>(null)
+
+const showProgressModal = ref(false)
+const { progress, pollError, start: startProgressPolling } = useGenerationProgress()
+
+/**
+ * Réagit à la fin de la génération des documents (voir `GenerationProgressModal`) :
+ * en cas de succès, réinitialise le formulaire et retourne au suivi comme
+ * avant le passage en asynchrone ; en cas d'échec, la modale reste ouverte
+ * avec l'erreur et le formulaire est conservé (l'utilisateur ne perd pas sa saisie).
+ */
+watch(
+  () => progress.value?.status,
+  (status) => {
+    if (status === 'completed') {
+      showProgressModal.value = false
+      resetForm()
+      navigate('tracking')
+    }
+  }
+)
+
+/** Ferme la modale de progression (uniquement possible après un échec, voir la modale). */
+function closeProgressModal() {
+  showProgressModal.value = false
+}
+
+/** Réinitialise les champs du formulaire après une création réussie. */
+function resetForm() {
+  roleRef.value = ''
+  companyRef.value = ''
+  locationRef.value = ''
+  typeRef.value = ''
+  sourceRef.value = ''
+  remunerationRef.value = ''
+  urlOffreRef.value = ''
+  descriptionOffreRef.value = ''
+  notesRef.value = ''
+  offerIdRef.value = null
+}
 
 const { documentsBlocking, missingDocumentsMessage, loadDocumentsStatus } = useDocumentsStatus()
 onMounted(loadDocumentsStatus)
@@ -93,20 +136,19 @@ async function submit() {
       session_id: currentSession.value?.id ?? null,
       offer_id: offerIdRef.value,
     }
-    // 2. Création de la candidature côté backend
-    await invoke<CandidatureView>('create_candidature', { input })
-    // 3. Réinitialisation du formulaire et retour au suivi
-    roleRef.value = ''
-    companyRef.value = ''
-    locationRef.value = ''
-    typeRef.value = ''
-    sourceRef.value = ''
-    remunerationRef.value = ''
-    urlOffreRef.value = ''
-    descriptionOffreRef.value = ''
-    notesRef.value = ''
-    offerIdRef.value = null
-    navigate('tracking')
+    // 2. Création de la candidature côté backend (documents générés en tâche
+    //    de fond côté agent — voir `showProgressModal`/`useGenerationProgress`)
+    const candidature = await invoke<CandidatureView>('create_candidature', { input })
+    // 3. Suivi de la génération des documents (modale bloquante) — seulement
+    //    si une génération a réellement été déclenchée (candidature liée à
+    //    une session, voir `create_candidature` côté agent)
+    if (candidature.session_id !== null) {
+      showProgressModal.value = true
+      startProgressPolling(candidature.id)
+    } else {
+      resetForm()
+      navigate('tracking')
+    }
   } catch (e: unknown) {
     saveError.value = extractErrorMessage(e, 'Erreur lors de la création de la candidature.')
   } finally {
@@ -418,5 +460,12 @@ async function handlePasteExtract() {
       {{ saving ? 'Enregistrement…' : 'Valider la candidature →' }}
     </button>
     </template>
+
+    <GenerationProgressModal
+      v-if="showProgressModal"
+      :progress="progress"
+      :poll-error="pollError"
+      @close="closeProgressModal"
+    />
   </div>
 </template>

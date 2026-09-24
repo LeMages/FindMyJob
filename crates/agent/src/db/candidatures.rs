@@ -258,6 +258,59 @@ pub async fn set_documents(
     Ok(())
 }
 
+/// Supprime définitivement une candidature et les lignes qui la référencent
+/// (contacts, entretiens, mails, historique de statut), dans une transaction.
+///
+/// Usage restreint : contrairement à `abandon` (suppression logicielle,
+/// utilisée par le bouton « Supprimer » de la page de détail), ce hard delete
+/// n'est appelé que par `api::candidatures::spawn_document_generation` quand
+/// la génération des documents échoue juste après la création — la
+/// candidature n'a alors pu recevoir ni contact, ni entretien, ni mail, mais
+/// la fonction reste correcte si ce n'était pas le cas.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions PostgreSQL.
+/// * `id` - Identifiant de la candidature à supprimer.
+///
+/// # Returns
+///
+/// `Ok(())` une fois la suppression effectuée (silencieux si la candidature n'existe déjà plus).
+pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
+    let mut tx = pool.begin().await.map_err(map_db_err)?;
+
+    // Ordre de suppression contraint par les FK internes : status_history
+    // référence interviews, emails référence contacts.
+    sqlx::query("DELETE FROM search.status_history WHERE candidature_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_db_err)?;
+    sqlx::query("DELETE FROM search.emails WHERE candidature_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_db_err)?;
+    sqlx::query("DELETE FROM search.interviews WHERE candidature_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_db_err)?;
+    sqlx::query("DELETE FROM search.contacts WHERE candidature_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_db_err)?;
+    sqlx::query("DELETE FROM search.candidatures WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_db_err)?;
+
+    tx.commit().await.map_err(map_db_err)?;
+    Ok(())
+}
+
 /// Marque une candidature comme abandonnée (statut `abandon`), utilisé quand
 /// l'utilisateur supprime une candidature encore au statut « à postuler ».
 /// La mise à jour du statut et son entrée d'historique sont écrites dans la

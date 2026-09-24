@@ -62,6 +62,7 @@ pub fn run() {
             commands::extract_offer_from_text,
             commands::get_candidatures,
             commands::get_candidature,
+            commands::get_generation_progress,
             commands::update_candidature,
             commands::abandon_candidature,
             commands::postuler_sans_message,

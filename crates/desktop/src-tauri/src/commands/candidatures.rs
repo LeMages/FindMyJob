@@ -3,12 +3,15 @@
 // Importation des modules internes
 use crate::api_client::ApiClient;
 use crate::error::AppError;
-use crate::models::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
+use crate::models::{
+    CandidatureDetail, CandidatureView, CreateCandidatureInput, GenerationProgress, UpdateCandidatureInput,
+};
 
-/// Crée une candidature. La génération du CV et de la lettre de motivation
-/// adaptés à l'offre (pipeline IA côté agent, à partir des documents de
-/// référence de la session et du profil candidat) a lieu côté serveur avant
-/// l'insertion en base.
+/// Crée une candidature. Si la session cible a ses documents de référence
+/// prêts, l'agent lance la génération du CV et de la lettre de motivation en
+/// tâche de fond : cette commande répond dès l'insertion en base, sans
+/// attendre la génération — `cv_path`/`lettre_motivation_path` valent `None`
+/// dans la réponse. Utiliser `get_generation_progress` pour suivre l'avancement.
 ///
 /// # Arguments
 ///
@@ -17,13 +20,33 @@ use crate::models::{CandidatureDetail, CandidatureView, CreateCandidatureInput, 
 ///
 /// # Returns
 ///
-/// `CandidatureView` créée, avec les chemins des documents générés.
+/// `CandidatureView` créée (documents pas encore générés).
 #[tauri::command]
 pub async fn create_candidature(
     api: tauri::State<'_, ApiClient>,
     input: CreateCandidatureInput,
 ) -> Result<CandidatureView, AppError> {
     api.post("/api/candidatures", &input).await
+}
+
+/// Récupère la progression de la génération des documents d'une candidature,
+/// pour affichage d'une barre de progression pendant `create_candidature`.
+///
+/// # Arguments
+///
+/// * `api` - Client HTTP vers l'agent.
+/// * `candidature_id` - Identifiant de la candidature suivie.
+///
+/// # Returns
+///
+/// `GenerationProgress` courante, ou `AppError::NotFound` si aucune
+/// génération n'est en cours ni récemment terminée pour cet identifiant.
+#[tauri::command]
+pub async fn get_generation_progress(
+    api: tauri::State<'_, ApiClient>,
+    candidature_id: i64,
+) -> Result<GenerationProgress, AppError> {
+    api.get(&format!("/api/candidatures/{candidature_id}/progress")).await
 }
 
 /// Liste les candidatures d'une session.

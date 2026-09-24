@@ -253,6 +253,16 @@ export interface CandidatureView {
   created_at: string
 }
 
+/** Progression de la génération des documents (CV + lettre de motivation) d'une candidature, consultée par polling. */
+export interface GenerationProgress {
+  candidature_id: number
+  current_step: number
+  total_steps: number
+  step_label: string
+  status: 'in_progress' | 'completed' | 'failed'
+  error: string | null
+}
+
 export interface CreateCandidatureInput {
   poste: string
   entreprise: string | null

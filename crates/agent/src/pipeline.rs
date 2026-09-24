@@ -108,12 +108,19 @@ async fn compile_with_retry(
     }
 }
 
+/// Nombre total d'étapes de `generate_documents`, communiqué à l'appelant
+/// pour calculer une progression (`current_step`/`total_steps`) — un retry
+/// de compilation (`compile_with_retry`) reste sur son étape, il n'en ajoute
+/// pas une septième.
+pub const GENERATION_STEPS_TOTAL: u8 = 6;
+
 /// Génère le CV et la lettre de motivation adaptés à une offre, pour la
 /// candidature en cours de création.
 ///
 /// Enchaîne : analyse de l'offre → matching du profil → rédaction du contenu
-/// (CV et lettre en parallèle) → assemblage Typst (CV et lettre en
-/// parallèle) → compilation PDF (avec un retry de correction par document).
+/// (CV puis lettre) → assemblage Typst + compilation PDF, document par
+/// document (CV puis lettre — séquentiel plutôt qu'en parallèle, pour que
+/// `on_progress` reflète une progression par étape lisible côté UI).
 /// Aucune étape n'écrit sur le disque ni en base : c'est à l'appelant de
 /// persister le résultat une fois la candidature créée.
 ///
@@ -123,6 +130,7 @@ async fn compile_with_retry(
 /// * `fonts_dir` - Dossier des polices importées par l'utilisateur, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session (fournit les documents de référence).
 /// * `description_offre` - Texte brut de l'offre d'emploi.
+/// * `on_progress` - Callback appelée à chaque étape (`step` 1-based, libellé), pour reporter la progression à l'appelant.
 ///
 /// # Returns
 ///
@@ -132,6 +140,7 @@ pub async fn generate_documents(
     fonts_dir: &Path,
     session_id: i64,
     description_offre: &str,
+    on_progress: impl Fn(u8, &str),
 ) -> Result<GeneratedDocuments, AppError> {
     let fonts_dir = fonts_dir.to_path_buf();
 
@@ -161,7 +170,10 @@ pub async fn generate_documents(
     // 2. Étapes 1 → 2 : analyse de l'offre, puis matching du profil
     //    (séquentielles, la seconde dépend de la première)
     // ------------------------------------------------------------------
+    on_progress(1, "Analyse de l'offre…");
     let offer_analysis = offer::analyze_offer(description_offre, &model).await?;
+
+    on_progress(2, "Matching profil / offre…");
     let matching_strategy = matching::match_profile(&offer_analysis, &profile, &model).await?;
 
     // ------------------------------------------------------------------
@@ -169,31 +181,36 @@ pub async fn generate_documents(
     // [DIAG-TEMP] Séquentiel au lieu de tokio::try_join! — test décisif pour
     // confirmer/infirmer une race de concurrence. À revert après diagnostic.
     // ------------------------------------------------------------------
+    on_progress(3, "Rédaction du CV…");
     let cv_content =
         content::generate_cv_content(&matching_strategy, &profile, &offer_analysis, &model).await?;
+
+    on_progress(4, "Rédaction de la lettre de motivation…");
     let lm_content =
         content::generate_lm_content(&matching_strategy, &profile, &offer_analysis, &model).await?;
 
     // ------------------------------------------------------------------
-    // 4. Étapes 4a/4b : assemblage Typst CV et lettre, en parallèle
+    // 4. Étapes 5/6 : assemblage Typst + compilation PDF, document par
+    //    document (séquentiel — voir doc de fonction pour le compromis
+    //    avec le parallélisme précédent).
     // ------------------------------------------------------------------
-    let (cv_typst, lm_typst) = tokio::try_join!(
-        assemble::assemble_typst(&cv_content, cv_style, &cv_original, "cv", Some(&profile.user), &model),
-        assemble::assemble_typst(
-            &lm_content,
-            lm_style,
-            &lm_original,
-            "lettre_motivation",
-            Some(&profile.user),
-            &model,
-        ),
-    )?;
-
-    // ------------------------------------------------------------------
-    // 5. Compilation PDF, avec un retry de correction par document
-    // ------------------------------------------------------------------
+    on_progress(5, "Assemblage et compilation du CV…");
+    let cv_typst =
+        assemble::assemble_typst(&cv_content, cv_style, &cv_original, "cv", Some(&profile.user), &model)
+            .await?;
     let (cv_typst, cv_pdf) =
         compile_with_retry(cv_typst, &cv_original, cv_root, fonts_dir.clone(), &model).await?;
+
+    on_progress(6, "Assemblage et compilation de la lettre…");
+    let lm_typst = assemble::assemble_typst(
+        &lm_content,
+        lm_style,
+        &lm_original,
+        "lettre_motivation",
+        Some(&profile.user),
+        &model,
+    )
+    .await?;
     let (lm_typst, lm_pdf) = compile_with_retry(lm_typst, &lm_original, lm_root, fonts_dir, &model).await?;
 
     Ok(GeneratedDocuments { cv_typst, cv_pdf, lm_typst, lm_pdf })

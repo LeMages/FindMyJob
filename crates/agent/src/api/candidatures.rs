@@ -11,10 +11,11 @@ use axum::{Json, Router};
 // Importation des modules internes
 use crate::api::error::ApiError;
 use crate::api::AppState;
+use crate::progress::ProgressStore;
 use crate::{db, documents, pipeline};
 use findmyjob_core::error::AppError;
 use findmyjob_core::models::{
-    CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput,
+    CandidatureDetail, CandidatureView, CreateCandidatureInput, GenerationProgress, UpdateCandidatureInput,
 };
 
 /// Assemble les routes `/api/candidatures*` et `/api/sessions/{id}/candidatures`.
@@ -23,6 +24,7 @@ pub fn router() -> Router<AppState> {
         .route("/sessions/{session_id}/candidatures", get(list_for_session))
         .route("/candidatures", post(create_candidature))
         .route("/candidatures/{id}", get(get_candidature).put(update_candidature))
+        .route("/candidatures/{id}/progress", get(get_generation_progress))
         .route("/candidatures/{id}/abandon", post(abandon_candidature))
         .route("/candidatures/{id}/postuler", post(postuler_sans_message))
         .route("/candidatures/{id}/postuler/mail", post(postuler_par_mail))
@@ -46,10 +48,16 @@ async fn references_ready(pool: &sqlx::PgPool, session_id: i64) -> Result<bool, 
 }
 
 /// Crée une candidature puis, si la session cible dispose déjà de documents
-/// de référence analysés, génère et attache immédiatement le CV et la lettre
-/// de motivation adaptés à l'offre. Si la candidature cible une session dont
-/// les documents de référence ne sont pas prêts, la création est refusée
-/// (`AppError::Validation`) plutôt que de créer une candidature sans document.
+/// de référence analysés, lance en tâche de fond la génération du CV et de
+/// la lettre de motivation adaptés à l'offre — la réponse HTTP ne les attend
+/// pas, `cv_path`/`lettre_motivation_path` restent `None` à ce stade. La
+/// progression est consultable via `GET /candidatures/{id}/progress` pendant
+/// que la génération tourne (voir `crate::progress`). Si la génération
+/// échoue, la candidature créée ici est supprimée (voir `fail_generation`) :
+/// une candidature ne doit jamais rester en base sans documents. Si la
+/// candidature cible une session dont les documents de référence ne sont pas
+/// prêts, la création est refusée (`AppError::Validation`) plutôt que de
+/// créer une candidature sans document.
 async fn create_candidature(
     State(state): State<AppState>,
     Json(input): Json<CreateCandidatureInput>,
@@ -66,40 +74,102 @@ async fn create_candidature(
     }
 
     let description_offre = input.description_offre.clone();
-    let mut view = db::candidatures::insert(&state.pool, &input).await?;
+    let view = db::candidatures::insert(&state.pool, &input).await?;
 
     if let Some(session_id) = view.session_id {
         if references_ready(&state.pool, session_id).await? {
-            let description_offre = description_offre.unwrap_or_default();
-            let generated =
-                pipeline::generate_documents(&state.pool, &state.fonts_dir, session_id, &description_offre)
-                    .await?;
-
-            let cv_path = documents::save_generated_document(
-                &state.data_dir,
-                session_id,
-                "cv",
-                view.id,
-                &generated.cv_typst,
-                &generated.cv_pdf,
-            )?;
-            let lm_path = documents::save_generated_document(
-                &state.data_dir,
-                session_id,
-                "lettre_motivation",
-                view.id,
-                &generated.lm_typst,
-                &generated.lm_pdf,
-            )?;
-
-            db::candidatures::set_documents(&state.pool, view.id, &Some(cv_path.clone()), &Some(lm_path.clone()))
-                .await?;
-            view.cv_path = Some(cv_path);
-            view.lettre_motivation_path = Some(lm_path);
+            spawn_document_generation(state, view.id, session_id, description_offre.unwrap_or_default());
         }
     }
 
     Ok(Json(view))
+}
+
+/// Lance en tâche de fond (`tokio::spawn`) la génération des documents d'une
+/// candidature : reporte la progression dans `state.progress` à chaque
+/// étape, sauvegarde les fichiers générés puis persiste leurs chemins en
+/// base une fois terminé. Si une étape échoue, la candidature — créée sans
+/// documents en attendant ce résultat — est supprimée plutôt que laissée
+/// orpheline en base ; seul le store de progression (éphémère) garde une
+/// trace de l'échec pour le desktop. Cette tâche n'a pas d'appelant HTTP à
+/// qui propager une erreur.
+fn spawn_document_generation(state: AppState, candidature_id: i64, session_id: i64, description_offre: String) {
+    tokio::spawn(async move {
+        let progress = state.progress.clone();
+        let result = pipeline::generate_documents(
+            &state.pool,
+            &state.fonts_dir,
+            session_id,
+            &description_offre,
+            |step, label| progress.update(candidature_id, step, pipeline::GENERATION_STEPS_TOTAL, label),
+        )
+        .await;
+
+        let generated = match result {
+            Ok(generated) => generated,
+            Err(e) => return fail_generation(&state, &progress, candidature_id, &e.to_string()).await,
+        };
+
+        let saved = documents::save_generated_document(
+            &state.data_dir,
+            session_id,
+            "cv",
+            candidature_id,
+            &generated.cv_typst,
+            &generated.cv_pdf,
+        )
+        .and_then(|cv_path| {
+            documents::save_generated_document(
+                &state.data_dir,
+                session_id,
+                "lettre_motivation",
+                candidature_id,
+                &generated.lm_typst,
+                &generated.lm_pdf,
+            )
+            .map(|lm_path| (cv_path, lm_path))
+        });
+
+        let (cv_path, lm_path) = match saved {
+            Ok(paths) => paths,
+            Err(e) => return fail_generation(&state, &progress, candidature_id, &e.to_string()).await,
+        };
+
+        if let Err(e) =
+            db::candidatures::set_documents(&state.pool, candidature_id, &Some(cv_path), &Some(lm_path)).await
+        {
+            return fail_generation(&state, &progress, candidature_id, &e.to_string()).await;
+        }
+
+        progress.mark_completed(candidature_id);
+    });
+}
+
+/// Marque la génération comme échouée dans le store de progression, puis
+/// supprime la candidature créée pour cette génération — elle n'a jamais eu
+/// de documents ni pu recevoir d'interaction utilisateur (contact, entretien)
+/// pendant la modale bloquante de progression côté desktop, donc rien d'autre
+/// à nettoyer. Le message affiché au desktop reste celui de l'échec de
+/// génération même si la suppression elle-même échoue (loggée sur stderr).
+async fn fail_generation(state: &AppState, progress: &ProgressStore, candidature_id: i64, error: &str) {
+    progress.mark_failed(candidature_id, error);
+    if let Err(e) = db::candidatures::delete(&state.pool, candidature_id).await {
+        eprintln!("Suppression de la candidature {candidature_id} après échec de génération impossible : {e}");
+    }
+}
+
+/// Renvoie la progression courante de la génération des documents d'une
+/// candidature, ou `404` si aucune génération n'est en cours ni récemment
+/// terminée pour cet identifiant (voir `crate::progress::ProgressStore`).
+async fn get_generation_progress(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<GenerationProgress>, ApiError> {
+    state
+        .progress
+        .get(id)
+        .map(Json)
+        .ok_or_else(|| AppError::NotFound("Aucune génération en cours pour cette candidature.".to_string()).into())
 }
 
 async fn get_candidature(

@@ -12,6 +12,7 @@ use tower_http::cors::CorsLayer;
 
 // Importation des modules internes
 use crate::config::AgentConfig;
+use crate::progress::ProgressStore;
 
 mod auth;
 mod candidatures;
@@ -44,6 +45,7 @@ pub struct AppState {
     pub data_dir: PathBuf,
     pub fonts_dir: PathBuf,
     pub config: AgentConfig,
+    pub progress: ProgressStore,
 }
 
 /// Construit la couche CORS : permissive si `CORS_ALLOWED_ORIGINS` n'est pas
