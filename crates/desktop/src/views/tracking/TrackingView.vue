@@ -20,6 +20,7 @@ import {
 } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 import { statusLabel, statusColor, TRASHED_STATUSES } from '@/composables/candidature_display'
+import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
 import TrashPopup from '@/views/tracking/components/TrashPopup.vue'
 import CandidaturesTabs from '@/views/tracking/components/CandidaturesTabs.vue'
 import MarchePanel from '@/views/tracking/components/MarchePanel.vue'
@@ -36,6 +37,8 @@ const sessionId = computed(() => currentSession.value?.id ?? null)
 const sessionIsAccepted = computed(() =>
   candidatures.value.some(c => c.status === 'accepte')
 )
+
+const { documentsBlocking, missingDocumentsMessage, loadDocumentsStatus } = useDocumentsStatus()
 
 // Les candidatures aux statuts terminaux négatifs ne figurent plus dans la
 // liste principale : elles sont reléguées à la corbeille (voir
@@ -155,6 +158,8 @@ async function loadCandidatures() {
 
 onMounted(loadCandidatures)
 watch(sessionId, loadCandidatures)
+onMounted(loadDocumentsStatus)
+watch(sessionId, loadDocumentsStatus)
 </script>
 
 <template>
@@ -193,13 +198,19 @@ watch(sessionId, loadCandidatures)
             </svg>
             Corbeille
           </button>
-          <button
-            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-            :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': sessionIsAccepted }"
-            @click="navigate('new')"
+          <span
+            class="inline-block"
+            :title="documentsBlocking ? `${missingDocumentsMessage} Complète-les dans l'onglet Paramètres.` : undefined"
           >
-            + Nouvelle candidature
-          </button>
+            <button
+              class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+              :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': sessionIsAccepted || documentsBlocking }"
+              :disabled="sessionIsAccepted || documentsBlocking"
+              @click="navigate('new')"
+            >
+              + Nouvelle candidature
+            </button>
+          </span>
         </div>
       </div>
     </div>

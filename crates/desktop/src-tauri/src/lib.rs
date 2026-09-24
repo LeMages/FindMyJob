@@ -48,6 +48,7 @@ pub fn run() {
             commands::save_lettre_motivation,
             commands::compile_cv,
             commands::compile_lettre_motivation,
+            commands::get_documents_status,
             commands::open_url,
             commands::update_user_info,
             commands::add_projet,

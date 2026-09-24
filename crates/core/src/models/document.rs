@@ -19,6 +19,16 @@ pub struct DocumentFileInfo {
     pub size: i64,
 }
 
+/// État de préparation des documents de référence d'une session (CV et
+/// lettre de motivation) : `all_ready` conditionne la création d'une
+/// candidature liée à cette session (voir `api::candidatures::create_candidature`).
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct DocumentsStatus {
+    pub cv_ready: bool,
+    pub lm_ready: bool,
+    pub all_ready: bool,
+}
+
 /// Modèle DB d'un document de référence (CV ou lettre de motivation) tracké
 /// dans la table `documents`. Le filesystem reste la source de vérité du
 /// contenu ; ce modèle ne porte que les métadonnées et le cache d'analyse

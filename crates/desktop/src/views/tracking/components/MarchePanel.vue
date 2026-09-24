@@ -13,6 +13,10 @@ import { currentSession } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 import type { OfferView } from '@/types'
 
+// TODO: quand un bouton « Postuler » par offre sera ajouté ici
+// (création de candidature depuis le marché), le conditionner par
+// all_ready (get_documents_status), comme dans NewApplicationView.vue.
+
 const offers = ref<OfferView[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)

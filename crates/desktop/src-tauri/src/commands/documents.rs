@@ -9,7 +9,7 @@ use serde_json::json;
 // Importation des modules internes
 use crate::api_client::ApiClient;
 use crate::error::AppError;
-use crate::models::{DocumentFileInfo, DocumentReferenceView};
+use crate::models::{DocumentFileInfo, DocumentReferenceView, DocumentsStatus};
 
 /// Récupère la référence de CV sauvegardée pour une session, si elle existe.
 ///
@@ -136,6 +136,25 @@ pub async fn compile_lettre_motivation(
 ) -> Result<String, AppError> {
     api.post(&format!("/api/sessions/{session_id}/documents/lm/compile"), &())
         .await
+}
+
+/// Récupère l'état de préparation des documents de référence (CV, lettre de
+/// motivation) d'une session — conditionne la création d'une candidature.
+///
+/// # Arguments
+///
+/// * `api` - Client HTTP vers l'agent.
+/// * `session_id` - Identifiant de la session propriétaire.
+///
+/// # Returns
+///
+/// `DocumentsStatus` reflétant l'état des deux documents de référence.
+#[tauri::command]
+pub async fn get_documents_status(
+    api: tauri::State<'_, ApiClient>,
+    session_id: i64,
+) -> Result<DocumentsStatus, AppError> {
+    api.get(&format!("/api/sessions/{session_id}/documents/status")).await
 }
 
 /// Inspecte l'état sur disque d'un document joint à une candidature (existence, taille).

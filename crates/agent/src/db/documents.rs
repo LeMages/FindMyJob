@@ -10,7 +10,7 @@ use sqlx::{PgPool, Row};
 // Importation des modules internes
 use crate::db::common::map_db_err;
 use findmyjob_core::error::AppError;
-use findmyjob_core::models::Document;
+use findmyjob_core::models::{Document, DocumentsStatus};
 
 /// Construit un `Document` à partir d'une ligne SQL brute.
 ///
@@ -118,4 +118,27 @@ pub async fn get_by_session_and_type(
     .map_err(map_db_err)?;
 
     row.as_ref().map(row_to_document).transpose().map_err(map_db_err)
+}
+
+/// Calcule l'état de préparation des documents de référence d'une session
+/// (CV et lettre de motivation) : prêt = document tracké et `style_analysis`
+/// non nul, seule condition sous laquelle une candidature peut être créée
+/// (voir `api::candidatures::create_candidature`).
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions PostgreSQL.
+/// * `session_id` - Identifiant de la session propriétaire.
+///
+/// # Returns
+///
+/// `DocumentsStatus` reflétant l'état des deux documents de référence.
+pub async fn status_for_session(pool: &PgPool, session_id: i64) -> Result<DocumentsStatus, AppError> {
+    let cv_ready = get_by_session_and_type(pool, session_id, "cv")
+        .await?
+        .is_some_and(|d| d.style_analysis.is_some());
+    let lm_ready = get_by_session_and_type(pool, session_id, "lettre_motivation")
+        .await?
+        .is_some_and(|d| d.style_analysis.is_some());
+    Ok(DocumentsStatus { cv_ready, lm_ready, all_ready: cv_ready && lm_ready })
 }

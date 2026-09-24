@@ -12,6 +12,7 @@ use axum::{Json, Router};
 use crate::api::error::ApiError;
 use crate::api::AppState;
 use crate::{db, documents, pipeline};
+use findmyjob_core::error::AppError;
 use findmyjob_core::models::{
     CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput,
 };
@@ -37,29 +38,33 @@ async fn list_for_session(
 
 /// Indique si les deux documents de référence (CV et lettre de motivation)
 /// d'une session ont déjà été analysés (`style_analysis` renseigné) — seule
-/// condition sous laquelle `pipeline::generate_documents` peut réussir (voir
-/// `pipeline::require_reference`).
+/// condition sous laquelle une candidature peut être créée pour cette
+/// session (voir `create_candidature`) et sous laquelle
+/// `pipeline::generate_documents` peut réussir (voir `pipeline::require_reference`).
 async fn references_ready(pool: &sqlx::PgPool, session_id: i64) -> Result<bool, ApiError> {
-    for doc_type in ["cv", "lettre_motivation"] {
-        let ready = db::documents::get_by_session_and_type(pool, session_id, doc_type)
-            .await?
-            .is_some_and(|d| d.style_analysis.is_some());
-        if !ready {
-            return Ok(false);
-        }
-    }
-    Ok(true)
+    Ok(db::documents::status_for_session(pool, session_id).await?.all_ready)
 }
 
 /// Crée une candidature puis, si la session cible dispose déjà de documents
 /// de référence analysés, génère et attache immédiatement le CV et la lettre
-/// de motivation adaptés à l'offre. Sans documents de référence, la
-/// candidature est créée sans document attaché (comme `candidatures::insert`
-/// seul) — la génération pourra être déclenchée plus tard par un autre appel.
+/// de motivation adaptés à l'offre. Si la candidature cible une session dont
+/// les documents de référence ne sont pas prêts, la création est refusée
+/// (`AppError::Validation`) plutôt que de créer une candidature sans document.
 async fn create_candidature(
     State(state): State<AppState>,
     Json(input): Json<CreateCandidatureInput>,
 ) -> Result<Json<CandidatureView>, ApiError> {
+    if let Some(session_id) = input.session_id {
+        if !references_ready(&state.pool, session_id).await? {
+            return Err(AppError::Validation(
+                "Les documents de référence (CV et lettre de motivation) doivent être uploadés \
+                 et analysés avant de pouvoir postuler."
+                    .to_string(),
+            )
+            .into());
+        }
+    }
+
     let description_offre = input.description_offre.clone();
     let mut view = db::candidatures::insert(&state.pool, &input).await?;
 

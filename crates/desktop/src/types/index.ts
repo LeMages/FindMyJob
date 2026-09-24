@@ -206,6 +206,12 @@ export interface DocumentReferenceView {
   updated_at: string
 }
 
+export interface DocumentsStatus {
+  cv_ready: boolean
+  lm_ready: boolean
+  all_ready: boolean
+}
+
 export interface ProfileDto {
   user: UserView
   experiences: ExperienceView[]

@@ -5,7 +5,7 @@
  */
 
 // Importation des modules Vue / framework
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
@@ -18,6 +18,7 @@ import {
   removeContact,
 } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
 
 const roleRef = ref('')
 const companyRef = ref('')
@@ -46,9 +47,13 @@ const isValid = computed(() =>
 const saving = ref(false)
 const saveError = ref<string | null>(null)
 
+const { documentsBlocking, missingDocumentsMessage, loadDocumentsStatus } = useDocumentsStatus()
+onMounted(loadDocumentsStatus)
+watch(() => currentSession.value?.id, loadDocumentsStatus)
+
 /** Valide et envoie le formulaire de nouvelle candidature au backend. */
 async function submit() {
-  if (!isValid.value) return
+  if (!isValid.value || documentsBlocking.value) return
   saving.value = true
   saveError.value = null
   try {
@@ -344,14 +349,20 @@ async function handlePasteExtract() {
       <textarea v-model="notesRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-20" placeholder="Notes libres, contexte, points à préparer..." />
     </div>
 
+    <!-- Documents de référence manquants -->
+    <div v-if="documentsBlocking" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[14px] text-[13px] text-amber-700 flex items-center justify-between gap-3">
+      <span>{{ missingDocumentsMessage }}</span>
+      <button class="underline font-medium whitespace-nowrap" @click="navigate('settings')">Aller aux paramètres</button>
+    </div>
+
     <!-- Error -->
     <div v-if="saveError" class="text-red-500 text-[13px] mb-2">{{ saveError }}</div>
 
     <!-- Submit -->
     <button
       class="w-full justify-center h-12 text-[15px] rounded-10 mt-1 px-4 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-      :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': saving || !isValid }"
-      :disabled="saving || !isValid"
+      :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': saving || !isValid || documentsBlocking }"
+      :disabled="saving || !isValid || documentsBlocking"
       @click="submit"
     >
       {{ saving ? 'Enregistrement…' : 'Valider la candidature →' }}

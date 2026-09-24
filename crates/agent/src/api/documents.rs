@@ -9,8 +9,8 @@ use axum::{Json, Router};
 // Importation des modules internes
 use crate::api::error::ApiError;
 use crate::api::AppState;
-use crate::documents;
-use findmyjob_core::models::{DocumentFileInfo, DocumentReferenceView};
+use crate::{db, documents};
+use findmyjob_core::models::{DocumentFileInfo, DocumentReferenceView, DocumentsStatus};
 
 #[derive(serde::Deserialize)]
 struct SaveDocumentInput {
@@ -30,6 +30,7 @@ pub fn router() -> Router<AppState> {
         .route("/sessions/{id}/documents/lm", get(get_lm_reference).post(save_lettre_motivation))
         .route("/sessions/{id}/documents/cv/compile", post(compile_cv))
         .route("/sessions/{id}/documents/lm/compile", post(compile_lettre_motivation))
+        .route("/sessions/{id}/documents/status", get(get_documents_status))
         .route("/documents/info", get(get_document_info))
         .route("/documents/pdf", get(get_document_pdf))
 }
@@ -100,6 +101,13 @@ async fn compile_lettre_motivation(
     Ok(Json(
         documents::compile_reference(&state.data_dir, &state.fonts_dir, session_id, "lettre_motivation").await?,
     ))
+}
+
+async fn get_documents_status(
+    State(state): State<AppState>,
+    Path(session_id): Path<i64>,
+) -> Result<Json<DocumentsStatus>, ApiError> {
+    Ok(Json(db::documents::status_for_session(&state.pool, session_id).await?))
 }
 
 async fn get_document_info(Query(query): Query<DocumentPathQuery>) -> Json<DocumentFileInfo> {
