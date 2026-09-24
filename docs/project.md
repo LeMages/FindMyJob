@@ -206,7 +206,7 @@ The API exposes the resulting queue (`GET /api/offers`, `GET /api/offers/{id}`, 
 
 Each session owns one reference CV and one reference cover letter, stored under `documents/sessions/<session_id>/{cv,lettre_motivation}/` on the agent's `DATA_DIR`. One reference document per type and per session.
 
-- **Saving a reference** (`crates/agent/src/documents/storage.rs::save_reference`) — style analysis via Claude runs first and blocks the write: a failed analysis writes nothing to disk. The previous reference (if any) is backed up under `backup/<timestamp>/` before the new `.typ` is written and compiled to `.pdf`.
+- **Saving a reference** (`crates/agent/src/documents/storage.rs::save_reference`) — style analysis via Claude runs first and blocks the write: a failed analysis writes nothing to disk. The `.typ` is then compiled to `.pdf` in memory and stored as an immutable version under `<doc_type>/versions/<version_id>/reference.{typ,pdf}`, tracked in `search.document_versions` (with its style analysis); `search.documents` points to the current version via `current_version_id`. Previous versions are kept and can be restored as the current reference (`documents/reference_versions.rs`, `POST /api/sessions/{id}/documents/{cv|lm}/versions/{version}/restore`). Each candidature records the reference versions its documents were generated from (`cv_reference_version_id` / `lm_reference_version_id`).
 - **Style analysis** (`crates/core/src/llm/style.rs::analyze_style`) sends the `.typ` source to Claude with a JSON schema covering section order, formatting (bullet style, person, tense, length), tone, design (layout, icons, photo, color), and Typst-specific patterns (custom functions/packages/fonts). The result is cached in `documents.style_analysis` and reused by the generation pipeline.
 - **Generation pipeline** (`crates/agent/src/pipeline.rs::generate_documents`, triggered from `POST /api/candidatures` when the session's references are already style-analyzed) chains:
   1. Offer analysis (`core::llm::offer::analyze_offer`).
@@ -265,7 +265,7 @@ Every file under `crates/desktop/src-tauri/src/commands/` follows the same shape
 ### Implemented end-to-end
 
 - Onboarding and full profile management (experiences, formations, languages, projects, skills).
-- Sessions: CRUD, reference CV/cover letter per session (import, compile, style analysis, backup history, PDF preview).
+- Sessions: CRUD, reference CV/cover letter per session (import, compile, style analysis, version history with restore, PDF preview).
 - Applications: creation with mandatory AI-generated documents (failure blocks creation), table view per session, editable detail while `a_postuler`, typed timeline, interview management, trash for negative terminal statuses.
 - Apply flow: no message / by mail / by message, all exporting documents to disk.
 - Offer import from a pasted URL or pasted text, prefilling the new-application form.

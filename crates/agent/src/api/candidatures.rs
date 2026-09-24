@@ -136,7 +136,14 @@ fn spawn_document_generation(state: AppState, candidature_id: i64, session_id: i
         };
 
         if let Err(e) =
-            db::candidatures::set_documents(&state.pool, candidature_id, &Some(cv_path), &Some(lm_path)).await
+            db::candidatures::set_documents(
+                &state.pool,
+                candidature_id,
+                &Some(cv_path),
+                &Some(lm_path),
+                (generated.cv_reference_version_id, generated.lm_reference_version_id),
+            )
+            .await
         {
             return fail_generation(&state, &progress, candidature_id, &e.to_string()).await;
         }

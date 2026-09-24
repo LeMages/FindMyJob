@@ -4,6 +4,7 @@
 
 pub mod candidatures;
 pub mod contacts;
+pub mod document_versions;
 pub mod documents;
 pub mod experiences;
 pub mod export;
@@ -28,6 +29,7 @@ pub mod users;
 // chaque fonction, que seul un ré-export glob propage jusqu'à `generate_handler!`.
 pub use candidatures::*;
 pub use contacts::*;
+pub use document_versions::*;
 pub use documents::*;
 pub use experiences::*;
 pub use export::*;

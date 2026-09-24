@@ -13,6 +13,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import { extractErrorMessage } from '@/composables/useErrorMessage'
+import DocumentVersionHistory from '@/components/DocumentVersionHistory.vue'
 import type { DocumentReferenceView } from '@/types/index'
 
 interface Props {
@@ -69,6 +70,10 @@ const previewVisible = ref(false)
 const previewLoading = ref(false)
 const previewError = ref<string | null>(null)
 const previewData = ref<string | null>(null)
+const previewVersionNumber = ref<number | null>(null)
+const previewModalTitle = computed(() =>
+  previewVersionNumber.value == null ? modalTitle.value : `${modalTitle.value} — version ${previewVersionNumber.value}`,
+)
 
 /**
  * Formate le timestamp epoch (ms) de dernière sauvegarde d'une référence.
@@ -118,19 +123,41 @@ async function onFileSelected(event: Event) {
   }
 }
 
-async function preview() {
-  if (!props.reference) return
+/**
+ * Ouvre la modale d'aperçu et y charge un PDF base64.
+ *
+ * @param loadPdf - Charge le PDF encodé en base64.
+ * @param errorFallback - Message affiché si l'erreur n'en porte pas.
+ */
+async function openPreview(loadPdf: () => Promise<string>, errorFallback: string) {
   previewVisible.value = true
   previewLoading.value = true
   previewError.value = null
   previewData.value = null
   try {
-    previewData.value = await invoke<string>(compileCommand.value, { sessionId: props.sessionId })
+    previewData.value = await loadPdf()
   } catch (e: unknown) {
-    previewError.value = extractErrorMessage(e, compileErrorFallback.value)
+    previewError.value = extractErrorMessage(e, errorFallback)
   } finally {
     previewLoading.value = false
   }
+}
+
+async function preview() {
+  if (!props.reference) return
+  previewVersionNumber.value = null
+  await openPreview(
+    () => invoke<string>(compileCommand.value, { sessionId: props.sessionId }),
+    compileErrorFallback.value,
+  )
+}
+
+async function previewVersion(version: number) {
+  previewVersionNumber.value = version
+  await openPreview(
+    () => invoke<string>('get_document_version_pdf', { sessionId: props.sessionId, docType: props.docType, version }),
+    "Impossible de charger l'aperçu de cette version.",
+  )
 }
 
 /** `true` si un nouveau document a été sauvegardé depuis l'entrée en mode édition. */
@@ -217,6 +244,16 @@ defineExpose({ hasChanges, reset })
     </button>
     <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ emptyLabel }}</div>
 
+    <DocumentVersionHistory
+      v-if="reference"
+      :doc-type="docType"
+      :session-id="sessionId"
+      :reference="reference"
+      :edit-mode="editMode"
+      @preview="previewVersion"
+      @restored="emit('update:reference', $event)"
+    />
+
     <div v-if="saving" class="mt-[10px] flex items-center gap-[7px] text-[12px] text-neutral-500 font-mono">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-blue-500 flex-none">
         <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
@@ -231,7 +268,7 @@ defineExpose({ hasChanges, reset })
     <div v-if="previewVisible" class="fixed inset-0 bg-black/45 z-[1000] flex items-center justify-center" @click.self="previewVisible = false">
       <div class="bg-surface-3 rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.22)] w-[min(860px,calc(100vw-48px))] h-[min(92vh,1000px)] flex flex-col overflow-hidden">
         <div class="flex items-center justify-between px-5 py-[14px] border-b border-neutral-200 flex-none">
-          <span class="text-[14px] font-semibold text-neutral-950">{{ modalTitle }}</span>
+          <span class="text-[14px] font-semibold text-neutral-950">{{ previewModalTitle }}</span>
           <button
             class="w-7 h-7 rounded-7 border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer text-neutral-600 hover:bg-surface-3 hover:text-neutral-950"
             type="button"

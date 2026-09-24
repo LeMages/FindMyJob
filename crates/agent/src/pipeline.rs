@@ -18,12 +18,16 @@ use findmyjob_core::llm::{assemble, content, matching, offer};
 use findmyjob_core::models::Document;
 
 /// Documents générés et compilés pour une candidature, prêts à être
-/// sauvegardés sur disque par l'appelant.
+/// sauvegardés sur disque par l'appelant, avec les versions de référence
+/// (`document_versions.id`) dont ils sont issus — `None` pour une référence
+/// antérieure au versioning.
 pub struct GeneratedDocuments {
     pub cv_typst: String,
     pub cv_pdf: Vec<u8>,
     pub lm_typst: String,
     pub lm_pdf: Vec<u8>,
+    pub cv_reference_version_id: Option<i64>,
+    pub lm_reference_version_id: Option<i64>,
 }
 
 /// Récupère le document de référence d'un type donné pour la session,
@@ -213,12 +217,20 @@ pub async fn generate_documents(
     .await?;
     let (lm_typst, lm_pdf) = compile_with_retry(lm_typst, &lm_original, lm_root, fonts_dir, &model).await?;
 
-    Ok(GeneratedDocuments { cv_typst, cv_pdf, lm_typst, lm_pdf })
+    Ok(GeneratedDocuments {
+        cv_typst,
+        cv_pdf,
+        lm_typst,
+        lm_pdf,
+        cv_reference_version_id: cv_doc.current_version_id,
+        lm_reference_version_id: lm_doc.current_version_id,
+    })
 }
 
 /// Dérive le dossier racine de compilation à partir du chemin du `.typ` de
-/// référence (`.../documents/sessions/<session_id>/<doc_type>/reference.typ`
-/// → `.../documents/sessions/<session_id>/<doc_type>/`).
+/// référence (`.../<doc_type>/versions/<version_id>/reference.typ`
+/// → `.../<doc_type>/versions/<version_id>/`, ou `.../<doc_type>/` pour une
+/// référence antérieure au versioning).
 ///
 /// # Arguments
 ///

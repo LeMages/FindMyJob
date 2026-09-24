@@ -38,15 +38,15 @@ pub fn router() -> Router<AppState> {
 async fn get_cv_reference(
     State(state): State<AppState>,
     Path(session_id): Path<i64>,
-) -> Json<Option<DocumentReferenceView>> {
-    Json(documents::get_reference(&state.pool, &state.data_dir, session_id, "cv").await)
+) -> Result<Json<Option<DocumentReferenceView>>, ApiError> {
+    Ok(Json(documents::get_reference(&state.pool, session_id, "cv").await?))
 }
 
 async fn get_lm_reference(
     State(state): State<AppState>,
     Path(session_id): Path<i64>,
-) -> Json<Option<DocumentReferenceView>> {
-    Json(documents::get_reference(&state.pool, &state.data_dir, session_id, "lettre_motivation").await)
+) -> Result<Json<Option<DocumentReferenceView>>, ApiError> {
+    Ok(Json(documents::get_reference(&state.pool, session_id, "lettre_motivation").await?))
 }
 
 async fn save_cv(
@@ -91,7 +91,7 @@ async fn compile_cv(
     State(state): State<AppState>,
     Path(session_id): Path<i64>,
 ) -> Result<Json<String>, ApiError> {
-    Ok(Json(documents::compile_reference(&state.data_dir, &state.fonts_dir, session_id, "cv").await?))
+    Ok(Json(documents::compile_reference(&state.pool, &state.fonts_dir, session_id, "cv").await?))
 }
 
 async fn compile_lettre_motivation(
@@ -99,7 +99,7 @@ async fn compile_lettre_motivation(
     Path(session_id): Path<i64>,
 ) -> Result<Json<String>, ApiError> {
     Ok(Json(
-        documents::compile_reference(&state.data_dir, &state.fonts_dir, session_id, "lettre_motivation").await?,
+        documents::compile_reference(&state.pool, &state.fonts_dir, session_id, "lettre_motivation").await?,
     ))
 }
 

@@ -2,10 +2,12 @@
 //! motivation) et des polices utilisateur : compilation Typst et stockage sur disque.
 
 pub mod fonts;
+pub mod reference_versions;
 pub mod storage;
 pub mod typst;
 
 pub use fonts::{delete_font, import_font_folder, list_fonts, resolve_fonts_dir};
+pub use reference_versions::{read_latest_version_pdf, read_version_pdf, restore_version};
 // `SAVE_STEPS_TOTAL` implémente l'export local vers le dossier de téléchargements
 // de l'utilisateur (flux desktop "postuler") : non exposé par l'API HTTP de cette
 // étape (pas de notion de "dossier de téléchargements" sur un serveur headless),

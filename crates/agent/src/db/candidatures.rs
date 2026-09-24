@@ -194,7 +194,9 @@ pub async fn update(
          WHERE id = $9 \
          RETURNING id, session_id, offer_id, poste, entreprise, localisation, status, source, \
                    type AS type_contrat, remuneration, url_offre, description_offre, notes, \
-                   date_candidature, cv_path, lettre_motivation_path, created_at",
+                   date_candidature, cv_path, lettre_motivation_path, created_at, \
+                   (SELECT version FROM search.document_versions WHERE id = cv_reference_version_id) AS cv_reference_version, \
+                   (SELECT version FROM search.document_versions WHERE id = lm_reference_version_id) AS lm_reference_version",
     )
     .bind(&poste)
     .bind(&entreprise)
@@ -226,11 +228,14 @@ pub async fn update(
         date_candidature: row.try_get("date_candidature").map_err(map_db_err)?,
         cv_path: row.try_get("cv_path").map_err(map_db_err)?,
         lettre_motivation_path: row.try_get("lettre_motivation_path").map_err(map_db_err)?,
+        cv_reference_version: row.try_get("cv_reference_version").map_err(map_db_err)?,
+        lm_reference_version: row.try_get("lm_reference_version").map_err(map_db_err)?,
         created_at: row.try_get("created_at").map_err(map_db_err)?,
     })
 }
 
-/// Renseigne les chemins des documents finalisés (CV / lettre de motivation) d'une candidature.
+/// Renseigne les chemins des documents finalisés (CV / lettre de motivation)
+/// d'une candidature, avec les versions de référence utilisées pour les générer.
 ///
 /// # Arguments
 ///
@@ -238,6 +243,8 @@ pub async fn update(
 /// * `id` - Identifiant de la candidature.
 /// * `cv_path` - Chemin final du CV, si fourni.
 /// * `lettre_motivation_path` - Chemin final de la lettre de motivation, si fournie.
+/// * `reference_versions` - Ids des versions de référence (CV, lettre) ayant
+///   servi à la génération, `None` pour une référence antérieure au versioning.
 ///
 /// # Returns
 ///
@@ -247,14 +254,21 @@ pub async fn set_documents(
     id: i64,
     cv_path: &Option<String>,
     lettre_motivation_path: &Option<String>,
+    reference_versions: (Option<i64>, Option<i64>),
 ) -> Result<(), AppError> {
-    sqlx::query("UPDATE search.candidatures SET cv_path = $1, lettre_motivation_path = $2 WHERE id = $3")
-        .bind(cv_path)
-        .bind(lettre_motivation_path)
-        .bind(id)
-        .execute(pool)
-        .await
-        .map_err(map_db_err)?;
+    let (cv_version_id, lm_version_id) = reference_versions;
+    sqlx::query(
+        "UPDATE search.candidatures SET cv_path = $1, lettre_motivation_path = $2, \
+         cv_reference_version_id = $3, lm_reference_version_id = $4 WHERE id = $5",
+    )
+    .bind(cv_path)
+    .bind(lettre_motivation_path)
+    .bind(cv_version_id)
+    .bind(lm_version_id)
+    .bind(id)
+    .execute(pool)
+    .await
+    .map_err(map_db_err)?;
     Ok(())
 }
 
@@ -496,7 +510,9 @@ pub async fn fetch_detail(
                 type AS type_contrat, remuneration, url_offre, description_offre, notes, \
                 date_candidature, \
                 cv_path, lettre_motivation_path, \
-                created_at \
+                created_at, \
+                (SELECT version FROM search.document_versions WHERE id = cv_reference_version_id) AS cv_reference_version, \
+                (SELECT version FROM search.document_versions WHERE id = lm_reference_version_id) AS lm_reference_version \
          FROM search.candidatures \
          WHERE id = $1",
     )
@@ -523,6 +539,8 @@ pub async fn fetch_detail(
         date_candidature: row.try_get("date_candidature").map_err(map_db_err)?,
         cv_path: row.try_get("cv_path").map_err(map_db_err)?,
         lettre_motivation_path: row.try_get("lettre_motivation_path").map_err(map_db_err)?,
+        cv_reference_version: row.try_get("cv_reference_version").map_err(map_db_err)?,
+        lm_reference_version: row.try_get("lm_reference_version").map_err(map_db_err)?,
         created_at: row.try_get("created_at").map_err(map_db_err)?,
     })
 }

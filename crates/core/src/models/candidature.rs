@@ -43,6 +43,11 @@ pub struct CandidatureDetail {
     pub date_candidature: Option<NaiveDate>,
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
+    /// Numéro de la version du CV de référence utilisée pour la génération,
+    /// `None` si générée avant le versioning ou version supprimée.
+    pub cv_reference_version: Option<i32>,
+    /// Numéro de la version de la lettre de référence utilisée pour la génération.
+    pub lm_reference_version: Option<i32>,
     pub created_at: DateTime<Utc>,
 }
 

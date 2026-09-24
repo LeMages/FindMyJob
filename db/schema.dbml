@@ -1,6 +1,6 @@
 // ============================================
 // FindMyJob - Schéma de base de données (PostgreSQL)
-// Mis à jour le 2026-09-18.
+// Mis à jour le 2026-09-24.
 //
 // Deux schémas Postgres :
 //   - profile : données de l'utilisateur (CV, compétences, parcours, settings)
@@ -229,6 +229,8 @@ Table search.candidatures {
   notes text
   cv_path text                // chemin du CV généré/joint
   lettre_motivation_path text
+  cv_reference_version_id integer [ref: > search.document_versions.id]  // ON DELETE SET NULL — version de CV de référence utilisée à la génération
+  lm_reference_version_id integer [ref: > search.document_versions.id]  // ON DELETE SET NULL — version de LM de référence utilisée à la génération
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null, default: `now()`]
 }
@@ -316,10 +318,31 @@ Table search.documents {
   file_path text [not null]
   pdf_path text
   style_analysis text   // cache de l'analyse de style LLM
+  current_version_id integer [ref: > search.document_versions.id]  // ON DELETE SET NULL — version courante, null si antérieure au versioning
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null, default: `now()`]
 
   indexes {
     (session_id, doc_type) [unique, name: 'uq_documents_session_doctype']
+  }
+}
+
+// Historique des documents de référence : une ligne par upload, jamais
+// écrasée. Fichiers sous documents/sessions/<session_id>/<doc_type>/versions/<id>/.
+// documents recopie la version courante (current_version_id).
+Table search.document_versions {
+  id integer [pk, increment]
+  session_id integer [ref: > search.sessions.id, not null]   // ON DELETE CASCADE
+  doc_type document_type [not null]
+  version integer [not null]              // numéro d'affichage, MAX+1 par (session_id, doc_type)
+  original_filename text [not null]
+  typst_path text [not null]
+  pdf_path text [not null]
+  style_analysis text [not null]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (session_id, doc_type, version) [unique, name: 'uq_document_version']
+    (session_id, doc_type) [name: 'idx_document_versions_session']
   }
 }

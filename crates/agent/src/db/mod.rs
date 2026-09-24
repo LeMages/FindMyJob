@@ -4,6 +4,7 @@ pub mod candidatures;
 pub mod common;
 pub mod config;
 pub mod contacts;
+pub mod document_versions;
 pub mod documents;
 pub mod experiences;
 pub mod export;

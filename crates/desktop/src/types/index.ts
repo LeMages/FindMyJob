@@ -219,6 +219,20 @@ export interface DocumentReferenceView {
   updated_at: string
 }
 
+/** Version d'un document de référence d'une session (voir `DocumentVersionView` côté Rust). */
+export interface DocumentVersionView {
+  id: number
+  session_id: number
+  doc_type: 'cv' | 'lettre_motivation'
+  version: number
+  original_filename: string
+  typst_path: string
+  pdf_path: string
+  created_at: string
+  /** Vrai si c'est la version utilisée pour les prochaines générations. */
+  is_current: boolean
+}
+
 export interface DocumentsStatus {
   cv_ready: boolean
   lm_ready: boolean
@@ -317,6 +331,10 @@ export interface CandidatureDetail {
   date_candidature: string | null
   cv_path: string | null
   lettre_motivation_path: string | null
+  /** Numéro de la version du CV de référence utilisée pour la génération. */
+  cv_reference_version: number | null
+  /** Numéro de la version de la lettre de référence utilisée pour la génération. */
+  lm_reference_version: number | null
   created_at: string
 }
 

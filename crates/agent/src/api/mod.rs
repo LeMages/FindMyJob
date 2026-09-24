@@ -18,6 +18,7 @@ mod auth;
 mod candidatures;
 mod common;
 mod contacts;
+mod document_versions;
 mod documents;
 mod error;
 mod experiences;
@@ -96,6 +97,7 @@ pub fn router(state: AppState) -> Router {
         .merge(offers::router())
         .merge(scraping::router())
         .merge(documents::router())
+        .merge(document_versions::router())
         .merge(fonts::router())
         .merge(settings::router())
         .merge(system::router())

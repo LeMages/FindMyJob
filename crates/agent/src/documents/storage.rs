@@ -1,10 +1,14 @@
 //! Stockage sur disque des documents de référence (CV, lettre de motivation)
 //! et des documents joints à une candidature : résolution de chemins,
-//! sauvegarde avec historique, compilation Typst → PDF, mise en scène des
+//! sauvegarde versionnée, compilation Typst → PDF, mise en scène des
 //! fichiers avant rattachement définitif à une candidature.
 //!
 //! Chaque session de candidature a son propre CV et sa propre lettre de
 //! motivation : tout est stocké sous `documents/sessions/<session_id>/`.
+//! Chaque upload de référence crée une version immuable sous
+//! `<doc_type>/versions/<version_id>/reference.{typ,pdf}` ; la ligne
+//! `documents` de la session pointe vers la version courante (voir
+//! `db::document_versions`).
 //!
 //! La résolution de chemins liée au dossier de données applicatif (et
 //! l'émission d'événements de progression pour un éventuel appelant
@@ -14,7 +18,6 @@
 use std::path::{Path, PathBuf};
 
 // Importation des crates externes
-use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
 // Importation des modules internes
@@ -52,74 +55,81 @@ fn resolve_doc_dir(data_dir: &Path, session_id: i64, doc_type: &str) -> PathBuf 
         .join(doc_type)
 }
 
-/// Nom de base utilisé pour les fichiers de sauvegarde (`cv.typ`/`lettre.typ`).
-fn doc_backup_basename(doc_type: &str) -> &'static str {
-    if doc_type == "lettre_motivation" { "lettre" } else { "cv" }
-}
-
-/// Date de dernière modification d'un fichier, pour affichage côté frontend.
+/// Écrit les fichiers `.typ` et `.pdf` d'une nouvelle version de référence
+/// dans son dossier dédié (créé au passage).
 ///
 /// # Arguments
 ///
-/// * `path` - Chemin du fichier à inspecter.
+/// * `version_dir` - Dossier `versions/<version_id>/` de la version.
+/// * `content` - Contenu Typst uploadé.
+/// * `pdf` - Octets du PDF compilé.
 ///
 /// # Returns
 ///
-/// Date de dernière modification, ou l'instant courant si indisponible
-/// (fichier tout juste créé, métadonnées inaccessibles).
-fn file_updated_at(path: &Path) -> DateTime<Utc> {
-    std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .map(DateTime::<Utc>::from)
-        .unwrap_or_else(|_| Utc::now())
+/// Chemins absolus `(typst_path, pdf_path)` des fichiers écrits.
+fn write_version_files(version_dir: &Path, content: &str, pdf: &[u8]) -> Result<(String, String), AppError> {
+    std::fs::create_dir_all(version_dir)
+        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier de version : {}", e)))?;
+
+    let typ_path = version_dir.join("reference.typ");
+    std::fs::write(&typ_path, content.as_bytes())
+        .map_err(|e| AppError::Validation(format!("Écriture du fichier impossible : {}", e)))?;
+
+    let pdf_path = version_dir.join("reference.pdf");
+    std::fs::write(&pdf_path, pdf)
+        .map_err(|e| AppError::Validation(format!("Écriture du PDF impossible : {}", e)))?;
+
+    Ok((typ_path.to_string_lossy().to_string(), pdf_path.to_string_lossy().to_string()))
 }
 
-/// Récupère la référence de document existante (si un fichier `reference.typ` a déjà été sauvegardé).
+/// Supprime le dossier d'une version qui n'a pas pu être enregistrée en base,
+/// pour ne pas laisser de fichiers orphelins. Un échec de suppression est
+/// seulement loggé : l'erreur d'origine reste celle remontée à l'appelant.
+///
+/// # Arguments
+///
+/// * `version_dir` - Dossier `versions/<version_id>/` à supprimer.
+fn discard_version_dir(version_dir: &Path) {
+    if let Err(e) = std::fs::remove_dir_all(version_dir) {
+        eprintln!("Suppression du dossier de version orphelin {} impossible : {e}", version_dir.display());
+    }
+}
+
+/// Récupère la référence courante d'un type de document pour une session,
+/// d'après sa ligne `documents` (source de vérité du chemin, qui pointe vers
+/// la version courante — ou vers `reference.typ` pour une référence
+/// antérieure au versioning).
 ///
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 ///
 /// # Returns
 ///
-/// `Some(DocumentReferenceView)` si un fichier de référence existe, `None` sinon.
+/// `Some(DocumentReferenceView)` si une référence est trackée et que son
+/// fichier existe sur disque, `None` sinon.
 pub async fn get_reference(
     pool: &PgPool,
-    data_dir: &Path,
     session_id: i64,
     doc_type: &str,
-) -> Option<DocumentReferenceView> {
-    let doc_dir = resolve_doc_dir(data_dir, session_id, doc_type);
-    let typ_path = doc_dir.join("reference.typ");
-    if !typ_path.exists() {
-        return None;
-    }
-
-    // Lecture DB best-effort : prépare l'enrichissement futur de la réponse
-    // (ex. style_analysis), sans influencer le comportement actuel — le
-    // filesystem reste la source de vérité de l'existence du document.
-    if let Err(e) = db::documents::get_by_session_and_type(pool, session_id, doc_type).await {
-        eprintln!("Lecture DB du document ({doc_type}, session {session_id}) échouée : {e}");
-    }
-
-    let pdf_path = doc_dir.join("reference.pdf");
-    Some(DocumentReferenceView {
-        file_path: typ_path.to_string_lossy().to_string(),
-        pdf_path: pdf_path.to_string_lossy().to_string(),
-        updated_at: file_updated_at(&typ_path),
-    })
+) -> Result<Option<DocumentReferenceView>, AppError> {
+    let doc = db::documents::get_by_session_and_type(pool, session_id, doc_type).await?;
+    Ok(doc
+        .filter(|d| Path::new(&d.file_path).exists())
+        .map(DocumentReferenceView::from))
 }
 
-/// Analyse le style du document via l'API Claude, puis sauvegarde le nouveau
-/// document de référence (.typ) en archivant l'ancien s'il existe, et le
-/// compile immédiatement en PDF.
+/// Analyse le style du document via l'API Claude, le compile en PDF, puis
+/// l'enregistre comme nouvelle version de référence (fichiers sous
+/// `versions/<version_id>/` + ligne `document_versions`) et en fait la
+/// référence courante de la session. Les versions précédentes sont conservées.
 ///
-/// L'analyse de style est bloquante et a lieu avant toute écriture disque :
-/// si l'appel à Claude échoue ou renvoie un format inattendu, le save entier
-/// échoue et rien n'est modifié (ni fichier, ni entrée DB).
+/// L'analyse de style et la compilation ont lieu avant toute écriture
+/// disque : si l'une échoue, rien n'est modifié (ni fichier, ni entrée DB).
+/// Si l'enregistrement en base de la version échoue, ses fichiers sont
+/// supprimés.
 ///
 /// # Arguments
 ///
@@ -158,95 +168,85 @@ pub async fn save_reference(
     // ------------------------------------------------------------------
     // 1bis. Analyse de style via l'API Claude — placée avant toute
     //    écriture disque : si l'appel échoue ou renvoie un format
-    //    inattendu, rien n'est créé (ni dossier, ni backup, ni fichier).
+    //    inattendu, rien n'est créé (ni dossier, ni version, ni fichier).
     // ------------------------------------------------------------------
     let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
 
     on_progress(1, "Analyse du style (IA)…");
     let style_analysis = findmyjob_core::llm::analyze_style(&content, doc_type, &model).await?;
 
+    // ------------------------------------------------------------------
+    // 2. Compilation en PDF, en mémoire (racine = dossier du type de
+    //    document, comme les références d'avant le versioning)
+    // ------------------------------------------------------------------
+    on_progress(2, "Compilation en PDF…");
     let doc_dir = resolve_doc_dir(data_dir, session_id, doc_type);
     std::fs::create_dir_all(&doc_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
 
-    let typ_path = doc_dir.join("reference.typ");
-    let pdf_path = doc_dir.join("reference.pdf");
-
-    // ------------------------------------------------------------------
-    // 2. Sauvegarde de l'ancienne référence (si elle existe) dans backup/<timestamp>/
-    // ------------------------------------------------------------------
-    on_progress(2, "Sauvegarde de l'historique…");
-    if typ_path.exists() {
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let backup_dir = doc_dir.join("backup").join(ts.to_string());
-        std::fs::create_dir_all(&backup_dir).map_err(|e| {
-            AppError::Validation(format!("Impossible de créer le dossier de sauvegarde : {}", e))
-        })?;
-        let basename = doc_backup_basename(doc_type);
-        std::fs::copy(&typ_path, backup_dir.join(format!("{}.typ", basename))).map_err(|e| {
-            AppError::Validation(format!("Sauvegarde de l'ancien fichier échouée : {}", e))
-        })?;
-        if pdf_path.exists() {
-            std::fs::copy(&pdf_path, backup_dir.join(format!("{}.pdf", basename))).ok();
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // 3. Écriture du nouveau fichier .typ
-    // ------------------------------------------------------------------
-    on_progress(3, "Écriture du fichier…");
-    std::fs::write(&typ_path, content.as_bytes())
-        .map_err(|e| AppError::Validation(format!("Écriture du fichier impossible : {}", e)))?;
-
-    // ------------------------------------------------------------------
-    // 4. Compilation en PDF
-    // ------------------------------------------------------------------
-    on_progress(4, "Compilation en PDF…");
     let root = doc_dir.clone();
     let fonts_dir = fonts_dir.to_path_buf();
-    let pdf_bytes = tokio::task::spawn_blocking(move || compile_to_pdf(content, root, fonts_dir))
+    let to_compile = content.clone();
+    let pdf_bytes = tokio::task::spawn_blocking(move || compile_to_pdf(to_compile, root, fonts_dir))
         .await
         .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
         .map_err(AppError::Validation)?;
 
-    std::fs::write(&pdf_path, &pdf_bytes)
-        .map_err(|e| AppError::Validation(format!("Écriture du PDF impossible : {}", e)))?;
+    // ------------------------------------------------------------------
+    // 3. Écriture des fichiers de la version, dans un dossier nommé par
+    //    l'identifiant réservé en base (jamais réutilisé)
+    // ------------------------------------------------------------------
+    on_progress(3, "Écriture de la version…");
+    let version_id = db::document_versions::reserve_id(pool).await?;
+    let version_dir = doc_dir.join("versions").join(version_id.to_string());
+    let written = write_version_files(&version_dir, &content, &pdf_bytes);
 
     // ------------------------------------------------------------------
-    // 5. Trace en DB (non bloquant : le filesystem reste la source de
-    //    vérité, on ne veut pas perdre un fichier correctement sauvegardé
-    //    à cause d'une erreur DB)
+    // 4. Enregistrement de la version en base — bloquant : une version
+    //    sans ligne en base n'existe pas, ses fichiers sont supprimés
     // ------------------------------------------------------------------
-    on_progress(5, "Enregistrement en base…");
-    if let Err(e) = db::documents::upsert(
+    on_progress(4, "Enregistrement de la version…");
+    let recorded = match written {
+        Ok((typ_path, pdf_path)) => db::document_versions::insert_version(
+            pool,
+            version_id,
+            session_id,
+            doc_type,
+            &filename,
+            &typ_path,
+            &pdf_path,
+            &style_analysis,
+        )
+        .await
+        .map(|_| (typ_path, pdf_path)),
+        Err(e) => Err(e),
+    };
+    let (typ_path, pdf_path) = recorded.inspect_err(|_| discard_version_dir(&version_dir))?;
+
+    // ------------------------------------------------------------------
+    // 5. Bascule de la référence courante sur cette version
+    // ------------------------------------------------------------------
+    on_progress(5, "Mise à jour de la référence…");
+    let doc = db::documents::upsert(
         pool,
         session_id,
         doc_type,
         &filename,
-        &typ_path.to_string_lossy(),
-        Some(&pdf_path.to_string_lossy()),
+        &typ_path,
+        Some(&pdf_path),
         Some(&style_analysis),
+        version_id,
     )
-    .await
-    {
-        eprintln!("Trace DB du document ({doc_type}, session {session_id}) échouée : {e}");
-    }
+    .await?;
 
-    Ok(DocumentReferenceView {
-        file_path: typ_path.to_string_lossy().to_string(),
-        pdf_path: pdf_path.to_string_lossy().to_string(),
-        updated_at: file_updated_at(&typ_path),
-    })
+    Ok(DocumentReferenceView::from(doc))
 }
 
-/// Compile la référence sauvegardée d'un type de document et retourne le PDF encodé en base64.
+/// Compile la référence courante d'un type de document et retourne le PDF encodé en base64.
 ///
 /// # Arguments
 ///
-/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
+/// * `pool` - Pool de connexions PostgreSQL.
 /// * `fonts_dir` - Dossier des polices importées, déjà résolu par l'appelant.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
@@ -255,20 +255,22 @@ pub async fn save_reference(
 ///
 /// PDF encodé en base64, prêt à être affiché côté frontend.
 pub async fn compile_reference(
-    data_dir: &Path,
+    pool: &PgPool,
     fonts_dir: &Path,
     session_id: i64,
     doc_type: &'static str,
 ) -> Result<String, AppError> {
-    let doc_dir = resolve_doc_dir(data_dir, session_id, doc_type);
-    let typ_path = doc_dir.join("reference.typ");
-    if !typ_path.exists() {
-        return Err(AppError::NotFound("Aucun fichier de référence trouvé.".to_string()));
-    }
+    let reference = get_reference(pool, session_id, doc_type)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Aucun fichier de référence trouvé.".to_string()))?;
+    let typ_path = PathBuf::from(&reference.file_path);
 
     let content = std::fs::read_to_string(&typ_path)
         .map_err(|e| AppError::Validation(format!("Impossible de lire le fichier : {}", e)))?;
-    let root = doc_dir;
+    let root = typ_path
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| AppError::Validation(format!("Chemin de référence invalide : {}", reference.file_path)))?;
     let fonts_dir = fonts_dir.to_path_buf();
 
     let pdf_bytes = tokio::task::spawn_blocking(move || compile_to_pdf(content, root, fonts_dir))

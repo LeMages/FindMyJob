@@ -33,6 +33,7 @@ fn row_to_document(row: &PgRow) -> Result<Document, sqlx::Error> {
         file_path: row.try_get("file_path")?,
         pdf_path: row.try_get("pdf_path")?,
         style_analysis: row.try_get("style_analysis")?,
+        current_version_id: row.try_get("current_version_id")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
     })
@@ -53,10 +54,12 @@ fn row_to_document(row: &PgRow) -> Result<Document, sqlx::Error> {
 /// * `file_path` - Chemin absolu vers `reference.typ`.
 /// * `pdf_path` - Chemin absolu vers `reference.pdf`, si disponible.
 /// * `style_analysis` - JSON d'analyse de style produit par le pipeline IA, si disponible.
+/// * `current_version_id` - Version (`document_versions.id`) dont ce document devient la copie courante.
 ///
 /// # Returns
 ///
 /// `Document` créé ou mis à jour.
+#[allow(clippy::too_many_arguments)]
 pub async fn upsert(
     pool: &PgPool,
     session_id: i64,
@@ -65,17 +68,20 @@ pub async fn upsert(
     file_path: &str,
     pdf_path: Option<&str>,
     style_analysis: Option<&str>,
+    current_version_id: i64,
 ) -> Result<Document, AppError> {
     let row = sqlx::query(
-        "INSERT INTO search.documents (session_id, doc_type, original_filename, file_path, pdf_path, style_analysis) \
-         VALUES ($1, $2, $3, $4, $5, $6) \
+        "INSERT INTO search.documents \
+             (session_id, doc_type, original_filename, file_path, pdf_path, style_analysis, current_version_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7) \
          ON CONFLICT (session_id, doc_type) DO UPDATE SET \
              original_filename = excluded.original_filename, \
              file_path = excluded.file_path, \
              pdf_path = excluded.pdf_path, \
-             style_analysis = excluded.style_analysis \
+             style_analysis = excluded.style_analysis, \
+             current_version_id = excluded.current_version_id \
          RETURNING id, session_id, doc_type, original_filename, file_path, pdf_path, \
-                   style_analysis, created_at, updated_at",
+                   style_analysis, current_version_id, created_at, updated_at",
     )
     .bind(session_id)
     .bind(doc_type)
@@ -83,6 +89,7 @@ pub async fn upsert(
     .bind(file_path)
     .bind(pdf_path)
     .bind(style_analysis)
+    .bind(current_version_id)
     .fetch_one(pool)
     .await
     .map_err(map_db_err)?;
@@ -108,7 +115,7 @@ pub async fn get_by_session_and_type(
 ) -> Result<Option<Document>, AppError> {
     let row = sqlx::query(
         "SELECT id, session_id, doc_type, original_filename, file_path, pdf_path, \
-                style_analysis, created_at, updated_at \
+                style_analysis, current_version_id, created_at, updated_at \
          FROM search.documents WHERE session_id = $1 AND doc_type = $2",
     )
     .bind(session_id)

@@ -34,6 +34,8 @@ const cvSize = computed(() => state.detailCvInfo?.size ?? 0)
 const lettrePath = computed(() => state.detailCandidature?.lettre_motivation_path ?? null)
 const lettreExists = computed(() => !!lettrePath.value && !!state.detailLettreInfo?.exists)
 const lettreSize = computed(() => state.detailLettreInfo?.size ?? 0)
+const cvReferenceVersion = computed(() => state.detailCandidature?.cv_reference_version ?? null)
+const lettreReferenceVersion = computed(() => state.detailCandidature?.lm_reference_version ?? null)
 
 const previewModal = ref<InstanceType<typeof DocumentPreviewModal> | null>(null)
 
@@ -174,6 +176,7 @@ function previewDocument(path: string, label: string) {
             <div class="flex-1 min-w-0">
               <div class="text-[13.5px] font-semibold leading-[1.25]">CV</div>
               <div class="font-mono text-[11px] text-neutral-500">{{ cvExists ? `Joint · ${formatFileSize(cvSize)}` : 'Non existant' }}</div>
+              <div v-if="cvReferenceVersion != null" class="font-mono text-[11px] text-neutral-400">Généré avec la référence v{{ cvReferenceVersion }}</div>
             </div>
             <button
               v-if="cvExists"
@@ -194,6 +197,7 @@ function previewDocument(path: string, label: string) {
             <div class="flex-1 min-w-0">
               <div class="text-[13.5px] font-semibold leading-[1.25]">Lettre de motivation</div>
               <div class="font-mono text-[11px] text-neutral-500">{{ lettreExists ? `Joint · ${formatFileSize(lettreSize)}` : 'Non existant' }}</div>
+              <div v-if="lettreReferenceVersion != null" class="font-mono text-[11px] text-neutral-400">Générée avec la référence v{{ lettreReferenceVersion }}</div>
             </div>
             <button
               v-if="lettreExists"
