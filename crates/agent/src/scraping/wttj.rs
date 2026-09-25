@@ -13,7 +13,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 // Importation des modules internes
-use super::types::{JobScraper, ScrapedOffer, SearchQuery};
+use super::types::{DescriptionRaw, DescriptionSource, JobScraper, ScrapedOffer, SearchQuery};
+use findmyjob_core::text::assemble_offer_description;
 
 const ALGOLIA_ENDPOINT: &str = "https://csekhvms53-dsn.algolia.net/1/indexes/*/queries";
 const ALGOLIA_APPLICATION_ID: &str = "CSEKHVMS53";
@@ -194,6 +195,15 @@ impl From<AlgoliaHit> for ScrapedOffer {
             .as_deref()
             .and_then(|raw| DateTime::parse_from_rfc3339(raw).ok())
             .map(|dt| dt.with_timezone(&Utc));
+        // État par défaut = repli Algolia (profil recherché seul) ; remplacé
+        // par le texte complet si l'API de détail répond.
+        let description = assemble_offer_description(None, hit.profile.as_deref(), None);
+        let description_raw = DescriptionRaw {
+            description: None,
+            profile: hit.profile,
+            recruitment_process: None,
+            source: DescriptionSource::Algolia,
+        };
 
         Self {
             source: "wttj".to_string(),
@@ -205,7 +215,8 @@ impl From<AlgoliaHit> for ScrapedOffer {
             contract_type: hit.contract_type_names.and_then(|names| names.fr),
             posted_at,
             scraped_at: Utc::now(),
-            description: hit.profile,
+            description,
+            description_raw: Some(description_raw),
         }
     }
 }

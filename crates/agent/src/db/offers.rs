@@ -3,6 +3,7 @@
 // Importation des crates externes
 use chrono::{DateTime, Utc};
 use sqlx::postgres::PgRow;
+use sqlx::types::Json;
 use sqlx::{PgPool, Row};
 
 // Importation des modules internes
@@ -73,6 +74,7 @@ pub async fn insert_offers(pool: &PgPool, session_id: i64, offers: &[ScrapedOffe
         .bind(offer.posted_at)
         .bind(offer.scraped_at)
         .bind(&offer.description)
+        .bind(offer.description_raw.as_ref().map(Json))
         .execute(pool)
         .await?;
 
