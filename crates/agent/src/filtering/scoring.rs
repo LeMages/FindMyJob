@@ -22,7 +22,10 @@ use findmyjob_core::error::AppError;
 use findmyjob_core::llm::client::call_claude;
 
 const BATCH_SIZE: usize = 5;
-const DESCRIPTION_MAX_CHARS: usize = 500;
+/// Caractères de description envoyés par offre : couvre le descriptif et le
+/// début du profil recherché. 5 × 2000 caractères ≈ 3-4k tokens d'entrée,
+/// sortie ≈ 500 tokens : très en deçà du plafond de `call_claude`.
+const DESCRIPTION_MAX_CHARS: usize = 2000;
 const BATCH_DELAY: Duration = Duration::from_secs(1);
 const RATE_LIMIT_RETRY_DELAY: Duration = Duration::from_secs(30);
 const STATUS_REVIEWED: &str = "reviewed";
