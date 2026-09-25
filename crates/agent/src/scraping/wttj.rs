@@ -13,7 +13,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 // Importation des modules internes
-use super::types::{DescriptionRaw, DescriptionSource, JobScraper, ScrapedOffer, SearchQuery};
+use super::types::{JobScraper, ScrapedOffer, SearchQuery};
 use super::wttj_job_details;
 use findmyjob_core::text::assemble_offer_description;
 
@@ -213,12 +213,6 @@ impl From<AlgoliaHit> for ScrapedOffer {
         // État par défaut = repli Algolia (profil recherché seul) ; remplacé
         // par le texte complet si l'API de détail répond.
         let description = assemble_offer_description(None, hit.profile.as_deref(), None);
-        let description_raw = DescriptionRaw {
-            description: None,
-            profile: hit.profile,
-            recruitment_process: None,
-            source: DescriptionSource::Algolia,
-        };
 
         Self {
             source: "wttj".to_string(),
@@ -232,7 +226,6 @@ impl From<AlgoliaHit> for ScrapedOffer {
             scraped_at: Utc::now(),
             organization_slug: Some(hit.organization.slug),
             description,
-            description_raw: Some(description_raw),
         }
     }
 }

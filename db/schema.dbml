@@ -175,7 +175,6 @@ Table search.offers {
   status varchar [not null, default: 'new']
   score real                          // score de pertinence calculé par le pipeline
   description text                    // texte brut assemblé (sections Descriptif / Profil / Entretiens)
-  description_raw jsonb               // HTML source {description, profile, recruitment_process, source: api_v1|algolia}
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null, default: `now()`]
 

@@ -10,7 +10,7 @@ use reqwest::Client;
 use serde::Deserialize;
 
 // Importation des modules internes
-use super::types::{DescriptionRaw, DescriptionSource, ScrapedOffer};
+use super::types::ScrapedOffer;
 use findmyjob_core::text::assemble_offer_description;
 
 const JOB_DETAILS_BASE_URL: &str = "https://api.welcometothejungle.com/api/v1/organizations";
@@ -85,12 +85,6 @@ fn apply_job_details(offer: &mut ScrapedOffer, details: JobDetails) -> bool {
     };
 
     offer.description = Some(description);
-    offer.description_raw = Some(DescriptionRaw {
-        description: details.description,
-        profile: details.profile,
-        recruitment_process: details.recruitment_process,
-        source: DescriptionSource::ApiV1,
-    });
     true
 }
 

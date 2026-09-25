@@ -3,7 +3,6 @@
 // Importation des crates externes
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde::Serialize;
 
 /// Une offre d'emploi normalisée, indépendamment de sa source.
 ///
@@ -20,7 +19,6 @@ use serde::Serialize;
 ///     organization_slug: Identifiant de l'entreprise côté source, si connu
 ///         (requis pour l'API de détail WTTJ).
 ///     description: Texte brut de l'offre, assemblé en sections, si connu.
-///     description_raw: Champs d'origine ayant servi à construire `description`.
 pub struct ScrapedOffer {
     pub source: String,
     pub source_id: Option<String>,
@@ -33,34 +31,6 @@ pub struct ScrapedOffer {
     pub scraped_at: DateTime<Utc>,
     pub organization_slug: Option<String>,
     pub description: Option<String>,
-    pub description_raw: Option<DescriptionRaw>,
-}
-
-/// Provenance des champs d'une description d'offre.
-#[derive(Serialize)]
-pub enum DescriptionSource {
-    /// API publique WTTJ v1 (texte complet de l'offre).
-    #[serde(rename = "api_v1")]
-    ApiV1,
-    /// Champ `profile` de l'index Algolia (repli, profil recherché seul).
-    #[serde(rename = "algolia")]
-    Algolia,
-}
-
-/// Champs HTML/Markdown d'origine d'une description, stockés tels quels
-/// (colonne `offers.description_raw`) pour rejouer la conversion sans réseau.
-///
-/// Attributes:
-///     description: Descriptif du poste, si fourni par la source.
-///     profile: Profil recherché, si fourni par la source.
-///     recruitment_process: Déroulement des entretiens, si fourni par la source.
-///     source: Provenance des champs.
-#[derive(Serialize)]
-pub struct DescriptionRaw {
-    pub description: Option<String>,
-    pub profile: Option<String>,
-    pub recruitment_process: Option<String>,
-    pub source: DescriptionSource,
 }
 
 /// Une recherche d'offres à exécuter sur une source.
