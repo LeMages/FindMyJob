@@ -3,6 +3,9 @@
 //! Le déclenchement manuel (`POST /api/sessions/{id}/search`) appelle
 //! directement [`run_search_for_session`].
 
+// Importation des modules standard
+use std::collections::HashSet;
+
 // Importation des crates externes
 use sqlx::PgPool;
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -13,7 +16,7 @@ use crate::db;
 use crate::filtering::profile_summary::format_scoring_context;
 use crate::filtering::{mechanical, scoring};
 use crate::logging;
-use crate::scraping::types::{JobScraper, SearchQuery};
+use crate::scraping::types::{JobScraper, ScrapedOffer, SearchQuery};
 use crate::scraping::wttj::WttjScraper;
 use findmyjob_core::error::AppError;
 use findmyjob_core::llm::client::DEFAULT_MODEL;
@@ -45,7 +48,7 @@ impl From<&SearchQueryView> for SearchQuery {
 /// * `config` - Configuration agent chargée au démarrage (`agent.toml`).
 pub async fn run_search_for_session(pool: &PgPool, session_id: i64, config: &AgentConfig) {
     // ------------------------------------------------------------------
-    // 1. Scraping + insertion, une requête à la fois
+    // 1. Scraping + enrichissement + insertion, une requête à la fois
     // ------------------------------------------------------------------
     let queries = match db::search_queries::list_for_session(pool, session_id).await {
         Ok(queries) => queries,
@@ -58,26 +61,7 @@ pub async fn run_search_for_session(pool: &PgPool, session_id: i64, config: &Age
 
     let scraper = WttjScraper::new();
     for query in &queries {
-        let search_query: SearchQuery = query.into();
-
-        // `JobScraper::scrape` retourne `Box<dyn Error>` (non `Send`) : converti en
-        // `String` avant le prochain `await`, cohérent avec l'ancien `run_pipeline`.
-        match scraper.scrape(std::slice::from_ref(&search_query)).await.map_err(|e| e.to_string()) {
-            Ok(offers) => match db::offers::insert_offers(pool, session_id, &offers).await {
-                Ok(inserted) => println!(
-                    "[pipeline] session {session_id} : \"{}\" — {inserted} nouvelle(s) offre(s) insérée(s)",
-                    query.keywords
-                ),
-                Err(e) => {
-                    eprintln!("[pipeline] session {session_id} : erreur insertion: {e}");
-                    logging::log_error_to_file("insertion offres", &e);
-                }
-            },
-            Err(e) => eprintln!(
-                "[pipeline] session {session_id} : erreur scraping \"{}\": {e}",
-                query.keywords
-            ),
-        }
+        scrape_and_insert(pool, session_id, &scraper, query).await;
     }
 
     // ------------------------------------------------------------------
@@ -110,6 +94,76 @@ pub async fn run_search_for_session(pool: &PgPool, session_id: i64, config: &Age
             logging::log_error_to_file("scoring LLM", &e);
         }
     }
+}
+
+/// Scrape une requête, écarte les offres déjà connues, enrichit les
+/// nouvelles (description complète via l'API WTTJ v1) puis les insère.
+/// Chaque échec est journalisé sans interrompre la session.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions PostgreSQL.
+/// * `session_id` - Session à laquelle rattacher les offres.
+/// * `scraper` - Client WTTJ partagé entre les requêtes de la session.
+/// * `query` - Requête de recherche à exécuter.
+async fn scrape_and_insert(pool: &PgPool, session_id: i64, scraper: &WttjScraper, query: &SearchQueryView) {
+    // ------------------------------------------------------------------
+    // 1. Scraping Algolia
+    // ------------------------------------------------------------------
+    let search_query: SearchQuery = query.into();
+    // `JobScraper::scrape` retourne `Box<dyn Error>` (non `Send`) : converti en
+    // `String` avant le prochain `await`, cohérent avec l'ancien `run_pipeline`.
+    let scraped = match scraper.scrape(std::slice::from_ref(&search_query)).await.map_err(|e| e.to_string()) {
+        Ok(offers) => offers,
+        Err(e) => {
+            eprintln!("[pipeline] session {session_id} : erreur scraping \"{}\": {e}", query.keywords);
+            return;
+        }
+    };
+
+    // ------------------------------------------------------------------
+    // 2. Dédup puis enrichissement des seules nouvelles offres : un appel
+    //    HTTP par offre, inutile pour celles déjà en base. Si la dédup
+    //    échoue, on insère sans enrichir (ON CONFLICT reste la garde).
+    // ------------------------------------------------------------------
+    let mut offers = dedup_by_url(scraped);
+    let urls: Vec<String> = offers.iter().map(|o| o.url.clone()).collect();
+    match db::offers::find_existing_urls(pool, &urls).await {
+        Ok(existing) => {
+            offers.retain(|o| !existing.contains(&o.url));
+            let enriched = scraper.enrich(&mut offers).await;
+            println!(
+                "[pipeline] session {session_id} : \"{}\" — {enriched}/{} description(s) complète(s) via l'API v1",
+                query.keywords,
+                offers.len()
+            );
+        }
+        Err(e) => {
+            eprintln!("[pipeline] session {session_id} : dédup impossible, descriptions non enrichies: {e}");
+            logging::log_error_to_file("dédup offres avant enrichissement", &e);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Insertion
+    // ------------------------------------------------------------------
+    match db::offers::insert_offers(pool, session_id, &offers).await {
+        Ok(inserted) => println!(
+            "[pipeline] session {session_id} : \"{}\" — {inserted} nouvelle(s) offre(s) insérée(s)",
+            query.keywords
+        ),
+        Err(e) => {
+            eprintln!("[pipeline] session {session_id} : erreur insertion: {e}");
+            logging::log_error_to_file("insertion offres", &e);
+        }
+    }
+}
+
+/// Retire les doublons d'URL d'un lot (une même offre peut remonter sur
+/// plusieurs pages Algolia), en gardant la première occurrence.
+fn dedup_by_url(offers: Vec<ScrapedOffer>) -> Vec<ScrapedOffer> {
+    let mut seen = HashSet::new();
+    offers.into_iter().filter(|o| seen.insert(o.url.clone())).collect()
 }
 
 /// Charge le profil (DB) et la session pour construire le contexte du scoring.

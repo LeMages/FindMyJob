@@ -17,6 +17,8 @@ use serde::Serialize;
 ///     contract_type: Type de contrat (stage, alternance, CDI...), si connu.
 ///     posted_at: Date de publication, si connue.
 ///     scraped_at: Date à laquelle l'offre a été récupérée.
+///     organization_slug: Identifiant de l'entreprise côté source, si connu
+///         (requis pour l'API de détail WTTJ).
 ///     description: Texte brut de l'offre, assemblé en sections, si connu.
 ///     description_raw: Champs d'origine ayant servi à construire `description`.
 pub struct ScrapedOffer {
@@ -29,6 +31,7 @@ pub struct ScrapedOffer {
     pub contract_type: Option<String>,
     pub posted_at: Option<DateTime<Utc>>,
     pub scraped_at: DateTime<Utc>,
+    pub organization_slug: Option<String>,
     pub description: Option<String>,
     pub description_raw: Option<DescriptionRaw>,
 }
@@ -36,6 +39,9 @@ pub struct ScrapedOffer {
 /// Provenance des champs d'une description d'offre.
 #[derive(Serialize)]
 pub enum DescriptionSource {
+    /// API publique WTTJ v1 (texte complet de l'offre).
+    #[serde(rename = "api_v1")]
+    ApiV1,
     /// Champ `profile` de l'index Algolia (repli, profil recherché seul).
     #[serde(rename = "algolia")]
     Algolia,

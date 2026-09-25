@@ -14,6 +14,7 @@ use serde_json::json;
 
 // Importation des modules internes
 use super::types::{DescriptionRaw, DescriptionSource, JobScraper, ScrapedOffer, SearchQuery};
+use super::wttj_job_details;
 use findmyjob_core::text::assemble_offer_description;
 
 const ALGOLIA_ENDPOINT: &str = "https://csekhvms53-dsn.algolia.net/1/indexes/*/queries";
@@ -169,6 +170,19 @@ impl WttjScraper {
             .pop()
             .ok_or_else(|| "Réponse Algolia sans résultat".into())
     }
+
+    /// Remplace la description (profil Algolia seul) des offres par leur
+    /// texte complet, via l'API publique WTTJ v1. À n'appeler que sur les
+    /// nouvelles offres : un appel HTTP par offre.
+    ///
+    /// Args:
+    ///     offers: Offres à enrichir ; celles en échec gardent leur repli Algolia.
+    ///
+    /// Returns:
+    ///     Nombre d'offres ayant reçu leur description complète.
+    pub async fn enrich(&self, offers: &mut [ScrapedOffer]) -> usize {
+        wttj_job_details::enrich_offers(&self.client, offers).await
+    }
 }
 
 impl Default for WttjScraper {
@@ -215,6 +229,7 @@ impl From<AlgoliaHit> for ScrapedOffer {
             contract_type: hit.contract_type_names.and_then(|names| names.fr),
             posted_at,
             scraped_at: Utc::now(),
+            organization_slug: Some(hit.organization.slug),
             description,
             description_raw: Some(description_raw),
         }

@@ -1,5 +1,8 @@
 //! Persistance des offres scrapées dans la table `offers`.
 
+// Importation des modules standard
+use std::collections::HashSet;
+
 // Importation des crates externes
 use chrono::{DateTime, Utc};
 use sqlx::postgres::PgRow;
@@ -85,6 +88,27 @@ pub async fn insert_offers(pool: &PgPool, session_id: i64, offers: &[ScrapedOffe
     eprintln!("{duplicates} offre(s) déjà connue(s), ignorée(s)");
 
     Ok(inserted)
+}
+
+/// Filtre, parmi des URLs d'offres, celles déjà présentes en base (toutes
+/// sessions confondues, `offers.url` étant unique globalement).
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions PostgreSQL.
+/// * `urls` - URLs à vérifier.
+///
+/// # Returns
+///
+/// L'ensemble des URLs déjà connues.
+pub async fn find_existing_urls(pool: &PgPool, urls: &[String]) -> Result<HashSet<String>, AppError> {
+    let existing: Vec<String> = sqlx::query_scalar("SELECT url FROM search.offers WHERE url = ANY($1)")
+        .bind(urls)
+        .fetch_all(pool)
+        .await
+        .map_err(map_db_err)?;
+
+    Ok(existing.into_iter().collect())
 }
 
 /// Liste les offres d'une session dont le score dépasse un seuil, quel que
