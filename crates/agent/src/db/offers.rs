@@ -62,8 +62,8 @@ pub async fn insert_offers(pool: &PgPool, session_id: i64, offers: &[ScrapedOffe
 
     for offer in offers {
         let result = sqlx::query(
-            "INSERT INTO search.offers (session_id, source, source_id, title, company, location, url, contract_type, posted_at, scraped_at, description) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+            "INSERT INTO search.offers (session_id, source, source_id, title, company, location, url, contract_type, posted_at, scraped_at, description, description_raw) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
              ON CONFLICT (url) DO NOTHING",
         )
         .bind(session_id)
