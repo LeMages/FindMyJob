@@ -42,8 +42,9 @@ struct AlgoliaHit {
     office: Option<AlgoliaOffice>,
     contract_type_names: Option<AlgoliaContractTypeNames>,
     published_at: Option<String>,
-    /// Texte de l'offre (profil recherché, missions...), en Markdown déjà
-    /// en texte plat — aucun nettoyage HTML nécessaire.
+    /// Profil recherché uniquement (pas le descriptif du poste), en Markdown
+    /// ou en HTML selon l'ATS, parfois la chaîne `"null"`. Sert de repli
+    /// quand l'API de détail v1 échoue.
     profile: Option<String>,
 }
 

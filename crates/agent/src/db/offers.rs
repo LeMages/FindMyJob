@@ -248,7 +248,8 @@ pub async fn mark_applied_tx(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id:
 
 /// Vue minimale d'une offre non encore scorée, utilisée par le filtre
 /// mécanique et le scoring LLM (`filtering::mechanical`, `filtering::scoring`).
-/// Distincte d'`OfferView` : expose `description`, absente de la réponse API.
+/// Vue interne au pipeline, distincte d'`OfferView` : sans les colonnes de
+/// statut, score et session exposées par l'API.
 pub struct UnscoredOffer {
     pub id: i64,
     pub title: String,
