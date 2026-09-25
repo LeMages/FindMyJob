@@ -16,10 +16,12 @@ import {
 } from '@/stores/app'
 import { TYPE_CONTRAT_OPTIONS, SOURCE_OPTIONS, TRASHED_STATUSES, statusLabel } from '@/composables/candidature_display'
 import { formatFileSize } from '@/composables/format_file_size'
+import { useDocumentDownload } from '@/composables/useDocumentDownload'
 import DetailPopup from '@/views/detail/components/DetailPopup.vue'
 import DocumentPreviewModal from '@/views/detail/components/DocumentPreviewModal.vue'
 import StatusTimelineCard from '@/views/detail/components/StatusTimelineCard.vue'
 import EditableField from '@/components/EditableField.vue'
+import type { DownloadDocType } from '@/composables/document_file_name'
 
 const initials = (nom: string | null) =>
   (nom ?? '').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
@@ -38,15 +40,17 @@ const cvReferenceVersion = computed(() => state.detailCandidature?.cv_reference_
 const lettreReferenceVersion = computed(() => state.detailCandidature?.lm_reference_version ?? null)
 
 const previewModal = ref<InstanceType<typeof DocumentPreviewModal> | null>(null)
+const { downloading, download } = useDocumentDownload()
 
 /**
  * Ouvre l'aperçu PDF d'un document joint à la candidature.
  *
  * @param path - Chemin absolu du document.
  * @param label - Titre affiché dans la modale d'aperçu.
+ * @param docType - Type du document, pour nommer un éventuel téléchargement.
  */
-function previewDocument(path: string, label: string) {
-  previewModal.value?.open(path, label)
+function previewDocument(path: string, label: string, docType: DownloadDocType) {
+  previewModal.value?.open(path, label, docType)
 }
 </script>
 
@@ -182,11 +186,24 @@ function previewDocument(path: string, label: string) {
               v-if="cvExists"
               class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-surface-2"
               title="Visualiser"
-              @click="previewDocument(cvPath!, 'Aperçu du CV')"
+              @click="previewDocument(cvPath!, 'Aperçu du CV', 'cv')"
             >
               <svg width="17" height="13" viewBox="0 0 17 13" fill="none">
                 <ellipse cx="8.5" cy="6.5" rx="7.5" ry="5.5" stroke="currentColor" stroke-width="1.4" />
                 <circle cx="8.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.4" />
+              </svg>
+            </button>
+            <button
+              v-if="cvExists"
+              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none hover:text-neutral-950 hover:bg-surface-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Télécharger"
+              :disabled="downloading !== null"
+              @click="download('cv', cvPath!)"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
             </button>
           </div>
@@ -203,11 +220,24 @@ function previewDocument(path: string, label: string) {
               v-if="lettreExists"
               class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-surface-2"
               title="Visualiser"
-              @click="previewDocument(lettrePath!, 'Aperçu de la lettre de motivation')"
+              @click="previewDocument(lettrePath!, 'Aperçu de la lettre de motivation', 'lm')"
             >
               <svg width="17" height="13" viewBox="0 0 17 13" fill="none">
                 <ellipse cx="8.5" cy="6.5" rx="7.5" ry="5.5" stroke="currentColor" stroke-width="1.4" />
                 <circle cx="8.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.4" />
+              </svg>
+            </button>
+            <button
+              v-if="lettreExists"
+              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none hover:text-neutral-950 hover:bg-surface-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Télécharger"
+              :disabled="downloading !== null"
+              @click="download('lm', lettrePath!)"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
             </button>
           </div>

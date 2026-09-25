@@ -123,9 +123,9 @@ pub async fn abandon_candidature(api: tauri::State<'_, ApiClient>, id: i64) -> R
     api.post_no_content(&format!("/api/candidatures/{id}/abandon"), &()).await
 }
 
-/// Traite le bouton « Postuler sans message » : exporte le CV et la lettre de
-/// motivation vers le dossier de téléchargements de l'utilisateur, puis passe
-/// la candidature au statut `postule`.
+/// Traite le bouton « Postuler sans message » : passe la candidature au
+/// statut `postule`. Le téléchargement du CV et de la lettre est fait ensuite
+/// par le frontend.
 ///
 /// # Arguments
 ///
@@ -134,15 +134,15 @@ pub async fn abandon_candidature(api: tauri::State<'_, ApiClient>, id: i64) -> R
 ///
 /// # Returns
 ///
-/// `Ok(())` une fois les documents exportés et le statut mis à jour.
+/// `Ok(())` une fois le statut mis à jour.
 #[tauri::command]
 pub async fn postuler_sans_message(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
     api.post_no_content(&format!("/api/candidatures/{id}/postuler"), &()).await
 }
 
 /// Traite le bouton « Postuler par mail » : fait rédiger un mail de
-/// candidature par l'IA, exporte CV, lettre de motivation et mail vers le
-/// dossier de téléchargements, puis passe la candidature au statut `postule`.
+/// candidature par l'IA et passe la candidature au statut `postule`. Le
+/// frontend exporte ensuite CV, lettre de motivation et mail (`.txt`).
 ///
 /// # Arguments
 ///
@@ -151,17 +151,17 @@ pub async fn postuler_sans_message(api: tauri::State<'_, ApiClient>, id: i64) ->
 ///
 /// # Returns
 ///
-/// `Ok(())` une fois le mail rédigé, les documents exportés et le statut mis à jour.
+/// Texte du mail rédigé par l'IA.
 #[tauri::command]
-pub async fn postuler_par_mail(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
-    api.post_no_content(&format!("/api/candidatures/{id}/postuler/mail"), &())
+pub async fn postuler_par_mail(api: tauri::State<'_, ApiClient>, id: i64) -> Result<String, AppError> {
+    api.post(&format!("/api/candidatures/{id}/postuler/mail"), &())
         .await
 }
 
 /// Traite le bouton « Postuler par message » : fait rédiger un message court
-/// (LinkedIn ou équivalent) par l'IA, exporte CV, lettre de motivation et
-/// message vers le dossier de téléchargements, puis passe la candidature au
-/// statut `postule`.
+/// (LinkedIn ou équivalent) par l'IA et passe la candidature au statut
+/// `postule`. Le frontend exporte ensuite CV, lettre de motivation et
+/// message (`.txt`).
 ///
 /// # Arguments
 ///
@@ -170,9 +170,9 @@ pub async fn postuler_par_mail(api: tauri::State<'_, ApiClient>, id: i64) -> Res
 ///
 /// # Returns
 ///
-/// `Ok(())` une fois le message rédigé, les documents exportés et le statut mis à jour.
+/// Texte du message rédigé par l'IA.
 #[tauri::command]
-pub async fn postuler_par_message(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
-    api.post_no_content(&format!("/api/candidatures/{id}/postuler/message"), &())
+pub async fn postuler_par_message(api: tauri::State<'_, ApiClient>, id: i64) -> Result<String, AppError> {
+    api.post(&format!("/api/candidatures/{id}/postuler/message"), &())
         .await
 }

@@ -20,6 +20,7 @@ import type {
   OfferView, NewApplicationPrefill,
 } from '@/types'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { downloadApplyDocuments, type ApplyMessageExport } from '@/composables/document_download'
 
 // ---------------------------------------------------------------------------
 // Sessions — chargées depuis le backend
@@ -45,6 +46,11 @@ const state = reactive({
   // User identity (populated after profile load)
   userDisplayName: '',
   userInitials: '',
+  userNom: null as string | null,
+  userPrenom: null as string | null,
+
+  // Notification transitoire globale (voir `showToast`)
+  toast: null as { message: string; kind: 'success' | 'error' } | null,
 
   // Sessions
   sessionId: 0,
@@ -114,14 +120,38 @@ export async function loadSessions() {
 }
 
 /**
- * Met à jour le nom et les initiales affichés dans la barre latérale.
+ * Met à jour l'identité de l'utilisateur : nom et initiales affichés dans la
+ * barre latérale, nom/prénom utilisés pour nommer les documents téléchargés.
  *
  * @param displayName - Nom complet à afficher.
  * @param initials - Initiales (fallback avatar).
+ * @param nom - Nom de famille.
+ * @param prenom - Prénom.
  */
-export function setUserInfo(displayName: string, initials: string) {
+export function setUserInfo(displayName: string, initials: string, nom: string | null, prenom: string | null) {
   state.userDisplayName = displayName
   state.userInitials = initials
+  state.userNom = nom
+  state.userPrenom = prenom
+}
+
+/** Durée d'affichage d'un toast avant disparition automatique. */
+const TOAST_DURATION_MS = 4000
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * Affiche une notification transitoire globale (remplace la précédente).
+ *
+ * @param message - Texte affiché.
+ * @param kind - `'success'` ou `'error'` (style du toast).
+ */
+export function showToast(message: string, kind: 'success' | 'error' = 'success') {
+  if (toastTimer) clearTimeout(toastTimer)
+  state.toast = { message, kind }
+  toastTimer = setTimeout(() => {
+    state.toast = null
+    toastTimer = null
+  }, TOAST_DURATION_MS)
 }
 
 /**
@@ -537,23 +567,47 @@ export async function deleteCandidature(): Promise<string | null> {
 }
 
 /**
+ * Télécharge les documents d'une candidature venant d'être postulée, sans
+ * bloquer la navigation : le résultat (ou l'échec) est signalé par un toast,
+ * la postulation elle-même restant acquise.
+ *
+ * @param candidature - Candidature postulée, capturée avant la navigation.
+ * @param message - Mail ou message rédigé par l'IA à exporter en `.txt`, `null` sinon.
+ */
+async function downloadDocumentsAfterApply(candidature: CandidatureDetail, message: ApplyMessageExport | null) {
+  try {
+    const owner = { nom: state.userNom, prenom: state.userPrenom }
+    const dir = await downloadApplyDocuments(candidature, owner, message)
+    if (dir) showToast(`Documents téléchargés dans ${dir}`)
+  } catch (e: unknown) {
+    showToast(extractErrorMessage(e, 'Impossible de télécharger les documents de la candidature.'), 'error')
+  }
+}
+
+/**
  * Invoque une commande Tauri « postuler » (mail, message ou sans message)
- * pour la candidature ouverte, puis retourne au suivi de la session en cas
- * de succès.
+ * pour la candidature ouverte, retourne au suivi de la session en cas de
+ * succès, puis télécharge ses documents en arrière-plan.
  *
  * @param command - Nom de la commande Tauri à invoquer (reçoit `{ id }`).
  * @param errorFallback - Message d'erreur par défaut si l'erreur n'est pas exploitable.
+ * @param messageFileName - Nom du `.txt` où exporter le texte renvoyé par la
+ *   commande (mail/message rédigé par l'IA) ; absent pour « sans message ».
  * @returns Message d'erreur en cas d'échec, sinon `null`.
  */
-async function applyVia(command: string, errorFallback: string): Promise<string | null> {
+async function applyVia(command: string, errorFallback: string, messageFileName?: string): Promise<string | null> {
   const current = state.detailCandidature
   if (!current) return null
 
   try {
-    await invoke<void>(command, { id: current.id })
+    const generated = await invoke<string | null>(command, { id: current.id })
+    const message = messageFileName && generated ? { fileName: messageFileName, content: generated } : null
     state.detailPopup = null
     state.selectedCard = null
     state.screen = 'tracking'
+    // Non attendu : le téléchargement ne doit pas retarder le retour au suivi
+    // (downloadDocumentsAfterApply gère ses propres erreurs).
+    void downloadDocumentsAfterApply(current, message)
     return null
   } catch (e: unknown) {
     return extractErrorMessage(e, errorFallback)
@@ -579,7 +633,7 @@ export async function applyWithoutMessage(): Promise<string | null> {
  * @returns Message d'erreur en cas d'échec, sinon `null`.
  */
 export async function applyByMail(): Promise<string | null> {
-  return applyVia('postuler_par_mail', 'Impossible de postuler par mail.')
+  return applyVia('postuler_par_mail', 'Impossible de postuler par mail.', 'Mail_de_candidature.txt')
 }
 
 /**
@@ -591,7 +645,7 @@ export async function applyByMail(): Promise<string | null> {
  * @returns Message d'erreur en cas d'échec, sinon `null`.
  */
 export async function applyByMessage(): Promise<string | null> {
-  return applyVia('postuler_par_message', 'Impossible de postuler par message.')
+  return applyVia('postuler_par_message', 'Impossible de postuler par message.', 'Message_candidature.txt')
 }
 
 // Expose raw state for components that need it

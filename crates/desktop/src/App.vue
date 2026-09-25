@@ -18,6 +18,7 @@ import ProfileView from '@/views/profile/ProfileView.vue'
 import SettingsView from '@/views/settings/SettingsView.vue'
 import DeleteSessionPopup from '@/components/DeleteSessionPopup.vue'
 import CreateSessionPopup from '@/components/CreateSessionPopup.vue'
+import AppToast from '@/components/AppToast.vue'
 import OnboardingWizard from '@/views/onboarding/OnboardingWizard.vue'
 import { state, setUserInfo, loadSessions } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
@@ -34,7 +35,7 @@ const startupError = ref<string | null>(null)
 function applyUserInfo(u: UserView) {
   const name = [u.prenom, u.nom].filter(Boolean).join(' ')
   const initials = ((u.prenom?.[0] ?? '') + (u.nom?.[0] ?? '')).toUpperCase()
-  setUserInfo(name, initials || '?')
+  setUserInfo(name, initials || '?', u.nom, u.prenom)
 }
 
 onMounted(async () => {
@@ -96,5 +97,6 @@ async function handleOnboardingCompleted(user: UserView) {
     </div>
     <DeleteSessionPopup />
     <CreateSessionPopup />
+    <AppToast />
   </template>
 </template>

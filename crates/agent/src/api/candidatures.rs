@@ -204,7 +204,9 @@ async fn postuler_sans_message(State(state): State<AppState>, Path(id): Path<i64
     Ok(())
 }
 
-async fn postuler_par_mail(State(state): State<AppState>, Path(id): Path<i64>) -> Result<(), ApiError> {
+/// Fait rédiger le mail de candidature par l'IA, marque la candidature comme
+/// postulée et renvoie le mail, que le desktop exporte en `.txt`.
+async fn postuler_par_mail(State(state): State<AppState>, Path(id): Path<i64>) -> Result<Json<String>, ApiError> {
     let detail = db::candidatures::fetch_detail(&state.pool, id).await?;
     let profile = db::profile::build_profile(&state.pool).await?;
     let model =
@@ -212,10 +214,12 @@ async fn postuler_par_mail(State(state): State<AppState>, Path(id): Path<i64>) -
 
     let email = findmyjob_core::llm::generate_application_email(&profile, &detail, &model).await?;
     db::candidatures::mark_postule(&state.pool, id, Some(&email)).await?;
-    Ok(())
+    Ok(Json(email))
 }
 
-async fn postuler_par_message(State(state): State<AppState>, Path(id): Path<i64>) -> Result<(), ApiError> {
+/// Fait rédiger le message court de candidature par l'IA, marque la
+/// candidature comme postulée et renvoie le message, que le desktop exporte en `.txt`.
+async fn postuler_par_message(State(state): State<AppState>, Path(id): Path<i64>) -> Result<Json<String>, ApiError> {
     let detail = db::candidatures::fetch_detail(&state.pool, id).await?;
     let profile = db::profile::build_profile(&state.pool).await?;
     let model =
@@ -223,5 +227,5 @@ async fn postuler_par_message(State(state): State<AppState>, Path(id): Path<i64>
 
     let message = findmyjob_core::llm::generate_application_message(&profile, &detail, &model).await?;
     db::candidatures::mark_postule(&state.pool, id, Some(&message)).await?;
-    Ok(())
+    Ok(Json(message))
 }

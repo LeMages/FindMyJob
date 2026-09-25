@@ -326,6 +326,50 @@ pub fn read_document_base64(path: &str) -> Result<String, AppError> {
     Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
 }
 
+/// Lit les octets bruts d'un document PDF joint à une candidature, pour un
+/// téléchargement binaire côté desktop.
+///
+/// Le chemin est fourni par le client : il est canonicalisé et doit se
+/// trouver sous `data_dir` avec l'extension `.pdf`, pour que l'endpoint ne
+/// permette pas de lire un fichier arbitraire du disque de l'agent. Tout
+/// refus renvoie `NotFound`, sans distinguer « absent » de « interdit ».
+///
+/// # Arguments
+///
+/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
+/// * `path` - Chemin absolu du document PDF (`candidatures.cv_path` ou `lettre_motivation_path`).
+///
+/// # Returns
+///
+/// Octets du PDF.
+pub fn read_document_bytes(data_dir: &Path, path: &str) -> Result<Vec<u8>, AppError> {
+    let not_found = || AppError::NotFound(format!("Document introuvable : {path}"));
+
+    // ------------------------------------------------------------------
+    // 1. Résolution des chemins réels — neutralise les `..` et les liens
+    //    symboliques avant la vérification d'appartenance
+    // ------------------------------------------------------------------
+    let requested = std::fs::canonicalize(path).map_err(|_| not_found())?;
+    let root = std::fs::canonicalize(data_dir)
+        .map_err(|e| AppError::Config(format!("Dossier de données introuvable ({}) : {e}", data_dir.display())))?;
+
+    // ------------------------------------------------------------------
+    // 2. Restriction au dossier de données et aux PDF
+    // ------------------------------------------------------------------
+    let is_pdf = requested
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
+    if !requested.starts_with(&root) || !is_pdf {
+        return Err(not_found());
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Lecture
+    // ------------------------------------------------------------------
+    std::fs::read(&requested)
+        .map_err(|e| AppError::Validation(format!("Impossible de lire le document {path} : {e}")))
+}
+
 /// Sauvegarde un document généré par le pipeline IA (`crate::pipeline`) à
 /// l'emplacement définitif d'une candidature : le code Typst est conservé à
 /// côté du PDF pour le debug/la traçabilité (`artefact/<candidature_id>.*`).

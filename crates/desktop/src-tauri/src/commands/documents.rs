@@ -3,8 +3,12 @@
 //! Chaque document de référence (et ses pièces jointes) appartient à une
 //! session de candidature, identifiée par `session_id`.
 
+// Importation des modules standard
+use std::path::Path;
+
 // Importation des crates externes
 use serde_json::json;
+use tauri::Manager;
 
 // Importation des modules internes
 use crate::api_client::ApiClient;
@@ -189,4 +193,85 @@ pub async fn get_document_info(
 #[tauri::command]
 pub async fn get_document_pdf(api: tauri::State<'_, ApiClient>, path: String) -> Result<String, AppError> {
     api.get_query("/api/documents/pdf", &[("path", path.as_str())]).await
+}
+
+/// Télécharge un document joint à une candidature depuis l'agent et l'écrit
+/// sur le disque local, en écrasant un éventuel fichier existant. Le dossier
+/// parent est créé s'il n'existe pas.
+///
+/// # Arguments
+///
+/// * `api` - Client HTTP vers l'agent.
+/// * `doc_path` - Chemin du document côté agent.
+/// * `save_path` - Chemin complet de destination (dossier + nom de fichier).
+///
+/// # Returns
+///
+/// Chemin du fichier sauvegardé.
+#[tauri::command]
+pub async fn download_document(
+    api: tauri::State<'_, ApiClient>,
+    doc_path: String,
+    save_path: String,
+) -> Result<String, AppError> {
+    // ------------------------------------------------------------------
+    // 1. Récupération du PDF brut
+    // ------------------------------------------------------------------
+    let bytes = api
+        .get_bytes_query("/api/documents/download", &[("path", doc_path.as_str())])
+        .await?;
+
+    // ------------------------------------------------------------------
+    // 2. Écriture locale
+    // ------------------------------------------------------------------
+    write_local_file(&save_path, &bytes)?;
+    Ok(save_path)
+}
+
+/// Écrit un fichier texte sur le disque local (ex. mail ou message de
+/// candidature rédigé par l'IA, exporté à côté des PDF), en écrasant un
+/// éventuel fichier existant. Le dossier parent est créé s'il n'existe pas.
+///
+/// # Arguments
+///
+/// * `save_path` - Chemin complet de destination.
+/// * `content` - Contenu texte à écrire.
+///
+/// # Returns
+///
+/// Chemin du fichier sauvegardé.
+#[tauri::command]
+pub fn save_text_file(save_path: String, content: String) -> Result<String, AppError> {
+    write_local_file(&save_path, content.as_bytes())?;
+    Ok(save_path)
+}
+
+/// Écrit `bytes` dans `save_path` (écrasement), après création du dossier parent.
+fn write_local_file(save_path: &str, bytes: &[u8]) -> Result<(), AppError> {
+    let target = Path::new(save_path);
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            AppError::Validation(format!("Impossible de créer le dossier {} : {e}", parent.display()))
+        })?;
+    }
+    std::fs::write(target, bytes)
+        .map_err(|e| AppError::Validation(format!("Impossible d'écrire le fichier {save_path} : {e}")))
+}
+
+/// Retourne le dossier de téléchargements de l'utilisateur.
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri (accès aux chemins système).
+///
+/// # Returns
+///
+/// Chemin absolu du dossier de téléchargements.
+#[tauri::command]
+pub fn get_downloads_dir(app: tauri::AppHandle) -> Result<String, AppError> {
+    let dir = app
+        .path()
+        .download_dir()
+        .map_err(|e| AppError::Config(format!("Dossier de téléchargements introuvable : {e}")))?;
+    Ok(dir.to_string_lossy().to_string())
 }

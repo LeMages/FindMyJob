@@ -149,7 +149,7 @@ function cancelEdit() {
 function syncUserInfo(u: UserView) {
   const name = [u.prenom, u.nom].filter(Boolean).join(' ')
   const initials = ((u.prenom?.[0] ?? '') + (u.nom?.[0] ?? '')).toUpperCase()
-  setUserInfo(name, initials || '?')
+  setUserInfo(name, initials || '?', u.nom, u.prenom)
 }
 
 /**

@@ -3,6 +3,8 @@
 
 // Importation des crates externes
 use axum::extract::{Path, Query, State};
+use axum::http::header;
+use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 
@@ -33,6 +35,7 @@ pub fn router() -> Router<AppState> {
         .route("/sessions/{id}/documents/status", get(get_documents_status))
         .route("/documents/info", get(get_document_info))
         .route("/documents/pdf", get(get_document_pdf))
+        .route("/documents/download", get(download_document))
 }
 
 async fn get_cv_reference(
@@ -116,4 +119,21 @@ async fn get_document_info(Query(query): Query<DocumentPathQuery>) -> Json<Docum
 
 async fn get_document_pdf(Query(query): Query<DocumentPathQuery>) -> Result<Json<String>, ApiError> {
     Ok(Json(documents::read_document_base64(&query.path)?))
+}
+
+/// Renvoie le PDF brut d'un document joint à une candidature. Le nom de
+/// fichier annoncé est générique : c'est le desktop qui nomme le fichier
+/// téléchargé à partir des infos de la candidature.
+async fn download_document(
+    State(state): State<AppState>,
+    Query(query): Query<DocumentPathQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let bytes = documents::read_document_bytes(&state.data_dir, &query.path)?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/pdf"),
+            (header::CONTENT_DISPOSITION, "attachment; filename=\"document.pdf\""),
+        ],
+        bytes,
+    ))
 }

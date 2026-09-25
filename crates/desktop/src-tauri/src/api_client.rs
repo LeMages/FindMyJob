@@ -82,6 +82,22 @@ impl ApiClient {
         self.handle_json(resp).await
     }
 
+    /// `GET` avec des paramètres de requête, retournant le corps brut en
+    /// octets (fichiers binaires, ex. PDF) au lieu de le désérialiser.
+    pub async fn get_bytes_query(&self, path: &str, query: &[(&str, &str)]) -> Result<Vec<u8>, AppError> {
+        let resp = self
+            .request(Method::GET, path)
+            .query(query)
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+        if !resp.status().is_success() {
+            return Err(Self::extract_error(resp).await);
+        }
+        let bytes = resp.bytes().await.map_err(Self::network_error)?;
+        Ok(bytes.to_vec())
+    }
+
     /// `POST` avec un corps JSON, désérialisant la réponse en JSON.
     pub async fn post<T: DeserializeOwned, B: Serialize>(
         &self,
