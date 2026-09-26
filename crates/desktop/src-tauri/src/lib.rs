@@ -27,7 +27,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(client)
         .invoke_handler(tauri::generate_handler![
-            commands::db_status,
             commands::user_exists,
             commands::create_user,
             commands::get_user,
@@ -91,15 +90,10 @@ pub fn run() {
             commands::delete_search_query,
             commands::run_session_search,
             commands::get_session_offers,
-            commands::get_api_key_status,
-            commands::set_api_key,
-            commands::delete_api_key,
             commands::get_llm_model,
             commands::set_llm_model,
             commands::get_theme,
             commands::set_theme,
-            commands::get_documents_path,
-            commands::open_folder,
             commands::test_api_connection,
             commands::export_data_json,
             commands::list_fonts,

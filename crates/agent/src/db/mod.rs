@@ -20,7 +20,6 @@ pub mod sessions;
 pub mod settings;
 pub mod skills;
 pub mod status_history;
-pub mod system;
 pub mod timeline_events;
 pub mod users;
 

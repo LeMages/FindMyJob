@@ -252,7 +252,7 @@ All routes are mounted under `/api` (`crates/agent/src/api/mod.rs`), protected b
 | `documents` | save/fetch CV & cover letter references, compile to PDF, inspect/read any document file |
 | `fonts` | list / import / delete a server-filesystem font family |
 | `settings` | Anthropic API key status/set/delete, LLM model, theme, connection test |
-| `system` | DB diagnostics, full JSON export, health check (unauthenticated) |
+| `system` | full JSON export, health check (unauthenticated) |
 
 ## 11. Desktop ↔ agent bridge
 
@@ -270,7 +270,7 @@ Every file under `crates/desktop/src-tauri/src/commands/` follows the same shape
 - Apply flow: no message / by mail / by message, all exporting documents to disk.
 - Offer import from a pasted URL or pasted text, prefilling the new-application form.
 - Interview planning (week/month views).
-- Settings: Anthropic API key, LLM model selection, connection test, theme, full JSON export.
+- Settings: LLM model selection, connection test, fonts, theme, full JSON export. The Anthropic API key is configured on the agent only (`.env`), never from the desktop.
 - Offers pipeline: scraping (WTTJ/Algolia), mechanical filtering, LLM scoring, scheduled runs — **backend only**, see §7.
 - CI/CD: lint + clippy on every PR to `dev`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
 
