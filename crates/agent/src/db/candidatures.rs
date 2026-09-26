@@ -272,15 +272,12 @@ pub async fn set_documents(
     Ok(())
 }
 
-/// Supprime définitivement une candidature et les lignes qui la référencent
-/// (contacts, entretiens, mails, historique de statut), dans une transaction.
+/// Supprime définitivement une candidature, sans condition de statut.
 ///
-/// Usage restreint : contrairement à `abandon` (suppression logicielle,
-/// utilisée par le bouton « Supprimer » de la page de détail), ce hard delete
-/// n'est appelé que par `api::candidatures::spawn_document_generation` quand
-/// la génération des documents échoue juste après la création — la
-/// candidature n'a alors pu recevoir ni contact, ni entretien, ni mail, mais
-/// la fonction reste correcte si ce n'était pas le cas.
+/// Usage restreint : appelé uniquement par
+/// `api::candidatures::spawn_document_generation` quand la génération des
+/// documents échoue juste après la création. Le bouton « Supprimer » de la
+/// page de détail passe par `delete_a_postuler`, qui vérifie le statut.
 ///
 /// # Arguments
 ///
@@ -292,57 +289,34 @@ pub async fn set_documents(
 /// `Ok(())` une fois la suppression effectuée (silencieux si la candidature n'existe déjà plus).
 pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
     let mut tx = pool.begin().await.map_err(map_db_err)?;
-
-    // Ordre de suppression contraint par les FK internes : status_history
-    // référence interviews, emails référence contacts.
-    sqlx::query("DELETE FROM search.status_history WHERE candidature_id = $1")
-        .bind(id)
-        .execute(&mut *tx)
-        .await
-        .map_err(map_db_err)?;
-    sqlx::query("DELETE FROM search.emails WHERE candidature_id = $1")
-        .bind(id)
-        .execute(&mut *tx)
-        .await
-        .map_err(map_db_err)?;
-    sqlx::query("DELETE FROM search.interviews WHERE candidature_id = $1")
-        .bind(id)
-        .execute(&mut *tx)
-        .await
-        .map_err(map_db_err)?;
-    sqlx::query("DELETE FROM search.contacts WHERE candidature_id = $1")
-        .bind(id)
-        .execute(&mut *tx)
-        .await
-        .map_err(map_db_err)?;
-    sqlx::query("DELETE FROM search.candidatures WHERE id = $1")
-        .bind(id)
-        .execute(&mut *tx)
-        .await
-        .map_err(map_db_err)?;
-
+    delete_in_tx(&mut tx, id).await?;
     tx.commit().await.map_err(map_db_err)?;
     Ok(())
 }
 
-/// Marque une candidature comme abandonnée (statut `abandon`), utilisé quand
-/// l'utilisateur supprime une candidature encore au statut « à postuler ».
-/// La mise à jour du statut et son entrée d'historique sont écrites dans la
-/// même transaction, pour ne jamais désynchroniser les deux.
+/// Supprime définitivement une candidature encore au statut « à postuler »
+/// (bouton « Supprimer » de la page de détail). Au-delà de ce statut, la
+/// candidature est engagée et passe par la corbeille (désistement, refus...),
+/// jamais par une suppression.
 ///
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `id` - Identifiant de la candidature à abandonner.
+/// * `id` - Identifiant de la candidature à supprimer.
 ///
 /// # Returns
 ///
-/// `Ok(())` une fois le changement de statut effectué, ou `AppError::NotFound`
-/// si la candidature n'existe pas.
-pub async fn abandon(pool: &PgPool, id: i64) -> Result<(), AppError> {
+/// Identifiant de la session de la candidature supprimée (pour le nettoyage
+/// de ses documents sur disque), `AppError::NotFound` si elle n'existe pas,
+/// ou `AppError::Conflict` si elle n'est plus au statut « à postuler ».
+pub async fn delete_a_postuler(pool: &PgPool, id: i64) -> Result<i64, AppError> {
     let mut tx = pool.begin().await.map_err(map_db_err)?;
 
-    let ancien_status: String = sqlx::query("SELECT status FROM search.candidatures WHERE id = $1")
+    // ------------------------------------------------------------------
+    // 1. Vérification du statut — FOR UPDATE pour qu'un « Postuler »
+    //    concurrent ne puisse pas s'intercaler entre le contrôle et le DELETE
+    // ------------------------------------------------------------------
+    let status: String = sqlx::query("SELECT status FROM search.candidatures WHERE id = $1 FOR UPDATE")
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
@@ -351,26 +325,49 @@ pub async fn abandon(pool: &PgPool, id: i64) -> Result<(), AppError> {
         .try_get("status")
         .map_err(map_db_err)?;
 
-    sqlx::query("UPDATE search.candidatures SET status = 'abandon' WHERE id = $1")
-        .bind(id)
-        .execute(&mut *tx)
-        .await
-        .map_err(map_db_err)?;
+    if status != "a_postuler" {
+        return Err(AppError::Conflict(
+            "Seule une candidature au statut « À postuler » peut être supprimée.".to_string(),
+        ));
+    }
 
-    status_history::record(
-        &mut tx,
-        id,
-        EventType::Desistement,
-        Some(&ancien_status),
-        Some("abandon"),
-        None,
-        None,
-    )
-    .await?;
+    // ------------------------------------------------------------------
+    // 2. Suppression
+    // ------------------------------------------------------------------
+    let session_id = delete_in_tx(&mut tx, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?;
 
     tx.commit().await.map_err(map_db_err)?;
+    Ok(session_id)
+}
 
-    Ok(())
+/// Supprime une candidature dans une transaction existante. Les lignes qui la
+/// référencent (historique, contacts, entretiens) partent par
+/// `ON DELETE CASCADE` ; l'offre source éventuelle repasse `reviewed` pour
+/// réapparaître dans le Marché.
+///
+/// Retourne l'identifiant de session de la candidature supprimée, `None` si
+/// elle n'existait pas.
+async fn delete_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: i64,
+) -> Result<Option<i64>, AppError> {
+    let Some(row) = sqlx::query("DELETE FROM search.candidatures WHERE id = $1 RETURNING session_id, offer_id")
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(map_db_err)?
+    else {
+        return Ok(None);
+    };
+
+    let session_id: i64 = row.try_get("session_id").map_err(map_db_err)?;
+    let offer_id: Option<i64> = row.try_get("offer_id").map_err(map_db_err)?;
+    if let Some(offer_id) = offer_id {
+        crate::db::offers::revert_applied_tx(tx, offer_id).await?;
+    }
+    Ok(Some(session_id))
 }
 
 /// Marque une candidature comme postulée (statut `postule`), utilisé une fois

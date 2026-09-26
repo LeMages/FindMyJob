@@ -276,6 +276,34 @@ pub async fn mark_applied_tx(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id:
     Ok(())
 }
 
+/// Remet une offre `applied` au statut `reviewed`, dans une transaction
+/// existante — pendant de `mark_applied_tx`, utilisé par
+/// `db::candidatures` quand la candidature créée depuis cette offre est
+/// supprimée, pour que l'offre réapparaisse dans le Marché.
+///
+/// Sans effet si l'offre n'est plus `applied` (statut changé entre-temps) :
+/// on ne veut pas écraser un statut posé par ailleurs.
+///
+/// # Arguments
+///
+/// * `tx` - Transaction PostgreSQL active.
+/// * `id` - Identifiant de l'offre.
+///
+/// # Returns
+///
+/// `Ok(())` une fois la mise à jour effectuée (ou ignorée).
+pub async fn revert_applied_tx(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id: i64) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE search.offers SET status = 'reviewed', updated_at = NOW() \
+         WHERE id = $1 AND status = 'applied'",
+    )
+    .bind(id)
+    .execute(&mut **tx)
+    .await
+    .map_err(map_db_err)?;
+    Ok(())
+}
+
 /// Vue minimale d'une offre non encore scorée, utilisée par le filtre
 /// mécanique et le scoring LLM (`filtering::mechanical`, `filtering::scoring`).
 /// Vue interne au pipeline, distincte d'`OfferView` : sans les colonnes de

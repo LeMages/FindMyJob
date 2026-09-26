@@ -546,8 +546,8 @@ export function addRecruiter() {
 }
 
 /**
- * Abandonne la candidature ouverte (statut « à postuler ») et retourne au
- * suivi de la session.
+ * Supprime définitivement la candidature ouverte (statut « à postuler ») et
+ * retourne au suivi de la session.
  *
  * @returns Message d'erreur en cas d'échec, sinon `null`.
  */
@@ -556,7 +556,7 @@ export async function deleteCandidature(): Promise<string | null> {
   if (!current) return null
 
   try {
-    await invoke<void>('abandon_candidature', { id: current.id })
+    await invoke<void>('delete_candidature', { id: current.id })
     state.detailPopup = null
     state.selectedCard = null
     state.screen = 'tracking'

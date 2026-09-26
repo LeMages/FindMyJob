@@ -14,7 +14,7 @@ pub use reference_versions::{read_latest_version_pdf, read_version_pdf, restore_
 // mais conservé pour un futur appelant desktop.
 #[allow(unused_imports)]
 pub use storage::{
-    compile_reference, document_info, get_reference, read_document_base64, read_document_bytes,
-    save_generated_document, save_reference, SAVE_STEPS_TOTAL,
+    compile_reference, delete_generated_documents, document_info, get_reference, read_document_base64,
+    read_document_bytes, save_generated_document, save_reference, SAVE_STEPS_TOTAL,
 };
 pub use typst::compile_to_pdf;

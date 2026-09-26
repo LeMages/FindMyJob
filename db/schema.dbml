@@ -239,7 +239,7 @@ Table search.candidatures {
 // la validation vit côté Rust (EventType, crates/core/src/models/event_type.rs).
 Table search.status_history {
   id integer [pk, increment]
-  candidature_id integer [ref: > search.candidatures.id, not null]
+  candidature_id integer [ref: > search.candidatures.id, not null, delete: cascade]
   event_type text [not null]           // voir EventType côté Rust, pas de CHECK SQL
   ancien_status candidature_status
   nouveau_status candidature_status    // nullable : un événement ne change pas toujours le statut
@@ -254,7 +254,7 @@ Table search.status_history {
 
 Table search.contacts {
   id integer [pk, increment]
-  candidature_id integer [ref: > search.candidatures.id, not null]
+  candidature_id integer [ref: > search.candidatures.id, not null, delete: cascade]
   nom text
   role text         // "RH", "Manager", "Lead Tech"
   email text
@@ -286,7 +286,7 @@ Enum interview_modalite {
 
 Table search.interviews {
   id integer [pk, increment]
-  candidature_id integer [ref: > search.candidatures.id, not null]
+  candidature_id integer [ref: > search.candidatures.id, not null, delete: cascade]
   contact_id integer [ref: > search.contacts.id]
   type interview_type
   modalite interview_modalite

@@ -242,7 +242,7 @@ All routes are mounted under `/api` (`crates/agent/src/api/mod.rs`), protected b
 | `profile` | aggregated profile (all sub-entities in one response) |
 | `experiences` / `formations` / `langues` / `projets` / `skills` | create / update / delete per sub-entity |
 | `sessions` | list / create / update / delete |
-| `candidatures` | list by session, create, get, update, abandon, apply (no message / by mail / by message) |
+| `candidatures` | list by session, create, get, update, delete (à postuler only), apply (no message / by mail / by message) |
 | `contacts` | list for an application (read-only, no create route yet) |
 | `status_history` | history for an application |
 | `timeline_events` | list available events, add an event |

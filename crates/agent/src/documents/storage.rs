@@ -408,3 +408,38 @@ pub fn save_generated_document(
 
     Ok(pdf_path.to_string_lossy().to_string())
 }
+
+/// Supprime les documents générés d'une candidature (CV et lettre de
+/// motivation, `.pdf` et `.typ`) écrits par `save_generated_document`.
+/// Un fichier déjà absent n'est pas une erreur : la génération a pu échouer
+/// avant l'écriture, ou le fichier avoir été supprimé à la main.
+///
+/// # Arguments
+///
+/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
+/// * `session_id` - Identifiant de la session propriétaire.
+/// * `candidature_id` - Identifiant de la candidature dont supprimer les documents.
+///
+/// # Returns
+///
+/// `Ok(())` si tous les fichiers existants ont été supprimés, sinon l'erreur
+/// du premier fichier impossible à supprimer.
+pub fn delete_generated_documents(data_dir: &Path, session_id: i64, candidature_id: i64) -> Result<(), AppError> {
+    for doc_type in ["cv", "lettre_motivation"] {
+        let artefact_dir = resolve_doc_dir(data_dir, session_id, doc_type).join("artefact");
+        for extension in ["pdf", "typ"] {
+            let path = artefact_dir.join(format!("{candidature_id}.{extension}"));
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    return Err(AppError::Validation(format!(
+                        "Suppression de {} impossible : {e}",
+                        path.display()
+                    )))
+                }
+            }
+        }
+    }
+    Ok(())
+}

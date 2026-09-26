@@ -106,21 +106,21 @@ pub async fn update_candidature(
     api.put(&format!("/api/candidatures/{id}"), &input).await
 }
 
-/// Marque une candidature comme abandonnée (statut `abandon`) — utilisé par
-/// le bouton « Supprimer » de la page de détail, tant que la candidature est
-/// encore au statut « à postuler ».
+/// Supprime définitivement une candidature — utilisé par le bouton
+/// « Supprimer » de la page de détail. L'agent refuse la suppression si la
+/// candidature n'est plus au statut « à postuler ».
 ///
 /// # Arguments
 ///
 /// * `api` - Client HTTP vers l'agent.
-/// * `id` - Identifiant de la candidature à abandonner.
+/// * `id` - Identifiant de la candidature à supprimer.
 ///
 /// # Returns
 ///
-/// `Ok(())` une fois le statut mis à jour.
+/// `Ok(())` une fois la candidature supprimée.
 #[tauri::command]
-pub async fn abandon_candidature(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
-    api.post_no_content(&format!("/api/candidatures/{id}/abandon"), &()).await
+pub async fn delete_candidature(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
+    api.delete(&format!("/api/candidatures/{id}")).await
 }
 
 /// Traite le bouton « Postuler sans message » : passe la candidature au

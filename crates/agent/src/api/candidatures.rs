@@ -1,5 +1,5 @@
-//! Endpoints REST pour les candidatures : CRUD, cycle de vie (abandon,
-//! postuler) et déclenchement du pipeline de génération de documents (CV +
+//! Endpoints REST pour les candidatures : CRUD, cycle de vie (suppression
+//! au statut « à postuler », postuler) et déclenchement du pipeline de génération de documents (CV +
 //! lettre de motivation) à la création, quand les documents de référence de
 //! la session sont disponibles.
 
@@ -23,9 +23,11 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/sessions/{session_id}/candidatures", get(list_for_session))
         .route("/candidatures", post(create_candidature))
-        .route("/candidatures/{id}", get(get_candidature).put(update_candidature))
+        .route(
+            "/candidatures/{id}",
+            get(get_candidature).put(update_candidature).delete(delete_candidature),
+        )
         .route("/candidatures/{id}/progress", get(get_generation_progress))
-        .route("/candidatures/{id}/abandon", post(abandon_candidature))
         .route("/candidatures/{id}/postuler", post(postuler_sans_message))
         .route("/candidatures/{id}/postuler/mail", post(postuler_par_mail))
         .route("/candidatures/{id}/postuler/message", post(postuler_par_message))
@@ -194,8 +196,15 @@ async fn update_candidature(
     Ok(Json(db::candidatures::update(&state.pool, id, &input).await?))
 }
 
-async fn abandon_candidature(State(state): State<AppState>, Path(id): Path<i64>) -> Result<(), ApiError> {
-    db::candidatures::abandon(&state.pool, id).await?;
+/// Supprime définitivement une candidature au statut « à postuler », puis ses
+/// documents générés sur disque. Le nettoyage disque est best-effort : la
+/// base est déjà cohérente à ce stade, un fichier orphelin ne justifie pas
+/// de renvoyer une erreur au desktop (échec loggé sur stderr).
+async fn delete_candidature(State(state): State<AppState>, Path(id): Path<i64>) -> Result<(), ApiError> {
+    let session_id = db::candidatures::delete_a_postuler(&state.pool, id).await?;
+    if let Err(e) = documents::delete_generated_documents(&state.data_dir, session_id, id) {
+        eprintln!("Suppression des documents de la candidature {id} impossible : {e}");
+    }
     Ok(())
 }
 
