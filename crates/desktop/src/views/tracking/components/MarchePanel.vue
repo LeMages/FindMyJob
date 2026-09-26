@@ -150,10 +150,10 @@ watch(sessionId, loadDocumentsStatus)
             <td class="py-2.5 px-4">
               <button
                 class="h-8 px-3 rounded-lg border border-neutral-950 bg-neutral-950 text-white text-[12px] font-medium cursor-pointer whitespace-nowrap hover:bg-neutral-800"
-                :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': o.has_candidature || documentsBlocking }"
-                :disabled="o.has_candidature || documentsBlocking"
+                :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': documentsBlocking }"
+                :disabled="documentsBlocking"
                 @click="startApplicationFromOffer(o)"
-              >{{ o.has_candidature ? 'Déjà postulé' : 'Postuler' }}</button>
+              >Postuler</button>
             </td>
           </tr>
         </tbody>

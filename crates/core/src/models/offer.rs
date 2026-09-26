@@ -20,6 +20,4 @@ pub struct OfferView {
     pub status: String,
     pub score: Option<f32>,
     pub created_at: DateTime<Utc>,
-    /// `true` si une candidature référence déjà cette offre (`offer_id`).
-    pub has_candidature: bool,
 }

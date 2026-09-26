@@ -106,7 +106,6 @@ export interface OfferView {
   status: string
   score: number | null
   created_at: string
-  has_candidature: boolean
 }
 
 /** Données d'une offre du Marché transmises au formulaire de nouvelle candidature. */

@@ -38,8 +38,28 @@ fn row_to_offer(row: &PgRow) -> Result<OfferView, sqlx::Error> {
         status: row.try_get("status")?,
         score: row.try_get("score")?,
         created_at: row.try_get("created_at")?,
-        has_candidature: row.try_get("has_candidature")?,
     })
+}
+
+/// Produit l'expression SQL qui normalise une URL d'offre pour comparaison.
+///
+/// Une URL collée à la main dans une candidature diffère souvent de l'URL
+/// scrapée (`?utm_source=…`, `/` final, `http` vs `https`, `www.`, casse) :
+/// on retire le schéma, le `www.`, le fragment, la query string et les `/`
+/// finaux, puis on passe en minuscules.
+///
+/// # Arguments
+///
+/// * `column` - Colonne SQL (qualifiée) contenant l'URL à normaliser.
+///
+/// # Returns
+///
+/// Fragment SQL à insérer dans une requête.
+fn normalized_url_sql(column: &str) -> String {
+    format!(
+        "lower(regexp_replace(split_part(split_part(\
+         regexp_replace(btrim({column}), '^https?://(www\\.)?', '', 'i'), '#', 1), '?', 1), '/+$', ''))"
+    )
 }
 
 /// Insère les offres scrapées en base, en ignorant les doublons.
@@ -110,7 +130,13 @@ pub async fn find_existing_urls(pool: &PgPool, urls: &[String]) -> Result<HashSe
 }
 
 /// Liste les offres d'une session dont le score dépasse un seuil, quel que
-/// soit leur statut.
+/// soit leur statut, en excluant celles pour lesquelles une candidature
+/// existe déjà.
+///
+/// Une offre est considérée comme déjà candidatée si une candidature (toutes
+/// sessions et tous statuts confondus) la référence via `offer_id` (créée
+/// depuis le Marché) ou porte la même URL normalisée dans `url_offre`
+/// (saisie manuelle).
 ///
 /// # Arguments
 ///
@@ -122,19 +148,26 @@ pub async fn find_existing_urls(pool: &PgPool, urls: &[String]) -> Result<HashSe
 ///
 /// Offres triées par score décroissant, les mieux notées en premier.
 pub async fn list_for_session(pool: &PgPool, session_id: i64, min_score: f32) -> Result<Vec<OfferView>, AppError> {
-    let rows = sqlx::query(
+    let sql = format!(
         "SELECT id, session_id, source, title, company, location, url, contract_type, posted_at, \
-                description, status, score, created_at, \
-                EXISTS(SELECT 1 FROM search.candidatures c WHERE c.offer_id = offers.id) AS has_candidature \
+                description, status, score, created_at \
          FROM search.offers \
          WHERE session_id = $1 AND score > $2 \
+           AND NOT EXISTS ( \
+               SELECT 1 FROM search.candidatures c \
+               WHERE c.offer_id = offers.id \
+                  OR (c.url_offre IS NOT NULL AND {} = {}) \
+           ) \
          ORDER BY score DESC",
-    )
-    .bind(session_id)
-    .bind(min_score)
-    .fetch_all(pool)
-    .await
-    .map_err(map_db_err)?;
+        normalized_url_sql("c.url_offre"),
+        normalized_url_sql("offers.url"),
+    );
+    let rows = sqlx::query(&sql)
+        .bind(session_id)
+        .bind(min_score)
+        .fetch_all(pool)
+        .await
+        .map_err(map_db_err)?;
 
     rows.iter().map(row_to_offer).collect::<Result<_, _>>().map_err(map_db_err)
 }
@@ -152,8 +185,7 @@ pub async fn list_for_session(pool: &PgPool, session_id: i64, min_score: f32) ->
 pub async fn fetch_one(pool: &PgPool, id: i64) -> Result<OfferView, AppError> {
     let row = sqlx::query(
         "SELECT id, session_id, source, title, company, location, url, contract_type, posted_at, \
-                description, status, score, created_at, \
-                EXISTS(SELECT 1 FROM search.candidatures c WHERE c.offer_id = offers.id) AS has_candidature \
+                description, status, score, created_at \
          FROM search.offers WHERE id = $1",
     )
     .bind(id)
