@@ -60,7 +60,7 @@ Headless binary crate: an Axum HTTP server that owns all persistence, the offers
 crates/agent/src/
   main.rs, config.rs, pipeline.rs, scheduler.rs, security.rs, logging.rs
   api/            22 route modules + mod.rs (router, auth middleware, CORS, error mapping)
-  db/             one file per table + common.rs, config.rs, export.rs, init.rs
+  db/             one file per table + common.rs, config.rs, init.rs
   documents/      Typst compilation + on-disk document storage (fonts.rs, storage.rs, typst.rs)
   filtering/      mechanical filter + LLM scoring for scraped offers
   scraping/       job board scrapers (wttj.rs today) behind a JobScraper trait
@@ -252,7 +252,7 @@ All routes are mounted under `/api` (`crates/agent/src/api/mod.rs`), protected b
 | `documents` | save/fetch CV & cover letter references, compile to PDF, inspect/read any document file |
 | `fonts` | list / import / delete a server-filesystem font family |
 | `settings` | Anthropic API key status/set/delete, LLM model, theme, connection test |
-| `system` | full JSON export, health check (unauthenticated) |
+| `system` | health check (unauthenticated) |
 
 ## 11. Desktop ↔ agent bridge
 
@@ -270,7 +270,7 @@ Every file under `crates/desktop/src-tauri/src/commands/` follows the same shape
 - Apply flow: no message / by mail / by message, all exporting documents to disk.
 - Offer import from a pasted URL or pasted text, prefilling the new-application form.
 - Interview planning (week/month views).
-- Settings: LLM model selection, connection test, fonts, theme, full JSON export. The Anthropic API key is configured on the agent only (`.env`), never from the desktop.
+- Settings: LLM model selection, connection test, fonts, theme. The Anthropic API key is configured on the agent only (`.env`), never from the desktop.
 - Offers pipeline: scraping (WTTJ/Algolia), mechanical filtering, LLM scoring, scheduled runs — **backend only**, see §7.
 - CI/CD: lint + clippy on every PR to `dev`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
 

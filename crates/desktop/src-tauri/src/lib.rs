@@ -95,7 +95,6 @@ pub fn run() {
             commands::get_theme,
             commands::set_theme,
             commands::test_api_connection,
-            commands::export_data_json,
             commands::list_fonts,
             commands::import_font_folder,
             commands::delete_font,

@@ -100,7 +100,6 @@ pub fn router(state: AppState) -> Router {
         .merge(document_versions::router())
         .merge(fonts::router())
         .merge(settings::router())
-        .merge(system::router())
         .route_layer(middleware::from_fn(auth::require_bearer_token));
 
     // `/api/system/health` reste volontairement hors de l'authentification

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
- * Vue « Paramètres » : modèle Claude, polices, thème d'affichage, export
- * des données en JSON.
+ * Vue « Paramètres » : modèle Claude, polices, thème d'affichage.
  */
 
 // Importation des modules Vue / framework
@@ -30,9 +29,6 @@ const testResult = ref<TestConnectionResult | null>(null)
 
 const { theme, setTheme } = useTheme()
 const themeFeedback = ref<string | null>(null)
-
-const exporting = ref(false)
-const exportFeedback = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
 async function loadModel() {
   try {
@@ -73,22 +69,6 @@ async function testConnection() {
 
 async function onThemeChange(value: ThemeSetting) {
   themeFeedback.value = await setTheme(value)
-}
-
-async function exportData() {
-  exporting.value = true
-  exportFeedback.value = null
-  try {
-    const path = await invoke<string | null>('export_data_json')
-    if (path) {
-      exportFeedback.value = { type: 'success', text: `Export enregistré : ${path}` }
-    }
-    // path === null : annulation par l'utilisateur, comportement neutre voulu.
-  } catch (e: unknown) {
-    exportFeedback.value = { type: 'error', text: extractErrorMessage(e, "Impossible d'exporter les données.") }
-  } finally {
-    exporting.value = false
-  }
 }
 </script>
 
@@ -149,25 +129,6 @@ async function exportData() {
           </button>
         </div>
         <div v-if="themeFeedback" class="text-[11.5px] font-mono mt-[6px] text-red-500">{{ themeFeedback }}</div>
-      </div>
-    </div>
-
-    <!-- Données -->
-    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DONNÉES</div>
-      <div class="flex items-center justify-between gap-5">
-        <div>
-          <div class="text-[14px] font-medium">Sauvegarde / Export</div>
-          <div class="text-[12.5px] text-neutral-500 mt-[3px] max-w-[520px] leading-[1.45]">Exporter toutes les données en JSON pour archivage.</div>
-          <div v-if="exportFeedback" class="text-[12.5px] font-mono mt-[6px]" :class="exportFeedback.type === 'success' ? 'text-green-600' : 'text-red-500'">
-            {{ exportFeedback.text }}
-          </div>
-        </div>
-        <button
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-50 disabled:cursor-not-allowed"
-          :disabled="exporting"
-          @click="exportData"
-        >{{ exporting ? 'Export en cours…' : 'Exporter' }}</button>
       </div>
     </div>
   </div>

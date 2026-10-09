@@ -7,7 +7,6 @@ pub mod contacts;
 pub mod document_versions;
 pub mod documents;
 pub mod experiences;
-pub mod export;
 pub mod formations;
 pub mod init;
 pub mod interviews;
