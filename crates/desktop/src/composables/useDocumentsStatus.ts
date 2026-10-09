@@ -19,8 +19,7 @@ const documentsStatus = ref<DocumentsStatus | null>(null)
 
 /**
  * Recharge l'état des documents de référence de la session courante.
- * Échec silencieux volontaire (comme `loadSessions`/`loadSearchQueries`
- * dans `stores/app.ts`) : le garde-fou serveur reste la source de vérité,
+ * Échec silencieux volontaire (comme `loadSessions` dans `stores/app.ts`) : le garde-fou serveur reste la source de vérité,
  * cet état n'est qu'un confort d'affichage.
  */
 async function loadDocumentsStatus() {

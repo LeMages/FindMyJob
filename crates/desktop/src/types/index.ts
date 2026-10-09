@@ -74,10 +74,7 @@ export type SessionStatut = 'active' | 'pause' | 'termine'
 export interface Session {
   id: number
   nom: string
-  contexte: string | null
   statut: SessionStatut
-  zone: string | null
-  min_score: number
   candidature_count: number
   has_accepted: boolean
   created_at: string
@@ -85,52 +82,7 @@ export interface Session {
 
 export interface UpdateSessionInput {
   nom: string
-  contexte: string | null
   statut: SessionStatut
-  zone: string | null
-  min_score: number
-}
-
-export interface SearchQueryView {
-  id: number
-  session_id: number
-  keywords: string
-  location: string | null
-  country_code: string | null
-  created_at: string
-}
-
-export interface OfferView {
-  id: number
-  session_id: number
-  source: string
-  title: string
-  company: string
-  location: string
-  url: string
-  contract_type: string | null
-  posted_at: string | null
-  description: string | null
-  status: string
-  score: number | null
-  created_at: string
-}
-
-/** Données d'une offre du Marché transmises au formulaire de nouvelle candidature. */
-export interface NewApplicationPrefill {
-  offerId: number
-  url: string
-  poste: string
-  entreprise: string
-  localisation: string
-  typeContrat: string | null
-  description: string | null
-}
-
-export interface CreateSearchQueryInput {
-  keywords: string
-  location: string | null
-  country_code: string | null
 }
 
 export interface NewContact {
@@ -264,7 +216,6 @@ export interface ProfileDto {
 export interface CandidatureView {
   id: number
   session_id: number | null
-  offer_id: number | null
   poste: string
   entreprise: string | null
   localisation: string | null
@@ -301,7 +252,6 @@ export interface CreateCandidatureInput {
   cv_path: string | null
   lettre_motivation_path: string | null
   session_id: number | null
-  offer_id: number | null
 }
 
 /** Champs extraits d'une offre scrapée (voir `scrape_offer`), pour pré-remplir le formulaire. */
@@ -328,7 +278,6 @@ export interface UpdateCandidatureInput {
 export interface CandidatureDetail {
   id: number
   session_id: number | null
-  offer_id: number | null
   poste: string
   entreprise: string | null
   localisation: string | null

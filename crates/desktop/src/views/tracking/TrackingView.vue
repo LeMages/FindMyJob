@@ -23,14 +23,13 @@ import { statusLabel, statusColor, TRASHED_STATUSES } from '@/composables/candid
 import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
 import TrashPopup from '@/views/tracking/components/TrashPopup.vue'
 import CandidaturesTabs from '@/views/tracking/components/CandidaturesTabs.vue'
-import MarchePanel from '@/views/tracking/components/MarchePanel.vue'
 import PlanningPanel from '@/views/tracking/components/PlanningPanel.vue'
 import SessionParametersForm from '@/views/tracking/components/SessionParametersForm.vue'
 
 const candidatures = ref<CandidatureView[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const activeTab = ref<'candidatures' | 'marche' | 'planning' | 'parametres'>('candidatures')
+const activeTab = ref<'candidatures' | 'planning' | 'parametres'>('candidatures')
 
 const sessionId = computed(() => currentSession.value?.id ?? null)
 
@@ -267,9 +266,6 @@ watch(sessionId, loadDocumentsStatus)
         </div>
       </template>
     </template>
-
-    <!-- Onglet Marché -->
-    <MarchePanel v-else-if="activeTab === 'marche'" />
 
     <!-- Onglet Planning -->
     <PlanningPanel v-else-if="activeTab === 'planning'" />
