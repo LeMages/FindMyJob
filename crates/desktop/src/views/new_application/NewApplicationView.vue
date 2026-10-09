@@ -1,18 +1,24 @@
 <script setup lang="ts">
 /**
- * Vue « Nouvelle candidature » : formulaire de création (détails du poste,
- * contacts recruteur, CV et lettre de motivation joints).
+ * Vue « Nouvelle candidature » : import de l'offre (lien, capture de la
+ * page, texte collé ou saisie manuelle), puis formulaire de création
+ * (détails du poste, contacts recruteur, notes).
  */
 
 // Importation des modules Vue / framework
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des composants
 import GenerationProgressModal from './components/GenerationProgressModal.vue'
+import OfferLinkStep from './components/OfferLinkStep.vue'
+import ExtractionChoiceStep from './components/ExtractionChoiceStep.vue'
+import CaptureStep from './components/CaptureStep.vue'
+import PasteStep from './components/PasteStep.vue'
+import DuplicateOfferWarning from './components/DuplicateOfferWarning.vue'
 
 // Importation des modules internes
-import type { CandidatureView, CreateCandidatureInput, OfferExtraction, ScrapedOfferFields } from '@/types'
+import type { CandidatureView, CreateCandidatureInput, OfferExtraction } from '@/types'
 import {
   state,
   currentSession,
@@ -23,6 +29,8 @@ import {
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
 import { useGenerationProgress } from '@/composables/useGenerationProgress'
+import { useOfferImport } from './useOfferImport'
+import { useDuplicateOffers } from './useDuplicateOffers'
 
 const roleRef = ref('')
 const companyRef = ref('')
@@ -34,10 +42,9 @@ const urlOffreRef = ref('')
 const descriptionOffreRef = ref('')
 const notesRef = ref('')
 
-const step = ref<'url' | 'paste' | 'form'>('url')
-const scraping = ref(false)
-const scrapingError = ref<string | null>(null)
-const pasteText = ref('')
+const offerImport = useOfferImport(urlOffreRef, onOfferExtracted)
+const { step, busy, urlError, urlUnavailable, choice, captureError, pasteError, pasteText } = offerImport
+const { duplicates, checkError, check: checkDuplicates, clear: clearDuplicates } = useDuplicateOffers()
 
 const isValid = computed(() =>
   roleRef.value.trim() !== '' &&
@@ -76,7 +83,7 @@ function closeProgressModal() {
   showProgressModal.value = false
 }
 
-/** Réinitialise les champs du formulaire après une création réussie. */
+/** Réinitialise le formulaire et le parcours d'import après une création réussie. */
 function resetForm() {
   roleRef.value = ''
   companyRef.value = ''
@@ -87,15 +94,22 @@ function resetForm() {
   urlOffreRef.value = ''
   descriptionOffreRef.value = ''
   notesRef.value = ''
+  saveError.value = null
+  offerImport.reset()
+  clearDuplicates()
 }
 
 const { documentsBlocking, missingDocumentsMessage, loadDocumentsStatus } = useDocumentsStatus()
 onMounted(loadDocumentsStatus)
 watch(() => currentSession.value?.id, loadDocumentsStatus)
 
+// La fenêtre de capture n'a plus de sens hors de cet écran.
+onBeforeUnmount(offerImport.closeCapture)
+
 /** Valide et envoie le formulaire de nouvelle candidature au backend. */
 async function submit() {
-  if (!isValid.value || documentsBlocking.value) return
+  const session = currentSession.value
+  if (!isValid.value || documentsBlocking.value || !session) return
   saving.value = true
   saveError.value = null
   try {
@@ -112,21 +126,13 @@ async function submit() {
       notes: notesRef.value.trim() || null,
       cv_path: null,
       lettre_motivation_path: null,
-      session_id: currentSession.value?.id ?? null,
+      session_id: session.id,
     }
-    // 2. Création de la candidature côté backend (documents générés en tâche
-    //    de fond côté agent — voir `showProgressModal`/`useGenerationProgress`)
+    // 2. Création de la candidature côté backend, puis suivi de la génération
+    //    des documents lancée en tâche de fond par l'agent (modale bloquante)
     const candidature = await invoke<CandidatureView>('create_candidature', { input })
-    // 3. Suivi de la génération des documents (modale bloquante) — seulement
-    //    si une génération a réellement été déclenchée (candidature liée à
-    //    une session, voir `create_candidature` côté agent)
-    if (candidature.session_id !== null) {
-      showProgressModal.value = true
-      startProgressPolling(candidature.id)
-    } else {
-      resetForm()
-      navigate('tracking')
-    }
+    showProgressModal.value = true
+    startProgressPolling(candidature.id)
   } catch (e: unknown) {
     saveError.value = extractErrorMessage(e, 'Erreur lors de la création de la candidature.')
   } finally {
@@ -164,56 +170,33 @@ function autoDetectSource(url: string) {
   }
 }
 
-/** Pré-remplit les refs du formulaire avec les champs extraits (scraping ou texte collé). */
-function applyFields(fields: ScrapedOfferFields) {
-  if (fields.poste) roleRef.value = fields.poste
-  if (fields.entreprise) companyRef.value = fields.entreprise
-  if (fields.localisation) locationRef.value = fields.localisation
-  if (fields.type_contrat) typeRef.value = fields.type_contrat
-  if (fields.remuneration) remunerationRef.value = fields.remuneration
-  if (fields.description_offre) descriptionOffreRef.value = fields.description_offre
-}
-
 /**
- * Scrape l'offre à l'URL saisie et pré-remplit le formulaire avec les champs
- * extraits. En cas d'échec (site protégé, timeout...), bascule sur l'étape
- * de copier-coller manuel plutôt que de bloquer l'utilisateur.
+ * Remplit le formulaire avec les champs d'une nouvelle analyse : un champ
+ * absent de cette analyse est vidé, pour ne pas mélanger deux offres.
  */
-async function handleScrape() {
-  scraping.value = true
-  scrapingError.value = null
-  try {
-    const extraction = await invoke<OfferExtraction>('scrape_offer', { url: urlOffreRef.value.trim() })
-    applyFields(extraction.fields)
+function applyFields(extraction: OfferExtraction) {
+  const { fields } = extraction
+  roleRef.value = fields.poste ?? ''
+  companyRef.value = fields.entreprise ?? ''
+  locationRef.value = fields.localisation ?? ''
+  typeRef.value = fields.type_contrat ?? ''
+  remunerationRef.value = fields.remuneration ?? ''
+  descriptionOffreRef.value = fields.description_offre ?? ''
+}
+
+/** Pré-remplit le formulaire après une extraction réussie et vérifie les doublons. */
+function onOfferExtracted(extraction: OfferExtraction) {
+  applyFields(extraction)
+  if (urlOffreRef.value.trim()) {
     autoDetectSource(urlOffreRef.value)
-    step.value = 'form'
-  } catch (e: unknown) {
-    scrapingError.value = extractErrorMessage(e, "Ce site bloque l'extraction automatique.")
-    step.value = 'paste'
-  } finally {
-    scraping.value = false
+    void checkDuplicates(urlOffreRef.value)
   }
 }
 
-/** Extrait les champs du formulaire depuis le texte de l'offre collé manuellement. */
-async function handlePasteExtract() {
-  scraping.value = true
-  scrapingError.value = null
-  try {
-    const extraction = await invoke<OfferExtraction>('extract_offer_from_text', {
-      text: pasteText.value.trim(),
-    })
-    applyFields(extraction.fields)
-    if (urlOffreRef.value) autoDetectSource(urlOffreRef.value)
-    step.value = 'form'
-  } catch (e: unknown) {
-    scrapingError.value = extractErrorMessage(
-      e,
-      "Impossible d'extraire les informations. Essaie la saisie manuelle."
-    )
-  } finally {
-    scraping.value = false
-  }
+/** Passe à la saisie manuelle en vérifiant les doublons du lien déjà saisi. */
+async function goToManual() {
+  await offerImport.goToManual()
+  void checkDuplicates(urlOffreRef.value)
 }
 </script>
 
@@ -232,55 +215,57 @@ async function handlePasteExtract() {
       >Annuler</button>
     </div>
 
-    <!-- Étape 1 : lien de l'offre -->
-    <div v-if="step === 'url'" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">LIEN DE L'OFFRE</div>
-      <p class="text-[13px] text-neutral-500 mb-[14px]">Colle le lien de l'offre pour pré-remplir automatiquement le formulaire, ou passe directement à la saisie manuelle.</p>
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Lien de l'offre</label>
-        <input v-model="urlOffreRef" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://www.linkedin.com/jobs/view/..." />
-      </div>
-      <div class="flex gap-3">
-        <button
-          class="h-12 text-[15px] rounded-10 px-4 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': scraping || !urlOffreRef.trim() }"
-          :disabled="scraping || !urlOffreRef.trim()"
-          @click="handleScrape"
-        >{{ scraping ? 'Analyse en cours…' : 'Analyser l\'offre →' }}</button>
-        <button
-          class="h-12 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': scraping }"
-          :disabled="scraping"
-          @click="step = 'form'"
-        >Saisie manuelle</button>
-      </div>
+    <!-- Sans session courante, aucune candidature ne peut être créée -->
+    <div v-if="!currentSession" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[18px] text-[13px] text-amber-700 flex items-center justify-between gap-3">
+      <span>Aucune session de recherche n'est sélectionnée : crée ou choisis une session dans le suivi avant d'ajouter une candidature.</span>
+      <button class="underline font-medium whitespace-nowrap" @click="navigate('tracking')">Aller au suivi</button>
     </div>
 
-    <!-- Étape fallback : copier-coller du texte de l'offre (scraping échoué) -->
-    <div v-if="step === 'paste'" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div v-if="scrapingError" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[14px] text-[13px] text-amber-700">{{ scrapingError }}</div>
-      <p class="text-[13px] text-neutral-500 mb-[14px]">Sélectionne tout le texte de la page de l'offre et colle-le ci-dessous.</p>
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Texte de l'offre</label>
-        <textarea v-model="pasteText" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-48" placeholder="Colle ici le texte complet de l'offre d'emploi..." />
-      </div>
-      <div class="flex gap-3">
-        <button
-          class="h-12 text-[15px] rounded-10 px-4 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': scraping || !pasteText.trim() }"
-          :disabled="scraping || !pasteText.trim()"
-          @click="handlePasteExtract"
-        >{{ scraping ? 'Analyse en cours…' : 'Analyser le texte →' }}</button>
-        <button
-          class="h-12 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': scraping }"
-          :disabled="scraping"
-          @click="step = 'form'"
-        >Saisie manuelle</button>
-      </div>
-    </div>
+    <OfferLinkStep
+      v-if="step === 'url'"
+      v-model="urlOffreRef"
+      :busy="busy"
+      :unavailable="urlUnavailable"
+      :error="urlError"
+      @analyze="offerImport.analyzeUrl"
+      @manual="goToManual"
+    />
+
+    <ExtractionChoiceStep
+      v-if="step === 'choice' && choice"
+      :message="choice.message"
+      :can-capture="choice.canCapture"
+      :busy="busy"
+      @capture="offerImport.openCapture"
+      @paste="offerImport.goToPaste"
+      @manual="goToManual"
+      @back="offerImport.backToUrl"
+    />
+
+    <CaptureStep
+      v-if="step === 'capture'"
+      :busy="busy"
+      :error="captureError"
+      @capture="offerImport.capturePage"
+      @reopen="offerImport.openCapture"
+      @paste="offerImport.goToPaste"
+      @manual="goToManual"
+      @back="offerImport.backToUrl"
+    />
+
+    <PasteStep
+      v-if="step === 'paste'"
+      v-model="pasteText"
+      :busy="busy"
+      :error="pasteError"
+      @analyze="offerImport.analyzePaste"
+      @manual="goToManual"
+      @back="offerImport.backToUrl"
+    />
 
     <template v-if="step === 'form'">
+    <button class="bg-transparent border-none font-mono text-[12px] text-neutral-500 cursor-pointer py-1 mb-[10px] hover:text-neutral-950" @click="offerImport.backToUrl">← Revenir au lien de l'offre</button>
+    <DuplicateOfferWarning :duplicates="duplicates" :check-error="checkError" />
     <!-- Détails du poste -->
     <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
       <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DÉTAILS DU POSTE</div>
@@ -336,7 +321,7 @@ async function handlePasteExtract() {
       </div>
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Lien de l'offre</label>
-        <input v-model="urlOffreRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://..." />
+        <input v-model="urlOffreRef" @change="checkDuplicates(urlOffreRef)" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://..." />
       </div>
       <div class="mb-0">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Contenu de l'offre <span class="text-red-500 font-semibold">*</span></label>
@@ -403,8 +388,8 @@ async function handlePasteExtract() {
     <!-- Submit -->
     <button
       class="w-full justify-center h-12 text-[15px] rounded-10 mt-1 px-4 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-      :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': saving || !isValid || documentsBlocking }"
-      :disabled="saving || !isValid || documentsBlocking"
+      :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': saving || !isValid || documentsBlocking || !currentSession }"
+      :disabled="saving || !isValid || documentsBlocking || !currentSession"
       @click="submit"
     >
       {{ saving ? 'Enregistrement…' : 'Valider la candidature →' }}

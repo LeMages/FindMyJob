@@ -4,7 +4,8 @@
 use crate::api_client::ApiClient;
 use crate::error::AppError;
 use crate::models::{
-    CandidatureDetail, CandidatureView, CreateCandidatureInput, GenerationProgress, UpdateCandidatureInput,
+    CandidatureDetail, CandidatureView, CreateCandidatureInput, DuplicateCandidatureView, GenerationProgress,
+    UpdateCandidatureInput,
 };
 
 /// Crée une candidature. Si la session cible a ses documents de référence
@@ -27,6 +28,26 @@ pub async fn create_candidature(
     input: CreateCandidatureInput,
 ) -> Result<CandidatureView, AppError> {
     api.post("/api/candidatures", &input).await
+}
+
+/// Cherche les candidatures existantes pointant vers la même offre que
+/// `url` (comparaison normalisée faite par l'agent), toutes sessions
+/// confondues, pour un avertissement de doublon non bloquant.
+///
+/// # Arguments
+///
+/// * `api` - Client HTTP vers l'agent.
+/// * `url` - URL de l'offre saisie.
+///
+/// # Returns
+///
+/// Les candidatures correspondantes (liste vide si aucune).
+#[tauri::command]
+pub async fn find_candidatures_by_url(
+    api: tauri::State<'_, ApiClient>,
+    url: String,
+) -> Result<Vec<DuplicateCandidatureView>, AppError> {
+    api.get_query("/api/candidatures/by-url", &[("url", url.as_str())]).await
 }
 
 /// Récupère la progression de la génération des documents d'une candidature,

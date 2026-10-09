@@ -4,7 +4,7 @@
 //! la session sont disponibles.
 
 // Importation des crates externes
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 
@@ -12,10 +12,12 @@ use axum::{Json, Router};
 use crate::api::error::ApiError;
 use crate::api::AppState;
 use crate::progress::ProgressStore;
+use crate::url_normalize::normalize_offer_url;
 use crate::{db, documents, pipeline};
 use findmyjob_core::error::AppError;
 use findmyjob_core::models::{
-    CandidatureDetail, CandidatureView, CreateCandidatureInput, GenerationProgress, UpdateCandidatureInput,
+    CandidatureDetail, CandidatureView, CreateCandidatureInput, DuplicateCandidatureView, GenerationProgress,
+    UpdateCandidatureInput,
 };
 
 /// Assemble les routes `/api/candidatures*` et `/api/sessions/{id}/candidatures`.
@@ -23,6 +25,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/sessions/{session_id}/candidatures", get(list_for_session))
         .route("/candidatures", post(create_candidature))
+        .route("/candidatures/by-url", get(find_by_offer_url))
         .route(
             "/candidatures/{id}",
             get(get_candidature).put(update_candidature).delete(delete_candidature),
@@ -38,6 +41,31 @@ async fn list_for_session(
     Path(session_id): Path<i64>,
 ) -> Result<Json<Vec<CandidatureView>>, ApiError> {
     Ok(Json(db::candidatures::list_for_session(&state.pool, session_id).await?))
+}
+
+#[derive(serde::Deserialize)]
+struct OfferUrlQuery {
+    url: String,
+}
+
+/// Cherche les candidatures existantes dont l'URL d'offre correspond, après
+/// normalisation (schéma, `www.`, query, fragment, slash final, casse), à
+/// l'URL donnée, toutes sessions confondues. Sert à un avertissement non
+/// bloquant : la réponse est toujours un succès, liste vide ou non.
+async fn find_by_offer_url(
+    State(state): State<AppState>,
+    Query(query): Query<OfferUrlQuery>,
+) -> Result<Json<Vec<DuplicateCandidatureView>>, ApiError> {
+    let Some(target) = normalize_offer_url(&query.url) else {
+        return Ok(Json(Vec::new()));
+    };
+    let candidatures = db::joins::list_candidatures_with_offer_url(&state.pool).await?;
+    let duplicates = candidatures
+        .into_iter()
+        .filter(|(url, _)| normalize_offer_url(url).as_deref() == Some(target.as_str()))
+        .map(|(_, candidature)| candidature)
+        .collect();
+    Ok(Json(duplicates))
 }
 
 /// Indique si les deux documents de référence (CV et lettre de motivation)

@@ -12,6 +12,7 @@ mod pipeline;
 mod pipeline_manual_run;
 mod progress;
 mod security;
+mod url_normalize;
 
 #[tokio::main]
 async fn main() {

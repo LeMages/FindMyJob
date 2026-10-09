@@ -10,6 +10,7 @@ pub mod experiences;
 pub mod formations;
 pub mod init;
 pub mod interviews;
+pub mod joins;
 pub mod langues;
 pub mod profile;
 pub mod projets;

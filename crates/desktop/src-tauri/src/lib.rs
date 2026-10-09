@@ -62,6 +62,7 @@ pub fn run() {
             commands::delete_skill,
             commands::update_skill,
             commands::create_candidature,
+            commands::find_candidatures_by_url,
             commands::scrape_offer,
             commands::extract_offer_from_text,
             commands::open_capture_window,

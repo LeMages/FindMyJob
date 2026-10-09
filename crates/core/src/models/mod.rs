@@ -22,7 +22,9 @@ pub mod status_history;
 pub mod timeline_event;
 pub mod user;
 
-pub use candidature::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
+pub use candidature::{
+    CandidatureDetail, CandidatureView, CreateCandidatureInput, DuplicateCandidatureView, UpdateCandidatureInput,
+};
 pub use contact::ContactView;
 pub use doc_content::{CvContent, ItemBullets, LmContent, ProseField};
 pub use doc_data::{

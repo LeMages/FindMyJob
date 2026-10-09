@@ -264,6 +264,28 @@ export interface ScrapedOfferFields {
   description_offre: string | null
 }
 
+/** Candidature existante pointant vers la même offre (miroir de `DuplicateCandidatureView`). */
+export interface DuplicateCandidatureView {
+  id: number
+  session_id: number
+  session_nom: string
+  poste: string
+  entreprise: string | null
+  status: string
+}
+
+/** Raison d'échec typée de la récupération/extraction d'une offre (miroir de `ScrapingFailure`). */
+export type ScrapingFailure =
+  | 'invalid_url'
+  | 'offer_unavailable'
+  | 'access_denied'
+  | 'timeout'
+  | 'network'
+  | 'not_html'
+  | 'empty_page'
+  | 'too_large'
+  | 'insufficient_content'
+
 /** Étage de la cascade d'extraction qui a produit les champs (miroir de `ExtractionStage`). */
 export type ExtractionStage = 'json_ld' | 'llm'
 

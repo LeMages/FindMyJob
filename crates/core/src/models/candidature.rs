@@ -78,3 +78,16 @@ pub struct UpdateCandidatureInput {
     pub url_offre: Option<String>,
     pub notes: Option<String>,
 }
+
+/// Candidature existante dont l'URL d'offre correspond (après
+/// normalisation) à une URL donnée : sert à l'avertissement non bloquant de
+/// doublon à la création, toutes sessions confondues.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DuplicateCandidatureView {
+    pub id: i64,
+    pub session_id: i64,
+    pub session_nom: String,
+    pub poste: String,
+    pub entreprise: Option<String>,
+    pub status: String,
+}
