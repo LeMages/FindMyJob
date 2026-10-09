@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 
 // Importation des modules internes
 use crate::docgen::budgets::CvBudget;
-use crate::docgen::lint::{lint_cv_budget, lint_prose, strip_dashes};
+use crate::docgen::lint::{lint_cv_budget, lint_prose, strip_dashes, Violation};
 use crate::docgen::selection::Selection;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
@@ -166,33 +166,70 @@ fn check_ids(kind: &str, items: &[ItemBullets], expected: &[i64]) -> Vec<String>
     problems
 }
 
-/// Validation bloquante : identifiants, compétences du profil, champs vides.
+/// Validation bloquante : identifiants et champs de prose vides. Un
+/// document ne peut pas être assemblé sans eux.
 fn blocking_problems(content: &CvContent, input: &CvWritingInput<'_>) -> Vec<String> {
     let mut problems = check_ids("experiences", &content.experiences, &input.selection.experience_ids());
     problems.extend(check_ids("projects", &content.projects, &input.selection.project_ids()));
+    let empty = content.prose_fields().into_iter().filter(|f| f.text.trim().is_empty());
+    problems.extend(empty.map(|f| format!("{} est vide.", f.path)));
+    problems
+}
 
-    let known: Vec<String> = input.profile.skills.iter().map(|s| s.nom.trim().to_lowercase()).collect();
+/// Compétences du profil, normalisées pour la comparaison.
+fn known_skills(profile: &ProfileDto) -> Vec<String> {
+    profile.skills.iter().map(|s| s.nom.trim().to_lowercase()).collect()
+}
+
+/// Vérifie que chaque compétence existe dans le profil et n'apparaît
+/// qu'une fois. Non bloquant : après le dernier essai, les compétences en
+/// cause sont retirées (`retain_profile_skills`), ce qui ne peut rien inventer.
+fn skill_violations(content: &CvContent, profile: &ProfileDto) -> Vec<Violation> {
+    let known = known_skills(profile);
     let mut seen: Vec<String> = Vec::new();
+    let mut violations = Vec::new();
     for group in &content.skills_groups {
         for skill in &group.skills {
             let normalized = skill.trim().to_lowercase();
             if !known.contains(&normalized) {
-                problems.push(format!(
-                    "skills_groups : « {skill} » n'est pas une compétence du profil. N'utilise que les compétences listées, écrites à l'identique."
-                ));
+                violations.push(Violation {
+                    field: "skills_groups".to_string(),
+                    message: format!("« {skill} » n'est pas une compétence du profil. N'utilise que les compétences listées, écrites à l'identique."),
+                });
             } else if seen.contains(&normalized) {
-                problems.push(format!("skills_groups : « {skill} » apparaît dans plusieurs groupes. Chaque compétence n'apparaît qu'une fois."));
+                violations.push(Violation {
+                    field: "skills_groups".to_string(),
+                    message: format!("« {skill} » apparaît dans plusieurs groupes. Chaque compétence n'apparaît qu'une fois."),
+                });
             }
             seen.push(normalized);
         }
-        if group.category.trim().is_empty() || group.skills.is_empty() {
-            problems.push("skills_groups : un groupe a une catégorie ou une liste de compétences vide.".to_string());
-        }
     }
+    violations
+}
 
-    let empty = content.prose_fields().into_iter().filter(|f| f.text.trim().is_empty());
-    problems.extend(empty.map(|f| format!("{} est vide.", f.path)));
-    problems
+/// Retire les compétences vides, absentes du profil ou en double, puis les
+/// groupes devenus vides.
+fn retain_profile_skills(content: &mut CvContent, profile: &ProfileDto) {
+    let known = known_skills(profile);
+    let mut seen: Vec<String> = Vec::new();
+    for group in content.skills_groups.iter_mut() {
+        group.skills.retain(|skill| {
+            let normalized = skill.trim().to_lowercase();
+            let keep = known.contains(&normalized) && !seen.contains(&normalized);
+            seen.push(normalized);
+            keep
+        });
+    }
+    content.skills_groups.retain(|g| !g.category.trim().is_empty() && !g.skills.is_empty());
+}
+
+/// Retire les compétences vides : le schéma demande des chaînes non vides,
+/// mais la contrainte n'est pas toujours appliquée par l'API.
+fn drop_empty_skills(content: &mut CvContent) {
+    for group in content.skills_groups.iter_mut() {
+        group.skills.retain(|skill| !skill.trim().is_empty());
+    }
 }
 
 /// Revue complète d'un contenu de CV.
@@ -200,6 +237,7 @@ fn review(content: &CvContent, input: &CvWritingInput<'_>, example_prose: &str) 
     let ordered = order_by_selection(content, input.selection);
     let mut violations = lint_prose(&ordered.prose_fields(), example_prose);
     violations.extend(lint_cv_budget(&ordered, &input.budget));
+    violations.extend(skill_violations(content, input.profile));
     Review { blocking: blocking_problems(content, input), violations }
 }
 
@@ -211,8 +249,11 @@ async fn call_once(
 ) -> Result<CvContent, AppError> {
     let message = with_feedback(user_message(input), feedback.as_ref());
     let raw = call_claude(&system_prompt(input), &message, Some(cv_content_schema(input)), model).await?;
-    serde_json::from_str(raw.trim())
-        .map_err(|e| AppError::Llm(format!("La rédaction du CV n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}")))
+    let mut content: CvContent = serde_json::from_str(raw.trim()).map_err(|e| {
+        AppError::Llm(format!("La rédaction du CV n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}"))
+    })?;
+    drop_empty_skills(&mut content);
+    Ok(content)
 }
 
 /// Rédige les champs de prose du CV, avec revue et jusqu'à 2 retries.
@@ -231,7 +272,10 @@ pub async fn write_cv(input: &CvWritingInput<'_>, model: &str) -> Result<Writing
         "CV",
         |feedback| call_once(input, feedback, model),
         |content| review(content, input, &prose),
-        |content| content.map_prose(strip_dashes),
+        |content| {
+            content.map_prose(strip_dashes);
+            retain_profile_skills(content, input.profile);
+        },
     )
     .await?;
     outcome.content = order_by_selection(&outcome.content, input.selection);
@@ -327,15 +371,28 @@ mod tests {
             example_lang: "fr",
         };
         assert!(blocking_problems(&content(&[2, 1], &["rust", "SQL"]), &input).is_empty());
+        assert!(skill_violations(&content(&[2, 1], &["rust", "SQL"]), &profile).is_empty());
 
         let problems = blocking_problems(&content(&[1, 1, 9], &["Kubernetes"]), &input);
         assert!(problems.iter().any(|p| p.contains("id 9 n'est pas")), "{problems:?}");
         assert!(problems.iter().any(|p| p.contains("id 2 manque")), "{problems:?}");
         assert!(problems.iter().any(|p| p.contains("id 1 apparaît 2 fois")), "{problems:?}");
-        assert!(problems.iter().any(|p| p.contains("Kubernetes")), "{problems:?}");
 
-        let duplicated = blocking_problems(&content(&[1, 2], &["Rust", "rust"]), &input);
-        assert!(duplicated.iter().any(|p| p.contains("plusieurs groupes")), "{duplicated:?}");
+        let skills = skill_violations(&content(&[1, 2], &["Kubernetes", "Rust", "rust"]), &profile);
+        assert!(skills.iter().any(|v| v.message.contains("Kubernetes")), "{skills:?}");
+        assert!(skills.iter().any(|v| v.message.contains("plusieurs groupes")), "{skills:?}");
+    }
+
+    #[test]
+    fn competences_hors_profil_retirees_mecaniquement() {
+        let mut cleaned = content(&[1], &["Kubernetes", "Rust", "rust", " "]);
+        drop_empty_skills(&mut cleaned);
+        retain_profile_skills(&mut cleaned, &profile());
+        assert_eq!(cleaned.skills_groups[0].skills, vec!["Rust".to_string()]);
+
+        let mut emptied = content(&[1], &["Kubernetes"]);
+        retain_profile_skills(&mut emptied, &profile());
+        assert!(emptied.skills_groups.is_empty(), "un groupe vidé disparaît");
     }
 
     #[test]

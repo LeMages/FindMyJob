@@ -220,6 +220,12 @@ async fn prepare(
     // Un profil peut avoir moins de projets que la référence : on en attend
     // autant que la sélection en contient, jamais plus.
     cv_budget.project_count = selection.projects.len();
+    // Même logique pour les groupes de compétences : pas plus de groupes que
+    // de domaines dans le profil, sinon le modèle doit en inventer un.
+    let mut domains: Vec<&str> = profile.skills.iter().map(|s| s.domaine.trim()).collect();
+    domains.sort_unstable();
+    domains.dedup();
+    cv_budget.skills_group_count = cv_budget.skills_group_count.min(domains.len());
     let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count);
 
     // ------------------------------------------------------------------
