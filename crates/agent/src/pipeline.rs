@@ -36,7 +36,7 @@ use findmyjob_core::llm::matching::match_profile;
 use findmyjob_core::llm::offer::analyze_offer;
 use findmyjob_core::llm::writing_loop::WritingOutcome;
 use findmyjob_core::models::{
-    CvContent, CvExampleData, CvLabels, LmContent, LmExampleData, LmLabels, MatchingResult, OfferView, ProfileDto,
+    CvContent, CvExampleData, CvLabels, LmContent, LmExampleData, LmLabels, MatchingResult, ProfileDto,
     Recipient,
 };
 
@@ -82,22 +82,12 @@ pub struct GenerationRequest<'a> {
     pub description_offre: &'a str,
 }
 
-/// Construit le destinataire de la lettre depuis la candidature, son offre
-/// source et ses contacts.
+/// Construit le destinataire de la lettre depuis la candidature et ses
+/// contacts.
 async fn load_recipient(pool: &PgPool, candidature_id: i64) -> Result<Recipient, AppError> {
     let candidature = db::candidatures::fetch_detail(pool, candidature_id).await?;
-    let offer: Option<OfferView> = match candidature.offer_id {
-        Some(offer_id) => match db::offers::fetch_one(pool, offer_id).await {
-            Ok(offer) => Some(offer),
-            // Une offre supprimée entre-temps prive seulement le destinataire
-            // d'un repli : la candidature garde ses propres champs.
-            Err(AppError::NotFound(_)) => None,
-            Err(e) => return Err(e),
-        },
-        None => None,
-    };
     let contacts = db::contacts::list_for_candidature(pool, candidature_id).await?;
-    Ok(build_recipient(&candidature, offer.as_ref(), &contacts))
+    Ok(build_recipient(&candidature, &contacts))
 }
 
 /// Langue du document : celle de l'offre si elle est prise en charge,

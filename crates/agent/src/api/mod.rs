@@ -11,7 +11,6 @@ use sqlx::PgPool;
 use tower_http::cors::CorsLayer;
 
 // Importation des modules internes
-use crate::config::AgentConfig;
 use crate::progress::ProgressStore;
 
 mod auth;
@@ -26,11 +25,9 @@ mod fonts;
 mod formations;
 mod interviews;
 mod langues;
-mod offers;
 mod profile;
 mod projets;
 mod scraping;
-mod search_queries;
 mod sessions;
 mod settings;
 mod skills;
@@ -45,7 +42,6 @@ pub struct AppState {
     pub pool: PgPool,
     pub data_dir: PathBuf,
     pub fonts_dir: PathBuf,
-    pub config: AgentConfig,
     pub progress: ProgressStore,
 }
 
@@ -88,13 +84,11 @@ pub fn router(state: AppState) -> Router {
         .merge(projets::router())
         .merge(skills::router())
         .merge(sessions::router())
-        .merge(search_queries::router())
         .merge(candidatures::router())
         .merge(contacts::router())
         .merge(status_history::router())
         .merge(timeline_events::router())
         .merge(interviews::router())
-        .merge(offers::router())
         .merge(scraping::router())
         .merge(documents::router())
         .merge(document_versions::router())

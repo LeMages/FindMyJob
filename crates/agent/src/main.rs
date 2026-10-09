@@ -1,20 +1,15 @@
-//! Agent FindMyJob (service headless) : serveur API REST (Axum) et scraping
-//! d'offres d'emploi en tâche de fond.
+//! Agent FindMyJob (service headless) : serveur API REST (Axum) qui porte
+//! la persistance et les pipelines IA de l'application.
 
 // Importation des modules internes
 mod api;
-mod config;
 mod db;
 mod docgen;
 mod documents;
-mod filtering;
-mod logging;
 mod pipeline;
 #[cfg(test)]
 mod pipeline_manual_run;
 mod progress;
-mod scheduler;
-mod scraping;
 mod security;
 
 #[tokio::main]
@@ -41,25 +36,12 @@ async fn main() {
         eprintln!("[WARN] API_TOKEN non configuré : l'API accepte les requêtes sans authentification.");
     }
 
-    // Chargée une fois, partagée entre l'état HTTP (déclenchement manuel d'une
-    // recherche) et le scheduler (job cron).
-    let agent_config =
-        config::AgentConfig::load().expect("Impossible de charger la configuration agent (agent.toml)");
-
     let state = api::AppState {
-        pool: pool.clone(),
+        pool,
         data_dir,
         fonts_dir,
-        config: agent_config.clone(),
         progress: progress::ProgressStore::new(),
     };
-
-    // Job cron (12h/18h) itérant sur les sessions actives. Le `JobScheduler`
-    // doit rester en vie jusqu'à l'arrêt du process (lié dans `main`, pas
-    // droppé plus tôt).
-    let _scheduler = scheduler::start(pool.clone(), agent_config)
-        .await
-        .expect("Impossible de démarrer le scheduler");
 
     let app = api::router(state);
 

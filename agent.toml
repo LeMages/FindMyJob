@@ -1,4 +1,0 @@
-[filters]
-contract_types = ["stage", "internship", "apprenticeship", "alternance", "intern"]
-exclude_keywords = ["senior", "lead", "principal", "manager", "directeur", "10 ans", "8 ans", "7 ans", "6 ans", "5 ans d'expérience", "confirmé"]
-max_days_old = 60

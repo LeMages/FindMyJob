@@ -106,27 +106,6 @@ pub async fn list_all(pool: &PgPool) -> Result<Vec<SessionView>, AppError> {
     rows.iter().map(row_to_session_view).collect()
 }
 
-/// Récupère une session par identifiant, avec ses statistiques agrégées.
-///
-/// # Arguments
-///
-/// * `pool` - Pool de connexions PostgreSQL.
-/// * `id` - Identifiant de la session.
-///
-/// # Returns
-///
-/// `SessionView` correspondante, ou `AppError::NotFound` si la session n'existe pas.
-pub async fn fetch_one(pool: &PgPool, id: i64) -> Result<SessionView, AppError> {
-    let sql = format!("{SELECT_WITH_STATS} WHERE s.id = $1");
-    let row = sqlx::query(&sql)
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(map_db_err)?
-        .ok_or_else(|| AppError::NotFound(format!("Session {id} introuvable.")))?;
-    row_to_session_view(&row)
-}
-
 /// Met à jour le nom, le contexte, le statut, la zone cible et le seuil de score d'une session existante.
 ///
 /// # Arguments

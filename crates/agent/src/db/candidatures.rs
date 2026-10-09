@@ -114,13 +114,6 @@ pub async fn insert(
     )
     .await?;
 
-    // Candidature créée depuis une offre du Marché (bouton "Postuler") :
-    // l'offre passe au statut "applied" dans la même transaction, pour ne
-    // jamais désynchroniser candidature et offre source.
-    if let Some(offer_id) = input.offer_id {
-        crate::db::offers::mark_applied_tx(&mut tx, offer_id).await?;
-    }
-
     tx.commit().await.map_err(map_db_err)?;
 
     Ok(view)
@@ -344,8 +337,7 @@ pub async fn delete_a_postuler(pool: &PgPool, id: i64) -> Result<i64, AppError> 
 
 /// Supprime une candidature dans une transaction existante. Les lignes qui la
 /// référencent (historique, contacts, entretiens) partent par
-/// `ON DELETE CASCADE` ; l'offre source éventuelle repasse `reviewed` pour
-/// réapparaître dans le Marché.
+/// `ON DELETE CASCADE`.
 ///
 /// Retourne l'identifiant de session de la candidature supprimée, `None` si
 /// elle n'existait pas.
@@ -353,21 +345,11 @@ async fn delete_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     id: i64,
 ) -> Result<Option<i64>, AppError> {
-    let Some(row) = sqlx::query("DELETE FROM search.candidatures WHERE id = $1 RETURNING session_id, offer_id")
+    sqlx::query_scalar("DELETE FROM search.candidatures WHERE id = $1 RETURNING session_id")
         .bind(id)
         .fetch_optional(&mut **tx)
         .await
-        .map_err(map_db_err)?
-    else {
-        return Ok(None);
-    };
-
-    let session_id: i64 = row.try_get("session_id").map_err(map_db_err)?;
-    let offer_id: Option<i64> = row.try_get("offer_id").map_err(map_db_err)?;
-    if let Some(offer_id) = offer_id {
-        crate::db::offers::revert_applied_tx(tx, offer_id).await?;
-    }
-    Ok(Some(session_id))
+        .map_err(map_db_err)
 }
 
 /// Marque une candidature comme postulée (statut `postule`), utilisé une fois
