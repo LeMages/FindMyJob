@@ -1,21 +1,19 @@
 //! Tests de la conversion des textes d'offres en texte brut
-//! (`findmyjob_core::text`), sur des fixtures réelles (DB et API WTTJ v1)
-//! et des cas construits (null, listes imbriquées, Markdown décoré).
+//! (`findmyjob_core::text`), sur des fixtures d'offres fictives (une en
+//! Markdown décoré, une en HTML) et des cas construits (null, listes
+//! imbriquées, Markdown décoré).
 
 // Importation des modules standard
 use std::collections::HashMap;
 
 // Importation des crates externes
 use scraper::Html;
-use serde_json::Value;
 
 // Importation des modules internes
-use findmyjob_core::text::{assemble_offer_description, html_to_plain};
+use findmyjob_core::text::html_to_plain;
 
-const OFFER_262_MARKDOWN: &str = include_str!("fixtures/offer_262_markdown.txt");
-const OFFER_271_HTML: &str = include_str!("fixtures/offer_271_html.txt");
-const V1_OVRSEA: &str = include_str!("fixtures/v1_ovrsea_analytics_engineer_intern.json");
-const V1_CONVERTEO: &str = include_str!("fixtures/v1_converteo_consultant_transformation_ia.json");
+const OFFER_MARKDOWN: &str = include_str!("fixtures/offer_markdown.txt");
+const OFFER_HTML: &str = include_str!("fixtures/offer_html.txt");
 
 // ======================================================================
 // Helpers
@@ -73,82 +71,41 @@ fn assert_clean(text: &str) {
     assert_eq!(text, text.trim(), "espaces en bord de texte");
 }
 
-/// Extrait un champ texte de `job` dans une réponse JSON de l'API v1.
-fn v1_field<'a>(json: &'a Value, field: &str) -> Option<&'a str> {
-    json["job"][field].as_str()
-}
-
 // ======================================================================
-// Fixtures réelles
+// Fixtures
 // ======================================================================
 
 #[test]
-fn markdown_fixture_262_is_cleaned_without_word_loss() {
-    let output = html_to_plain(OFFER_262_MARKDOWN).expect("texte non vide");
+fn markdown_fixture_is_cleaned_without_word_loss() {
+    let output = html_to_plain(OFFER_MARKDOWN).expect("texte non vide");
 
     assert_clean(&output);
-    assert_no_word_lost(OFFER_262_MARKDOWN, &output);
-    assert!(output.starts_with("- Étudiant(e) en école de commerce, d’ingénieur ou université (Bac+4/5)"));
-    assert!(output.contains("\n- Prêt(e) à rejoindre l’aventure WeeFin ? Postule dès maintenant !"));
+    assert_no_word_lost(OFFER_MARKDOWN, &output);
+    assert!(output.starts_with("Ton rôle\n\n- Étudiant(e) en école d'ingénieur ou université (Bac+4/5)"));
+    assert!(output.contains("\n- Curiosité et rigueur, avec une première expérience en Python. SQL est un plus.\n"));
+    assert!(output.contains("Ce que nous offrons\n\n- Télétravail partiel\n- Une équipe de douze personnes\n- Des projets variés"));
+    assert!(output.contains("\nPrêt(e) à rejoindre l’aventure Société Exemple ? Postule dès maintenant !\n"));
     assert!(output.ends_with("sans discrimination."));
 }
 
 #[test]
-fn html_fixture_271_is_cleaned_without_word_loss() {
-    let output = html_to_plain(OFFER_271_HTML).expect("texte non vide");
+fn html_fixture_is_cleaned_without_word_loss() {
+    let output = html_to_plain(OFFER_HTML).expect("texte non vide");
 
     assert_clean(&output);
-    assert_no_word_lost(&html_visible_text(OFFER_271_HTML), &output);
-    assert!(output.contains("école de commerce avec une majeure Data & Analytics, vous êtes"));
-    assert!(output.contains("Vos atouts :\n\n- Curiosité, esprit d’analyse aiguisé et capacité"));
-    assert!(output.contains("\n- Attrait pour l'entreprenariat et l'innovation."));
-    assert!(output.contains("\n\nAdditional Information\n\n"));
-}
-
-#[test]
-fn v1_ovrsea_skips_null_profile_and_missing_process() {
-    let json: Value = serde_json::from_str(V1_OVRSEA).expect("JSON v1 valide");
-    let description = v1_field(&json, "description");
-
-    let output = assemble_offer_description(
-        description,
-        v1_field(&json, "profile"),
-        v1_field(&json, "recruitment_process"),
-    )
-    .expect("description non vide");
-
-    assert_clean(&output);
-    assert_no_word_lost(&html_visible_text(description.unwrap_or_default()), &output);
-    assert!(output.starts_with("Descriptif du poste\nOur mission: to make international freight"));
-    assert!(!output.contains("Profil recherché"));
-    assert!(!output.contains("Déroulement des entretiens"));
-    assert!(output.contains("\n- The Data Team at OVRSEA\n"));
-    assert!(output.contains("\n- You are available for 6 months, starting as early as December 2026.\n"));
-}
-
-#[test]
-fn v1_converteo_assembles_three_sections_in_order() {
-    let json: Value = serde_json::from_str(V1_CONVERTEO).expect("JSON v1 valide");
-
-    let output = assemble_offer_description(
-        v1_field(&json, "description"),
-        v1_field(&json, "profile"),
-        v1_field(&json, "recruitment_process"),
-    )
-    .expect("description non vide");
-
-    assert_clean(&output);
-    let description_at = output.find("Descriptif du poste\n").expect("section description");
-    let profile_at = output.find("\n\nProfil recherché\n").expect("section profil");
-    let process_at = output.find("\n\nDéroulement des entretiens\n").expect("section entretiens");
-    assert!(description_at == 0 && description_at < profile_at && profile_at < process_at);
-
+    assert_no_word_lost(&html_visible_text(OFFER_HTML), &output);
+    assert!(output.starts_with("Descriptif du poste\n\nAu sein de l'équipe Data de Société Exemple"));
     // `<li><p>…</p></li>` : puces consécutives, sans ligne vide intercalée.
     assert!(output.contains(
-        "\n- Participer au cadrage et à la priorisation des cas d’usage IA : aide à la qualification"
+        "\n- Participer au cadrage des cas d’usage : qualification et priorisation des besoins.\n\
+         - Analyser et structurer la donnée : modélisation, nettoyage.\n\
+         - Documenter les traitements pour l'équipe.\n"
     ));
-    assert!(output.contains(".\n- Analyser et structurer la donnée :"));
-    assert!(output.contains("Déroulement des entretiens\n- Un entretien de découverte et de “fit”"));
+    assert!(output.contains("Data & Analytics, vous êtes curieux(se) et autonome."));
+    assert!(output.contains("Vos atouts :\n\n- Curiosité, esprit d’analyse et capacité"));
+    assert!(output.contains("\n- Attrait pour l'entreprenariat et l'innovation."));
+    assert!(output.contains("\n\nAdditional Information\n\n"));
+    assert!(output.ends_with("à partir de janvier 2027.\nBasé à Lyon."));
 }
 
 // ======================================================================
@@ -203,14 +160,5 @@ fn leading_emoji_becomes_bullet_and_others_are_removed() {
     assert_eq!(
         html_to_plain(markdown).as_deref(),
         Some("- Autonomie\n- Ambition\n- Idées\nFin")
-    );
-}
-
-#[test]
-fn assembly_omits_empty_sections_and_returns_none_when_all_empty() {
-    assert_eq!(assemble_offer_description(None, Some("<p>null</p>"), Some("  ")), None);
-    assert_eq!(
-        assemble_offer_description(None, Some("**Rigueur**"), None).as_deref(),
-        Some("Profil recherché\nRigueur")
     );
 }

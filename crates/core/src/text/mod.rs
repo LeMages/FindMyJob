@@ -7,7 +7,5 @@ mod markdown_cleanup;
 mod whitespace_normalize;
 
 pub mod html_to_plain;
-pub mod offer_description;
 
 pub use html_to_plain::html_to_plain;
-pub use offer_description::assemble_offer_description;
