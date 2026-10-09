@@ -3,6 +3,7 @@
 //! aucun accès direct à une base de données ici.
 
 pub mod candidatures;
+pub mod capture;
 pub mod contacts;
 pub mod document_versions;
 pub mod documents;
@@ -25,6 +26,7 @@ pub mod users;
 // la macro #[tauri::command] génère des items cachés (__cmd__xxx) à côté de
 // chaque fonction, que seul un ré-export glob propage jusqu'à `generate_handler!`.
 pub use candidatures::*;
+pub use capture::*;
 pub use contacts::*;
 pub use document_versions::*;
 pub use documents::*;
