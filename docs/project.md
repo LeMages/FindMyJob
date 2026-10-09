@@ -2,7 +2,7 @@
 
 This document is the technical reference for FindMyJob. It exists so a conversation with an AI assistant (or a new contributor) can resume without re-explaining the project from scratch. It describes the what, the why, and the actual state of the code.
 
-Last updated: 2026-09-17, against the `refactor/cargo-workspace` branch, after the split from a single Tauri+SQLite app into a 3-crate workspace with a headless agent backend.
+Last updated: 2026-10-09, after the removal of automatic offer collection (scraping, filtering, LLM scoring, scheduler): offers now enter the app only through their link or pasted text. The removed pipeline is kept at the Git tag `archive/collecte-automatique`.
 
 ## 1. Vision
 
@@ -18,15 +18,15 @@ Guiding principle: think the scope and schema through as completely as possible 
 |---|---|
 | Desktop shell | Tauri 2 (Windows / macOS / Linux) |
 | Frontend | Vue 3.5 + TypeScript 5 + Vite 6, Tailwind CSS 4 via `@tailwindcss/vite` (no `tailwind.config` file) |
-| Backend (headless) | Rust, Axum 0.8, `tokio-cron-scheduler` for the offers pipeline |
+| Backend (headless) | Rust, Axum 0.8 |
 | Database | PostgreSQL 16 + pgvector (`pgvector/pgvector:pg16`), accessed via sqlx 0.8 (`postgres`, `runtime-tokio-rustls`, `migrate`) |
 | Document compilation | `typst-as-lib` 0.16 + `typst-pdf` 0.15 (CV/cover-letter PDF generation, no external `typst` binary) |
 | AI | Anthropic Claude Messages API, called in raw HTTP via `reqwest` 0.12 (rustls) — no official Rust SDK |
-| Deployment (agent) | Docker Compose (`postgres` + `agent` services), `Dockerfile.agent` |
+| Local runtime (agent) | Docker Compose (`postgres` + `agent` services), `Dockerfile.agent`, on the user's machine |
 
 The Claude model is selectable in settings: `AVAILABLE_MODELS = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]`, default `DEFAULT_MODEL = "claude-sonnet-4-6"` (`crates/core/src/llm/client.rs`), resolved per request via `crates/agent/src/db/settings.rs::resolve_llm_model`.
 
-Other notable dependencies: `tauri-plugin-dialog` (native file picker), `dotenvy` (`.env` loading), `base64` (PDF bytes over the API/IPC), `open` (opening folders/URLs from the OS), `scraper` (HTML parsing for offer scraping and extraction), `chrono` (dates), `toml` (agent static config).
+Other notable dependencies: `tauri-plugin-dialog` (native file picker), `dotenvy` (`.env` loading), `base64` (PDF bytes over the API/IPC), `open` (opening folders/URLs from the OS), `scraper` (HTML parsing for offer extraction by link), `chrono` (dates).
 
 No vue-router: navigation is a homemade router via `state.screen` (`crates/desktop/src/stores/app.ts` + `src/App.vue`). No Pinia: the store is a plain exported `reactive` object.
 
@@ -41,7 +41,7 @@ members = ["crates/core", "crates/agent", "crates/desktop/src-tauri"]
 
 ### `crates/core` — `findmyjob-core`
 
-Pure business logic: models, LLM calls, HTML scraping helpers. No database dependency, no Tauri, no Axum — deliberately so it can be shared unmodified by both the agent (server-side) and the desktop app (client-side).
+Pure business logic: models, LLM calls, offer page fetch and text extraction. No database dependency, no Tauri, no Axum — deliberately so it can be shared unmodified by both the agent and the desktop app.
 
 ```
 crates/core/src/
@@ -50,22 +50,21 @@ crates/core/src/
   docgen/         pure document-pipeline logic: budgets, linter, selection, period/date formatting, text diff
   llm/            Claude client, prompt assembly per pipeline step (templatization, matching, writing, label translation)
   models/         serde DTOs re-exported for both the API and the Tauri commands
-  scraping/       HTML fetch (fetch.rs) + text extraction (extract.rs)
+  scraping/       offer page fetch (fetch.rs) + text extraction (extract.rs), used by the add-by-link flow
+  text/           deterministic HTML/Markdown to plain text conversion (html_to_plain)
 ```
 
 ### `crates/agent` — `findmyjob-agent`
 
-Headless binary crate: an Axum HTTP server that owns all persistence, the offers pipeline (scraping, filtering, scoring), the documents pipeline (Typst generation), and the cron scheduler. This is where the business rules live.
+Headless binary crate: an Axum HTTP server that owns all persistence, offer extraction by link, and the documents pipeline (Typst generation). This is where the business rules live. It runs locally, next to PostgreSQL, via Docker Compose.
 
 ```
 crates/agent/src/
-  main.rs, config.rs, pipeline.rs, scheduler.rs, security.rs, logging.rs
+  main.rs, pipeline.rs, progress.rs, security.rs
   docgen/         deterministic document assembly: cv_data/lm_data builders, labels cache, page fitting, trace
-  api/            22 route modules + mod.rs (router, auth middleware, CORS, error mapping)
+  api/            19 route modules + mod.rs (router, auth middleware, CORS, error mapping)
   db/             one file per table + common.rs, config.rs, init.rs
   documents/      Typst compilation, reference templatization, on-disk document storage
-  filtering/      mechanical filter + LLM scoring for scraped offers
-  scraping/       job board scrapers (wttj.rs today) behind a JobScraper trait
 ```
 
 ### `crates/desktop` — Vue 3 frontend + Tauri shell
@@ -128,8 +127,10 @@ Migrations live in `db/migrations/postgres/` (sqlx migrate, applied at agent sta
 - `0002_app_schema.sql` — the bulk of the application schema: `users`, `lang`, `projets`, `experiences`, `formations`, `skills`, `sessions`, `candidatures`, `contacts`, `interviews`, `status_history`, `documents`, `emails`, `embeddings`, `settings`, plus a `trigger_set_updated_at()` function attached to most tables.
 - `0003_offers_add_description.sql` — adds `offers.description`.
 - `0004_cleanup_schema.sql` — drops `candidatures.last_relance`/`next_relance`, `offers.embedding`, and the unused `emails`/`embeddings` tables. The `vector` extension from `0001` stays loaded even though no column uses it anymore.
+- `0005` to `0013` — schema split into `profile`/`search`, offer collection tables and columns (later removed), document versions and templates.
+- `0014_remove_offer_collection.sql` — drops `search.offers`, `search.search_queries`, `candidatures.offer_id` and the session columns that only served scoring and the Marché tab (`contexte`, `zone`, `min_score`).
 
-The full, authoritative schema (tables, columns, enums, foreign keys) is kept in `db/schema.dbml`, generated from the migrations — read it for exact column types and constraints rather than duplicating them here. A rendered diagram sits alongside it at `db/schema.png`.
+The full, authoritative schema (tables, columns, enums, foreign keys) is kept in `db/schema.dbml`, generated from the migrations — read it for exact column types and constraints rather than duplicating them here. Rendered diagrams sit alongside it (`db/schema_profile.png`, `db/schema_search.png`).
 
 Table summary:
 
@@ -141,14 +142,13 @@ Table summary:
 | `projets` | Personal projects attached to the profile |
 | `experiences` | Work experience entries in the profile |
 | `skills` | Skills, grouped by a free-text domain |
-| `sessions` | A search "session" (context, zone, status) grouping a set of applications, with its own reference CV/cover letter |
+| `sessions` | A search "session" (name, status) grouping a set of applications, with its own reference CV/cover letter |
 | `candidatures` | Core entity — one row per application (company, status, metadata, generated document paths) |
 | `status_history` | Unified timeline of events for an application (status changes, follow-ups, interviews, messages, calls, notes) |
-| `contacts` | People associated with an application (recruiter, manager…) — read-only today, see §12 |
+| `contacts` | People associated with an application (recruiter, manager…) — read-only today, see §11 |
 | `interviews` | Scheduled or completed interviews for an application |
 | `documents` | Reference CV / cover letter for a session (file path + cached LLM style analysis) |
 | `settings` | Key-value app settings (LLM model, theme) |
-| `offers` | Scraped job listings feeding the offers pipeline (source, score, status) — see §7 |
 
 ## 6. Application lifecycle
 
@@ -178,37 +178,11 @@ Three commands cover the transition from `a_postuler` to `postule` (`crates/agen
 
 All three then record the `candidature_envoyee` event and refuse (`AppError::Conflict`) if the application is no longer in the `a_postuler` status.
 
-## 7. Offers pipeline (backend-only, no desktop UI yet)
-
-`crates/agent/src/scheduler.rs::run_pipeline` runs three steps in sequence, each logging failures to file and continuing regardless of the previous step's outcome:
-
-1. **Scraping** — `crates/agent/src/scraping/wttj.rs` queries Welcome to the Jungle's public Algolia search API directly (index `wk_cms_jobs_production`), not HTML scraping (the WTTJ site itself sits behind an AWS WAF JS challenge, the Algolia endpoint doesn't). One query per `[[searches]]` entry in `agent.toml`, paginated up to 5 pages of 30 hits. Results are normalized into `ScrapedOffer` and inserted via `db::offers::insert_offers`.
-2. **Mechanical filtering** — `crates/agent/src/filtering/mechanical.rs` dismisses (`status = "dismissed"`, `score = -1.0`) offers whose contract type isn't in `agent.toml`'s allow-list, whose title/description contains an excluded keyword, or that are older than `max_days_old`.
-3. **LLM scoring** — `crates/agent/src/filtering/scoring.rs` batches the remaining unscored offers (5 at a time) and calls Claude, with a system prompt built from the DB profile (`db::profile::build_profile`) and the session's `zone`/`contexte` (`filtering/profile_summary.rs`), with a structured-output schema (score 0.0–1.0 + reason), persisting `score`/`status = "reviewed"`. One retry on malformed JSON, exponential backoff on HTTP 429.
-
-The scheduler runs the full pipeline once at startup (in a background task, without blocking the HTTP server bind) and then on a cron schedule via `tokio_cron_scheduler`, expression `"0 0 12,18 * * *"` (every day at noon and 6pm) — hardcoded in `scheduler.rs`, not configurable through `agent.toml` or an env var.
-
-`agent.toml` (path from `AGENT_CONFIG_PATH`, loaded once at startup, not hot-reloaded) drives *what* gets searched/filtered/scored:
-
-```toml
-[filters]
-contract_types = [...]    # allow-list, case-insensitive substring match
-exclude_keywords = [...]
-max_days_old = 60
-
-[[searches]]               # repeatable
-keywords = "..."
-location = "..."
-country_code = "..."
-```
-
-The API exposes the resulting queue (`GET /api/offers`, `GET /api/offers/{id}`, `POST /api/offers/{id}/dismiss`, `POST /api/offers/{id}/applied`), but as of this writing there is no corresponding Tauri command, no `invoke()` call, and no TypeScript type anywhere in `crates/desktop` — the pipeline is fully implemented and running, with no way to see its output from the desktop app yet.
-
-## 8. Documents pipeline (CV / cover letter tailoring)
+## 7. Documents pipeline (CV / cover letter tailoring)
 
 Each session owns one reference CV and one reference cover letter, stored under `documents/sessions/<session_id>/{cv,lettre_motivation}/` on the agent's `DATA_DIR`. The user's reference `.typ` is never modified: it serves as a style and layout model only. **The profile in the database is the only source of facts** — no value from the reference (name, company, address, figures) ever appears in a generated document.
 
-### 8.1 Templatization, at upload
+### 7.1 Templatization, at upload
 
 - **Saving a reference** (`documents/storage.rs::save_reference`) compiles the `.typ`, then converts it into a template (`documents/templatize.rs::templatize`, one Claude call with structured output, `core::llm::templatize`). Both happen before any disk write: a failure writes nothing. The version is stored under `<doc_type>/versions/<version_id>/` as `reference.{typ,pdf}`, `template.typ` and `example_data.json`, tracked in `search.document_versions` (`template_path`, `example_data_path`, `page_count`); `search.documents` points to the current version. Versions can be restored (`documents/reference_versions.rs`), and `POST /api/sessions/{id}/documents/{cv|lm}/templatize` re-templatizes the current reference without a new upload.
 - **`template.typ`** is the same document with every content value read from a `data.json` file following a canonical schema (`core::models::doc_data`: `CvData`, `LmData`, identical for every user; fixed texts such as section titles or the closing formula live in `labels`). Lists are rendered with loops, an empty optional field hides its whole line without orphan separators, values are inserted as strings (never evaluated as markup), and the letter date comes from the data.
@@ -216,7 +190,7 @@ Each session owns one reference CV and one reference cover letter, stored under 
 - **Validation** (`documents/templatize.rs`): the template must load `data.json` and must not use `eval`, `datetime.today` or `read`; rendered with `example_data`, it must not exceed the reference's page count and must render the same words as the reference, except the text the model declares it dropped (`dropped_text`, elements with no field in the schema — never a dated CV entry) and a date computed by the reference; rendered with empty data, it must compile and show no word (proof that nothing is hard-coded). Failures are sent back as feedback (compiler errors with the offending line, missing/extra words), 2 retries at most, then the upload fails with the last problems. `page_count` is the page count of the template rendered with its example data.
 - A reference is **ready** (`references_ready`, `DocumentsStatus`) once its template exists.
 
-### 8.2 Generation, per application
+### 7.2 Generation, per application
 
 `crates/agent/src/pipeline.rs::generate_documents`, triggered from `POST /api/candidatures`:
 
@@ -232,7 +206,7 @@ No LLM produces Typst during generation. **Compilation** uses `typst-as-lib` (`d
 
 **Artifacts**: `.../artefact/<candidature_id>.pdf` and `.data.json` (the template version is `candidatures.{cv,lm}_reference_version_id`). **Trace**: `documents/sessions/<session_id>/debug/<candidature_id>/` holds `offer_analysis.json`, `matching.json`, `selection.json`, `budgets.json`, `cv_content.json`, `lm_content.json`, `lint_report.json` and `attempts.json`.
 
-## 9. AI layer
+## 8. AI layer
 
 ### HTTP client (`crates/core/src/llm/client.rs`)
 
@@ -247,7 +221,7 @@ Raw HTTP calls to Anthropic's Messages API (`https://api.anthropic.com/v1/messag
 
 Two functions (`generate_application_email`, `generate_application_message`), plain text ready to paste, one Claude call each, no structured output. Shared rules: only rephrase what already exists in the profile, no placeholders, no markdown, minimal signature (first + last name only).
 
-## 10. REST API (`crates/agent/src/api/`)
+## 9. REST API (`crates/agent/src/api/`)
 
 All routes are mounted under `/api` (`crates/agent/src/api/mod.rs`), protected by a bearer-token middleware (`API_TOKEN` env var) except `GET /api/system/health`. If `API_TOKEN` is unset, the middleware lets every request through (dev-mode warning printed at startup). CORS is permissive unless `CORS_ALLOWED_ORIGINS` restricts it to a comma-separated origin list.
 
@@ -262,20 +236,19 @@ All routes are mounted under `/api` (`crates/agent/src/api/mod.rs`), protected b
 | `status_history` | history for an application |
 | `timeline_events` | list available events, add an event |
 | `interviews` | pending interviews for an application, all interviews for a session |
-| `offers` | list, get, dismiss, mark applied |
-| `scraping` | on-demand extraction from a URL or pasted text |
+| `scraping` | offer extraction from a URL (`POST /api/scraping/url`) or pasted text (`POST /api/scraping/text`), prefilling the new-application form |
 | `documents` | save/fetch CV & cover letter references, compile to PDF, inspect/read any document file |
 | `fonts` | list / import / delete a server-filesystem font family |
 | `settings` | Anthropic API key status/set/delete, LLM model, theme, connection test |
 | `system` | health check (unauthenticated) |
 
-## 11. Desktop ↔ agent bridge
+## 10. Desktop ↔ agent bridge
 
 `crates/desktop/src-tauri/src/api_client.rs` implements a small `reqwest`-based `ApiClient` (GET/POST/PUT/PATCH/DELETE + no-content variants), injected as `tauri::State<ApiClient>`, carrying the bearer token and base URL (`API_URL` env var, e.g. `http://localhost:3000`).
 
 Every file under `crates/desktop/src-tauri/src/commands/` follows the same shape: an `async fn` taking `api: State<'_, ApiClient>`, calling the matching `/api/...` route, and returning the deserialized DTO or a mapped `AppError` — there is no SQL, no business rule, and no direct database access anywhere in the desktop crate. `crates/desktop/src-tauri/src/models/mod.rs` re-exports `findmyjob_core::models::*` rather than duplicating any type.
 
-## 12. Features — implemented, partial, and planned
+## 11. Features — implemented, partial, and planned
 
 ### Implemented end-to-end
 
@@ -286,24 +259,21 @@ Every file under `crates/desktop/src-tauri/src/commands/` follows the same shape
 - Offer import from a pasted URL or pasted text, prefilling the new-application form.
 - Interview planning (week/month views).
 - Settings: LLM model selection, connection test, fonts, theme. The Anthropic API key is configured on the agent only (`.env`), never from the desktop.
-- Offers pipeline: scraping (WTTJ/Algolia), mechanical filtering, LLM scoring, scheduled runs — **backend only**, see §7.
 - CI/CD: lint + clippy on every PR to `dev`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
 
 ### Partial
 
 - **Recruiter contacts**: reading works (`GET /api/candidatures/{id}/contacts`), but there is no `POST` route on the agent, and the desktop's "add contact" action (`addRecruiter` in `crates/desktop/src/stores/app.ts`) is an explicit local-only stub — nothing is persisted.
-- **Offers pipeline UI**: the backend pipeline described in §7 runs on schedule and populates the `offers` table, but nothing in the desktop app surfaces it yet.
 
 ### Planned / out of MVP scope
 
 - A persisted contact-creation flow (agent route + Tauri command + UI), completing the item above.
-- A desktop UI for the offers queue (browse, dismiss, mark applied).
 - Smart follow-ups: automatic detection of stale applications and a drafted follow-up message (distinct from the existing manual `relance` status/event).
 - A standalone profile-to-offer matching feature (project ranking by relevance), distinct from the internal matching step already used inside the tailoring pipeline (`core::llm::matching::match_profile`).
 - A provider-agnostic LLM layer (OpenAI-compatible, configurable base URL) to support Ollama Cloud or a local runtime — not implemented; the provider is Anthropic-specific today (see `CLAUDE.md`).
 - Multi-device sync, mobile client, mail/calendar integrations.
 
-## 13. Repository, CI/CD, and conventions
+## 12. Repository, CI/CD, and conventions
 
 ### Commit convention
 
@@ -315,14 +285,15 @@ Conventional Commits drive automated versioning: `<type>(<scope>): <description>
 - `dev` → PR to `staging`, `staging` → PR to `main` — `.github/workflows/gatekeeper.yml` blocks any other source branch (only `staging` can merge into `main`, only `dev` can merge into `staging`).
 - Push to `main` — `.github/workflows/release.yml`: `semantic-release` (`.releaserc.json`) determines the version, then a Tauri build matrix (macOS ARM64/x64, Ubuntu 22.04, Windows) and a GitHub release if a version was computed.
 
-### Local and deployed running
+### Running locally
 
-- Agent: `docker compose up -d` runs Postgres (`pgvector/pgvector:pg16`) and the agent (`Dockerfile.agent`) together, or `cargo run -p findmyjob-agent` against a Postgres reachable via `.env`.
-- Desktop: `cd crates/desktop && npm install && npm run tauri dev`, pointed at the agent via `API_URL`.
+Everything runs on the user's machine; there is no hosted backend.
 
-## 14. Known gaps and points of attention
+- Agent: `docker compose up -d` runs Postgres (`pgvector/pgvector:pg16`) and the agent (`Dockerfile.agent`) together; migrations are applied when the agent starts. For agent development, `cargo run -p findmyjob-agent` against a Postgres reachable via `.env`.
+- Desktop: `cd crates/desktop && npm install && npm run tauri dev`. It targets `API_URL`, which defaults to `http://localhost:3000`.
 
-- CI's `rust` job runs `cargo test --workspace` on every PR. Coverage is limited to offer-text conversion and the documents pipeline's pure logic (budgets, linter, selection, periods, text diff, writing validation, `cv_data`/`lm_data` builders, template compilation on a fixture); no test calls the LLM or the database.
-- The root `Cargo.toml` still declares the `sqlite` feature on the shared `sqlx` dependency even though no crate uses SQLite anymore (only `postgres` is actually pulled in, by `crates/agent`) — harmless but worth cleaning up.
-- The `vector` (pgvector) Postgres extension is loaded by migration `0001` but nothing uses it: the one column that did, `offers.embedding`, was dropped by migration `0004`. Profile-to-offer matching goes through an LLM call today, not vector similarity.
-- `db/schema.png` is a static image, not regenerated automatically from `db/schema.dbml` — verify it still matches before relying on it visually.
+## 13. Known gaps and points of attention
+
+- CI's `rust` job runs `cargo test --workspace` on every PR. Coverage is limited to HTML/Markdown-to-text conversion (`html_to_plain`, on fictional offer fixtures) and the documents pipeline's pure logic (budgets, linter, selection, periods, text diff, writing validation, `cv_data`/`lm_data` builders, template compilation on a fixture); no test calls the LLM or the database.
+- The `vector` (pgvector) Postgres extension is loaded by migration `0001` but nothing uses it: the one column that did, `offers.embedding`, was dropped by migration `0004` (and the `offers` table itself by `0014`). Profile-to-offer matching goes through an LLM call today, not vector similarity.
+- `db/schema_profile.png` and `db/schema_search.png` are static images, not regenerated automatically from `db/schema.dbml` — `schema_search.png` still shows the `offers` and `search_queries` tables removed by `0014`.

@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-FindMyJob is an open-source desktop app (Tauri 2) that helps students track job applications (internships, apprenticeships, permanent contracts). It's a Cargo workspace of three crates: a shared logic library, a headless Axum server that owns all persistence and AI pipelines, and the Tauri desktop shell, which is a pure HTTP client of that server. See [`docs/project.md`](docs/project.md) for the exhaustive technical reference — this file is the day-to-day working guide.
+FindMyJob is an open-source desktop app (Tauri 2) that helps students track job applications (internships, apprenticeships, permanent contracts). It's a Cargo workspace of three crates: a shared logic library, a headless Axum server that owns all persistence and AI pipelines, and the Tauri desktop shell, which is a pure HTTP client of that server. Everything runs locally: the server and PostgreSQL via Docker Compose, the desktop app on the same machine. Offers enter the app only through their link (or pasted text) — there is no automatic offer collection. See [`docs/project.md`](docs/project.md) for the exhaustive technical reference — this file is the day-to-day working guide.
 
 ## Workspace architecture
 
 ```
-crates/core     findmyjob-core   — shared business logic: models, LLM calls, HTML scraping. No DB, no Tauri, no Axum dependency.
-crates/agent    findmyjob-agent — headless Axum server. Owns the PostgreSQL connection, the offers pipeline (scraping/filtering/scoring), the documents pipeline (Typst generation), the cron scheduler, and every business rule.
+crates/core     findmyjob-core   — shared business logic: models, LLM calls, offer page fetch and text extraction. No DB, no Tauri, no Axum dependency.
+crates/agent    findmyjob-agent — headless Axum server. Owns the PostgreSQL connection, offer extraction by link, the documents pipeline (Typst generation), and every business rule.
 crates/desktop  Vue 3 frontend at crates/desktop/, Tauri backend nested at crates/desktop/src-tauri/. Thin HTTP client of the agent — no database access, no business logic beyond proxying.
 ```
 
@@ -24,13 +24,12 @@ crates/desktop  Vue 3 frontend at crates/desktop/, Tauri backend nested at crate
 | Claude API client and prompt assembly | `crates/core/src/llm/*.rs` (`client.rs` is the raw HTTP client) |
 | Database access (PostgreSQL via sqlx) | `crates/agent/src/db/*.rs`, one file per table |
 | REST API routes | `crates/agent/src/api/*.rs`, one file per resource, mounted in `crates/agent/src/api/mod.rs` |
-| Offers pipeline (scraping/filtering/scoring) | `crates/agent/src/scraping/`, `crates/agent/src/filtering/`, orchestrated by `crates/agent/src/scheduler.rs` |
+| Offer extraction by link (fetch, text extraction, LLM field extraction) | `crates/core/src/scraping/`, `crates/core/src/llm/scraping_extract.rs`, exposed by `crates/agent/src/api/scraping.rs` (`POST /api/scraping/url`, `/api/scraping/text`) |
 | Documents pipeline (CV/LM tailoring + Typst) | `crates/agent/src/pipeline.rs` (orchestration), `crates/agent/src/docgen/` (deterministic assembly), `crates/agent/src/documents/` (templatization, storage, compilation), `crates/core/src/docgen/` (budgets, linter, selection — pure logic) |
 | Tauri commands | `crates/desktop/src-tauri/src/commands/*.rs`, one file per domain, each delegating to `api_client::ApiClient` |
 | HTTP client to the agent | `crates/desktop/src-tauri/src/api_client.rs` |
 | TypeScript types | `crates/desktop/src/types/index.ts` (hand-mirrored from `crates/core::models`, no codegen) |
 | Vue views and components | `crates/desktop/src/views/<view_name>/` (one folder per view) and `crates/desktop/src/components/` (shared) |
-| Agent static config (mechanical filters) | `agent.toml`, loaded from `AGENT_CONFIG_PATH` |
 
 ## Code conventions
 
@@ -67,7 +66,7 @@ For a change that touches the database and needs to reach the UI, follow the cha
 5. **TypeScript type** — mirror the DTO by hand in `crates/desktop/src/types/index.ts`.
 6. **Vue component** — wire the `invoke()` call into the relevant view or component.
 
-Skipping a step usually means the feature is backend-only (see the offers pipeline, below) — that's a valid intermediate state, but call it out rather than letting a route silently go unused.
+Skipping a step usually means the feature is backend-only — that's a valid intermediate state, but call it out rather than letting a route silently go unused.
 
 ## Running the project locally
 
@@ -79,16 +78,16 @@ npm install
 npm run tauri dev
 ```
 
-To iterate on the agent alone, without Docker: `cargo run -p findmyjob-agent` against a Postgres reachable via the `DB_*` vars in `.env`. Agent config beyond env vars (mechanical filters; the candidate profile lives in the DB) lives in `agent.toml`, loaded from `AGENT_CONFIG_PATH` and **not** hot-reloaded — restart the agent after editing it.
+`docker compose up -d` is the single command that starts the agent locally (migrations run at startup); the desktop targets `API_URL`, which defaults to `http://localhost:3000`. To iterate on the agent alone, without Docker: `cargo run -p findmyjob-agent` against a Postgres reachable via the `DB_*` vars in `.env`. The agent is configured by environment variables only (see `.env.example`); the candidate profile lives in the DB.
 
 `npm`/`vite`/`tauri` commands must be run from `crates/desktop/`, not the repo root — there is no root `package.json`.
 
 ## Points of attention
 
-- **The offers pipeline has no desktop UI yet.** `crates/agent` fully implements scraping (WTTJ via Algolia), mechanical filtering, LLM scoring, and a cron schedule, and exposes `GET/POST /api/offers/*`. Nothing in `crates/desktop` calls it — no Tauri command, no `invoke()`, no TS type. Don't assume a desktop feature exists just because the backend route does.
+- **No automatic offer collection.** Scraping of job boards, filtering, LLM scoring, the scheduler and the Marché tab were removed (they went against several platforms' terms of use); the code is kept at the Git tag `archive/collecte-automatique`. An offer exists only inside its application (`url_offre`, `description_offre`), added by link or pasted text. Don't reintroduce bulk collection from job platforms.
 - **Recruiter contact creation is not persisted.** The agent only exposes `GET /api/candidatures/{id}/contacts` — there is no `POST` route. The desktop's "add contact" action is an explicit local-only stub in `crates/desktop/src/stores/app.ts` (`addRecruiter`). Implementing this for real means the full chain in the section above, not a frontend-only fix.
-- **No LLM writes Typst during generation.** References are converted once into `template.typ` + `example_data.json` at upload; generation fills a canonical `data.json` from the profile (facts) and LLM-written prose only. The reference is a style model, never a source of facts. See `docs/project.md` §8.
-- **Test coverage is narrow.** `cargo test` covers offer-text conversion and the documents pipeline's pure logic only; nothing tests the LLM calls, the database or the API routes.
+- **No LLM writes Typst during generation.** References are converted once into `template.typ` + `example_data.json` at upload; generation fills a canonical `data.json` from the profile (facts) and LLM-written prose only. The reference is a style model, never a source of facts. See `docs/project.md` §7.
+- **Test coverage is narrow.** `cargo test` covers HTML/Markdown-to-text conversion and the documents pipeline's pure logic only; nothing tests the LLM calls, the database or the API routes.
 
 ## What NOT to do
 

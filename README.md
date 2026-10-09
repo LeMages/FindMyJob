@@ -13,19 +13,20 @@ FindMyJob helps students organize their search for an internship, apprenticeship
 - **AI-drafted application message** — a short email or message adapted to the offer when you apply.
 - **Offer import** — paste a job listing's URL or its raw text, and the form is prefilled automatically (title, company, location, contract type, pay, description) for you to review.
 - **Interview planning** — week/month views across all your applications.
-- **Automated offer discovery** *(backend only, no UI yet)* — scrapes Welcome to the Jungle, filters and scores offers against your profile with Claude, on a schedule. See [`docs/project.md`](docs/project.md#7-offers-pipeline-backend-only-no-desktop-ui-yet) for the current state.
+
+Every offer enters the app through its link (or its pasted text): FindMyJob never collects offers on its own.
 
 ## Architecture
 
 FindMyJob is a Cargo workspace with three crates:
 
 ```
-crates/core     shared business logic — models, LLM calls, HTML scraping (no DB, no Tauri)
-crates/agent    headless Axum server — owns PostgreSQL, the offers pipeline, document generation
+crates/core     shared business logic — models, LLM calls, offer page fetch and text extraction (no DB, no Tauri)
+crates/agent    headless Axum server — owns PostgreSQL, offer extraction by link, document generation
 crates/desktop  Tauri 2 + Vue 3 app — thin HTTP client of the agent, no direct DB access
 ```
 
-The desktop app never talks to the database directly: it calls the agent's REST API over HTTP. See [`docs/project.md`](docs/project.md) for the full technical reference (data model, pipelines, API routes, conventions).
+The agent runs locally next to PostgreSQL (Docker Compose), and the desktop app never talks to the database directly: it calls the agent's REST API over HTTP, on `http://localhost:3000` by default. See [`docs/project.md`](docs/project.md) for the full technical reference (data model, pipelines, API routes, conventions).
 
 ## Database
 
@@ -35,11 +36,11 @@ The database is a single PostgreSQL instance split into two schemas:
 
 ![Profile schema](db/schema_profile.png)
 
-**Search** — Job search sessions, scraped offers, applications, interviews, and documents.
+**Search** — Job search sessions, applications, interviews, and documents.
 
 ![Search schema](db/schema_search.png)
 
-See [`db/schema.dbml`](db/schema.dbml) for the full column-level reference.
+See [`db/schema.dbml`](db/schema.dbml) for the full column-level reference (the diagrams are static images and may lag behind it).
 
 ## Prerequisites
 
@@ -57,13 +58,13 @@ cd FindMyJob
 cp .env.example .env   # fill in ANTHROPIC_API_KEY at minimum
 ```
 
-Start PostgreSQL and the agent:
+Start PostgreSQL and the agent, both on your machine (migrations are applied when the agent starts):
 
 ```bash
 docker compose up -d
 ```
 
-Or, to run the agent locally against a Postgres of your own (useful while iterating on the agent):
+Or, to run the agent from source against a Postgres of your own (useful while iterating on the agent):
 
 ```bash
 cargo run -p findmyjob-agent
@@ -103,7 +104,11 @@ The installer is generated under `target/release/bundle/` at the repo root.
 
 ## Project status
 
-Active early-stage development. Application tracking, AI document tailoring, and offer import are implemented end to end. The offers-discovery pipeline runs server-side but has no desktop UI yet, and recruiter-contact creation isn't persisted yet — see [`docs/project.md`](docs/project.md#12-features--implemented-partial-and-planned) for the full picture.
+Active early-stage development. Application tracking, AI document tailoring, and offer import by link are implemented end to end. Recruiter-contact creation isn't persisted yet — see [`docs/project.md`](docs/project.md#11-features--implemented-partial-and-planned) for the full picture.
+
+## History
+
+An early version collected offers automatically (Welcome to the Jungle, filtering, LLM scoring). I removed it after realizing this approach went against the terms of use of several job platforms. The app now relies on adding offers by their link. The original pipeline is still available at the `archive/collecte-automatique` tag.
 
 ## About
 
