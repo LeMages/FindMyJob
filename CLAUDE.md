@@ -24,7 +24,8 @@ crates/desktop  Vue 3 frontend at crates/desktop/, Tauri backend nested at crate
 | Claude API client and prompt assembly | `crates/core/src/llm/*.rs` (`client.rs` is the raw HTTP client) |
 | Database access (PostgreSQL via sqlx) | `crates/agent/src/db/*.rs`, one file per table |
 | REST API routes | `crates/agent/src/api/*.rs`, one file per resource, mounted in `crates/agent/src/api/mod.rs` |
-| Offer extraction by link (fetch, text extraction, LLM field extraction) | `crates/core/src/scraping/`, `crates/core/src/llm/scraping_extract.rs`, exposed by `crates/agent/src/api/scraping.rs` (`POST /api/scraping/url`, `/api/scraping/text`) |
+| Offer import by link (URL validation, guarded fetch, JSON-LD then page text + LLM, final cleanup) | `crates/core/src/scraping/` (pure logic), `crates/core/src/llm/scraping_extract.rs`, cascade in `crates/agent/src/offer_extraction.rs`, exposed by `crates/agent/src/api/scraping.rs` (`POST /api/scraping/url`, `/html`, `/text`) |
+| Capture window (user-driven page capture when the agent can't read a page) | `crates/desktop/src-tauri/src/commands/capture.rs` — captures and forwards to `/api/scraping/html`, no extraction logic |
 | Documents pipeline (CV/LM tailoring + Typst) | `crates/agent/src/pipeline.rs` (orchestration), `crates/agent/src/docgen/` (deterministic assembly), `crates/agent/src/documents/` (templatization, storage, compilation), `crates/core/src/docgen/` (budgets, linter, selection — pure logic) |
 | Tauri commands | `crates/desktop/src-tauri/src/commands/*.rs`, one file per domain, each delegating to `api_client::ApiClient` |
 | HTTP client to the agent | `crates/desktop/src-tauri/src/api_client.rs` |
@@ -87,7 +88,9 @@ npm run tauri dev
 - **No automatic offer collection.** Scraping of job boards, filtering, LLM scoring, the scheduler and the Marché tab were removed (they went against several platforms' terms of use); the code is kept at the Git tag `archive/collecte-automatique`. An offer exists only inside its application (`url_offre`, `description_offre`), added by link or pasted text. Don't reintroduce bulk collection from job platforms.
 - **Recruiter contact creation is not persisted.** The agent only exposes `GET /api/candidatures/{id}/contacts` — there is no `POST` route. The desktop's "add contact" action is an explicit local-only stub in `crates/desktop/src/stores/app.ts` (`addRecruiter`). Implementing this for real means the full chain in the section above, not a frontend-only fix.
 - **No LLM writes Typst during generation.** References are converted once into `template.typ` + `example_data.json` at upload; generation fills a canonical `data.json` from the profile (facts) and LLM-written prose only. The reference is a style model, never a source of facts. See `docs/project.md` §7.
-- **Test coverage is narrow.** `cargo test` covers HTML/Markdown-to-text conversion and the documents pipeline's pure logic only; nothing tests the LLM calls, the database or the API routes.
+- **Offer import is user-triggered, one page at a time.** No crawl, no retry loop, no proxy/identity rotation/captcha solving. The agent fetches only a validated public `http(s)` URL (`core::scraping::url_validation`, DNS filtered by `safe_resolver`). Failures are typed (`ScrapingFailure`, serialized as a code in `AppError::Scraping`) and the UI chooses the message — don't hardcode user-facing advice in the backend. Every description, whatever its path, goes through `core::scraping::finalize::finalize_fields`.
+- **The capture window has no IPC access.** The `capture` window is deliberately absent from every capability; its HTML is read from Rust with `eval_with_callback`. Never add it to a capability or give it a `remote` capability, and keep validating the URL before loading it.
+- **Test coverage is narrow.** `cargo test` covers HTML/Markdown-to-text conversion, the offer import's pure logic (synthetic HTML fixtures, no network) and the documents pipeline's pure logic; nothing tests the LLM calls, the database or the API routes.
 
 ## What NOT to do
 

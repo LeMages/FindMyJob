@@ -11,7 +11,7 @@ FindMyJob helps students organize their search for an internship, apprenticeship
 - **Application tracking** — company, position, contract type (internship / apprenticeship / permanent / fixed-term / temp / freelance), contacts, notes, full status timeline (applied, follow-ups, interviews, offer, outcome).
 - **AI-tailored CV and cover letter** — generated from your profile and the offer's text, in your own document's style.
 - **AI-drafted application message** — a short email or message adapted to the offer when you apply.
-- **Offer import** — paste a job listing's URL or its raw text, and the form is prefilled automatically (title, company, location, contract type, pay, description) for you to review.
+- **Offer import** — paste a job listing's URL and the form is prefilled automatically (title, company, location, contract type, pay, full description) for you to review. The page's structured data (JSON-LD) is used when available, otherwise its text is analyzed by the AI. If a site refuses automatic reading, you can open the page inside FindMyJob (accept cookies, log in), capture it, paste its text, or fill the form by hand. An existing application for the same offer is flagged.
 - **Interview planning** — week/month views across all your applications.
 
 Every offer enters the app through its link (or its pasted text): FindMyJob never collects offers on its own.

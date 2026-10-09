@@ -47,7 +47,9 @@ async fn main() {
 
     let app = api::router(state);
 
-    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    // `API_PORT` : même variable que le mapping de `docker-compose.yml` et
+    // `.env.example`. Dans le conteneur, la valeur est fixée à 3000.
+    let port = std::env::var("API_PORT").unwrap_or_else(|_| "3000".to_string());
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await.expect("Impossible d'écouter sur le port configuré");
     println!("API listening on {addr}");

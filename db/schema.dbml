@@ -13,6 +13,13 @@
 // users, projets, experiences, formations, skills, sessions, candidatures,
 // contacts, interviews, documents, settings.
 // status_history n'a pas de trigger updated_at.
+//
+// Conventions de ce fichier (pour rester lisible dans dbdiagram) :
+//   - les identifiants notés `integer [pk, increment]` sont des BIGSERIAL
+//     en SQL, et les clés étrangères notées `integer` des BIGINT ;
+//   - les `Enum` DBML représentent des colonnes TEXT contraintes par un
+//     CHECK (aucun type ENUM Postgres n'est créé par les migrations) ;
+//   - `timestamp` correspond à TIMESTAMPTZ.
 // ============================================
 
 
@@ -173,11 +180,12 @@ Table search.candidatures {
   type candidature_type
   status candidature_status [not null, default: 'a_postuler']
   source text                 // canal de candidature, voir SOURCE_OPTIONS côté frontend
-  url_offre text
-  description_offre text      // texte brut de l'annonce, entrée du pipeline IA
+  url_offre text              // ni index ni unicité : doublons signalés par GET /api/candidatures/by-url (comparaison normalisée côté agent)
+  description_offre text      // texte brut de l'annonce (nettoyé par core::text::html_to_plain à l'import), entrée du pipeline IA
   entreprise text
   localisation text
   remuneration text
+  date_candidature date       // date d'envoi de la candidature
   notes text
   cv_path text                // chemin du CV généré/joint
   lettre_motivation_path text

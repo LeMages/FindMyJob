@@ -25,6 +25,9 @@ services:
     ports:
       - "${API_PORT:-3000}:3000"
     environment:
+      # Port d'écoute dans le conteneur, fixe : API_PORT de l'hôte ne règle
+      # que le mapping ci-dessus.
+      API_PORT: 3000
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ${DB_USER:-findmyjob}

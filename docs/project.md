@@ -2,7 +2,7 @@
 
 This document is the technical reference for FindMyJob. It exists so a conversation with an AI assistant (or a new contributor) can resume without re-explaining the project from scratch. It describes the what, the why, and the actual state of the code.
 
-Last updated: 2026-10-09, after the removal of automatic offer collection (scraping, filtering, LLM scoring, scheduler): offers now enter the app only through their link or pasted text. The removed pipeline is kept at the Git tag `archive/collecte-automatique`.
+Last updated: 2026-10-09, after the removal of automatic offer collection (scraping, filtering, LLM scoring, scheduler): offers now enter the app only through their link or pasted text. The removed pipeline is kept at the Git tag `archive/collecte-automatique`. The add-by-link flow was then hardened (guarded fetch, JSON-LD/LLM cascade, capture window, duplicate warning; see §9 « Offer import by link »).
 
 ## 1. Vision
 
@@ -50,7 +50,7 @@ crates/core/src/
   docgen/         pure document-pipeline logic: budgets, linter, selection, period/date formatting, text diff
   llm/            Claude client, prompt assembly per pipeline step (templatization, matching, writing, label translation)
   models/         serde DTOs re-exported for both the API and the Tauri commands
-  scraping/       offer page fetch (fetch.rs) + text extraction (extract.rs), used by the add-by-link flow
+  scraping/       add-by-link flow: URL validation, guarded fetch, typed failures, JSON-LD and page-text extraction, final cleanup
   text/           deterministic HTML/Markdown to plain text conversion (html_to_plain)
 ```
 
@@ -60,10 +60,10 @@ Headless binary crate: an Axum HTTP server that owns all persistence, offer extr
 
 ```
 crates/agent/src/
-  main.rs, pipeline.rs, progress.rs, security.rs
+  main.rs, pipeline.rs, progress.rs, security.rs, offer_extraction.rs (import cascade), url_normalize.rs (duplicates)
   docgen/         deterministic document assembly: cv_data/lm_data builders, labels cache, page fitting, trace
   api/            19 route modules + mod.rs (router, auth middleware, CORS, error mapping)
-  db/             one file per table + common.rs, config.rs, init.rs
+  db/             one file per table + joins.rs (cross-table queries), common.rs, config.rs, init.rs
   documents/      Typst compilation, reference templatization, on-disk document storage
 ```
 
@@ -215,6 +215,7 @@ Raw HTTP calls to Anthropic's Messages API (`https://api.anthropic.com/v1/messag
 - `thinking` is explicitly disabled on every request: the pipeline is a single-turn structured generation, and extended thinking shares the same output token budget as the visible response — leaving it on by default truncated responses before any useful content.
 - Structured outputs (JSON Schema) are used wherever a schema is provided, to guarantee a strictly conformant response (offer analysis, matching, templatization, CV/LM writing, label translation). The API caps the compiled grammar size: the templatization schema for a CV sits close to that cap, so fixed-value fields are plain strings checked in Rust rather than `enum`s.
 - `MAX_TOKENS = 8192` by default; templatization (full template + example data in one response) uses 16384.
+- One shared `reqwest` client with a 300 s request timeout and a 10 s connect timeout (long Typst/prose generations can take minutes). On the desktop side, `ApiClient` uses a 600 s request timeout and a 5 s connect timeout, so a stopped agent is reported quickly.
 - Two explicit failure cases are turned into a clear `AppError::Llm` rather than a downstream JSON-parsing error: `stop_reason == "refusal"` (safety classifier) and `stop_reason == "max_tokens"` (truncated response).
 
 ### Application message drafting (`core::llm::candidature_message`)
@@ -231,16 +232,35 @@ All routes are mounted under `/api` (`crates/agent/src/api/mod.rs`), protected b
 | `profile` | aggregated profile (all sub-entities in one response) |
 | `experiences` / `formations` / `langues` / `projets` / `skills` | create / update / delete per sub-entity |
 | `sessions` | list / create / update / delete |
-| `candidatures` | list by session, create, get, update, delete (à postuler only), apply (no message / by mail / by message) |
+| `candidatures` | list by session, create, get, update, delete (à postuler only), apply (no message / by mail / by message), find by normalized offer URL (`GET /api/candidatures/by-url`) |
 | `contacts` | list for an application (read-only, no create route yet) |
 | `status_history` | history for an application |
 | `timeline_events` | list available events, add an event |
 | `interviews` | pending interviews for an application, all interviews for a session |
-| `scraping` | offer extraction from a URL (`POST /api/scraping/url`) or pasted text (`POST /api/scraping/text`), prefilling the new-application form |
+| `scraping` | offer extraction from a URL fetched by the agent (`POST /api/scraping/url`), from HTML captured by the desktop window (`POST /api/scraping/html`, 6 MB body limit) or from pasted text (`POST /api/scraping/text`); see « Offer import by link » below |
 | `documents` | save/fetch CV & cover letter references, compile to PDF, inspect/read any document file |
 | `fonts` | list / import / delete a server-filesystem font family |
 | `settings` | Anthropic API key status/set/delete, LLM model, theme, connection test |
 | `system` | health check (unauthenticated) |
+
+### Offer import by link
+
+An offer enters the app only when the user adds it, one page at a time: there is no crawl, no automatic discovery and no retry loop against a site that refuses. Nothing bypasses a site's protections (no proxy, no identity rotation, no captcha solving).
+
+**Fetch** (`core::scraping::fetch`, used by `POST /api/scraping/url`): the URL is validated first (`url_validation.rs`: `http`/`https` only, host required, no credentials, no `localhost`, single-label or `.local` names, and no loopback/private/link-local/CGNAT IP). A fresh client per fetch sends browser `Accept`/`Accept-Language` headers, keeps cookies only for the redirect chain, follows at most 10 redirects (each target revalidated) and resolves DNS through `safe_resolver.rs`, which drops non-public addresses. The body is read in chunks and capped at 5 MB; a non-HTML `Content-Type` or an empty page is refused.
+
+**Typed failures** (`core::scraping::failure::ScrapingFailure`): `invalid_url`, `offer_unavailable` (404/410), `access_denied` (401/403/429/999), `timeout`, `network`, `not_html`, `empty_page`, `too_large`, `insufficient_content`. They travel as `AppError::Scraping(code)`, serialized `{"kind":"Scraping","message":"access_denied"}`; the agent logs the technical detail, and the UI picks the message and the next step.
+
+**Cascade** (`crates/agent/src/offer_extraction.rs::run_cascade`, shared by `/scraping/url` and `/scraping/html`), on the raw HTML:
+
+1. **JSON-LD, no LLM** (`core::scraping::json_ld`): every `application/ld+json` block is read, and a `JobPosting` is searched in objects, arrays and `@graph` (`@type` string or array). Mapping: `title` → poste, `hiringOrganization.name` → entreprise, `jobLocation` (object or array) → localisation, prefixed by « Télétravail » when `jobLocationType` is `TELECOMMUTE`, `baseSalary` → readable text (`salary_format.rs`, French number formats, empty or zero amounts ignored), `description` → description. Contract type (`contract_type.rs`): `employmentType: INTERN` → `stage`, otherwise an explicit keyword in the title (stage, stagiaire, intern, alternance, apprentissage, CDI, CDD, intérim), otherwise `null` (a title naming two different types also gives `null`). The stage succeeds when the title is present and the cleaned description exceeds 200 characters.
+2. **Page text + LLM** (`core::scraping::extract::extract_page_text`, then `core::llm::scraping_extract`): among the semantic containers (`article`, `main`, `section`, `[class*=job]`…), the one with the longest text wins (fallback `<body>`); navigation, headers, footers and forms are dropped; headings and lists are kept; truncation (12 000 characters) happens after isolation. `<title>` and `og:title` are passed to the LLM as hints. The prompt asks for the description copied word for word, with the page's own section titles. The stage fails with `insufficient_content` when the text is too short or looks like a JavaScript shell, an anti-bot challenge or a lone cookie banner (`content_check.rs`), or when the LLM returns an empty title or description.
+
+**Final cleanup** (`core::scraping::finalize::finalize_fields`), on every path (JSON-LD, LLM, pasted text): the description goes through `core::text::html_to_plain` (no tags, emoji or Markdown decoration; headings and lists kept; escaped HTML from JSON-LD decoded), short fields are reduced to one line, and a contract type outside the form's values is dropped. The routes return `OfferExtraction { fields, stage }` with `stage` = `json_ld` or `llm`.
+
+**Capture window** (`crates/desktop/src-tauri/src/commands/capture.rs`): when the agent cannot read the page (access refused, content rendered by JavaScript), the user opens it in a secondary `capture` window, accepts cookies or logs in, then clicks « Capturer cette page » in the main window. The rendered HTML is read on the Rust side with `WebviewWindow::eval_with_callback` (no IPC from the page), capped at 5 MB, and sent to `POST /api/scraping/html` (6 MB body limit), so it goes through the same cascade. The window belongs to no capability: Tauri rejects every IPC call from a remote origin without a `remote` capability, so the remote page cannot reach any app command. The URL is validated before loading (a local URL such as the dev server would be treated as an app page with IPC access). The window's WebView profile (`<app local data>/capture_webview`) keeps the site session between uses, isolated from the main window.
+
+**Duplicates**: `GET /api/candidatures/by-url?url=…` returns existing applications, across all sessions, whose `url_offre` matches after normalization (`crates/agent/src/url_normalize.rs`: no scheme, `www.`, query, fragment or trailing slash, lowercase). The screen shows them as a non-blocking warning.
 
 ## 10. Desktop ↔ agent bridge
 
@@ -256,7 +276,7 @@ Every file under `crates/desktop/src-tauri/src/commands/` follows the same shape
 - Sessions: CRUD, reference CV/cover letter per session (import, compile, templatization, version history with restore, PDF preview).
 - Applications: creation with mandatory AI-generated documents (failure blocks creation), table view per session, editable detail while `a_postuler`, typed timeline, interview management, trash for negative terminal statuses.
 - Apply flow: no message / by mail / by message, all exporting documents to disk.
-- Offer import from a pasted URL or pasted text, prefilling the new-application form.
+- Offer import from a link (JSON-LD, then page text + LLM), from a page captured in the FindMyJob window, or from pasted text, prefilling the new-application form; choice screen on failure, non-blocking duplicate warning.
 - Interview planning (week/month views).
 - Settings: LLM model selection, connection test, fonts, theme. The Anthropic API key is configured on the agent only (`.env`), never from the desktop.
 - CI/CD: lint + clippy on every PR to `dev`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
@@ -294,6 +314,6 @@ Everything runs on the user's machine; there is no hosted backend.
 
 ## 13. Known gaps and points of attention
 
-- CI's `rust` job runs `cargo test --workspace` on every PR. Coverage is limited to HTML/Markdown-to-text conversion (`html_to_plain`, on fictional offer fixtures) and the documents pipeline's pure logic (budgets, linter, selection, periods, text diff, writing validation, `cv_data`/`lm_data` builders, template compilation on a fixture); no test calls the LLM or the database.
+- CI's `rust` job runs `cargo test --workspace` on every PR. Coverage is limited to HTML/Markdown-to-text conversion (`html_to_plain`, on fictional offer fixtures), the offer import's pure logic (JSON-LD mapping, contract types, page-text extraction, insufficient-content detection, final cleanup, URL validation, failure classification, URL normalization — synthetic HTML, no network) and the documents pipeline's pure logic (budgets, linter, selection, periods, text diff, writing validation, `cv_data`/`lm_data` builders, template compilation on a fixture); no test calls the LLM or the database.
 - The `vector` (pgvector) Postgres extension is loaded by migration `0001` but nothing uses it: the one column that did, `offers.embedding`, was dropped by migration `0004` (and the `offers` table itself by `0014`). Profile-to-offer matching goes through an LLM call today, not vector similarity.
 - `db/schema_profile.png` and `db/schema_search.png` are static images, not regenerated automatically from `db/schema.dbml` — `schema_search.png` still shows the `offers` and `search_queries` tables removed by `0014`.
