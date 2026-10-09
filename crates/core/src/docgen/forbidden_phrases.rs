@@ -21,6 +21,9 @@ pub const FORBIDDEN_PHRASES_FR: &[&str] = &[
     "point d'entrée",
     "m'a immédiatement interpellé",
     "opportunité idéale",
+    "démontrant une maîtrise",
+    "témoignant d'une maîtrise",
+    "applicable à la",
 ];
 
 /// Formules interdites, en anglais.
@@ -34,4 +37,6 @@ pub const FORBIDDEN_PHRASES_EN: &[&str] = &[
     "proven expertise",
     "ideal opportunity",
     "immediately caught my attention",
+    "demonstrating strong",
+    "showcasing my",
 ];

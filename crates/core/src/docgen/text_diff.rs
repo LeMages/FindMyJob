@@ -140,6 +140,29 @@ pub fn diff_words(expected: &str, actual: &str) -> Result<TextDiff, String> {
     Ok(TextDiff { expected_words: a.len(), missing, extra })
 }
 
+/// Repère les séparateurs orphelins d'un texte rendu : deux séparateurs
+/// graphiques consécutifs (« | | », « • • », « : | »), signe qu'une valeur
+/// vide a été affichée entre eux au lieu de faire disparaître sa ligne.
+///
+/// # Arguments
+///
+/// * `text` - Texte rendu.
+///
+/// # Returns
+///
+/// Paires de séparateurs consécutifs, citées telles quelles.
+pub fn orphan_separators(text: &str) -> Vec<String> {
+    let is_separator = |w: &str| !w.is_empty() && w.chars().all(|c| SEPARATOR_CHARS.contains(&c));
+    words(text)
+        .windows(2)
+        .filter(|pair| is_separator(pair[0]) && is_separator(pair[1]))
+        .map(|pair| format!("{} {}", pair[0], pair[1]))
+        .collect()
+}
+
+/// Caractères considérés comme séparateurs graphiques.
+const SEPARATOR_CHARS: [char; 9] = ['|', '•', '·', '–', '—', '-', ':', ',', '/'];
+
 /// Liste les mots qui contiennent au moins une lettre ou un chiffre.
 ///
 /// Un template rendu avec des données entièrement vides ne doit produire

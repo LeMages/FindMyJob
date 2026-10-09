@@ -216,7 +216,10 @@ async fn prepare(
     let project_count = cv_ref.example.data.projects.len();
     let matching = match_profile(&offer_analysis, &profile, project_count, &model).await?;
     let selection = select(&profile, &matching, project_count);
-    let cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count);
+    let mut cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count);
+    // Un profil peut avoir moins de projets que la référence : on en attend
+    // autant que la sélection en contient, jamais plus.
+    cv_budget.project_count = selection.projects.len();
     let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count);
 
     // ------------------------------------------------------------------

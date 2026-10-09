@@ -36,3 +36,11 @@ fn seuls_les_separateurs_ne_sont_pas_du_contenu() {
     assert!(alphanumeric_words("•  |  : – ,").is_empty());
     assert_eq!(alphanumeric_words("• Objet :"), vec!["Objet".to_string()]);
 }
+
+#[test]
+fn separateurs_orphelins_detectes() {
+    use findmyjob_core::docgen::text_diff::orphan_separators;
+    assert_eq!(orphan_separators("FindMyJob  |    |  2025"), vec!["| |".to_string()]);
+    assert_eq!(orphan_separators("Anglais : | Français : natif"), vec![": |".to_string()]);
+    assert!(orphan_separators("Need4Viz  |  Nov. 2025 – Avr. 2026 • Lyon").is_empty());
+}

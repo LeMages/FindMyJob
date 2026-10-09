@@ -10,6 +10,8 @@ mod documents;
 mod filtering;
 mod logging;
 mod pipeline;
+#[cfg(test)]
+mod pipeline_manual_run;
 mod progress;
 mod scheduler;
 mod scraping;

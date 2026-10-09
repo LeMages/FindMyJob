@@ -10,7 +10,9 @@
 //!   déclarés supprimés (`dropped_text` : éléments sans champ dans le
 //!   schéma) et d'une date calculée à la compilation ;
 //! - compilé avec des données vides, compile toujours et n'affiche aucun mot
-//!   (preuve qu'aucun contenu n'est resté écrit en dur).
+//!   (preuve qu'aucun contenu n'est resté écrit en dur) ;
+//! - compilé avec les champs secondaires vides (coordonnées, organisations,
+//!   lieux, niveaux), ne laisse aucun séparateur orphelin.
 
 // Importation des modules standard
 use std::path::{Path, PathBuf};
@@ -22,7 +24,7 @@ use sqlx::PgPool;
 use crate::db;
 use crate::documents::typst::{compile_document, compile_template, CompiledDocument};
 use findmyjob_core::docgen::date_format::format_long_date;
-use findmyjob_core::docgen::text_diff::{alphanumeric_words, diff_words};
+use findmyjob_core::docgen::text_diff::{alphanumeric_words, diff_words, orphan_separators};
 use findmyjob_core::error::AppError;
 use findmyjob_core::llm::{templatize_reference, TemplatizeFeedback, TemplatizeOutput};
 use findmyjob_core::models::{CvExampleData, Document, LmExampleData, TemplateArtifacts};
@@ -184,10 +186,12 @@ async fn validate(
     let example = example_for_rendering(&output.example_data, example_data_json, context)?;
     let root = context.root.to_path_buf();
     let fonts_dir = context.fonts_dir.to_path_buf();
-    let (with_example, with_blank) = tokio::task::spawn_blocking(move || {
+    let sparse = sparse_data(&example)?;
+    let (with_example, with_blank, with_sparse) = tokio::task::spawn_blocking(move || {
         let with_example = compile_template(template.clone(), example, root.clone(), fonts_dir.clone());
-        let with_blank = compile_template(template, blank_json.into_bytes(), root, fonts_dir);
-        (with_example, with_blank)
+        let with_blank = compile_template(template.clone(), blank_json.into_bytes(), root.clone(), fonts_dir.clone());
+        let with_sparse = compile_template(template, sparse, root, fonts_dir);
+        (with_example, with_blank, with_sparse)
     })
     .await
     .map_err(|e| AppError::Validation(format!("Erreur interne de compilation Typst : {e}")))?;
@@ -218,6 +222,23 @@ async fn validate(
         }
         Err(errors) => problems.push(format!(
             "Le template ne compile pas quand tous les champs sont vides (chaînes vides, listes vides) : {errors}"
+        )),
+    }
+    match with_sparse {
+        Ok(rendered) => {
+            let orphans = orphan_separators(&rendered.text);
+            if !orphans.is_empty() {
+                problems.push(format!(
+                    "Rendu avec les champs secondaires vides ({}), le template laisse des séparateurs orphelins : {}. \
+                     Un champ vide doit faire disparaître sa valeur et le séparateur qui l'accompagne.",
+                    SPARSE_FIELDS.join(", "),
+                    quote_words(&orphans)
+                ));
+            }
+        }
+        Err(errors) => problems.push(format!(
+            "Le template ne compile pas quand les champs secondaires sont vides ({}) : {errors}",
+            SPARSE_FIELDS.join(", ")
         )),
     }
 
@@ -253,6 +274,47 @@ fn contains_year(text: &str) -> bool {
         let isolated_after = chars.get(i + 4).is_none_or(|c| !c.is_ascii_digit());
         is_year && isolated_before && isolated_after
     })
+}
+
+/// Champs secondaires vidés pour le rendu « clairsemé » : coordonnées,
+/// organisations, lieux et niveaux, que le profil d'un utilisateur peut
+/// ne pas renseigner.
+const SPARSE_FIELDS: [&str; 15] = [
+    "email", "telephone", "ville", "adresse", "code_postal", "linkedin", "github", "portfolio", "entreprise", "lieu",
+    "pour_qui", "ecole", "level", "location", "contact_role",
+];
+
+/// Données d'exemple dont les champs secondaires (`SPARSE_FIELDS`) sont
+/// vidés, partout où ils apparaissent : un template correct n'affiche
+/// alors aucun séparateur orphelin.
+///
+/// # Arguments
+///
+/// * `example` - Données d'exemple sérialisées (telles que rendues).
+///
+/// # Returns
+///
+/// Données clairsemées sérialisées.
+fn sparse_data(example: &[u8]) -> Result<Vec<u8>, AppError> {
+    fn clear(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                for (key, field) in map.iter_mut() {
+                    if SPARSE_FIELDS.contains(&key.as_str()) && field.is_string() {
+                        *field = serde_json::Value::String(String::new());
+                    } else {
+                        clear(field);
+                    }
+                }
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(clear),
+            _ => {}
+        }
+    }
+    let mut data: serde_json::Value = serde_json::from_slice(example)
+        .map_err(|e| AppError::Validation(format!("Données d'exemple illisibles : {e}")))?;
+    clear(&mut data);
+    serde_json::to_vec(&data).map_err(|e| AppError::Validation(format!("Données clairsemées non sérialisables : {e}")))
 }
 
 /// Contrôles statiques : chargement de `data.json` et constructions interdites.

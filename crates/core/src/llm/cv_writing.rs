@@ -172,13 +172,18 @@ fn blocking_problems(content: &CvContent, input: &CvWritingInput<'_>) -> Vec<Str
     problems.extend(check_ids("projects", &content.projects, &input.selection.project_ids()));
 
     let known: Vec<String> = input.profile.skills.iter().map(|s| s.nom.trim().to_lowercase()).collect();
+    let mut seen: Vec<String> = Vec::new();
     for group in &content.skills_groups {
         for skill in &group.skills {
-            if !known.contains(&skill.trim().to_lowercase()) {
+            let normalized = skill.trim().to_lowercase();
+            if !known.contains(&normalized) {
                 problems.push(format!(
                     "skills_groups : « {skill} » n'est pas une compétence du profil. N'utilise que les compétences listées, écrites à l'identique."
                 ));
+            } else if seen.contains(&normalized) {
+                problems.push(format!("skills_groups : « {skill} » apparaît dans plusieurs groupes. Chaque compétence n'apparaît qu'une fois."));
             }
+            seen.push(normalized);
         }
         if group.category.trim().is_empty() || group.skills.is_empty() {
             problems.push("skills_groups : un groupe a une catégorie ou une liste de compétences vide.".to_string());
@@ -328,6 +333,9 @@ mod tests {
         assert!(problems.iter().any(|p| p.contains("id 2 manque")), "{problems:?}");
         assert!(problems.iter().any(|p| p.contains("id 1 apparaît 2 fois")), "{problems:?}");
         assert!(problems.iter().any(|p| p.contains("Kubernetes")), "{problems:?}");
+
+        let duplicated = blocking_problems(&content(&[1, 2], &["Rust", "rust"]), &input);
+        assert!(duplicated.iter().any(|p| p.contains("plusieurs groupes")), "{duplicated:?}");
     }
 
     #[test]
