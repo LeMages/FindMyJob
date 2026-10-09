@@ -6,12 +6,22 @@
 //! désérialiser un corps vide en JSON échoue toujours côté serde, donc les
 //! endpoints qui renvoient `()` ne doivent jamais passer par `resp.json()`.
 
+// Importation des modules standard
+use std::time::Duration;
+
 // Importation des crates externes
 use reqwest::{Client, Method, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
 
 // Importation des modules internes
 use crate::error::AppError;
+
+/// Délai maximal d'une requête vers l'agent. Large : certaines routes
+/// enchaînent des appels LLM synchrones (extraction d'offre, conversion d'une
+/// référence de CV/LM), chacun borné à 5 minutes côté agent.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(600);
+/// Délai maximal de connexion : un agent arrêté doit être signalé vite.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Client HTTP partagé, injecté comme état Tauri à la place de l'ancien pool
 /// SQLite.
@@ -38,13 +48,19 @@ impl ApiClient {
     ///
     /// # Returns
     ///
-    /// Un `ApiClient` prêt à l'emploi.
-    pub fn new(base_url: &str, token: Option<String>) -> Self {
-        Self {
-            client: Client::new(),
+    /// Un `ApiClient` prêt à l'emploi, ou une erreur si le client TLS ne peut
+    /// pas être initialisé.
+    pub fn new(base_url: &str, token: Option<String>) -> Result<Self, AppError> {
+        let client = Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .connect_timeout(CONNECT_TIMEOUT)
+            .build()
+            .map_err(|e| AppError::Config(format!("Impossible d'initialiser le client HTTP vers l'agent : {e}")))?;
+        Ok(Self {
+            client,
             base_url: base_url.trim_end_matches('/').to_string(),
             token,
-        }
+        })
     }
 
     /// Construit une requête vers `path`, avec le jeton `Bearer` si configuré.

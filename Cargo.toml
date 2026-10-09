@@ -19,6 +19,7 @@ typst-library = "0.15"
 typst-syntax = "0.15"
 base64 = "0.22"
 scraper = "0.22"
+url = "2"
 dotenvy = "0.15"
 tauri = { version = "2", features = [] }
 tauri-build = { version = "2", features = [] }

@@ -6,6 +6,7 @@ mod api;
 mod db;
 mod docgen;
 mod documents;
+mod offer_extraction;
 mod pipeline;
 #[cfg(test)]
 mod pipeline_manual_run;

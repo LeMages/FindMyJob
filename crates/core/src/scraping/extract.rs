@@ -5,6 +5,7 @@ use scraper::{ElementRef, Html, Node, Selector};
 
 // Importation des modules internes
 use crate::error::AppError;
+use crate::scraping::failure::ScrapingFailure;
 
 /// Sélecteurs CSS essayés dans l'ordre pour localiser le contenu de l'offre.
 /// Le premier qui matche est utilisé comme racine d'extraction.
@@ -54,10 +55,7 @@ pub fn extract_text(html: &str) -> Result<String, AppError> {
 
     let cleaned = raw_text.trim();
     if cleaned.is_empty() {
-        return Err(AppError::Scraping(
-            "Aucun contenu exploitable trouvé sur cette page. Essaie la saisie manuelle."
-                .to_string(),
-        ));
+        return Err(AppError::Scraping(ScrapingFailure::InsufficientContent));
     }
 
     Ok(truncate_chars(cleaned, MAX_CHARS))

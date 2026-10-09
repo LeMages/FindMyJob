@@ -5,6 +5,10 @@
 //! requête, désérialisation minimale) — la construction du prompt et la
 //! logique métier vivent dans les modules appelants (ex. `llm::style`).
 
+// Importation des modules standard
+use std::sync::LazyLock;
+use std::time::Duration;
+
 // Importation des crates externes
 use reqwest::Client;
 use serde::Deserialize;
@@ -25,6 +29,22 @@ pub const AVAILABLE_MODELS: [&str; 2] = ["claude-sonnet-4-6", "claude-haiku-4-5-
 /// Visibilité `pub(crate)` pour permettre aux points d'appel utilisant
 /// [`call_claude_with_tokens_meta`] de réutiliser le même plafond par défaut.
 pub(crate) const MAX_TOKENS: u32 = 8192;
+/// Délai maximal d'un appel complet. Large : les générations Typst/prose
+/// produisent des milliers de tokens et peuvent durer plusieurs minutes.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
+/// Délai maximal d'établissement de la connexion à l'API.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Client HTTP partagé par tous les appels (réutilise les connexions TLS).
+/// L'échec de construction est conservé en texte pour être remonté à chaque
+/// appel plutôt que de faire paniquer le processus.
+static CLIENT: LazyLock<Result<Client, String>> = LazyLock::new(|| {
+    Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .build()
+        .map_err(|e| e.to_string())
+});
 
 #[derive(Deserialize)]
 struct ContentBlock {
@@ -144,7 +164,9 @@ pub async fn call_claude_with_tokens_meta(
     // ------------------------------------------------------------------
     // 3. Appel réseau
     // ------------------------------------------------------------------
-    let client = Client::new();
+    let client = CLIENT
+        .as_ref()
+        .map_err(|e| AppError::Config(format!("Impossible d'initialiser le client HTTP Claude : {e}")))?;
     let response = client
         .post(ANTHROPIC_API_URL)
         .header("x-api-key", &api_key)
@@ -153,7 +175,13 @@ pub async fn call_claude_with_tokens_meta(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Llm(format!("Erreur réseau API Claude: {e}")))?;
+        .map_err(|e| {
+            if e.is_timeout() {
+                AppError::Llm("L'API Claude n'a pas répondu dans le délai imparti.".to_string())
+            } else {
+                AppError::Llm(format!("Erreur réseau API Claude: {e}"))
+            }
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();

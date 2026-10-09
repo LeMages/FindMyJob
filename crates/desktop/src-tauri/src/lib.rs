@@ -21,7 +21,9 @@ pub fn run() {
 
     let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
     let api_token = std::env::var("API_TOKEN").ok().filter(|t| !t.is_empty());
-    let client = ApiClient::new(&api_url, api_token);
+    // Sans client HTTP (initialisation TLS impossible), l'application ne peut
+    // rien afficher : arrêt immédiat avec la cause, comme `run()` ci-dessous.
+    let client = ApiClient::new(&api_url, api_token).expect("client HTTP vers l'agent");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

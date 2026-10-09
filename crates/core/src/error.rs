@@ -4,6 +4,9 @@
 //! conflit, ressource introuvable, erreur base de données) et implémente
 //! `serde::Serialize` afin de traverser le pont IPC de Tauri.
 
+// Importation des modules internes
+use crate::scraping::failure::ScrapingFailure;
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {
@@ -13,7 +16,9 @@ pub enum AppError {
     NotFound(String),
     Config(String),
     Llm(String),
-    Scraping(String),
+    /// Échec typé de la récupération ou de l'extraction d'une offre, sérialisé
+    /// en code (`{"kind":"Scraping","message":"access_denied"}`).
+    Scraping(ScrapingFailure),
 }
 
 impl std::fmt::Display for AppError {
@@ -24,8 +29,8 @@ impl std::fmt::Display for AppError {
             | AppError::Conflict(m)
             | AppError::NotFound(m)
             | AppError::Config(m)
-            | AppError::Llm(m)
-            | AppError::Scraping(m) => write!(f, "{}", m),
+            | AppError::Llm(m) => write!(f, "{}", m),
+            AppError::Scraping(failure) => write!(f, "Échec de l'extraction de l'offre ({failure})"),
         }
     }
 }
