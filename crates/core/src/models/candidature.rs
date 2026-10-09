@@ -6,7 +6,6 @@ use chrono::{DateTime, NaiveDate, Utc};
 pub struct CandidatureView {
     pub id: i64,
     pub session_id: Option<i64>,
-    pub offer_id: Option<i64>,
     pub poste: String,
     pub entreprise: Option<String>,
     pub localisation: Option<String>,
@@ -29,7 +28,6 @@ pub struct CandidatureView {
 pub struct CandidatureDetail {
     pub id: i64,
     pub session_id: Option<i64>,
-    pub offer_id: Option<i64>,
     pub poste: String,
     pub entreprise: Option<String>,
     pub localisation: Option<String>,
@@ -65,7 +63,6 @@ pub struct CreateCandidatureInput {
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
     pub session_id: Option<i64>,
-    pub offer_id: Option<i64>,
 }
 
 /// Champs modifiables depuis la page de détail, uniquement au statut

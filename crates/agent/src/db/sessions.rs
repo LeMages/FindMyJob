@@ -5,20 +5,17 @@ use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row};
 
 // Importation des modules internes
-use crate::db::common::{map_db_err, normalize};
+use crate::db::common::map_db_err;
 use findmyjob_core::error::AppError;
 use findmyjob_core::models::{SessionView, UpdateSessionInput};
 
 /// Valeurs acceptées pour `sessions.statut` (miroir de la contrainte CHECK en base).
 const VALID_STATUTS: [&str; 3] = ["active", "pause", "termine"];
 
-/// Bornes acceptées pour `sessions.min_score` (miroir de la contrainte CHECK en base).
-const MIN_SCORE_RANGE: std::ops::RangeInclusive<f32> = 0.05..=1.0;
-
 /// Requête agrégée sessions + statistiques (candidatures, acceptation),
 /// partagée par le listing et la mise à jour d'une session.
 const SELECT_WITH_STATS: &str =
-    "SELECT s.id, s.nom, s.contexte, s.statut, s.zone, s.min_score, s.created_at, \
+    "SELECT s.id, s.nom, s.statut, s.created_at, \
             (SELECT COUNT(*) FROM search.candidatures c \
              WHERE c.session_id = s.id \
                AND c.status NOT IN ('abandon', 'ghosting', 'refus', 'offre_refusee')) AS candidature_count, \
@@ -41,10 +38,7 @@ fn row_to_session_view(row: &PgRow) -> Result<SessionView, AppError> {
     Ok(SessionView {
         id: row.try_get("id").map_err(map_db_err)?,
         nom: row.try_get("nom").map_err(map_db_err)?,
-        contexte: row.try_get("contexte").map_err(map_db_err)?,
         statut: row.try_get("statut").map_err(map_db_err)?,
-        zone: row.try_get("zone").map_err(map_db_err)?,
-        min_score: row.try_get("min_score").map_err(map_db_err)?,
         candidature_count: row.try_get("candidature_count").unwrap_or(0),
         has_accepted: has_accepted_int != 0,
         created_at: row.try_get("created_at").map_err(map_db_err)?,
@@ -69,7 +63,7 @@ pub async fn insert(pool: &PgPool, nom: &str) -> Result<SessionView, AppError> {
 
     let row = sqlx::query(
         "INSERT INTO search.sessions (nom) VALUES ($1) \
-         RETURNING id, nom, contexte, statut, zone, min_score, created_at",
+         RETURNING id, nom, statut, created_at",
     )
     .bind(&nom)
     .fetch_one(pool)
@@ -79,10 +73,7 @@ pub async fn insert(pool: &PgPool, nom: &str) -> Result<SessionView, AppError> {
     Ok(SessionView {
         id: row.try_get("id").map_err(map_db_err)?,
         nom: row.try_get("nom").map_err(map_db_err)?,
-        contexte: row.try_get("contexte").map_err(map_db_err)?,
         statut: row.try_get("statut").map_err(map_db_err)?,
-        zone: row.try_get("zone").map_err(map_db_err)?,
-        min_score: row.try_get("min_score").map_err(map_db_err)?,
         candidature_count: 0,
         has_accepted: false,
         created_at: row.try_get("created_at").map_err(map_db_err)?,
@@ -106,7 +97,7 @@ pub async fn list_all(pool: &PgPool) -> Result<Vec<SessionView>, AppError> {
     rows.iter().map(row_to_session_view).collect()
 }
 
-/// Met à jour le nom, le contexte, le statut, la zone cible et le seuil de score d'une session existante.
+/// Met à jour le nom et le statut d'une session existante.
 ///
 /// # Arguments
 ///
@@ -129,21 +120,10 @@ pub async fn update(
     if !VALID_STATUTS.contains(&input.statut.as_str()) {
         return Err(AppError::Validation("Statut de session invalide.".to_string()));
     }
-    if !MIN_SCORE_RANGE.contains(&input.min_score) {
-        return Err(AppError::Validation(format!(
-            "Le seuil de score doit être compris entre 0.05 et 1 (reçu : {}).",
-            input.min_score
-        )));
-    }
-    let contexte = normalize(input.contexte.clone());
-    let zone = normalize(input.zone.clone());
 
-    let result = sqlx::query("UPDATE search.sessions SET nom = $1, contexte = $2, statut = $3, zone = $4, min_score = $5 WHERE id = $6")
+    let result = sqlx::query("UPDATE search.sessions SET nom = $1, statut = $2 WHERE id = $3")
         .bind(&nom)
-        .bind(&contexte)
         .bind(&input.statut)
-        .bind(&zone)
-        .bind(input.min_score)
         .bind(id)
         .execute(pool)
         .await

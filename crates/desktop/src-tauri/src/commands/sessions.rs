@@ -37,7 +37,7 @@ pub async fn get_sessions(api: tauri::State<'_, ApiClient>) -> Result<Vec<Sessio
     api.get("/api/sessions").await
 }
 
-/// Met à jour le nom, le contexte, le statut et la zone cible d'une session existante.
+/// Met à jour le nom et le statut d'une session existante.
 ///
 /// # Arguments
 ///

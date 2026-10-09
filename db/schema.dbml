@@ -4,7 +4,7 @@
 //
 // Deux schémas Postgres :
 //   - profile : données de l'utilisateur (CV, compétences, parcours, settings)
-//   - search  : recherche d'emploi (sessions, candidatures, offres)
+//   - search  : recherche d'emploi (sessions, candidatures, documents)
 //
 // App mono-utilisateur : les tables du schéma search ne portent pas
 // de user_id. Le profil est récupéré directement (un seul user).
@@ -12,7 +12,7 @@
 // Triggers `updated_at` (fonction trigger_set_updated_at(), BEFORE UPDATE) :
 // users, projets, experiences, formations, skills, sessions, candidatures,
 // contacts, interviews, documents, settings.
-// offers et status_history n'ont pas de trigger updated_at.
+// status_history n'a pas de trigger updated_at.
 // ============================================
 
 
@@ -132,62 +132,11 @@ Enum session_statut {
 Table search.sessions {
   id integer [pk, increment]
   nom text [not null]
-  contexte text
   statut session_statut [not null, default: 'active']
-  zone text
-  min_score real [not null, default: 0.5, note: 'Seuil d affichage des offres (Marché), CHECK entre 0.05 et 1']
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null, default: `now()`]
 
-  Note: 'Regroupe un ensemble de candidatures et d offres pour une recherche\nciblée (zone géographique, type de poste). Possède son propre CV et sa\npropre lettre de motivation de référence, tracés dans documents.'
-}
-
-// ============================================
-// Requêtes de recherche d'une session — pilotent le scraping (remplace la
-// config statique [[searches]] d'agent.toml)
-// ============================================
-
-Table search.search_queries {
-  id integer [pk, increment]
-  session_id integer [ref: > search.sessions.id, not null]
-  keywords text [not null]
-  location text
-  country_code text
-  created_at timestamp [not null, default: `now()`]
-
-  indexes {
-    session_id [name: 'idx_search_queries_session_id']
-  }
-}
-
-// ============================================
-// Offres scrapées — liées à une session
-// ============================================
-
-Table search.offers {
-  id integer [pk, increment]
-  session_id integer [ref: > search.sessions.id, not null]
-  source varchar [not null]           // plateforme d'origine (WTTJ, LinkedIn...)
-  source_id varchar                   // identifiant chez la plateforme source
-  title text [not null]
-  company text [not null]
-  location text [not null]
-  url text [not null, unique]         // uq_offers_url
-  contract_type varchar
-  posted_at timestamp
-  scraped_at timestamp [not null, default: `now()`]
-  status varchar [not null, default: 'new']
-  score real                          // score de pertinence calculé par le pipeline
-  description text                    // texte brut assemblé (sections Descriptif / Profil / Entretiens)
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-
-  indexes {
-    status [name: 'idx_offers_status']
-    source [name: 'idx_offers_source']
-    posted_at [name: 'idx_offers_posted_at']
-    session_id [name: 'idx_offers_session_id']
-  }
+  Note: 'Regroupe un ensemble de candidatures pour une recherche ciblée.\nPossède son propre CV et sa propre lettre de motivation de référence,\ntracés dans documents.'
 }
 
 // ============================================
@@ -220,7 +169,6 @@ Enum candidature_status {
 Table search.candidatures {
   id integer [pk, increment]
   session_id integer [ref: > search.sessions.id, not null]
-  offer_id integer [ref: > search.offers.id]  // offre source si créée depuis le Marché, null si saisie manuelle
   poste text [not null]
   type candidature_type
   status candidature_status [not null, default: 'a_postuler']
