@@ -7,11 +7,9 @@ edition = "2021"
 findmyjob-core = { path = "../core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-reqwest = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "time"] }
 axum = { workspace = true }
 tower-http = { workspace = true }
-async-trait = "0.1"
 sqlx = { workspace = true, features = ["postgres", "chrono"] }
 chrono = { workspace = true, features = ["serde"] }
 dotenvy = { workspace = true }
@@ -21,7 +19,3 @@ typst-layout = { workspace = true }
 typst-library = { workspace = true }
 typst-syntax = { workspace = true }
 base64 = { workspace = true }
-scraper = { workspace = true }
-percent-encoding = "2.3"
-toml = "0.8"
-tokio-cron-scheduler = "0.13"
