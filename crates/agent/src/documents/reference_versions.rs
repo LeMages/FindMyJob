@@ -60,7 +60,9 @@ pub async fn read_latest_version_pdf(pool: &PgPool, session_id: i64, doc_type: &
 /// Restaure une version d'un document de référence comme référence courante
 /// de la session : c'est elle que le pipeline de génération utilisera pour
 /// les prochaines candidatures. Aucune version n'est créée ni supprimée, et
-/// l'analyse de style stockée avec la version est réutilisée (pas d'appel à Claude).
+/// le template stocké avec la version est réutilisé (pas d'appel à Claude).
+/// Une version jamais templatisée devient courante sans template : elle doit
+/// être re-templatisée avant toute génération.
 ///
 /// # Arguments
 ///
@@ -100,7 +102,7 @@ pub async fn restore_version(
         &record.original_filename,
         &record.typst_path,
         Some(&record.pdf_path),
-        Some(&record.style_analysis),
+        record.template.as_ref(),
         record.id,
     )
     .await?;

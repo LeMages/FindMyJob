@@ -22,7 +22,8 @@ use sqlx::PgPool;
 
 // Importation des modules internes
 use crate::db;
-use crate::documents::typst::compile_to_pdf;
+use crate::documents::templatize::{templatize, write_template_files};
+use crate::documents::typst::{compile_document, compile_to_pdf};
 use findmyjob_core::error::AppError;
 use findmyjob_core::models::{DocumentFileInfo, DocumentReferenceView};
 
@@ -121,12 +122,13 @@ pub async fn get_reference(
         .map(DocumentReferenceView::from))
 }
 
-/// Analyse le style du document via l'API Claude, le compile en PDF, puis
-/// l'enregistre comme nouvelle version de référence (fichiers sous
-/// `versions/<version_id>/` + ligne `document_versions`) et en fait la
-/// référence courante de la session. Les versions précédentes sont conservées.
+/// Compile le document, le convertit en template (appel LLM validé par
+/// compilation, voir `documents::templatize`), puis l'enregistre comme
+/// nouvelle version de référence (fichiers sous `versions/<version_id>/` +
+/// ligne `document_versions`) et en fait la référence courante de la
+/// session. Les versions précédentes sont conservées.
 ///
-/// L'analyse de style et la compilation ont lieu avant toute écriture
+/// La compilation et la templatisation ont lieu avant toute écriture
 /// disque : si l'une échoue, rien n'est modifié (ni fichier, ni entrée DB).
 /// Si l'enregistrement en base de la version échoue, ses fichiers sont
 /// supprimés.
@@ -166,48 +168,48 @@ pub async fn save_reference(
     }
 
     // ------------------------------------------------------------------
-    // 1bis. Analyse de style via l'API Claude — placée avant toute
-    //    écriture disque : si l'appel échoue ou renvoie un format
-    //    inattendu, rien n'est créé (ni dossier, ni version, ni fichier).
-    // ------------------------------------------------------------------
-    let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
-
-    on_progress(1, "Analyse du style (IA)…");
-    let style_analysis = findmyjob_core::llm::analyze_style(&content, doc_type, &model).await?;
-
-    // ------------------------------------------------------------------
     // 2. Compilation en PDF, en mémoire (racine = dossier du type de
     //    document, comme les références d'avant le versioning)
     // ------------------------------------------------------------------
-    on_progress(2, "Compilation en PDF…");
+    on_progress(1, "Compilation en PDF…");
     let doc_dir = resolve_doc_dir(data_dir, session_id, doc_type);
     std::fs::create_dir_all(&doc_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
 
-    let root = doc_dir.clone();
-    let fonts_dir = fonts_dir.to_path_buf();
-    let to_compile = content.clone();
-    let pdf_bytes = tokio::task::spawn_blocking(move || compile_to_pdf(to_compile, root, fonts_dir))
-        .await
-        .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
-        .map_err(AppError::Validation)?;
+    let reference = {
+        let (to_compile, root, fonts) = (content.clone(), doc_dir.clone(), fonts_dir.to_path_buf());
+        tokio::task::spawn_blocking(move || compile_document(to_compile, root, fonts))
+            .await
+            .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
+            .map_err(AppError::Validation)?
+    };
 
     // ------------------------------------------------------------------
-    // 3. Écriture des fichiers de la version, dans un dossier nommé par
+    // 3. Conversion en template via l'API Claude, validée par compilation
+    //    — avant toute écriture disque : en cas d'échec, rien n'est créé
+    // ------------------------------------------------------------------
+    on_progress(2, "Conversion en template (IA)…");
+    let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
+    let validated = templatize(&content, &reference, doc_type, &doc_dir, fonts_dir, &model).await?;
+
+    // ------------------------------------------------------------------
+    // 4. Écriture des fichiers de la version, dans un dossier nommé par
     //    l'identifiant réservé en base (jamais réutilisé)
     // ------------------------------------------------------------------
     on_progress(3, "Écriture de la version…");
     let version_id = db::document_versions::reserve_id(pool).await?;
     let version_dir = doc_dir.join("versions").join(version_id.to_string());
-    let written = write_version_files(&version_dir, &content, &pdf_bytes);
+    let written = write_version_files(&version_dir, &content, &reference.pdf).and_then(|paths| {
+        write_template_files(&version_dir, &validated).map(|template| (paths, template))
+    });
 
     // ------------------------------------------------------------------
-    // 4. Enregistrement de la version en base — bloquant : une version
+    // 5. Enregistrement de la version en base — bloquant : une version
     //    sans ligne en base n'existe pas, ses fichiers sont supprimés
     // ------------------------------------------------------------------
     on_progress(4, "Enregistrement de la version…");
     let recorded = match written {
-        Ok((typ_path, pdf_path)) => db::document_versions::insert_version(
+        Ok(((typ_path, pdf_path), template)) => db::document_versions::insert_version(
             pool,
             version_id,
             session_id,
@@ -215,16 +217,16 @@ pub async fn save_reference(
             &filename,
             &typ_path,
             &pdf_path,
-            &style_analysis,
+            &template,
         )
         .await
-        .map(|_| (typ_path, pdf_path)),
+        .map(|_| (typ_path, pdf_path, template)),
         Err(e) => Err(e),
     };
-    let (typ_path, pdf_path) = recorded.inspect_err(|_| discard_version_dir(&version_dir))?;
+    let (typ_path, pdf_path, template) = recorded.inspect_err(|_| discard_version_dir(&version_dir))?;
 
     // ------------------------------------------------------------------
-    // 5. Bascule de la référence courante sur cette version
+    // 6. Bascule de la référence courante sur cette version
     // ------------------------------------------------------------------
     on_progress(5, "Mise à jour de la référence…");
     let doc = db::documents::upsert(
@@ -234,7 +236,7 @@ pub async fn save_reference(
         &filename,
         &typ_path,
         Some(&pdf_path),
-        Some(&style_analysis),
+        Some(&template),
         version_id,
     )
     .await?;
@@ -371,8 +373,10 @@ pub fn read_document_bytes(data_dir: &Path, path: &str) -> Result<Vec<u8>, AppEr
 }
 
 /// Sauvegarde un document généré par le pipeline IA (`crate::pipeline`) à
-/// l'emplacement définitif d'une candidature : le code Typst est conservé à
-/// côté du PDF pour le debug/la traçabilité (`artefact/<candidature_id>.*`).
+/// l'emplacement définitif d'une candidature : le PDF, et à côté les
+/// données passées au template (`artefact/<candidature_id>.{pdf,data.json}`).
+/// La version de template utilisée est tracée en base
+/// (`candidatures.cv_reference_version_id` / `lm_reference_version_id`).
 ///
 /// # Arguments
 ///
@@ -380,8 +384,8 @@ pub fn read_document_bytes(data_dir: &Path, path: &str) -> Result<Vec<u8>, AppEr
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `candidature_id` - Identifiant de la candidature à laquelle rattacher le document.
-/// * `typst` - Code Typst généré (sauvegardé à des fins de traçabilité).
 /// * `pdf` - Octets du PDF compilé.
+/// * `data_json` - Données passées au template.
 ///
 /// # Returns
 ///
@@ -391,16 +395,16 @@ pub fn save_generated_document(
     session_id: i64,
     doc_type: &str,
     candidature_id: i64,
-    typst: &str,
     pdf: &[u8],
+    data_json: &str,
 ) -> Result<String, AppError> {
     let artefact_dir = resolve_doc_dir(data_dir, session_id, doc_type).join("artefact");
     std::fs::create_dir_all(&artefact_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
 
-    let typ_path = artefact_dir.join(format!("{}.typ", candidature_id));
-    std::fs::write(&typ_path, typst.as_bytes())
-        .map_err(|e| AppError::Validation(format!("Écriture du fichier Typst impossible : {}", e)))?;
+    let data_path = artefact_dir.join(format!("{}.data.json", candidature_id));
+    std::fs::write(&data_path, data_json.as_bytes())
+        .map_err(|e| AppError::Validation(format!("Écriture des données du document impossible : {}", e)))?;
 
     let pdf_path = artefact_dir.join(format!("{}.pdf", candidature_id));
     std::fs::write(&pdf_path, pdf)
@@ -409,10 +413,61 @@ pub fn save_generated_document(
     Ok(pdf_path.to_string_lossy().to_string())
 }
 
+/// Dossier de debug d'une génération :
+/// `documents/sessions/<session_id>/debug/<candidature_id>/`.
+fn resolve_debug_dir(data_dir: &Path, session_id: i64, candidature_id: i64) -> PathBuf {
+    data_dir
+        .join("documents")
+        .join("sessions")
+        .join(session_id.to_string())
+        .join("debug")
+        .join(candidature_id.to_string())
+}
+
+/// Écrit les fichiers de trace d'une génération (analyse d'offre, matching,
+/// contenus rédigés, rapports du linter, essais) dans son dossier de debug.
+///
+/// # Arguments
+///
+/// * `data_dir` - Dossier de données de l'application, déjà résolu par l'appelant.
+/// * `session_id` - Identifiant de la session propriétaire.
+/// * `candidature_id` - Identifiant de la candidature.
+/// * `files` - Fichiers à écrire : nom et contenu.
+///
+/// # Returns
+///
+/// Chemin du dossier de debug.
+pub fn save_generation_trace(
+    data_dir: &Path,
+    session_id: i64,
+    candidature_id: i64,
+    files: &[(&str, String)],
+) -> Result<PathBuf, AppError> {
+    let dir = resolve_debug_dir(data_dir, session_id, candidature_id);
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| AppError::Validation(format!("Impossible de créer {} : {e}", dir.display())))?;
+    for (name, content) in files {
+        let path = dir.join(name);
+        std::fs::write(&path, content.as_bytes())
+            .map_err(|e| AppError::Validation(format!("Écriture de {} impossible : {e}", path.display())))?;
+    }
+    Ok(dir)
+}
+
+/// Supprime un fichier, sans erreur s'il est déjà absent.
+fn remove_if_exists(path: &Path) -> Result<(), AppError> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(AppError::Validation(format!("Suppression de {} impossible : {e}", path.display()))),
+    }
+}
+
 /// Supprime les documents générés d'une candidature (CV et lettre de
-/// motivation, `.pdf` et `.typ`) écrits par `save_generated_document`.
-/// Un fichier déjà absent n'est pas une erreur : la génération a pu échouer
-/// avant l'écriture, ou le fichier avoir été supprimé à la main.
+/// motivation : `.pdf`, `.data.json`, et `.typ` des générations antérieures
+/// aux templates) ainsi que son dossier de debug. Un fichier déjà absent
+/// n'est pas une erreur : la génération a pu échouer avant l'écriture, ou
+/// le fichier avoir été supprimé à la main.
 ///
 /// # Arguments
 ///
@@ -427,19 +482,15 @@ pub fn save_generated_document(
 pub fn delete_generated_documents(data_dir: &Path, session_id: i64, candidature_id: i64) -> Result<(), AppError> {
     for doc_type in ["cv", "lettre_motivation"] {
         let artefact_dir = resolve_doc_dir(data_dir, session_id, doc_type).join("artefact");
-        for extension in ["pdf", "typ"] {
-            let path = artefact_dir.join(format!("{candidature_id}.{extension}"));
-            match std::fs::remove_file(&path) {
-                Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => {
-                    return Err(AppError::Validation(format!(
-                        "Suppression de {} impossible : {e}",
-                        path.display()
-                    )))
-                }
-            }
+        for extension in ["pdf", "data.json", "typ"] {
+            remove_if_exists(&artefact_dir.join(format!("{candidature_id}.{extension}")))?;
         }
     }
-    Ok(())
+
+    let debug_dir = resolve_debug_dir(data_dir, session_id, candidature_id);
+    match std::fs::remove_dir_all(&debug_dir) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(AppError::Validation(format!("Suppression de {} impossible : {e}", debug_dir.display()))),
+    }
 }

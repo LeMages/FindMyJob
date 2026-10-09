@@ -6,7 +6,7 @@ pub struct CreateSkillInput {
     pub domaine: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct SkillView {
     pub id: i64,
     pub domaine: String,

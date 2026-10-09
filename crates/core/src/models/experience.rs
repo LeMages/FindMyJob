@@ -2,7 +2,7 @@
 
 use chrono::NaiveDate;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ExperienceView {
     pub id: i64,
     pub poste: String,

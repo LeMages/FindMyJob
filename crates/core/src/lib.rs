@@ -3,6 +3,7 @@
 //! persistance, la génération de documents et la gestion de la clé API
 //! vivent dans les crates qui consomment `core` (ex. `findmyjob-agent`).
 
+pub mod docgen;
 pub mod error;
 pub mod llm;
 pub mod models;

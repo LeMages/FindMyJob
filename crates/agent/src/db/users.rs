@@ -26,11 +26,14 @@ fn row_to_user(row: &PgRow) -> Result<UserView, sqlx::Error> {
         email: row.try_get("email")?,
         telephone: row.try_get("telephone")?,
         ville: row.try_get("ville")?,
+        adresse: row.try_get("adresse")?,
+        code_postal: row.try_get("code_postal")?,
         permis: row.try_get("permis")?,
         description: row.try_get("description")?,
         linkedin: row.try_get("linkedin")?,
         github: row.try_get("github")?,
         portfolio: row.try_get("portfolio")?,
+        interets: row.try_get("interets")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
     })
@@ -47,8 +50,8 @@ fn row_to_user(row: &PgRow) -> Result<UserView, sqlx::Error> {
 /// `UserView`, ou `AppError::NotFound` si le profil n'a pas encore été créé.
 pub async fn fetch_first_user(pool: &PgPool) -> Result<UserView, AppError> {
     let row = sqlx::query(
-        "SELECT id, nom, prenom, email, telephone, ville, permis, description, \
-         linkedin, github, portfolio, created_at, updated_at \
+        "SELECT id, nom, prenom, email, telephone, ville, adresse, code_postal, permis, \
+         description, linkedin, github, portfolio, interets, created_at, updated_at \
          FROM profile.users LIMIT 1",
     )
     .fetch_optional(pool)
@@ -165,7 +168,8 @@ pub async fn update_description(
 /// Met à jour les informations de contact du profil.
 ///
 /// Les champs `None` conservent leur valeur existante (`COALESCE`), à l'exception
-/// de `telephone` et `permis` qui sont toujours remplacés (y compris par `None`).
+/// de `telephone`, `adresse`, `code_postal`, `interets` et `permis` qui sont
+/// toujours remplacés (y compris par `None`).
 /// `linkedin`, `github` et `portfolio` suivent le même comportement `COALESCE` que
 /// `prenom`/`nom`/`email` : un champ vidé côté client (`None`) ne l'efface pas en base.
 ///
@@ -197,7 +201,10 @@ pub async fn update_user_info(
            permis    = $5, \
            linkedin  = COALESCE($6, linkedin), \
            github    = COALESCE($7, github), \
-           portfolio = COALESCE($8, portfolio) \
+           portfolio = COALESCE($8, portfolio), \
+           adresse   = $9, \
+           code_postal = $10, \
+           interets  = $11 \
          WHERE id = (SELECT id FROM profile.users LIMIT 1)",
     )
     .bind(normalize(input.prenom))
@@ -208,6 +215,9 @@ pub async fn update_user_info(
     .bind(normalize(input.linkedin))
     .bind(normalize(input.github))
     .bind(normalize(input.portfolio))
+    .bind(normalize(input.adresse))
+    .bind(normalize(input.code_postal))
+    .bind(normalize(input.interets))
     .execute(pool)
     .await
     .map_err(map_db_err)?;

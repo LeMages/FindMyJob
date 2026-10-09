@@ -16,7 +16,7 @@ pub struct CreateUserInput {
     pub portfolio: Option<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct UserView {
     pub id: i64,
     pub nom: Option<String>,
@@ -24,11 +24,15 @@ pub struct UserView {
     pub email: Option<String>,
     pub telephone: Option<String>,
     pub ville: Option<String>,
+    pub adresse: Option<String>,
+    pub code_postal: Option<String>,
     pub permis: Option<bool>,
     pub description: Option<String>,
     pub linkedin: Option<String>,
     pub github: Option<String>,
     pub portfolio: Option<String>,
+    /// Centres d'intérêt, une ligne = un item.
+    pub interets: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -39,8 +43,15 @@ pub struct UpdateUserInfoInput {
     pub nom: Option<String>,
     pub email: Option<String>,
     pub telephone: Option<String>,
+    #[serde(default)]
+    pub adresse: Option<String>,
+    #[serde(default)]
+    pub code_postal: Option<String>,
     pub permis: Option<bool>,
     pub linkedin: Option<String>,
     pub github: Option<String>,
     pub portfolio: Option<String>,
+    /// Centres d'intérêt, une ligne = un item.
+    #[serde(default)]
+    pub interets: Option<String>,
 }

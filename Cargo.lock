@@ -1424,7 +1424,10 @@ dependencies = [
  "toml 0.8.2",
  "tower-http",
  "typst-as-lib",
+ "typst-layout",
+ "typst-library",
  "typst-pdf",
+ "typst-syntax",
 ]
 
 [[package]]

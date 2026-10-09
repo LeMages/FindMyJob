@@ -47,7 +47,8 @@ Pure business logic: models, LLM calls, HTML scraping helpers. No database depen
 crates/core/src/
   lib.rs
   error.rs        AppError shared by both crates that use core
-  llm/            Claude client, prompt assembly per pipeline step, matching, style analysis
+  docgen/         pure document-pipeline logic: budgets, linter, selection, period/date formatting, text diff
+  llm/            Claude client, prompt assembly per pipeline step (templatization, matching, writing, label translation)
   models/         serde DTOs re-exported for both the API and the Tauri commands
   scraping/       HTML fetch (fetch.rs) + text extraction (extract.rs)
 ```
@@ -59,9 +60,10 @@ Headless binary crate: an Axum HTTP server that owns all persistence, the offers
 ```
 crates/agent/src/
   main.rs, config.rs, pipeline.rs, scheduler.rs, security.rs, logging.rs
+  docgen/         deterministic document assembly: cv_data/lm_data builders, labels cache, page fitting, trace
   api/            22 route modules + mod.rs (router, auth middleware, CORS, error mapping)
   db/             one file per table + common.rs, config.rs, init.rs
-  documents/      Typst compilation + on-disk document storage (fonts.rs, storage.rs, typst.rs)
+  documents/      Typst compilation, reference templatization, on-disk document storage
   filtering/      mechanical filter + LLM scoring for scraped offers
   scraping/       job board scrapers (wttj.rs today) behind a JobScraper trait
 ```
@@ -204,18 +206,31 @@ The API exposes the resulting queue (`GET /api/offers`, `GET /api/offers/{id}`, 
 
 ## 8. Documents pipeline (CV / cover letter tailoring)
 
-Each session owns one reference CV and one reference cover letter, stored under `documents/sessions/<session_id>/{cv,lettre_motivation}/` on the agent's `DATA_DIR`. One reference document per type and per session.
+Each session owns one reference CV and one reference cover letter, stored under `documents/sessions/<session_id>/{cv,lettre_motivation}/` on the agent's `DATA_DIR`. The user's reference `.typ` is never modified: it serves as a style and layout model only. **The profile in the database is the only source of facts** — no value from the reference (name, company, address, figures) ever appears in a generated document.
 
-- **Saving a reference** (`crates/agent/src/documents/storage.rs::save_reference`) — style analysis via Claude runs first and blocks the write: a failed analysis writes nothing to disk. The `.typ` is then compiled to `.pdf` in memory and stored as an immutable version under `<doc_type>/versions/<version_id>/reference.{typ,pdf}`, tracked in `search.document_versions` (with its style analysis); `search.documents` points to the current version via `current_version_id`. Previous versions are kept and can be restored as the current reference (`documents/reference_versions.rs`, `POST /api/sessions/{id}/documents/{cv|lm}/versions/{version}/restore`). Each candidature records the reference versions its documents were generated from (`cv_reference_version_id` / `lm_reference_version_id`).
-- **Style analysis** (`crates/core/src/llm/style.rs::analyze_style`) sends the `.typ` source to Claude with a JSON schema covering section order, formatting (bullet style, person, tense, length), tone, design (layout, icons, photo, color), and Typst-specific patterns (custom functions/packages/fonts). The result is cached in `documents.style_analysis` and reused by the generation pipeline.
-- **Generation pipeline** (`crates/agent/src/pipeline.rs::generate_documents`, triggered from `POST /api/candidatures` when the session's references are already style-analyzed) chains:
-  1. Offer analysis (`core::llm::offer::analyze_offer`).
-  2. Profile matching (`core::llm::matching::match_profile`) — which experiences/projects/skills to foreground.
-  3. Content generation (`core::llm::content::generate_cv_content` / `generate_lm_content`) — **currently sequential**, not `tokio::try_join!`; see §12 for why.
-  4. Typst assembly (`core::llm::assemble::assemble_typst`) for CV and cover letter in parallel (`tokio::try_join!`), injecting the candidate's real contact details to avoid placeholders.
-  5. Compilation with one retry: on a Typst compile error, `core::llm::assemble::fix_typst` attempts a fix from the compiler errors plus the reference document as a style guide, then recompiles once more before giving up.
-- **Compilation** itself uses the `typst-as-lib` crate (`crates/agent/src/documents/typst.rs`) inside `spawn_blocking` — no external `typst` binary is shelled out — with a filesystem resolver rooted at the document's folder and fonts drawn from system fonts, `typst-kit` embedded fonts, and any fonts imported via `POST /api/fonts`.
-- **Generated artifacts** for a specific application live under `.../artefact/<candidature_id>.{typ,pdf}`, with the `.typ` kept alongside the `.pdf` for debugging.
+### 8.1 Templatization, at upload
+
+- **Saving a reference** (`documents/storage.rs::save_reference`) compiles the `.typ`, then converts it into a template (`documents/templatize.rs::templatize`, one Claude call with structured output, `core::llm::templatize`). Both happen before any disk write: a failure writes nothing. The version is stored under `<doc_type>/versions/<version_id>/` as `reference.{typ,pdf}`, `template.typ` and `example_data.json`, tracked in `search.document_versions` (`template_path`, `example_data_path`, `page_count`); `search.documents` points to the current version. Versions can be restored (`documents/reference_versions.rs`), and `POST /api/sessions/{id}/documents/{cv|lm}/templatize` re-templatizes the current reference without a new upload.
+- **`template.typ`** is the same document with every content value read from a `data.json` file following a canonical schema (`core::models::doc_data`: `CvData`, `LmData`, identical for every user; fixed texts such as section titles or the closing formula live in `labels`). Lists are rendered with loops, an empty optional field hides its whole line without orphan separators, values are inserted as strings (never evaluated as markup), and the letter date comes from the data.
+- **`example_data.json`** is the reference's content in that schema, plus `detected_lang` and, for a CV, `period_style` (month or year per section). It is the style model and the source of the length budgets — never a source of facts.
+- **Validation** (`documents/templatize.rs`): the template must load `data.json` and must not use `eval`, `datetime.today` or `read`; rendered with `example_data`, it must not exceed the reference's page count and must render the same words as the reference, except the text the model declares it dropped (`dropped_text`, elements with no field in the schema — never a dated CV entry) and a date computed by the reference; rendered with empty data, it must compile and show no word (proof that nothing is hard-coded). Failures are sent back as feedback (compiler errors with the offending line, missing/extra words), 2 retries at most, then the upload fails with the last problems. `page_count` is the page count of the template rendered with its example data.
+- A reference is **ready** (`references_ready`, `DocumentsStatus`) once its template exists.
+
+### 8.2 Generation, per application
+
+`crates/agent/src/pipeline.rs::generate_documents`, triggered from `POST /api/candidatures`:
+
+1. Offer analysis (`core::llm::offer::analyze_offer`); its `language` is the documents' language.
+2. Matching (`core::llm::matching::match_profile`), then selection (`core::docgen::selection::select`): every experience is kept, plus the N most relevant projects (N = number of projects in the reference). `highlights` / `keywords_covered` / `match_type` steer what to say; they are not text to copy.
+3. Budgets (`core::docgen::budgets`) from `example_data`: exact element counts (paragraphs, projects, skill groups, bullets per entry by rank), word counts at ±10 %, page count.
+4. Labels in the offer's language: the reference's own labels, or a Claude translation cached per reference version and language (`docgen/labels_cache.rs`, `labels.<lang>.{cv,lm}.json`).
+5. Writing, CV and letter in parallel (`tokio::try_join!`): `core::llm::cv_writing::write_cv` (title, summary, bullets per selected entry id, skill groups) and `core::llm::lm_writing::write_lm` (subject, paragraphs). Prompts carry the offer analysis, the selected profile facts, the reference's prose clearly delimited as a style model, the budgets and the target language. Each output is reviewed (`core::llm::writing_loop`): blocking validation (ids match the selection, every skill exists in the profile, no empty field) plus the linter (`core::docgen::lint`: em/en dashes, Markdown bold, backticks, forbidden phrases from `core::docgen::forbidden_phrases` unless present in the reference, budgets). Violations trigger a new call with the previous output and the problem list, 2 retries at most; after the last one, remaining dashes are replaced mechanically and other lint violations are logged without blocking.
+6. Deterministic assembly (`docgen/build_cv_data.rs`, `docgen/build_lm_data.rs`): identity, titles, companies, periods (`core::docgen::period_format`, in the reference's style), education, languages, interests and recipient (company, location, contact — only what the database holds, `docgen/recipient.rs`) come from Rust; prose comes from step 5.
+7. Compilation of `template.typ` with the data (`docgen/page_fit.rs`): if the PDF exceeds the reference's page count, writing is re-run with budgets reduced by 15 % (cumulative), twice at most, then the document is kept with a warning.
+
+No LLM produces Typst during generation. **Compilation** uses `typst-as-lib` (`documents/typst.rs`) inside `spawn_blocking`, serving the data as a virtual `data.json` file, with fonts from the system, `typst-kit` embedded fonts and fonts imported via `POST /api/fonts`.
+
+**Artifacts**: `.../artefact/<candidature_id>.pdf` and `.data.json` (the template version is `candidatures.{cv,lm}_reference_version_id`). **Trace**: `documents/sessions/<session_id>/debug/<candidature_id>/` holds `offer_analysis.json`, `matching.json`, `selection.json`, `budgets.json`, `cv_content.json`, `lm_content.json`, `lint_report.json` and `attempts.json`.
 
 ## 9. AI layer
 
@@ -224,8 +239,8 @@ Each session owns one reference CV and one reference cover letter, stored under 
 Raw HTTP calls to Anthropic's Messages API (`https://api.anthropic.com/v1/messages`, header `anthropic-version: 2023-06-01`) via `reqwest` — there is no official Rust SDK for the Anthropic API. The key is read from `ANTHROPIC_API_KEY` on every call; on the agent side, `crates/agent/src/security.rs` is the sole writer/reader-of-record (backed by `.env` in development, mutable at runtime through `PUT /api/settings/api-key`).
 
 - `thinking` is explicitly disabled on every request: the pipeline is a single-turn structured generation, and extended thinking shares the same output token budget as the visible response — leaving it on by default truncated responses before any useful content.
-- Structured outputs (JSON Schema) are used wherever a schema is provided, to guarantee a strictly conformant response (offer analysis, matching, style analysis, CV/LM content).
-- `MAX_TOKENS = 8192` by default; a higher explicit cap is used for steps producing full Typst documents.
+- Structured outputs (JSON Schema) are used wherever a schema is provided, to guarantee a strictly conformant response (offer analysis, matching, templatization, CV/LM writing, label translation). The API caps the compiled grammar size: the templatization schema for a CV sits close to that cap, so fixed-value fields are plain strings checked in Rust rather than `enum`s.
+- `MAX_TOKENS = 8192` by default; templatization (full template + example data in one response) uses 16384.
 - Two explicit failure cases are turned into a clear `AppError::Llm` rather than a downstream JSON-parsing error: `stop_reason == "refusal"` (safety classifier) and `stop_reason == "max_tokens"` (truncated response).
 
 ### Application message drafting (`core::llm::candidature_message`)
@@ -265,7 +280,7 @@ Every file under `crates/desktop/src-tauri/src/commands/` follows the same shape
 ### Implemented end-to-end
 
 - Onboarding and full profile management (experiences, formations, languages, projects, skills).
-- Sessions: CRUD, reference CV/cover letter per session (import, compile, style analysis, version history with restore, PDF preview).
+- Sessions: CRUD, reference CV/cover letter per session (import, compile, templatization, version history with restore, PDF preview).
 - Applications: creation with mandatory AI-generated documents (failure blocks creation), table view per session, editable detail while `a_postuler`, typed timeline, interview management, trash for negative terminal statuses.
 - Apply flow: no message / by mail / by message, all exporting documents to disk.
 - Offer import from a pasted URL or pasted text, prefilling the new-application form.
@@ -307,8 +322,7 @@ Conventional Commits drive automated versioning: `<type>(<scope>): <description>
 
 ## 14. Known gaps and points of attention
 
-- `crates/agent/src/pipeline.rs:169` carries a `[DIAG-TEMP]` comment: CV/cover-letter content generation was deliberately made sequential instead of `tokio::try_join!`, to rule out a concurrency race during a specific diagnosis. Not yet reverted — check whether the diagnosis concluded before "fixing" it back to parallel.
-- CI's `rust` job runs `cargo test --workspace` on every PR, but the repository currently has zero `#[test]`/`#[tokio::test]` functions — the job passes vacuously and should not be read as real coverage.
+- CI's `rust` job runs `cargo test --workspace` on every PR. Coverage is limited to offer-text conversion and the documents pipeline's pure logic (budgets, linter, selection, periods, text diff, writing validation, `cv_data`/`lm_data` builders, template compilation on a fixture); no test calls the LLM or the database.
 - The root `Cargo.toml` still declares the `sqlite` feature on the shared `sqlx` dependency even though no crate uses SQLite anymore (only `postgres` is actually pulled in, by `crates/agent`) — harmless but worth cleaning up.
 - The `vector` (pgvector) Postgres extension is loaded by migration `0001` but nothing uses it: the one column that did, `offers.embedding`, was dropped by migration `0004`. Profile-to-offer matching goes through an LLM call today, not vector similarity.
 - `db/schema.png` is a static image, not regenerated automatically from `db/schema.dbml` — verify it still matches before relying on it visually.

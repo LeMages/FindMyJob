@@ -1,247 +1,360 @@
 //! Orchestration du pipeline de génération de documents (CV + lettre de
-//! motivation) pour une candidature : enchaîne les 6 appels LLM du crate
-//! `findmyjob-core` (module `llm`), compile le Typst produit en PDF, et
-//! retry une fois la compilation en cas d'échec. Tout est synchrone dans
-//! l'appelant (pas de queue).
+//! motivation) pour une candidature :
+//!
+//! 1. analyse de l'offre (LLM) ;
+//! 2. matching du profil (LLM), puis sélection des entrées (Rust) ;
+//! 3. rédaction de la prose du CV et de la lettre en parallèle (LLM, avec
+//!    linter et retry), dans le style de la référence et sous budgets ;
+//! 4. assemblage déterministe des données (Rust) et compilation du template
+//!    de chaque référence, avec ajustement au nombre de pages.
+//!
+//! Aucun LLM ne produit de Typst pendant la génération. Rien n'est écrit sur
+//! disque ni en base ici : c'est à l'appelant de persister le résultat.
 
 // Importation des modules standard
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // Importation des crates externes
 use sqlx::PgPool;
 
 // Importation des modules internes
 use crate::db;
-use crate::documents::compile_to_pdf;
+use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
+use crate::docgen::build_lm_data::build_lm_data;
+use crate::docgen::labels_cache::{resolve_cv_labels, resolve_lm_labels, ResolvedLabels};
+use crate::docgen::page_fit::{fit_to_pages, CompileTarget, FittedDocument};
+use crate::docgen::recipient::build_recipient;
+use crate::docgen::reference_template::{load_reference, ReferenceTemplate};
+use crate::docgen::trace::{DocumentTrace, GenerationTrace};
+use findmyjob_core::docgen::budgets::{cv_budget, lm_budget, CvBudget, LmBudget};
+use findmyjob_core::docgen::period_format::detect_separator;
+use findmyjob_core::docgen::selection::{select, Selection};
 use findmyjob_core::error::AppError;
-use findmyjob_core::llm::{assemble, content, matching, offer};
-use findmyjob_core::models::Document;
+use findmyjob_core::llm::cv_writing::{write_cv, CvWritingInput};
+use findmyjob_core::llm::lm_writing::{write_lm, LmWritingInput};
+use findmyjob_core::llm::matching::match_profile;
+use findmyjob_core::llm::offer::analyze_offer;
+use findmyjob_core::llm::writing_loop::WritingOutcome;
+use findmyjob_core::models::{
+    CvContent, CvExampleData, CvLabels, LmContent, LmExampleData, LmLabels, MatchingResult, OfferView, ProfileDto,
+    Recipient,
+};
 
-/// Documents générés et compilés pour une candidature, prêts à être
-/// sauvegardés sur disque par l'appelant, avec les versions de référence
-/// (`document_versions.id`) dont ils sont issus — `None` pour une référence
-/// antérieure au versioning.
+/// Nombre total d'étapes de `generate_documents`, communiqué à l'appelant
+/// pour calculer une progression (`current_step`/`total_steps`). Les
+/// relances (linter, pages) restent sur leur étape.
+pub const GENERATION_STEPS_TOTAL: u8 = 5;
+
+/// Langues de document prises en charge ; une autre valeur d'analyse
+/// d'offre retombe sur la langue de la référence.
+const SUPPORTED_LANGS: [&str; 2] = ["fr", "en"];
+
+/// Document généré, prêt à être sauvegardé.
+///
+/// # Attributes
+///
+/// * `pdf` - Octets du PDF compilé.
+/// * `data_json` - Données passées au template (`data.json`).
+/// * `reference_version_id` - Version de référence (et de template) utilisée.
+pub struct GeneratedDocument {
+    pub pdf: Vec<u8>,
+    pub data_json: String,
+    pub reference_version_id: Option<i64>,
+}
+
+/// Documents générés pour une candidature, avec leur trace.
 pub struct GeneratedDocuments {
-    pub cv_typst: String,
-    pub cv_pdf: Vec<u8>,
-    pub lm_typst: String,
-    pub lm_pdf: Vec<u8>,
-    pub cv_reference_version_id: Option<i64>,
-    pub lm_reference_version_id: Option<i64>,
+    pub cv: GeneratedDocument,
+    pub lm: GeneratedDocument,
+    pub trace: GenerationTrace,
 }
 
-/// Récupère le document de référence d'un type donné pour la session,
-/// et vérifie qu'il porte bien une analyse de style déjà calculée
-/// (calculée à la sauvegarde de la référence, voir `documents::save_reference`).
+/// Paramètres d'une génération.
 ///
-/// # Arguments
+/// # Attributes
 ///
-/// * `pool` - Pool de connexions PostgreSQL.
-/// * `session_id` - Identifiant de la session propriétaire.
-/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
-/// * `label` - Libellé lisible du type de document, pour le message d'erreur.
-///
-/// # Returns
-///
-/// Le `Document` de référence, garanti avec `style_analysis: Some(_)`.
-async fn require_reference(
-    pool: &PgPool,
-    session_id: i64,
-    doc_type: &str,
-    label: &str,
-) -> Result<Document, AppError> {
-    db::documents::get_by_session_and_type(pool, session_id, doc_type)
-        .await?
-        .filter(|d| d.style_analysis.is_some())
-        .ok_or_else(|| {
-            AppError::Validation(format!(
-                "Veuillez d'abord importer votre {label} de référence dans les paramètres de session."
-            ))
-        })
+/// * `session_id` - Session de la candidature (fournit les références).
+/// * `candidature_id` - Candidature (fournit le destinataire).
+/// * `description_offre` - Texte brut de l'offre.
+pub struct GenerationRequest<'a> {
+    pub session_id: i64,
+    pub candidature_id: i64,
+    pub description_offre: &'a str,
 }
 
-/// Compile un document Typst en PDF, et retente une fois après correction
-/// automatique (`assemble::fix_typst`) si la première compilation échoue.
-///
-/// # Arguments
-///
-/// * `code` - Code Typst à compiler.
-/// * `original_typst` - Document Typst de référence, transmis à `fix_typst` comme référence de syntaxe.
-/// * `root` - Dossier racine pour la résolution des imports/images relatifs du template.
-/// * `fonts_dir` - Dossier des polices importées par l'utilisateur.
-/// * `model` - Identifiant du modèle Claude à utiliser pour la correction éventuelle.
-///
-/// # Returns
-///
-/// Le code Typst final (corrigé ou non) et les octets du PDF compilé.
-async fn compile_with_retry(
-    code: String,
-    original_typst: &str,
-    root: PathBuf,
-    fonts_dir: PathBuf,
-    model: &str,
-) -> Result<(String, Vec<u8>), AppError> {
-    let first_attempt = {
-        let code = code.clone();
-        let root = root.clone();
-        let fonts_dir = fonts_dir.clone();
-        tokio::task::spawn_blocking(move || compile_to_pdf(code, root, fonts_dir))
-            .await
-            .map_err(|e| AppError::Llm(format!("Erreur interne de compilation Typst : {e}")))?
+/// Construit le destinataire de la lettre depuis la candidature, son offre
+/// source et ses contacts.
+async fn load_recipient(pool: &PgPool, candidature_id: i64) -> Result<Recipient, AppError> {
+    let candidature = db::candidatures::fetch_detail(pool, candidature_id).await?;
+    let offer: Option<OfferView> = match candidature.offer_id {
+        Some(offer_id) => match db::offers::fetch_one(pool, offer_id).await {
+            Ok(offer) => Some(offer),
+            // Une offre supprimée entre-temps prive seulement le destinataire
+            // d'un repli : la candidature garde ses propres champs.
+            Err(AppError::NotFound(_)) => None,
+            Err(e) => return Err(e),
+        },
+        None => None,
     };
+    let contacts = db::contacts::list_for_candidature(pool, candidature_id).await?;
+    Ok(build_recipient(&candidature, offer.as_ref(), &contacts))
+}
 
-    match first_attempt {
-        Ok(pdf) => Ok((code, pdf)),
-        Err(compiler_errors) => {
-            let fixed_code = assemble::fix_typst(&code, &compiler_errors, original_typst, model).await?;
+/// Langue du document : celle de l'offre si elle est prise en charge,
+/// sinon celle de la référence.
+fn target_language(offer_analysis: &str, fallback: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(offer_analysis)
+        .ok()
+        .and_then(|v| v.get("language").and_then(|l| l.as_str()).map(str::to_string))
+        .filter(|lang| SUPPORTED_LANGS.contains(&lang.as_str()))
+        .unwrap_or_else(|| fallback.to_string())
+}
 
-            let retry_result = {
-                let code = fixed_code.clone();
-                tokio::task::spawn_blocking(move || compile_to_pdf(code, root, fonts_dir))
-                    .await
-                    .map_err(|e| AppError::Llm(format!("Erreur interne de compilation Typst : {e}")))?
-            };
+/// Convertit un document ajusté en trace et en document à sauvegarder.
+fn finish<C>(
+    fitted: FittedDocument<C>,
+    reference_version_id: Option<i64>,
+    labels_translated: bool,
+) -> (GeneratedDocument, DocumentTrace<C>) {
+    let trace = DocumentTrace {
+        content: fitted.writing.content,
+        rounds: fitted.rounds,
+        residual_violations: fitted.writing.residual_violations,
+        page_count: fitted.page_count,
+        page_retries: fitted.page_retries,
+        warning: fitted.warning,
+        labels_translated,
+    };
+    (GeneratedDocument { pdf: fitted.pdf, data_json: fitted.data_json, reference_version_id }, trace)
+}
 
-            retry_result.map(|pdf| (fixed_code.clone(), pdf)).map_err(|retry_errors| {
-                AppError::Llm(format!(
-                    "La compilation Typst a échoué après une tentative de correction.\n\
-                     Erreurs du compilateur : {retry_errors}\n\nCode Typst généré :\n{fixed_code}"
-                ))
-            })
+/// Tout ce que la rédaction et l'assemblage partagent, préparé une fois.
+///
+/// # Attributes
+///
+/// * `profile` - Profil complet du candidat.
+/// * `model` - Modèle Claude configuré.
+/// * `cv_ref`, `lm_ref` - Références templatisées.
+/// * `recipient` - Destinataire de la lettre.
+/// * `offer_analysis` - Analyse de l'offre (JSON).
+/// * `lang` - Langue des documents.
+/// * `matching`, `selection` - Matching et entrées retenues.
+/// * `cv_budget`, `lm_budget` - Budgets initiaux.
+/// * `cv_labels`, `lm_labels` - Libellés dans la langue des documents.
+struct GenerationContext {
+    profile: ProfileDto,
+    model: String,
+    cv_ref: ReferenceTemplate<CvExampleData>,
+    lm_ref: ReferenceTemplate<LmExampleData>,
+    recipient: Recipient,
+    offer_analysis: String,
+    lang: String,
+    matching: MatchingResult,
+    selection: Selection,
+    cv_budget: CvBudget,
+    lm_budget: LmBudget,
+    cv_labels: ResolvedLabels<CvLabels>,
+    lm_labels: ResolvedLabels<LmLabels>,
+}
+
+impl GenerationContext {
+    /// Entrées de la rédaction du CV pour un budget donné.
+    fn cv_input(&self, budget: CvBudget) -> CvWritingInput<'_> {
+        CvWritingInput {
+            offer_analysis: &self.offer_analysis,
+            matching: &self.matching,
+            selection: &self.selection,
+            profile: &self.profile,
+            example: &self.cv_ref.example.data,
+            budget,
+            target_lang: &self.lang,
+            example_lang: &self.cv_ref.example.detected_lang,
+        }
+    }
+
+    /// Entrées de la rédaction de la lettre pour un budget donné.
+    fn lm_input(&self, budget: LmBudget) -> LmWritingInput<'_> {
+        LmWritingInput {
+            offer_analysis: &self.offer_analysis,
+            matching: &self.matching,
+            selection: &self.selection,
+            profile: &self.profile,
+            example: &self.lm_ref.example.data,
+            budget,
+            company: &self.recipient.company,
+            target_lang: &self.lang,
+            example_lang: &self.lm_ref.example.detected_lang,
         }
     }
 }
 
-/// Nombre total d'étapes de `generate_documents`, communiqué à l'appelant
-/// pour calculer une progression (`current_step`/`total_steps`) — un retry
-/// de compilation (`compile_with_retry`) reste sur son étape, il n'en ajoute
-/// pas une septième.
-pub const GENERATION_STEPS_TOTAL: u8 = 6;
+/// Étapes 1 et 2 : profil, références, destinataire, analyse de l'offre,
+/// matching, sélection, budgets et libellés.
+async fn prepare(
+    pool: &PgPool,
+    request: &GenerationRequest<'_>,
+    on_progress: &impl Fn(u8, &str),
+) -> Result<GenerationContext, AppError> {
+    // ------------------------------------------------------------------
+    // 1. Profil, modèle, références templatisées, destinataire
+    // ------------------------------------------------------------------
+    let profile = db::profile::build_profile(pool).await?;
+    let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
+    let cv_ref: ReferenceTemplate<CvExampleData> = load_reference(pool, request.session_id, "cv", "CV").await?;
+    let lm_ref: ReferenceTemplate<LmExampleData> =
+        load_reference(pool, request.session_id, "lettre_motivation", "lettre de motivation").await?;
+    let recipient = load_recipient(pool, request.candidature_id).await?;
 
-/// Génère le CV et la lettre de motivation adaptés à une offre, pour la
-/// candidature en cours de création.
-///
-/// Enchaîne : analyse de l'offre → matching du profil → rédaction du contenu
-/// (CV puis lettre) → assemblage Typst + compilation PDF, document par
-/// document (CV puis lettre — séquentiel plutôt qu'en parallèle, pour que
-/// `on_progress` reflète une progression par étape lisible côté UI).
-/// Aucune étape n'écrit sur le disque ni en base : c'est à l'appelant de
-/// persister le résultat une fois la candidature créée.
+    // ------------------------------------------------------------------
+    // 2. Analyse de l'offre, matching, sélection et budgets
+    // ------------------------------------------------------------------
+    on_progress(1, "Analyse de l'offre…");
+    let offer_analysis = analyze_offer(request.description_offre, &model).await?;
+    let lang = target_language(&offer_analysis, &cv_ref.example.detected_lang);
+
+    on_progress(2, "Matching profil / offre…");
+    let project_count = cv_ref.example.data.projects.len();
+    let matching = match_profile(&offer_analysis, &profile, project_count, &model).await?;
+    let selection = select(&profile, &matching, project_count);
+    let cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count);
+    let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count);
+
+    // ------------------------------------------------------------------
+    // 3. Libellés dans la langue de l'offre (traduits et mis en cache si besoin)
+    // ------------------------------------------------------------------
+    let (cv_labels, lm_labels) = tokio::try_join!(
+        resolve_cv_labels(&cv_ref.example.data.labels, &cv_ref.example.detected_lang, &lang, &cv_ref.dir, &model),
+        resolve_lm_labels(&lm_ref.example.data.labels, &lm_ref.example.detected_lang, &lang, &lm_ref.dir, &model),
+    )?;
+
+    Ok(GenerationContext {
+        profile,
+        model,
+        cv_ref,
+        lm_ref,
+        recipient,
+        offer_analysis,
+        lang,
+        matching,
+        selection,
+        cv_budget,
+        lm_budget,
+        cv_labels,
+        lm_labels,
+    })
+}
+
+/// Assemble, compile et ajuste le CV au nombre de pages de la référence.
+async fn produce_cv(
+    ctx: &GenerationContext,
+    writing: WritingOutcome<CvContent>,
+    fonts_dir: &Path,
+) -> Result<FittedDocument<CvContent>, AppError> {
+    let separator = detect_separator(ctx.cv_ref.example.data.experiences.iter().map(|e| e.period.as_str()));
+    let layout = CvLayout {
+        labels: &ctx.cv_labels.labels,
+        period_style: &ctx.cv_ref.example.period_style,
+        separator: &separator,
+        lang: &ctx.lang,
+    };
+    let target = CompileTarget {
+        label: "CV",
+        template: &ctx.cv_ref.template,
+        root: &ctx.cv_ref.dir,
+        fonts_dir,
+        max_pages: ctx.cv_ref.page_count,
+    };
+    fit_to_pages(
+        &target,
+        writing,
+        |content| build_cv_data(&ctx.profile, &ctx.selection, content, &layout),
+        |factor| {
+            let input = ctx.cv_input(ctx.cv_budget.scaled(factor));
+            async move { write_cv(&input, &ctx.model).await }
+        },
+    )
+    .await
+}
+
+/// Assemble, compile et ajuste la lettre au nombre de pages de la référence.
+async fn produce_lm(
+    ctx: &GenerationContext,
+    writing: WritingOutcome<LmContent>,
+    fonts_dir: &Path,
+) -> Result<FittedDocument<LmContent>, AppError> {
+    let today = chrono::Local::now().date_naive();
+    let target = CompileTarget {
+        label: "lettre",
+        template: &ctx.lm_ref.template,
+        root: &ctx.lm_ref.dir,
+        fonts_dir,
+        max_pages: ctx.lm_ref.page_count,
+    };
+    fit_to_pages(
+        &target,
+        writing,
+        |content| build_lm_data(&ctx.profile, &ctx.recipient, content, &ctx.lm_labels.labels, today, &ctx.lang),
+        |factor| {
+            let input = ctx.lm_input(ctx.lm_budget.scaled(factor));
+            async move { write_lm(&input, &ctx.model).await }
+        },
+    )
+    .await
+}
+
+/// Construit le résultat et sa trace.
+fn into_result(
+    ctx: GenerationContext,
+    cv_fitted: FittedDocument<CvContent>,
+    lm_fitted: FittedDocument<LmContent>,
+) -> GeneratedDocuments {
+    let (cv, cv_trace) = finish(cv_fitted, ctx.cv_ref.version_id, ctx.cv_labels.translated);
+    let (lm, lm_trace) = finish(lm_fitted, ctx.lm_ref.version_id, ctx.lm_labels.translated);
+    let offer_analysis = serde_json::from_str(&ctx.offer_analysis)
+        .unwrap_or_else(|_| serde_json::Value::String(ctx.offer_analysis.clone()));
+    let trace = GenerationTrace {
+        offer_analysis,
+        experience_ids: ctx.selection.experience_ids(),
+        project_ids: ctx.selection.project_ids(),
+        matching: ctx.matching,
+        cv_budget: ctx.cv_budget,
+        lm_budget: ctx.lm_budget,
+        cv: cv_trace,
+        lm: lm_trace,
+    };
+    GeneratedDocuments { cv, lm, trace }
+}
+
+/// Génère le CV et la lettre de motivation adaptés à une offre.
 ///
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions PostgreSQL.
-/// * `fonts_dir` - Dossier des polices importées par l'utilisateur, déjà résolu par l'appelant.
-/// * `session_id` - Identifiant de la session (fournit les documents de référence).
-/// * `description_offre` - Texte brut de l'offre d'emploi.
-/// * `on_progress` - Callback appelée à chaque étape (`step` 1-based, libellé), pour reporter la progression à l'appelant.
+/// * `fonts_dir` - Dossier des polices importées par l'utilisateur.
+/// * `request` - Session, candidature et texte de l'offre.
+/// * `on_progress` - Callback appelée à chaque étape (`step` 1-based, libellé).
 ///
 /// # Returns
 ///
-/// `GeneratedDocuments` avec le Typst et le PDF de chaque document.
+/// `GeneratedDocuments`.
 pub async fn generate_documents(
     pool: &PgPool,
     fonts_dir: &Path,
-    session_id: i64,
-    description_offre: &str,
+    request: GenerationRequest<'_>,
     on_progress: impl Fn(u8, &str),
 ) -> Result<GeneratedDocuments, AppError> {
-    let fonts_dir = fonts_dir.to_path_buf();
+    let ctx = prepare(pool, &request, &on_progress).await?;
 
-    // ------------------------------------------------------------------
-    // 1. Profil candidat, modèle configuré, documents de référence
-    // ------------------------------------------------------------------
-    let profile = db::profile::build_profile(pool).await?;
-    let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
+    on_progress(3, "Rédaction du CV et de la lettre…");
+    let (cv_input, lm_input) = (ctx.cv_input(ctx.cv_budget.clone()), ctx.lm_input(ctx.lm_budget.clone()));
+    let (cv_writing, lm_writing) =
+        tokio::try_join!(write_cv(&cv_input, &ctx.model), write_lm(&lm_input, &ctx.model))?;
 
-    let cv_doc = require_reference(pool, session_id, "cv", "CV").await?;
-    let lm_doc = require_reference(pool, session_id, "lettre_motivation", "lettre de motivation").await?;
+    on_progress(4, "Assemblage et compilation du CV…");
+    let cv_fitted = produce_cv(&ctx, cv_writing, fonts_dir).await?;
 
-    let cv_original = std::fs::read_to_string(&cv_doc.file_path)
-        .map_err(|e| AppError::Validation(format!("Impossible de lire le CV de référence : {e}")))?;
-    let lm_original = std::fs::read_to_string(&lm_doc.file_path).map_err(|e| {
-        AppError::Validation(format!("Impossible de lire la lettre de référence : {e}"))
-    })?;
+    on_progress(5, "Assemblage et compilation de la lettre…");
+    let lm_fitted = produce_lm(&ctx, lm_writing, fonts_dir).await?;
 
-    // Garanti Some par `require_reference` (filtre sur style_analysis.is_some()).
-    let cv_style = cv_doc.style_analysis.as_deref().expect("style_analysis filtré en amont");
-    let lm_style = lm_doc.style_analysis.as_deref().expect("style_analysis filtré en amont");
-
-    let cv_root = doc_dir(&cv_doc.file_path)?;
-    let lm_root = doc_dir(&lm_doc.file_path)?;
-
-    // ------------------------------------------------------------------
-    // 2. Étapes 1 → 2 : analyse de l'offre, puis matching du profil
-    //    (séquentielles, la seconde dépend de la première)
-    // ------------------------------------------------------------------
-    on_progress(1, "Analyse de l'offre…");
-    let offer_analysis = offer::analyze_offer(description_offre, &model).await?;
-
-    on_progress(2, "Matching profil / offre…");
-    let matching_strategy = matching::match_profile(&offer_analysis, &profile, &model).await?;
-
-    // ------------------------------------------------------------------
-    // 3. Étapes 3a/3b : rédaction du contenu CV et lettre
-    // [DIAG-TEMP] Séquentiel au lieu de tokio::try_join! — test décisif pour
-    // confirmer/infirmer une race de concurrence. À revert après diagnostic.
-    // ------------------------------------------------------------------
-    on_progress(3, "Rédaction du CV…");
-    let cv_content =
-        content::generate_cv_content(&matching_strategy, &profile, &offer_analysis, &model).await?;
-
-    on_progress(4, "Rédaction de la lettre de motivation…");
-    let lm_content =
-        content::generate_lm_content(&matching_strategy, &profile, &offer_analysis, &model).await?;
-
-    // ------------------------------------------------------------------
-    // 4. Étapes 5/6 : assemblage Typst + compilation PDF, document par
-    //    document (séquentiel — voir doc de fonction pour le compromis
-    //    avec le parallélisme précédent).
-    // ------------------------------------------------------------------
-    on_progress(5, "Assemblage et compilation du CV…");
-    let cv_typst =
-        assemble::assemble_typst(&cv_content, cv_style, &cv_original, "cv", Some(&profile.user), &model)
-            .await?;
-    let (cv_typst, cv_pdf) =
-        compile_with_retry(cv_typst, &cv_original, cv_root, fonts_dir.clone(), &model).await?;
-
-    on_progress(6, "Assemblage et compilation de la lettre…");
-    let lm_typst = assemble::assemble_typst(
-        &lm_content,
-        lm_style,
-        &lm_original,
-        "lettre_motivation",
-        Some(&profile.user),
-        &model,
-    )
-    .await?;
-    let (lm_typst, lm_pdf) = compile_with_retry(lm_typst, &lm_original, lm_root, fonts_dir, &model).await?;
-
-    Ok(GeneratedDocuments {
-        cv_typst,
-        cv_pdf,
-        lm_typst,
-        lm_pdf,
-        cv_reference_version_id: cv_doc.current_version_id,
-        lm_reference_version_id: lm_doc.current_version_id,
-    })
-}
-
-/// Dérive le dossier racine de compilation à partir du chemin du `.typ` de
-/// référence (`.../<doc_type>/versions/<version_id>/reference.typ`
-/// → `.../<doc_type>/versions/<version_id>/`, ou `.../<doc_type>/` pour une
-/// référence antérieure au versioning).
-///
-/// # Arguments
-///
-/// * `reference_typ_path` - Chemin absolu vers le fichier `.typ` de référence.
-///
-/// # Returns
-///
-/// Le dossier parent, utilisé pour résoudre les imports/images relatifs du template.
-fn doc_dir(reference_typ_path: &str) -> Result<PathBuf, AppError> {
-    Path::new(reference_typ_path)
-        .parent()
-        .map(PathBuf::from)
-        .ok_or_else(|| AppError::Validation("Chemin de document de référence invalide.".to_string()))
+    Ok(into_result(ctx, cv_fitted, lm_fitted))
 }

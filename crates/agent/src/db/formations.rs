@@ -20,7 +20,7 @@ use findmyjob_core::models::{CreateFormationInput, FormationView};
 /// Formations triées par date de fin puis de début décroissantes.
 pub async fn list_for_user(pool: &PgPool, user_id: i64) -> Result<Vec<FormationView>, AppError> {
     let rows = sqlx::query(
-        "SELECT id, titre, ecole, date_debut, date_fin \
+        "SELECT id, titre, ecole, description, date_debut, date_fin \
          FROM profile.formations WHERE user_id = $1 \
          ORDER BY COALESCE(date_fin, DATE '9999-12-31') DESC, date_debut DESC",
     )
@@ -35,6 +35,7 @@ pub async fn list_for_user(pool: &PgPool, user_id: i64) -> Result<Vec<FormationV
                 id: r.try_get("id")?,
                 titre: r.try_get("titre")?,
                 ecole: r.try_get("ecole")?,
+                description: r.try_get("description")?,
                 date_debut: r.try_get("date_debut")?,
                 date_fin: r.try_get("date_fin")?,
             })
@@ -65,13 +66,14 @@ pub async fn insert(
     }
 
     let row = sqlx::query(
-        "INSERT INTO profile.formations (user_id, titre, ecole, date_debut, date_fin) \
-         VALUES ($1, $2, $3, $4, $5) \
-         RETURNING id, titre, ecole, date_debut, date_fin",
+        "INSERT INTO profile.formations (user_id, titre, ecole, description, date_debut, date_fin) \
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         RETURNING id, titre, ecole, description, date_debut, date_fin",
     )
     .bind(user_id)
     .bind(&titre)
     .bind(normalize(input.ecole))
+    .bind(normalize(input.description))
     .bind(input.date_debut)
     .bind(input.date_fin)
     .fetch_one(pool)
@@ -82,6 +84,7 @@ pub async fn insert(
         id: row.try_get("id").map_err(map_db_err)?,
         titre: row.try_get("titre").map_err(map_db_err)?,
         ecole: row.try_get("ecole").map_err(map_db_err)?,
+        description: row.try_get("description").map_err(map_db_err)?,
         date_debut: row.try_get("date_debut").map_err(map_db_err)?,
         date_fin: row.try_get("date_fin").map_err(map_db_err)?,
     })
@@ -110,12 +113,13 @@ pub async fn update(
 
     let row = sqlx::query(
         "UPDATE profile.formations \
-         SET titre = $1, ecole = $2, date_debut = $3, date_fin = $4 \
-         WHERE id = $5 AND user_id = (SELECT id FROM profile.users LIMIT 1) \
-         RETURNING id, titre, ecole, date_debut, date_fin",
+         SET titre = $1, ecole = $2, description = $3, date_debut = $4, date_fin = $5 \
+         WHERE id = $6 AND user_id = (SELECT id FROM profile.users LIMIT 1) \
+         RETURNING id, titre, ecole, description, date_debut, date_fin",
     )
     .bind(&titre)
     .bind(normalize(input.ecole))
+    .bind(normalize(input.description))
     .bind(input.date_debut)
     .bind(input.date_fin)
     .bind(id)
@@ -129,6 +133,7 @@ pub async fn update(
         id: row.try_get("id").map_err(map_db_err)?,
         titre: row.try_get("titre").map_err(map_db_err)?,
         ecole: row.try_get("ecole").map_err(map_db_err)?,
+        description: row.try_get("description").map_err(map_db_err)?,
         date_debut: row.try_get("date_debut").map_err(map_db_err)?,
         date_fin: row.try_get("date_fin").map_err(map_db_err)?,
     })

@@ -14,10 +14,14 @@ export interface UpdateUserInfoInput {
   nom: string | null
   email: string | null
   telephone: string | null
+  adresse: string | null
+  code_postal: string | null
   permis: boolean | null
   linkedin: string | null
   github: string | null
   portfolio: string | null
+  /** Centres d'intérêt, une ligne = un item. */
+  interets: string | null
 }
 
 export interface CreateUserInput {
@@ -40,11 +44,15 @@ export interface UserView {
   email: string | null
   telephone: string | null
   ville: string | null
+  adresse: string | null
+  code_postal: string | null
   permis: boolean | null
   description: string | null
   linkedin: string | null
   github: string | null
   portfolio: string | null
+  /** Centres d'intérêt, une ligne = un item. */
+  interets: string | null
   created_at: string
   updated_at: string
 }
@@ -178,6 +186,8 @@ export interface FormationView {
   id: number
   titre: string
   ecole: string | null
+  /** Détails (spécialité, cours, échange...), une ligne = un détail. */
+  description: string | null
   date_debut: string | null
   date_fin: string | null
 }
@@ -185,6 +195,8 @@ export interface FormationView {
 export interface CreateFormationInput {
   titre: string
   ecole: string | null
+  /** Détails (spécialité, cours, échange...), une ligne = un détail. */
+  description: string | null
   date_debut: string | null
   date_fin: string | null
 }

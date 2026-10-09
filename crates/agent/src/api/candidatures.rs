@@ -41,7 +41,7 @@ async fn list_for_session(
 }
 
 /// Indique si les deux documents de référence (CV et lettre de motivation)
-/// d'une session ont déjà été analysés (`style_analysis` renseigné) — seule
+/// d'une session ont déjà été templatisés (`template_path` renseigné) — seule
 /// condition sous laquelle une candidature peut être créée pour cette
 /// session (voir `create_candidature`) et sous laquelle
 /// `pipeline::generate_documents` peut réussir (voir `pipeline::require_reference`).
@@ -50,7 +50,7 @@ async fn references_ready(pool: &sqlx::PgPool, session_id: i64) -> Result<bool, 
 }
 
 /// Crée une candidature puis, si la session cible dispose déjà de documents
-/// de référence analysés, lance en tâche de fond la génération du CV et de
+/// de référence templatisés, lance en tâche de fond la génération du CV et de
 /// la lettre de motivation adaptés à l'offre — la réponse HTTP ne les attend
 /// pas, `cv_path`/`lettre_motivation_path` restent `None` à ce stade. La
 /// progression est consultable via `GET /candidatures/{id}/progress` pendant
@@ -68,7 +68,7 @@ async fn create_candidature(
         if !references_ready(&state.pool, session_id).await? {
             return Err(AppError::Validation(
                 "Les documents de référence (CV et lettre de motivation) doivent être uploadés \
-                 et analysés avant de pouvoir postuler."
+                 et convertis en template avant de pouvoir postuler."
                     .to_string(),
             )
             .into());
@@ -98,13 +98,14 @@ async fn create_candidature(
 fn spawn_document_generation(state: AppState, candidature_id: i64, session_id: i64, description_offre: String) {
     tokio::spawn(async move {
         let progress = state.progress.clone();
-        let result = pipeline::generate_documents(
-            &state.pool,
-            &state.fonts_dir,
+        let request = pipeline::GenerationRequest {
             session_id,
-            &description_offre,
-            |step, label| progress.update(candidature_id, step, pipeline::GENERATION_STEPS_TOTAL, label),
-        )
+            candidature_id,
+            description_offre: &description_offre,
+        };
+        let result = pipeline::generate_documents(&state.pool, &state.fonts_dir, request, |step, label| {
+            progress.update(candidature_id, step, pipeline::GENERATION_STEPS_TOTAL, label)
+        })
         .await;
 
         let generated = match result {
@@ -112,13 +113,23 @@ fn spawn_document_generation(state: AppState, candidature_id: i64, session_id: i
             Err(e) => return fail_generation(&state, &progress, candidature_id, &e.to_string()).await,
         };
 
+        // La trace sert au diagnostic : son échec est journalisé sans faire
+        // échouer une génération réussie.
+        let trace = generated.trace.files().and_then(|files| {
+            documents::save_generation_trace(&state.data_dir, session_id, candidature_id, &files)
+        });
+        if let Err(e) = trace {
+            eprintln!("Trace de génération de la candidature {candidature_id} non écrite : {e}");
+        }
+
+        let (cv, lm) = (&generated.cv, &generated.lm);
         let saved = documents::save_generated_document(
             &state.data_dir,
             session_id,
             "cv",
             candidature_id,
-            &generated.cv_typst,
-            &generated.cv_pdf,
+            &cv.pdf,
+            &cv.data_json,
         )
         .and_then(|cv_path| {
             documents::save_generated_document(
@@ -126,8 +137,8 @@ fn spawn_document_generation(state: AppState, candidature_id: i64, session_id: i
                 session_id,
                 "lettre_motivation",
                 candidature_id,
-                &generated.lm_typst,
-                &generated.lm_pdf,
+                &lm.pdf,
+                &lm.data_json,
             )
             .map(|lm_path| (cv_path, lm_path))
         });
@@ -143,7 +154,7 @@ fn spawn_document_generation(state: AppState, candidature_id: i64, session_id: i
                 candidature_id,
                 &Some(cv_path),
                 &Some(lm_path),
-                (generated.cv_reference_version_id, generated.lm_reference_version_id),
+                (cv.reference_version_id, lm.reference_version_id),
             )
             .await
         {

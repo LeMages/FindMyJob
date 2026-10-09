@@ -11,6 +11,7 @@ use axum::{Json, Router};
 // Importation des modules internes
 use crate::api::error::ApiError;
 use crate::api::AppState;
+use crate::documents::templatize::RetemplatizeReport;
 use crate::{db, documents};
 use findmyjob_core::models::{DocumentFileInfo, DocumentReferenceView, DocumentsStatus};
 
@@ -32,10 +33,31 @@ pub fn router() -> Router<AppState> {
         .route("/sessions/{id}/documents/lm", get(get_lm_reference).post(save_lettre_motivation))
         .route("/sessions/{id}/documents/cv/compile", post(compile_cv))
         .route("/sessions/{id}/documents/lm/compile", post(compile_lettre_motivation))
+        .route("/sessions/{id}/documents/cv/templatize", post(templatize_cv))
+        .route("/sessions/{id}/documents/lm/templatize", post(templatize_lettre_motivation))
         .route("/sessions/{id}/documents/status", get(get_documents_status))
         .route("/documents/info", get(get_document_info))
         .route("/documents/pdf", get(get_document_pdf))
         .route("/documents/download", get(download_document))
+}
+
+/// Re-templatise le CV de référence courant de la session, sans nouvel
+/// upload (références antérieures à la templatisation, ou template à refaire).
+async fn templatize_cv(
+    State(state): State<AppState>,
+    Path(session_id): Path<i64>,
+) -> Result<Json<RetemplatizeReport>, ApiError> {
+    Ok(Json(documents::retemplatize_current(&state.pool, &state.fonts_dir, session_id, "cv").await?))
+}
+
+/// Re-templatise la lettre de motivation de référence courante de la session.
+async fn templatize_lettre_motivation(
+    State(state): State<AppState>,
+    Path(session_id): Path<i64>,
+) -> Result<Json<RetemplatizeReport>, ApiError> {
+    Ok(Json(
+        documents::retemplatize_current(&state.pool, &state.fonts_dir, session_id, "lettre_motivation").await?,
+    ))
 }
 
 async fn get_cv_reference(

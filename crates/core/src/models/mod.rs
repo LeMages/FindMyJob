@@ -2,6 +2,8 @@
 
 pub mod candidature;
 pub mod contact;
+pub mod doc_content;
+pub mod doc_data;
 pub mod document;
 pub mod event_type;
 pub mod experience;
@@ -10,6 +12,7 @@ pub mod formation;
 pub mod generation_progress;
 pub mod interview;
 pub mod lang;
+pub mod matching;
 pub mod offer;
 pub mod profile;
 pub mod projet;
@@ -22,7 +25,14 @@ pub mod user;
 
 pub use candidature::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
 pub use contact::ContactView;
-pub use document::{Document, DocumentFileInfo, DocumentReferenceView, DocumentVersionView, DocumentsStatus};
+pub use doc_content::{CvContent, ItemBullets, LmContent, ProseField};
+pub use doc_data::{
+    CvData, CvExampleData, CvExperience, CvFormation, CvLabels, CvLangue, CvProject, Identity, LmData,
+    LmExampleData, LmLabels, PeriodGranularity, PeriodStyle, Recipient, SkillsGroup,
+};
+pub use document::{
+    Document, DocumentFileInfo, DocumentReferenceView, DocumentVersionView, DocumentsStatus, TemplateArtifacts,
+};
 pub use event_type::EventType;
 pub use experience::{CreateExperienceInput, ExperienceView};
 pub use font::FontFamilyView;
@@ -30,6 +40,7 @@ pub use formation::{CreateFormationInput, FormationView};
 pub use generation_progress::{GenerationProgress, GenerationStatus};
 pub use interview::{InterviewView, PlanningInterviewView};
 pub use lang::{CreateLangInput, LangView};
+pub use matching::{MatchedItem, MatchedSkill, MatchingResult};
 pub use offer::OfferView;
 pub use profile::ProfileDto;
 pub use projet::{CreateProjetInput, ProjetView};

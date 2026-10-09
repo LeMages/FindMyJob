@@ -5,6 +5,7 @@
 mod api;
 mod config;
 mod db;
+mod docgen;
 mod documents;
 mod filtering;
 mod logging;

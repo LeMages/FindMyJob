@@ -6,7 +6,7 @@ pub struct CreateLangInput {
     pub level: Option<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct LangView {
     pub id: i64,
     pub nom: Option<String>,

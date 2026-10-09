@@ -25,7 +25,7 @@ crates/desktop  Vue 3 frontend at crates/desktop/, Tauri backend nested at crate
 | Database access (PostgreSQL via sqlx) | `crates/agent/src/db/*.rs`, one file per table |
 | REST API routes | `crates/agent/src/api/*.rs`, one file per resource, mounted in `crates/agent/src/api/mod.rs` |
 | Offers pipeline (scraping/filtering/scoring) | `crates/agent/src/scraping/`, `crates/agent/src/filtering/`, orchestrated by `crates/agent/src/scheduler.rs` |
-| Documents pipeline (CV/LM tailoring + Typst) | `crates/agent/src/pipeline.rs` (orchestration), `crates/agent/src/documents/` (storage + compilation) |
+| Documents pipeline (CV/LM tailoring + Typst) | `crates/agent/src/pipeline.rs` (orchestration), `crates/agent/src/docgen/` (deterministic assembly), `crates/agent/src/documents/` (templatization, storage, compilation), `crates/core/src/docgen/` (budgets, linter, selection — pure logic) |
 | Tauri commands | `crates/desktop/src-tauri/src/commands/*.rs`, one file per domain, each delegating to `api_client::ApiClient` |
 | HTTP client to the agent | `crates/desktop/src-tauri/src/api_client.rs` |
 | TypeScript types | `crates/desktop/src/types/index.ts` (hand-mirrored from `crates/core::models`, no codegen) |
@@ -87,8 +87,8 @@ To iterate on the agent alone, without Docker: `cargo run -p findmyjob-agent` ag
 
 - **The offers pipeline has no desktop UI yet.** `crates/agent` fully implements scraping (WTTJ via Algolia), mechanical filtering, LLM scoring, and a cron schedule, and exposes `GET/POST /api/offers/*`. Nothing in `crates/desktop` calls it — no Tauri command, no `invoke()`, no TS type. Don't assume a desktop feature exists just because the backend route does.
 - **Recruiter contact creation is not persisted.** The agent only exposes `GET /api/candidatures/{id}/contacts` — there is no `POST` route. The desktop's "add contact" action is an explicit local-only stub in `crates/desktop/src/stores/app.ts` (`addRecruiter`). Implementing this for real means the full chain in the section above, not a frontend-only fix.
-- **`crates/agent/src/pipeline.rs:169` has a `[DIAG-TEMP]` marker.** CV/cover-letter content generation was deliberately made sequential instead of `tokio::try_join!` to diagnose a concurrency race. Don't revert it to parallel without checking whether that diagnosis concluded.
-- **CI's `cargo test` job currently runs against zero tests.** It passes vacuously — don't treat a green CI run as evidence of test coverage.
+- **No LLM writes Typst during generation.** References are converted once into `template.typ` + `example_data.json` at upload; generation fills a canonical `data.json` from the profile (facts) and LLM-written prose only. The reference is a style model, never a source of facts. See `docs/project.md` §8.
+- **Test coverage is narrow.** `cargo test` covers offer-text conversion and the documents pipeline's pure logic only; nothing tests the LLM calls, the database or the API routes.
 
 ## What NOT to do
 

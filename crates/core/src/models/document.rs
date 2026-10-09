@@ -29,10 +29,26 @@ pub struct DocumentsStatus {
     pub all_ready: bool,
 }
 
+/// Fichiers produits par la templatisation d'une référence (voir
+/// `llm::templatize`), rangés à côté de son `reference.typ`.
+///
+/// # Attributes
+///
+/// * `template_path` - Chemin absolu du `template.typ` (lit `data.json`).
+/// * `example_data_path` - Chemin absolu de `example_data.json` (contenu de
+///   la référence au schéma canonique, avec la langue détectée).
+/// * `page_count` - Nombre de pages du PDF de la référence.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct TemplateArtifacts {
+    pub template_path: String,
+    pub example_data_path: String,
+    pub page_count: i32,
+}
+
 /// Modèle DB d'un document de référence (CV ou lettre de motivation) tracké
 /// dans la table `documents`. Le filesystem reste la source de vérité du
-/// contenu ; ce modèle ne porte que les métadonnées et le cache d'analyse
-/// de style LLM (`style_analysis`, rempli plus tard par le pipeline IA).
+/// contenu ; ce modèle ne porte que les métadonnées et les chemins des
+/// fichiers de templatisation (`template_path`, `example_data_path`).
 ///
 /// # Attributes
 ///
@@ -42,7 +58,9 @@ pub struct DocumentsStatus {
 /// * `original_filename` - Nom du fichier tel qu'uploadé par l'utilisateur.
 /// * `file_path` - Chemin absolu vers `reference.typ` sur le disque.
 /// * `pdf_path` - Chemin absolu vers `reference.pdf`, si compilé.
-/// * `style_analysis` - Cache JSON de l'analyse de style LLM (étape 0), `None` pour l'instant.
+/// * `template_path` - Chemin du `template.typ`, `None` tant que la référence n'est pas templatisée.
+/// * `example_data_path` - Chemin de `example_data.json`, `None` tant que la référence n'est pas templatisée.
+/// * `page_count` - Nombre de pages du PDF de la référence, `None` tant que la référence n'est pas templatisée.
 /// * `current_version_id` - Version courante dans `document_versions`, `None` si antérieure au versioning.
 /// * `created_at` - Date de création (ISO 8601).
 /// * `updated_at` - Date de dernière mise à jour (ISO 8601).
@@ -54,10 +72,27 @@ pub struct Document {
     pub original_filename: String,
     pub file_path: String,
     pub pdf_path: Option<String>,
-    pub style_analysis: Option<String>,
+    pub template_path: Option<String>,
+    pub example_data_path: Option<String>,
+    pub page_count: Option<i32>,
     pub current_version_id: Option<i64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl Document {
+    /// Fichiers de templatisation de la référence, s'ils existent tous.
+    ///
+    /// # Returns
+    ///
+    /// `Some(TemplateArtifacts)` si la référence est templatisée, `None` sinon.
+    pub fn template(&self) -> Option<TemplateArtifacts> {
+        Some(TemplateArtifacts {
+            template_path: self.template_path.clone()?,
+            example_data_path: self.example_data_path.clone()?,
+            page_count: self.page_count?,
+        })
+    }
 }
 
 /// Vue frontend de la référence courante, construite depuis sa ligne

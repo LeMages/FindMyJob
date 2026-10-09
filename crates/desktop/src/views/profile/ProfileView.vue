@@ -63,10 +63,13 @@ interface UserInfoDraft {
   nom: string
   email: string
   telephone: string
+  adresse: string
+  code_postal: string
   permis: boolean
   linkedin: string
   github: string
   portfolio: string
+  interets: string
 }
 
 const draftUserInfo = ref<UserInfoDraft>({
@@ -74,10 +77,13 @@ const draftUserInfo = ref<UserInfoDraft>({
   nom: '',
   email: '',
   telephone: '',
+  adresse: '',
+  code_postal: '',
   permis: false,
   linkedin: '',
   github: '',
   portfolio: '',
+  interets: '',
 })
 
 function isUserInfoDirty(): boolean {
@@ -88,6 +94,9 @@ function isUserInfoDirty(): boolean {
     draftUserInfo.value.nom !== (u.nom ?? '') ||
     draftUserInfo.value.email !== (u.email ?? '') ||
     draftUserInfo.value.telephone !== (u.telephone ?? '') ||
+    draftUserInfo.value.adresse !== (u.adresse ?? '') ||
+    draftUserInfo.value.code_postal !== (u.code_postal ?? '') ||
+    draftUserInfo.value.interets !== (u.interets ?? '') ||
     draftUserInfo.value.permis !== (u.permis ?? false) ||
     draftUserInfo.value.linkedin !== (u.linkedin ?? '') ||
     draftUserInfo.value.github !== (u.github ?? '') ||
@@ -120,10 +129,13 @@ function enterEditMode() {
     nom: u?.nom ?? '',
     email: u?.email ?? '',
     telephone: u?.telephone ?? '',
+    adresse: u?.adresse ?? '',
+    code_postal: u?.code_postal ?? '',
     permis: u?.permis ?? false,
     linkedin: u?.linkedin ?? '',
     github: u?.github ?? '',
     portfolio: u?.portfolio ?? '',
+    interets: u?.interets ?? '',
   }
   draftDescription.value = u?.description ?? ''
   saveError.value = null
@@ -185,10 +197,13 @@ async function saveUserInfo(): Promise<void> {
     nom: d.nom.trim() || null,
     email: d.email.trim() || null,
     telephone: d.telephone.trim() || null,
+    adresse: d.adresse.trim() || null,
+    code_postal: d.code_postal.trim() || null,
     permis: d.permis,
     linkedin: linkedin || null,
     github: github || null,
     portfolio: portfolio || null,
+    interets: d.interets.trim() || null,
   }
   const updated = await invoke<UserView>('update_user_info', { input })
   profile.value!.user = updated
@@ -367,6 +382,20 @@ const initials = computed(() => {
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Téléphone</label>
           <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
         </div>
+      </div>
+      <div class="flex gap-[14px]">
+        <div class="flex-[2] mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse</label>
+          <input v-model="draftUserInfo.adresse" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="12 rue de l'Exemple" />
+        </div>
+        <div class="flex-1 mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Code postal</label>
+          <input v-model="draftUserInfo.code_postal" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="75000" />
+        </div>
+      </div>
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Centres d'intérêt (un par ligne)</label>
+        <textarea v-model="draftUserInfo.interets" rows="3" class="w-full border border-neutral-300 rounded-lg px-3 py-2 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 resize-y" placeholder="Handball"></textarea>
       </div>
       <label class="inline-flex items-center gap-2 text-[13.5px] cursor-pointer select-none mt-0.5">
         <input type="checkbox" v-model="draftUserInfo.permis" />

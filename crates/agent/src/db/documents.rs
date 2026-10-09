@@ -1,7 +1,7 @@
 //! Accès et logique de persistance pour les documents de référence (CV,
 //! lettre de motivation) : le filesystem reste la source de vérité du
-//! contenu, cette table ne tracke que les métadonnées et le cache
-//! `style_analysis`.
+//! contenu, cette table ne tracke que les métadonnées et les chemins des
+//! fichiers de templatisation (`template_path`, `example_data_path`).
 
 // Importation des crates externes
 use sqlx::postgres::PgRow;
@@ -10,7 +10,11 @@ use sqlx::{PgPool, Row};
 // Importation des modules internes
 use crate::db::common::map_db_err;
 use findmyjob_core::error::AppError;
-use findmyjob_core::models::{Document, DocumentsStatus};
+use findmyjob_core::models::{Document, DocumentsStatus, TemplateArtifacts};
+
+/// Colonnes lues pour reconstruire un `Document`.
+const DOCUMENT_COLUMNS: &str = "id, session_id, doc_type, original_filename, file_path, pdf_path, \
+     template_path, example_data_path, page_count, current_version_id, created_at, updated_at";
 
 /// Construit un `Document` à partir d'une ligne SQL brute.
 ///
@@ -32,7 +36,9 @@ fn row_to_document(row: &PgRow) -> Result<Document, sqlx::Error> {
         original_filename: row.try_get("original_filename")?,
         file_path: row.try_get("file_path")?,
         pdf_path: row.try_get("pdf_path")?,
-        style_analysis: row.try_get("style_analysis")?,
+        template_path: row.try_get("template_path")?,
+        example_data_path: row.try_get("example_data_path")?,
+        page_count: row.try_get("page_count")?,
         current_version_id: row.try_get("current_version_id")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
@@ -53,7 +59,7 @@ fn row_to_document(row: &PgRow) -> Result<Document, sqlx::Error> {
 /// * `original_filename` - Nom du fichier tel qu'uploadé par l'utilisateur.
 /// * `file_path` - Chemin absolu vers `reference.typ`.
 /// * `pdf_path` - Chemin absolu vers `reference.pdf`, si disponible.
-/// * `style_analysis` - JSON d'analyse de style produit par le pipeline IA, si disponible.
+/// * `template` - Fichiers de templatisation de la version, `None` si elle n'est pas templatisée.
 /// * `current_version_id` - Version (`document_versions.id`) dont ce document devient la copie courante.
 ///
 /// # Returns
@@ -67,28 +73,32 @@ pub async fn upsert(
     original_filename: &str,
     file_path: &str,
     pdf_path: Option<&str>,
-    style_analysis: Option<&str>,
+    template: Option<&TemplateArtifacts>,
     current_version_id: i64,
 ) -> Result<Document, AppError> {
-    let row = sqlx::query(
+    let row = sqlx::query(&format!(
         "INSERT INTO search.documents \
-             (session_id, doc_type, original_filename, file_path, pdf_path, style_analysis, current_version_id) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7) \
+             (session_id, doc_type, original_filename, file_path, pdf_path, \
+              template_path, example_data_path, page_count, current_version_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
          ON CONFLICT (session_id, doc_type) DO UPDATE SET \
              original_filename = excluded.original_filename, \
              file_path = excluded.file_path, \
              pdf_path = excluded.pdf_path, \
-             style_analysis = excluded.style_analysis, \
+             template_path = excluded.template_path, \
+             example_data_path = excluded.example_data_path, \
+             page_count = excluded.page_count, \
              current_version_id = excluded.current_version_id \
-         RETURNING id, session_id, doc_type, original_filename, file_path, pdf_path, \
-                   style_analysis, current_version_id, created_at, updated_at",
-    )
+         RETURNING {DOCUMENT_COLUMNS}"
+    ))
     .bind(session_id)
     .bind(doc_type)
     .bind(original_filename)
     .bind(file_path)
     .bind(pdf_path)
-    .bind(style_analysis)
+    .bind(template.map(|t| t.template_path.as_str()))
+    .bind(template.map(|t| t.example_data_path.as_str()))
+    .bind(template.map(|t| t.page_count))
     .bind(current_version_id)
     .fetch_one(pool)
     .await
@@ -113,11 +123,9 @@ pub async fn get_by_session_and_type(
     session_id: i64,
     doc_type: &str,
 ) -> Result<Option<Document>, AppError> {
-    let row = sqlx::query(
-        "SELECT id, session_id, doc_type, original_filename, file_path, pdf_path, \
-                style_analysis, current_version_id, created_at, updated_at \
-         FROM search.documents WHERE session_id = $1 AND doc_type = $2",
-    )
+    let row = sqlx::query(&format!(
+        "SELECT {DOCUMENT_COLUMNS} FROM search.documents WHERE session_id = $1 AND doc_type = $2"
+    ))
     .bind(session_id)
     .bind(doc_type)
     .fetch_optional(pool)
@@ -128,8 +136,8 @@ pub async fn get_by_session_and_type(
 }
 
 /// Calcule l'état de préparation des documents de référence d'une session
-/// (CV et lettre de motivation) : prêt = document tracké et `style_analysis`
-/// non nul, seule condition sous laquelle une candidature peut être créée
+/// (CV et lettre de motivation) : prêt = document tracké et templatisé
+/// (`template_path` non nul), seule condition sous laquelle une candidature peut être créée
 /// (voir `api::candidatures::create_candidature`).
 ///
 /// # Arguments
@@ -143,9 +151,48 @@ pub async fn get_by_session_and_type(
 pub async fn status_for_session(pool: &PgPool, session_id: i64) -> Result<DocumentsStatus, AppError> {
     let cv_ready = get_by_session_and_type(pool, session_id, "cv")
         .await?
-        .is_some_and(|d| d.style_analysis.is_some());
+        .is_some_and(|d| d.template().is_some());
     let lm_ready = get_by_session_and_type(pool, session_id, "lettre_motivation")
         .await?
-        .is_some_and(|d| d.style_analysis.is_some());
+        .is_some_and(|d| d.template().is_some());
     Ok(DocumentsStatus { cv_ready, lm_ready, all_ready: cv_ready && lm_ready })
+}
+
+/// Enregistre les fichiers de templatisation de la référence courante d'une
+/// session, sans changer de version (re-templatisation d'une référence
+/// existante, voir `documents::templatize::retemplatize_current`).
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions PostgreSQL.
+/// * `session_id` - Identifiant de la session propriétaire.
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `template` - Fichiers de templatisation à enregistrer.
+///
+/// # Returns
+///
+/// `Document` mis à jour, ou `AppError::NotFound` si aucune référence n'est trackée.
+pub async fn set_template(
+    pool: &PgPool,
+    session_id: i64,
+    doc_type: &str,
+    template: &TemplateArtifacts,
+) -> Result<Document, AppError> {
+    let row = sqlx::query(&format!(
+        "UPDATE search.documents \
+         SET template_path = $3, example_data_path = $4, page_count = $5 \
+         WHERE session_id = $1 AND doc_type = $2 \
+         RETURNING {DOCUMENT_COLUMNS}"
+    ))
+    .bind(session_id)
+    .bind(doc_type)
+    .bind(&template.template_path)
+    .bind(&template.example_data_path)
+    .bind(template.page_count)
+    .fetch_optional(pool)
+    .await
+    .map_err(map_db_err)?;
+
+    let row = row.ok_or_else(|| AppError::NotFound("Aucun document de référence trouvé.".to_string()))?;
+    row_to_document(&row).map_err(map_db_err)
 }

@@ -14,7 +14,7 @@ use sqlx::{PgPool, Row};
 // Importation des modules internes
 use crate::db::common::map_db_err;
 use findmyjob_core::error::AppError;
-use findmyjob_core::models::DocumentVersionView;
+use findmyjob_core::models::{DocumentVersionView, TemplateArtifacts};
 
 /// Colonnes de `DocumentVersionView`, `is_current` calculé par jointure sur
 /// `documents.current_version_id` (alias `v` pour `document_versions`, `d`
@@ -26,9 +26,9 @@ const VIEW_COLUMNS: &str = "v.id, v.session_id, v.doc_type, v.version, v.origina
 const VIEW_FROM: &str = "search.document_versions v \
      LEFT JOIN search.documents d ON d.current_version_id = v.id";
 
-/// Version complète d'un document de référence, avec son analyse de style —
-/// nécessaire pour restaurer la version comme référence courante sans
-/// rappeler Claude. Interne à l'agent, jamais exposée par l'API.
+/// Version complète d'un document de référence, avec ses fichiers de
+/// templatisation, nécessaires pour restaurer la version comme référence
+/// courante sans rappeler Claude. Interne à l'agent, jamais exposée par l'API.
 ///
 /// # Attributes
 ///
@@ -36,13 +36,13 @@ const VIEW_FROM: &str = "search.document_versions v \
 /// * `original_filename` - Nom du fichier tel qu'uploadé.
 /// * `typst_path` - Chemin absolu du `.typ`.
 /// * `pdf_path` - Chemin absolu du `.pdf`.
-/// * `style_analysis` - Analyse de style calculée à l'upload.
+/// * `template` - Fichiers de templatisation, `None` si la version n'a pas été templatisée.
 pub struct VersionRecord {
     pub id: i64,
     pub original_filename: String,
     pub typst_path: String,
     pub pdf_path: String,
-    pub style_analysis: String,
+    pub template: Option<TemplateArtifacts>,
 }
 
 /// Construit un `DocumentVersionView` à partir d'une ligne SQL sélectionnant `VIEW_COLUMNS`.
@@ -103,7 +103,7 @@ pub async fn reserve_id(pool: &PgPool) -> Result<i64, AppError> {
 /// * `original_filename` - Nom du fichier tel qu'uploadé.
 /// * `typst_path` - Chemin absolu du `.typ` de la version.
 /// * `pdf_path` - Chemin absolu du `.pdf` de la version.
-/// * `style_analysis` - Analyse de style calculée pour ce contenu.
+/// * `template` - Fichiers de templatisation produits à l'upload.
 ///
 /// # Returns
 ///
@@ -118,15 +118,16 @@ pub async fn insert_version(
     original_filename: &str,
     typst_path: &str,
     pdf_path: &str,
-    style_analysis: &str,
+    template: &TemplateArtifacts,
 ) -> Result<DocumentVersionView, AppError> {
     let row = sqlx::query(
         "INSERT INTO search.document_versions \
-             (id, session_id, doc_type, version, original_filename, typst_path, pdf_path, style_analysis) \
+             (id, session_id, doc_type, version, original_filename, typst_path, pdf_path, \
+              template_path, example_data_path, page_count) \
          VALUES ($1, $2, $3, \
                  (SELECT COALESCE(MAX(version), 0) + 1 FROM search.document_versions \
                   WHERE session_id = $2 AND doc_type = $3), \
-                 $4, $5, $6, $7) \
+                 $4, $5, $6, $7, $8, $9) \
          RETURNING id, session_id, doc_type, version, original_filename, typst_path, pdf_path, \
                    created_at, FALSE AS is_current",
     )
@@ -136,7 +137,9 @@ pub async fn insert_version(
     .bind(original_filename)
     .bind(typst_path)
     .bind(pdf_path)
-    .bind(style_analysis)
+    .bind(&template.template_path)
+    .bind(&template.example_data_path)
+    .bind(template.page_count)
     .fetch_one(pool)
     .await
     .map_err(map_db_err)?;
@@ -239,7 +242,7 @@ pub async fn get_version(
     row.as_ref().map(row_to_view).transpose().map_err(map_db_err)
 }
 
-/// Récupère une version précise avec son analyse de style, pour la restaurer
+/// Récupère une version précise avec ses fichiers de templatisation, pour la restaurer
 /// comme référence courante.
 ///
 /// # Arguments
@@ -259,7 +262,7 @@ pub async fn get_version_record(
     version: i32,
 ) -> Result<Option<VersionRecord>, AppError> {
     let row = sqlx::query(
-        "SELECT id, original_filename, typst_path, pdf_path, style_analysis \
+        "SELECT id, original_filename, typst_path, pdf_path, template_path, example_data_path, page_count \
          FROM search.document_versions \
          WHERE session_id = $1 AND doc_type = $2 AND version = $3",
     )
@@ -273,11 +276,53 @@ pub async fn get_version_record(
     let Some(row) = row else {
         return Ok(None);
     };
+    let template_path: Option<String> = row.try_get("template_path").map_err(map_db_err)?;
+    let example_data_path: Option<String> = row.try_get("example_data_path").map_err(map_db_err)?;
+    let page_count: Option<i32> = row.try_get("page_count").map_err(map_db_err)?;
+    let template = match (template_path, example_data_path, page_count) {
+        (Some(template_path), Some(example_data_path), Some(page_count)) => {
+            Some(TemplateArtifacts { template_path, example_data_path, page_count })
+        }
+        _ => None,
+    };
+
     Ok(Some(VersionRecord {
         id: row.try_get("id").map_err(map_db_err)?,
         original_filename: row.try_get("original_filename").map_err(map_db_err)?,
         typst_path: row.try_get("typst_path").map_err(map_db_err)?,
         pdf_path: row.try_get("pdf_path").map_err(map_db_err)?,
-        style_analysis: row.try_get("style_analysis").map_err(map_db_err)?,
+        template,
     }))
+}
+
+/// Enregistre les fichiers de templatisation d'une version existante
+/// (re-templatisation sans nouvel upload).
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions PostgreSQL.
+/// * `id` - Identifiant de la version.
+/// * `template` - Fichiers de templatisation à enregistrer.
+///
+/// # Returns
+///
+/// `Ok(())`, ou `AppError::NotFound` si la version n'existe pas.
+pub async fn set_template(pool: &PgPool, id: i64, template: &TemplateArtifacts) -> Result<(), AppError> {
+    let result = sqlx::query(
+        "UPDATE search.document_versions \
+         SET template_path = $2, example_data_path = $3, page_count = $4 \
+         WHERE id = $1",
+    )
+    .bind(id)
+    .bind(&template.template_path)
+    .bind(&template.example_data_path)
+    .bind(template.page_count)
+    .execute(pool)
+    .await
+    .map_err(map_db_err)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound(format!("Version de document {id} introuvable.")));
+    }
+    Ok(())
 }
