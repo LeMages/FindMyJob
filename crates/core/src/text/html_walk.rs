@@ -24,12 +24,15 @@ const LIST_INDENT: &str = "  ";
 /// Attributes:
 ///     out: Texte produit jusqu'ici.
 ///     list_depth: Nombre de `<ul>`/`<ol>` ouverts au point courant.
-struct HtmlRenderer {
+///     extra_skip: Balises ignorées en plus de [`SKIP_TAGS`] (ex. `nav` pour
+///         une page complète).
+struct HtmlRenderer<'a> {
     out: String,
     list_depth: usize,
+    extra_skip: &'a [&'a str],
 }
 
-impl HtmlRenderer {
+impl HtmlRenderer<'_> {
     /// Parcourt les enfants d'un élément et rend chacun d'eux.
     fn walk(&mut self, element: ElementRef, depth: usize) {
         if depth > MAX_DEPTH {
@@ -55,7 +58,7 @@ impl HtmlRenderer {
             "br" => self.out.push('\n'),
             "li" => self.visit_list_item(element, depth),
             "ul" | "ol" => self.visit_list(element, depth),
-            _ if SKIP_TAGS.contains(&name) => {}
+            _ if SKIP_TAGS.contains(&name) || self.extra_skip.contains(&name) => {}
             _ if BLOCK_TAGS.contains(&name) => self.visit_block(element, depth),
             _ => self.walk(element, depth),
         }
@@ -136,11 +139,28 @@ impl HtmlRenderer {
 /// en bord de ligne possibles).
 pub(crate) fn render_html(html: &str) -> String {
     let fragment = Html::parse_fragment(html);
+    render_element(fragment.root_element(), &[])
+}
+
+/// Rend le contenu d'un élément d'un document déjà parsé en texte structuré
+/// par lignes (titres en blocs, listes en puces).
+///
+/// # Arguments
+///
+/// * `element` - Racine du rendu (ex. `<main>` d'une page d'offre).
+/// * `extra_skip` - Balises dont le sous-arbre est ignoré en plus des
+///   scripts et styles (ex. `nav`, `footer`).
+///
+/// # Returns
+///
+/// Le texte rendu, pas encore normalisé.
+pub(crate) fn render_element(element: ElementRef, extra_skip: &[&str]) -> String {
     let mut renderer = HtmlRenderer {
         out: String::new(),
         list_depth: 0,
+        extra_skip,
     };
-    renderer.walk(fragment.root_element(), 0);
+    renderer.walk(element, 0);
     renderer.out
 }
 

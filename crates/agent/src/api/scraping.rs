@@ -11,10 +11,9 @@ use axum::{Json, Router};
 use crate::api::error::ApiError;
 use crate::api::AppState;
 use crate::db;
-use crate::offer_extraction::run_cascade;
+use crate::offer_extraction::{extract_from_text, run_cascade};
 use findmyjob_core::llm::client::DEFAULT_MODEL;
-use findmyjob_core::llm::scraping_extract::{extract_offer_fields, ScrapedOfferFields};
-use findmyjob_core::scraping::extract::{truncate_chars, MAX_CHARS};
+use findmyjob_core::models::OfferExtraction;
 use findmyjob_core::scraping::fetch::fetch_html;
 use findmyjob_core::scraping::url_validation::validate_offer_url;
 
@@ -54,7 +53,7 @@ pub fn router() -> Router<AppState> {
 async fn scrape_offer(
     State(state): State<AppState>,
     Json(input): Json<UrlInput>,
-) -> Result<Json<ScrapedOfferFields>, ApiError> {
+) -> Result<Json<OfferExtraction>, ApiError> {
     let model = db::settings::resolve_llm_model(&state.pool, DEFAULT_MODEL).await?;
     let html = fetch_html(&input.url).await?;
     Ok(Json(run_cascade(&html, &model).await?))
@@ -65,7 +64,7 @@ async fn scrape_offer(
 async fn extract_offer_from_html(
     State(state): State<AppState>,
     Json(input): Json<HtmlInput>,
-) -> Result<Json<ScrapedOfferFields>, ApiError> {
+) -> Result<Json<OfferExtraction>, ApiError> {
     validate_offer_url(&input.url)?;
     let model = db::settings::resolve_llm_model(&state.pool, DEFAULT_MODEL).await?;
     Ok(Json(run_cascade(&input.html, &model).await?))
@@ -75,8 +74,7 @@ async fn extract_offer_from_html(
 async fn extract_offer_from_text(
     State(state): State<AppState>,
     Json(input): Json<TextInput>,
-) -> Result<Json<ScrapedOfferFields>, ApiError> {
+) -> Result<Json<OfferExtraction>, ApiError> {
     let model = db::settings::resolve_llm_model(&state.pool, DEFAULT_MODEL).await?;
-    let text = truncate_chars(&input.text, MAX_CHARS);
-    Ok(Json(extract_offer_fields(&text, &model).await?))
+    Ok(Json(extract_from_text(&input.text, &model).await?))
 }

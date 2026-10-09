@@ -12,7 +12,7 @@ import { invoke } from '@tauri-apps/api/core'
 import GenerationProgressModal from './components/GenerationProgressModal.vue'
 
 // Importation des modules internes
-import type { CandidatureView, CreateCandidatureInput, ScrapedOfferFields } from '@/types'
+import type { CandidatureView, CreateCandidatureInput, OfferExtraction, ScrapedOfferFields } from '@/types'
 import {
   state,
   currentSession,
@@ -183,8 +183,8 @@ async function handleScrape() {
   scraping.value = true
   scrapingError.value = null
   try {
-    const fields = await invoke<ScrapedOfferFields>('scrape_offer', { url: urlOffreRef.value.trim() })
-    applyFields(fields)
+    const extraction = await invoke<OfferExtraction>('scrape_offer', { url: urlOffreRef.value.trim() })
+    applyFields(extraction.fields)
     autoDetectSource(urlOffreRef.value)
     step.value = 'form'
   } catch (e: unknown) {
@@ -200,10 +200,10 @@ async function handlePasteExtract() {
   scraping.value = true
   scrapingError.value = null
   try {
-    const fields = await invoke<ScrapedOfferFields>('extract_offer_from_text', {
+    const extraction = await invoke<OfferExtraction>('extract_offer_from_text', {
       text: pasteText.value.trim(),
     })
-    applyFields(fields)
+    applyFields(extraction.fields)
     if (urlOffreRef.value) autoDetectSource(urlOffreRef.value)
     step.value = 'form'
   } catch (e: unknown) {

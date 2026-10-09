@@ -6,7 +6,7 @@ use serde_json::json;
 // Importation des modules internes
 use crate::api_client::ApiClient;
 use crate::error::AppError;
-use findmyjob_core::llm::scraping_extract::ScrapedOfferFields;
+use findmyjob_core::models::OfferExtraction;
 
 /// Scrape une offre d'emploi depuis son URL et en extrait les champs du
 /// formulaire de candidature (poste, entreprise, lieu, type de contrat,
@@ -19,13 +19,14 @@ use findmyjob_core::llm::scraping_extract::ScrapedOfferFields;
 ///
 /// # Returns
 ///
-/// Les champs extraits, chacun `None` si non trouvé. Erreur si l'URL est
-/// vide, si le site bloque l'accès, ou si l'extraction LLM échoue.
+/// Les champs extraits (chacun `None` si non trouvé) et l'étage de la
+/// cascade utilisé. Erreur si l'URL est vide, ou erreur typée de l'agent
+/// (accès refusé, offre introuvable, contenu insuffisant, erreur LLM...).
 #[tauri::command]
 pub async fn scrape_offer(
     api: tauri::State<'_, ApiClient>,
     url: String,
-) -> Result<ScrapedOfferFields, AppError> {
+) -> Result<OfferExtraction, AppError> {
     let url = url.trim();
     if url.is_empty() {
         return Err(AppError::Validation("L'URL de l'offre est requise.".to_string()));
@@ -35,8 +36,8 @@ pub async fn scrape_offer(
 }
 
 /// Extrait les champs du formulaire de candidature depuis un texte d'offre
-/// collé manuellement — fallback quand le scraping (`scrape_offer`) échoue
-/// (site protégé, timeout...).
+/// collé manuellement — une des suites proposées quand l'extraction par lien
+/// échoue (site protégé, contenu insuffisant).
 ///
 /// # Arguments
 ///
@@ -45,13 +46,13 @@ pub async fn scrape_offer(
 ///
 /// # Returns
 ///
-/// Les champs extraits, chacun `None` si non trouvé. Erreur si le texte est
-/// vide ou si l'extraction LLM échoue.
+/// Les champs extraits (chacun `None` si non trouvé) et l'étage `llm`.
+/// Erreur si le texte est vide ou si l'extraction LLM échoue.
 #[tauri::command]
 pub async fn extract_offer_from_text(
     api: tauri::State<'_, ApiClient>,
     text: String,
-) -> Result<ScrapedOfferFields, AppError> {
+) -> Result<OfferExtraction, AppError> {
     let text = text.trim();
     if text.is_empty() {
         return Err(AppError::Validation("Le texte de l'offre est vide.".to_string()));

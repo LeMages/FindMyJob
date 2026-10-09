@@ -264,6 +264,15 @@ export interface ScrapedOfferFields {
   description_offre: string | null
 }
 
+/** Étage de la cascade d'extraction qui a produit les champs (miroir de `ExtractionStage`). */
+export type ExtractionStage = 'json_ld' | 'llm'
+
+/** Résultat d'une extraction d'offre (miroir de `OfferExtraction`). */
+export interface OfferExtraction {
+  fields: ScrapedOfferFields
+  stage: ExtractionStage
+}
+
 export interface UpdateCandidatureInput {
   poste: string
   entreprise: string | null

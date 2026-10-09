@@ -11,9 +11,11 @@ use super::whitespace_normalize::normalize_whitespace;
 /// Convertit un texte d'offre HTML ou Markdown en texte brut lisible.
 ///
 /// Le HTML est détecté par la présence d'une balise ; sinon l'entrée est
-/// traitée comme du Markdown (repli Algolia), dont les sauts de ligne sont
-/// significatifs. Le nettoyage Markdown s'applique dans les deux cas, car
-/// certains ATS glissent des `**` dans leur HTML.
+/// traitée comme du texte ou du Markdown, dont les sauts de ligne sont
+/// significatifs. Un HTML échappé (`&lt;p&gt;…`, fréquent dans le JSON-LD des
+/// pages d'offre) est décodé puis rendu comme du HTML. Le nettoyage Markdown
+/// s'applique dans tous les cas, car certains ATS glissent des `**` dans
+/// leur HTML.
 ///
 /// # Arguments
 ///
@@ -27,16 +29,21 @@ pub fn html_to_plain(input: &str) -> Option<String> {
     let rendered = if looks_like_html(input) {
         render_html(input)
     } else {
-        decode_entities(input)
+        let decoded = decode_entities(input);
+        if looks_like_html(&decoded) {
+            render_html(&decoded)
+        } else {
+            decoded
+        }
     };
 
     let cleaned = clean_markdown(&rendered);
     let without_emojis = strip_emojis(&cleaned);
     let normalized = normalize_whitespace(&without_emojis);
 
-    // Algolia et l'API v1 sérialisent parfois l'absence de valeur en chaîne
-    // "null" : on la traite comme un champ vide, après rendu pour couvrir
-    // aussi la variante "<p>null</p>".
+    // Certaines sources sérialisent l'absence de valeur en chaîne "null" :
+    // on la traite comme un champ vide, après rendu pour couvrir aussi la
+    // variante "<p>null</p>".
     if normalized.is_empty() || normalized.eq_ignore_ascii_case("null") {
         None
     } else {
