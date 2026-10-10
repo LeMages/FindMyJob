@@ -1,156 +1,227 @@
 // ============================================
-// FindMyJob - Schéma de base de données (PostgreSQL)
-// Mis à jour le 2026-10-09.
+// FindMyJob - Schéma de base de données (SQLite)
+// Mis à jour le 2026-10-10 (migration db/migrations/sqlite/0001_init.sql).
 //
-// Deux schémas Postgres :
-//   - profile : données de l'utilisateur (CV, compétences, parcours, settings)
-//   - search  : recherche d'emploi (sessions, candidatures, documents)
-//
-// App mono-utilisateur : les tables du schéma search ne portent pas
-// de user_id. Le profil est récupéré directement (un seul user).
-//
-// Triggers `updated_at` (fonction trigger_set_updated_at(), BEFORE UPDATE) :
-// users, projets, experiences, formations, skills, sessions, candidatures,
-// contacts, interviews, documents, settings.
-// status_history n'a pas de trigger updated_at.
+// Base locale de l'application desktop : <dossier de données>/findmyjob.db.
+// Toutes les tables sont STRICT ; PRAGMA foreign_keys = ON à chaque connexion.
+// App mono-utilisateur : aucune table ne porte de user_id, users n'a qu'une
+// ligne (id = 1).
 //
 // Conventions de ce fichier (pour rester lisible dans dbdiagram) :
-//   - les identifiants notés `integer [pk, increment]` sont des BIGSERIAL
-//     en SQL, et les clés étrangères notées `integer` des BIGINT ;
-//   - les `Enum` DBML représentent des colonnes TEXT contraintes par un
-//     CHECK (aucun type ENUM Postgres n'est créé par les migrations) ;
-//   - `timestamp` correspond à TIMESTAMPTZ.
+//   - `integer [pk, increment]` = INTEGER PRIMARY KEY (AUTOINCREMENT quand
+//     l'identifiant nomme un dossier : sessions, document_versions,
+//     candidatures) ;
+//   - les `Enum` DBML représentent des colonnes TEXT contraintes par un CHECK ;
+//   - `timestamp` = TEXT RFC 3339 UTC en millisecondes
+//     ('YYYY-MM-DDTHH:MM:SS.mmmZ'), écrit par le code (aucun trigger, aucun
+//     défaut) ; `date` = TEXT 'YYYY-MM-DD' ; `boolean` = INTEGER 0/1 ;
+//   - les chemins de fichiers sont relatifs au dossier de données, séparateur '/'.
 // ============================================
 
 
 // ****************************************************
-//                 SCHÉMA : PROFILE
-// Données stables de l'utilisateur (CV, parcours, config)
+//                      PROFIL
 // ****************************************************
 
-Table profile.users {
-  id integer [pk, increment]
-  nom text
-  prenom text
-  email text
+Table users {
+  id integer [pk, note: "CHECK (id = 1)"]
+  nom text [not null]
+  prenom text [not null]
+  email text [not null]
   telephone text
-  ville text
   adresse text        // rue, affichée dans l'en-tête de la lettre si la référence l'affiche
   code_postal text
-  permis boolean [default: false]
+  ville text
+  permis boolean [note: "NULL = non renseigné"]
   description text
   linkedin text
   github text
   portfolio text
-  interets text       // centres d'intérêt, une ligne = un item
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  interets text       // une ligne = un centre d'intérêt
+  created_at timestamp [not null]
 }
 
-Table profile.lang {
+Table experiences {
   id integer [pk, increment]
-  user_id integer [ref: > profile.users.id, not null]
-  nom text
-  level text
-}
-
-Table profile.formations {
-  id integer [pk, increment]
-  user_id integer [ref: > profile.users.id, not null]
-  titre text [not null]
-  ecole text
-  description text    // détails (spécialité, cours, échange...), une ligne = un détail
-  date_debut date
-  date_fin date
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-}
-
-Table profile.projets {
-  id integer [pk, increment]
-  user_id integer [ref: > profile.users.id, not null]
-  titre text [not null]
-  description text
-  stack text          // technologies utilisées, texte libre
-  url text            // repo ou démo
-  pour_qui text       // client / employeur / projet perso
-  date_debut date
-  date_fin date
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-}
-
-// Distinct de candidature_type : pas de "freelance" ici.
-Enum experience_type_contrat {
-  stage
-  alternance
-  interim
-  cdd
-  cdi
-}
-
-Table profile.experiences {
-  id integer [pk, increment]
-  user_id integer [ref: > profile.users.id, not null]
   poste text [not null]
   entreprise text
   lieu text
   description text
   date_debut date
   date_fin date
-  type_contrat experience_type_contrat
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  type_contrat contract_type
+  created_at timestamp [not null]
 }
 
-Table profile.skills {
+Table formations {
   id integer [pk, increment]
-  user_id integer [ref: > profile.users.id, not null]
-  domaine text [not null]   // "Langages", "Data & ML", "Data Engineering"...
-  nom text [not null]       // "Python", "PyTorch"...
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  titre text [not null]
+  ecole text
+  description text    // une ligne = un détail
+  date_debut date
+  date_fin date
+  created_at timestamp [not null]
 }
 
-Table profile.settings {
+Table projets {
   id integer [pk, increment]
-  cle text [not null, unique]   // "llm_model", "theme"
-  valeur text
-  updated_at timestamp [not null, default: `now()`]
+  titre text [not null]
+  description text
+  stack text
+  url text
+  pour_qui text
+  date_debut date
+  date_fin date
+  created_at timestamp [not null]
 }
 
-
-// ****************************************************
-//                 SCHÉMA : SEARCH
-// Recherche d'emploi (sessions, offres, candidatures)
-// Mono-utilisateur : pas de user_id sur ces tables.
-// ****************************************************
-
-// ============================================
-// Sessions
-// ============================================
-
-Enum session_statut {
-  active
-  pause
-  termine
-}
-
-Table search.sessions {
+Table skills {
   id integer [pk, increment]
+  domaine text [not null]
   nom text [not null]
-  statut session_statut [not null, default: 'active']
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  created_at timestamp [not null]
 
-  Note: 'Regroupe un ensemble de candidatures pour une recherche ciblée.\nPossède son propre CV et sa propre lettre de motivation de référence,\ntracés dans documents.'
+  indexes {
+    (domaine, nom) [unique]
+  }
 }
 
-// ============================================
-// Candidatures (cœur)
-// ============================================
+Table langues {
+  id integer [pk, increment]
+  nom text [not null, unique]
+  level text
+  created_at timestamp [not null]
+}
 
-Enum candidature_type {
+Table settings {
+  cle text [pk, note: "'llm_model', 'theme'"]
+  valeur text
+}
+
+
+// ****************************************************
+//               SESSIONS ET DOCUMENTS
+// ****************************************************
+
+Table sessions {
+  id integer [pk, increment, note: "AUTOINCREMENT"]
+  nom text [not null]
+  statut session_status [not null, default: 'active']
+  created_at timestamp [not null]
+}
+
+Table document_versions {
+  id integer [pk, increment, note: "AUTOINCREMENT ; nomme le dossier versions/<id>/"]
+  session_id integer [not null, ref: > sessions.id, note: "ON DELETE CASCADE"]
+  doc_type doc_type [not null]
+  version integer [not null]          // numéro d'affichage par (session, doc_type)
+  original_filename text [not null]
+  typst_path text [not null]
+  pdf_path text [not null]
+  template_path text
+  example_data_path text
+  page_count integer
+  created_at timestamp [not null]
+
+  indexes {
+    (session_id, doc_type, version) [unique]
+  }
+}
+
+// Pointeur vers la version courante de chaque référence.
+Table documents {
+  session_id integer [not null, ref: > sessions.id, note: "ON DELETE CASCADE"]
+  doc_type doc_type [not null]
+  current_version_id integer [not null, ref: > document_versions.id, note: "ON DELETE CASCADE"]
+  updated_at timestamp [not null]     // dernier upload ou dernière restauration
+
+  indexes {
+    (session_id, doc_type) [pk]
+  }
+}
+
+
+// ****************************************************
+//                   CANDIDATURES
+// ****************************************************
+
+Table candidatures {
+  id integer [pk, increment, note: "AUTOINCREMENT ; nomme artefact/<id>.* et debug/<id>/"]
+  session_id integer [not null, ref: > sessions.id, note: "ON DELETE CASCADE"]
+  poste text [not null]
+  type_contrat contract_type [not null]
+  status candidature_status [not null, default: 'a_postuler']
+  source text [not null]
+  url_offre text
+  description_offre text [not null]
+  entreprise text [not null]
+  localisation text [not null]
+  remuneration text
+  notes text
+  cv_path text
+  lettre_motivation_path text
+  cv_reference_version_id integer [ref: > document_versions.id, note: "ON DELETE SET NULL"]
+  lm_reference_version_id integer [ref: > document_versions.id, note: "ON DELETE SET NULL"]
+  created_at timestamp [not null]
+
+  indexes {
+    session_id
+  }
+}
+
+Table contacts {
+  id integer [pk, increment]
+  candidature_id integer [not null, ref: > candidatures.id, note: "ON DELETE CASCADE"]
+  nom text
+  role text
+  email text
+  telephone text
+  notes text
+  created_at timestamp [not null]
+
+  indexes {
+    candidature_id
+  }
+}
+
+Table interviews {
+  id integer [pk, increment]
+  candidature_id integer [not null, ref: > candidatures.id, note: "ON DELETE CASCADE"]
+  contact_id integer [ref: > contacts.id, note: "ON DELETE SET NULL"]
+  type_entretien interview_type
+  modalite interview_mode
+  date_entretien timestamp
+  lieu text
+  issue interview_outcome [not null, default: 'en_attente']
+  notes text
+  created_at timestamp [not null]
+
+  indexes {
+    candidature_id
+  }
+}
+
+Table status_history {
+  id integer [pk, increment]
+  candidature_id integer [not null, ref: > candidatures.id, note: "ON DELETE CASCADE"]
+  event_type event_type [not null]
+  ancien_status candidature_status
+  nouveau_status candidature_status
+  content text
+  interview_id integer [ref: > interviews.id, note: "ON DELETE SET NULL"]
+  changed_at timestamp [not null]
+
+  indexes {
+    candidature_id
+  }
+}
+
+
+// ****************************************************
+//            VALEURS CONTRAINTES (CHECK)
+// ****************************************************
+
+Enum contract_type {
   stage
   alternance
   cdi
@@ -159,69 +230,29 @@ Enum candidature_type {
   freelance
 }
 
+Enum session_status {
+  active
+  pause
+  termine
+}
+
+Enum doc_type {
+  cv
+  lettre_motivation
+}
+
 Enum candidature_status {
   a_postuler
   postule
   relance
   entretien
-  entretien_passe // entretien passé, en attente de retour
-  offre           // statut intermédiaire : peut encore être accepté ou décliné
+  entretien_passe
+  offre
   refus
   abandon
   ghosting
   accepte
   offre_refusee
-}
-
-Table search.candidatures {
-  id integer [pk, increment]
-  session_id integer [ref: > search.sessions.id, not null]
-  poste text [not null]
-  type candidature_type
-  status candidature_status [not null, default: 'a_postuler']
-  source text                 // canal de candidature, voir SOURCE_OPTIONS côté frontend
-  url_offre text              // ni index ni unicité : doublons signalés par GET /api/candidatures/by-url (comparaison normalisée côté agent)
-  description_offre text      // texte brut de l'annonce (nettoyé par core::text::html_to_plain à l'import), entrée du pipeline IA
-  entreprise text
-  localisation text
-  remuneration text
-  date_candidature date       // date d'envoi de la candidature
-  notes text
-  cv_path text                // chemin du CV généré/joint
-  lettre_motivation_path text
-  cv_reference_version_id integer [ref: > search.document_versions.id]  // ON DELETE SET NULL — version de CV de référence utilisée à la génération
-  lm_reference_version_id integer [ref: > search.document_versions.id]  // ON DELETE SET NULL — version de LM de référence utilisée à la génération
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-}
-
-// status_history est une timeline unifiée : event_type n'a pas de CHECK SQL,
-// la validation vit côté Rust (EventType, crates/core/src/models/event_type.rs).
-Table search.status_history {
-  id integer [pk, increment]
-  candidature_id integer [ref: > search.candidatures.id, not null, delete: cascade]
-  event_type text [not null]           // voir EventType côté Rust, pas de CHECK SQL
-  ancien_status candidature_status
-  nouveau_status candidature_status    // nullable : un événement ne change pas toujours le statut
-  content text                         // mail/message associé à l'événement
-  interview_id integer [ref: > search.interviews.id]
-  changed_at timestamp [not null, default: `now()`]
-}
-
-// ============================================
-// Contacts & entretiens
-// ============================================
-
-Table search.contacts {
-  id integer [pk, increment]
-  candidature_id integer [ref: > search.candidatures.id, not null, delete: cascade]
-  nom text
-  role text         // "RH", "Manager", "Lead Tech"
-  email text
-  telephone text
-  notes text
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
 }
 
 Enum interview_type {
@@ -232,84 +263,32 @@ Enum interview_type {
   autre
 }
 
-Enum interview_issue {
-  en_attente
-  positif
-  negatif
-}
-
-Enum interview_modalite {
+Enum interview_mode {
   visio
   presentiel
   telephone
 }
 
-Table search.interviews {
-  id integer [pk, increment]
-  candidature_id integer [ref: > search.candidatures.id, not null, delete: cascade]
-  contact_id integer [ref: > search.contacts.id]
-  type interview_type
-  modalite interview_modalite
-  date_entretien timestamp
-  lieu text         // texte libre : adresse, lien de visio, numéro
-  issue interview_issue [default: 'en_attente']
-  notes text
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+Enum interview_outcome {
+  en_attente
+  positif
+  negatif
 }
 
-// ============================================
-// Documents (CV / LM) — fichiers sur disque
-// ============================================
-// Un document de référence par type et par session. Une référence n'est
-// utilisable par la génération qu'une fois templatisée (template_path non
-// null) : le template lit ses données depuis un JSON au schéma canonique.
-// Le document rattaché
-// à une candidature (généré ou joint) est tracé par candidatures.cv_path /
-// lettre_motivation_path, pas par cette table.
-
-Enum document_type {
-  cv
-  lettre_motivation
-}
-
-Table search.documents {
-  id integer [pk, increment]
-  session_id integer [ref: > search.sessions.id, not null]   // ON DELETE CASCADE
-  doc_type document_type [not null]
-  original_filename text [not null]
-  file_path text [not null]
-  pdf_path text
-  template_path text      // template.typ de la version courante, null tant que non templatisée
-  example_data_path text  // example_data.json de la version courante
-  page_count integer      // nombre de pages du PDF de référence
-  current_version_id integer [ref: > search.document_versions.id]  // ON DELETE SET NULL — version courante, null si antérieure au versioning
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-
-  indexes {
-    (session_id, doc_type) [unique, name: 'uq_documents_session_doctype']
-  }
-}
-
-// Historique des documents de référence : une ligne par upload, jamais
-// écrasée. Fichiers sous documents/sessions/<session_id>/<doc_type>/versions/<id>/.
-// documents recopie la version courante (current_version_id).
-Table search.document_versions {
-  id integer [pk, increment]
-  session_id integer [ref: > search.sessions.id, not null]   // ON DELETE CASCADE
-  doc_type document_type [not null]
-  version integer [not null]              // numéro d'affichage, MAX+1 par (session_id, doc_type)
-  original_filename text [not null]
-  typst_path text [not null]
-  pdf_path text [not null]
-  template_path text      // template.typ produit à l'upload (null si non templatisée)
-  example_data_path text  // example_data.json produit à l'upload
-  page_count integer      // nombre de pages du PDF de référence
-  created_at timestamp [not null, default: `now()`]
-
-  indexes {
-    (session_id, doc_type, version) [unique, name: 'uq_document_version']
-    (session_id, doc_type) [name: 'idx_document_versions_session']
-  }
+Enum event_type {
+  creation
+  candidature_envoyee
+  relance
+  entretien_planifie
+  entretien_passe
+  offre_recue
+  refus_recu
+  ghosting
+  desistement
+  accepter_offre
+  decliner_offre
+  message_envoye
+  message_recu
+  appel
+  note
 }
