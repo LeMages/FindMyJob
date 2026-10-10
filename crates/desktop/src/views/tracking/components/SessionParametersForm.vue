@@ -4,8 +4,8 @@
  * page Candidatures). Titre et statut sont reliés au backend (`sessions`),
  * édités au double-clic (même mécanique que la page détail d'une
  * candidature). Le CV et la lettre de motivation de référence
- * sont propres à cette session (`documents/sessions/<id>/`) et gérés par
- * `DocumentReferenceEditor` en mode "reference".
+ * sont propres à cette session (`documents/sessions/<id>/`) et affichés dans
+ * la card « Documents », une `DocumentReferenceRow` par document.
  */
 
 // Importation des modules Vue / framework
@@ -17,7 +17,7 @@ import { currentSession, updateSession } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 import type { DocumentReferenceView, SessionStatut } from '@/types'
 import EditableField from '@/components/EditableField.vue'
-import DocumentReferenceEditor from '@/components/DocumentReferenceEditor.vue'
+import DocumentReferenceRow from '@/components/DocumentReferenceRow.vue'
 
 const STATUS_OPTIONS: { value: SessionStatut; label: string }[] = [
   { value: 'active', label: 'Active' },
@@ -99,17 +99,21 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
 
     <!-- Documents -->
     <div v-if="documentsLoadError" class="font-mono text-[12px] text-red-500 mb-[18px]">{{ documentsLoadError }}</div>
-    <DocumentReferenceEditor
-      doc-type="cv"
-      :session-id="sessionId"
-      :reference="cvReference"
-      @update:reference="v => (cvReference = v)"
-    />
-    <DocumentReferenceEditor
-      doc-type="lettre_motivation"
-      :session-id="sessionId"
-      :reference="lettreReference"
-      @update:reference="v => (lettreReference = v)"
-    />
+    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] pt-5 pb-2 mb-[18px]">
+      <div class="text-[11px] font-semibold mb-[4px] font-mono tracking-[.06em] text-neutral-500">DOCUMENTS</div>
+      <DocumentReferenceRow
+        doc-type="cv"
+        :session-id="sessionId"
+        :reference="cvReference"
+        @update:reference="v => (cvReference = v)"
+      />
+      <div class="border-t border-neutral-200" />
+      <DocumentReferenceRow
+        doc-type="lettre_motivation"
+        :session-id="sessionId"
+        :reference="lettreReference"
+        @update:reference="v => (lettreReference = v)"
+      />
+    </div>
   </div>
 </template>

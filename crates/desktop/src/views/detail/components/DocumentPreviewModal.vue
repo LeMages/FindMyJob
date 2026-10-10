@@ -2,7 +2,7 @@
 /**
  * Modale d'aperçu PDF d'un document joint à une candidature (CV, lettre de
  * motivation), propre à `DetailView`. Même mécanique que l'aperçu des
- * documents de référence du profil (`DocumentReferenceEditor.vue`) : lecture
+ * documents de référence du profil (`DocumentReferenceRow.vue`) : lecture
  * du PDF encodé en base64 côté backend, affiché dans une iframe.
  */
 

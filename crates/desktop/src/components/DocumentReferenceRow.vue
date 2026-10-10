@@ -1,20 +1,22 @@
 <script setup lang="ts">
 /**
- * Éditeur de document de référence (CV ou lettre de motivation) du profil :
- * document Typst persistant, sauvegardé immédiatement côté backend, avec
- * compilation et aperçu PDF. Paramétré par `docType` (labels et noms de
- * commande dérivés de `cv` | `lettre_motivation`), ce qui évite de dupliquer
- * la même logique pour les deux documents.
+ * Ligne d'un document de référence (CV ou lettre de motivation) de la card
+ * « Documents » des paramètres de session : document Typst persistant,
+ * sauvegardé immédiatement côté backend, avec compilation et aperçu PDF, et
+ * accès à ses versions (`DocumentVersionsPopup`). Paramétré par `docType`
+ * (labels et noms de commande dérivés de `cv` | `lettre_motivation`), ce qui
+ * évite de dupliquer la même logique pour les deux documents.
  */
 
 // Importation des modules Vue / framework
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import { extractErrorMessage } from '@/composables/useErrorMessage'
-import DocumentVersionHistory from '@/components/DocumentVersionHistory.vue'
-import type { DocumentReferenceView } from '@/types/index'
+import { formatDateTime } from '@/composables/date_time_format'
+import DocumentVersionsPopup from '@/components/DocumentVersionsPopup.vue'
+import type { DocumentReferenceView, DocumentVersionView } from '@/types/index'
 
 interface Props {
   docType: 'cv' | 'lettre_motivation'
@@ -46,7 +48,7 @@ const error = ref<string | null>(null)
 const saveCommand = computed(() => (isCv.value ? 'save_cv' : 'save_lettre_motivation'))
 const compileCommand = computed(() => (isCv.value ? 'compile_cv' : 'compile_lettre_motivation'))
 
-const fieldsetTitle = computed(() => (isCv.value ? 'CV (TYPST)' : 'LETTRE DE MOTIVATION (TYPST)'))
+const docLabel = computed(() => (isCv.value ? 'CV' : 'Lettre de motivation'))
 const emptyLabel = computed(() => (isCv.value ? 'Aucun CV renseigné' : 'Aucune lettre de motivation renseignée'))
 const savedLabel = computed(() => (isCv.value ? 'Enregistré le' : 'Enregistrée le'))
 const previewTitle = computed(() => (isCv.value ? 'Visualiser le CV compilé' : 'Visualiser la lettre compilée'))
@@ -75,16 +77,56 @@ const previewModalTitle = computed(() =>
   previewVersionNumber.value == null ? modalTitle.value : `${modalTitle.value} — version ${previewVersionNumber.value}`,
 )
 
-/**
- * Formate le timestamp epoch (ms) de dernière sauvegarde d'une référence.
- *
- * @param updatedAt - Timestamp en millisecondes, sous forme de chaîne.
- * @returns Date formatée, ou `'?'` si le timestamp est absent/invalide.
- */
-function fmtReferenceDate(updatedAt: string): string {
-  const ms = Number(updatedAt)
-  if (!ms) return '?'
-  return new Date(ms).toLocaleDateString('fr-FR')
+// ── Versions ─────────────────────────────────────────────────────────────────
+
+const versions = ref<DocumentVersionView[]>([])
+const versionsLoadError = ref<string | null>(null)
+const versionsOpen = ref(false)
+
+/** Version courante (la plus récente si aucune n'est marquée, cas d'une référence antérieure au versioning). */
+const currentVersion = computed(
+  () => versions.value.find(v => v.is_current) ?? versions.value.reduce<DocumentVersionView | null>(
+    (latest, v) => (latest == null || v.version > latest.version ? v : latest),
+    null,
+  ),
+)
+
+// `DocumentReferenceView` ne porte pas le nom d'origine : on le lit sur la
+// version courante, avec repli sur le nom du fichier stocké.
+const displayFilename = computed(() => currentVersion.value?.original_filename ?? 'reference.typ')
+const displayDate = computed(() =>
+  formatDateTime(currentVersion.value?.created_at ?? props.reference?.updated_at ?? ''),
+)
+
+async function loadVersions() {
+  versionsLoadError.value = null
+  if (props.sessionId == null || !props.reference) {
+    versions.value = []
+    return
+  }
+  try {
+    versions.value = await invoke<DocumentVersionView[]>('get_document_versions', {
+      sessionId: props.sessionId,
+      docType: props.docType,
+    })
+  } catch (e: unknown) {
+    versions.value = []
+    versionsLoadError.value = extractErrorMessage(e, "Impossible de charger l'historique des versions.")
+  }
+}
+
+// Chaque changement de référence (upload, restauration) recharge les versions.
+watch(() => [props.sessionId, props.reference?.file_path, props.reference?.updated_at], loadVersions, {
+  immediate: true,
+})
+
+/** Ferme la couche du dessus : l'aperçu s'il est ouvert par-dessus la popup, sinon la popup. */
+function onVersionsClose() {
+  if (previewVisible.value) {
+    previewVisible.value = false
+    return
+  }
+  versionsOpen.value = false
 }
 
 function triggerPicker() {
@@ -173,9 +215,7 @@ defineExpose({ hasChanges, reset })
 </script>
 
 <template>
-  <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-    <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ fieldsetTitle }}</div>
-
+  <div class="py-[12px]">
     <input
       ref="fileInput"
       type="file"
@@ -184,8 +224,7 @@ defineExpose({ hasChanges, reset })
       @change="onFileSelected"
     />
 
-    <!-- Affichage du document actuel -->
-    <div v-if="reference" class="flex items-center gap-3 pt-[10px] pb-[6px]">
+    <div class="flex items-center gap-3">
       <div class="w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-500 flex-none">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -196,14 +235,21 @@ defineExpose({ hasChanges, reset })
         </svg>
       </div>
       <div class="flex-1 min-w-0">
-        <div class="text-[13px] font-semibold text-neutral-950 whitespace-nowrap overflow-hidden text-ellipsis">reference.typ</div>
-        <div class="text-[11px] text-neutral-500 mt-px">{{ savedLabel }} {{ fmtReferenceDate(reference.updated_at) }}</div>
+        <div class="text-[13px] font-semibold text-neutral-950">{{ docLabel }}</div>
+        <!-- Document actuel : nom du fichier et date de la version courante -->
+        <template v-if="reference">
+          <div class="text-[12px] text-neutral-700 mt-px whitespace-nowrap overflow-hidden text-ellipsis font-mono">{{ displayFilename }}</div>
+          <div class="text-[11px] text-neutral-500 mt-px">{{ savedLabel }} {{ displayDate }}</div>
+        </template>
+        <div v-else class="text-[12px] text-neutral-400 mt-px font-mono">{{ emptyLabel }}</div>
       </div>
       <div class="flex items-center gap-2 flex-none">
         <button
+          v-if="reference"
           class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-blue-200 bg-blue-50 text-blue-500 cursor-pointer transition-colors duration-150 hover:bg-blue-100 hover:border-blue-300"
           type="button"
           :title="previewTitle"
+          :aria-label="previewTitle"
           @click="preview"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -217,42 +263,37 @@ defineExpose({ hasChanges, reset })
           type="button"
           :disabled="saving"
           :title="uploadLabel"
+          :aria-label="uploadLabel"
           @click="triggerPicker"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- Sans document : icône d'ajout ; sinon icône de remplacement -->
+          <svg v-if="reference" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="17 1 21 5 17 9"/>
             <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
             <polyline points="7 23 3 19 7 15"/>
             <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
           </svg>
+          <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        <button
+          v-if="reference"
+          class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-neutral-300 bg-surface-2 text-neutral-600 cursor-pointer transition-colors duration-150 hover:bg-surface-3 hover:border-neutral-400"
+          type="button"
+          title="Versions"
+          aria-label="Versions"
+          @click="versionsOpen = true"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+            <polyline points="3 3 3 8 8 8"/>
+            <polyline points="12 7 12 12 15 14"/>
+          </svg>
         </button>
       </div>
     </div>
-    <!-- Aucun document : bouton d'ajout centré en mode édition, texte statique sinon -->
-    <button
-      v-else-if="editMode"
-      class="w-full flex flex-col items-center justify-center gap-2 py-7 rounded-lg border border-dashed border-neutral-300 text-neutral-500 cursor-pointer transition-colors duration-150 hover:bg-surface-2 hover:border-neutral-400 hover:text-neutral-700 disabled:opacity-60 disabled:cursor-default"
-      type="button"
-      :disabled="saving"
-      @click="triggerPicker"
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="12" y1="5" x2="12" y2="19"/>
-        <line x1="5" y1="12" x2="19" y2="12"/>
-      </svg>
-      <span class="text-[13px] font-medium font-sans">{{ saving ? 'Sauvegarde…' : uploadLabel }}</span>
-    </button>
-    <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ emptyLabel }}</div>
-
-    <DocumentVersionHistory
-      v-if="reference"
-      :doc-type="docType"
-      :session-id="sessionId"
-      :reference="reference"
-      :edit-mode="editMode"
-      @preview="previewVersion"
-      @restored="emit('update:reference', $event)"
-    />
 
     <div v-if="saving" class="mt-[10px] flex items-center gap-[7px] text-[12px] text-neutral-500 font-mono">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-blue-500 flex-none">
@@ -262,6 +303,18 @@ defineExpose({ hasChanges, reset })
     </div>
     <div v-if="error" class="mt-[10px] text-[12px] text-red-600">{{ error }}</div>
   </div>
+
+  <DocumentVersionsPopup
+    v-if="versionsOpen"
+    :doc-type="docType"
+    :session-id="sessionId"
+    :versions="versions"
+    :load-error="versionsLoadError"
+    :edit-mode="editMode"
+    @close="onVersionsClose"
+    @preview="previewVersion"
+    @restored="emit('update:reference', $event)"
+  />
 
   <!-- Modale prévisualisation -->
   <Teleport to="body">
