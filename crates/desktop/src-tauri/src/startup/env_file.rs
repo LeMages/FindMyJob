@@ -6,7 +6,7 @@
 //! l'environnement ne sont jamais écrasées.
 
 // Importation des modules standard
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 // Importation des modules internes
 use findmyjob_core::trace_log;
@@ -20,7 +20,11 @@ const ENV_FILE: &str = ".env";
 /// # Arguments
 ///
 /// * `config_dir` - Dossier de configuration de l'application, s'il a pu être déterminé.
-pub fn load(config_dir: Option<&Path>) {
+///
+/// # Returns
+///
+/// Chemin du `.env` chargé, ou `None` si aucun n'a été trouvé ou s'il est illisible.
+pub fn load(config_dir: Option<&Path>) -> Option<PathBuf> {
     // ------------------------------------------------------------------
     // 1. Dossier de configuration de l'application
     // ------------------------------------------------------------------
@@ -28,7 +32,7 @@ pub fn load(config_dir: Option<&Path>) {
         match dotenvy::from_path(&path) {
             Ok(()) => {
                 trace_log::log(&format!("[démarrage] .env chargé : {}", path.display()));
-                return;
+                return Some(path);
             }
             Err(e) => trace_log::log(&format!("[démarrage] .env illisible {} : {e}", path.display())),
         }
@@ -38,8 +42,17 @@ pub fn load(config_dir: Option<&Path>) {
     // 2. Répertoire courant et ses parents
     // ------------------------------------------------------------------
     match dotenvy::dotenv() {
-        Ok(path) => trace_log::log(&format!("[démarrage] .env chargé : {}", path.display())),
-        Err(e) if e.not_found() => trace_log::log("[démarrage] aucun fichier .env trouvé"),
-        Err(e) => trace_log::log(&format!("[démarrage] .env illisible : {e}")),
+        Ok(path) => {
+            trace_log::log(&format!("[démarrage] .env chargé : {}", path.display()));
+            Some(path)
+        }
+        Err(e) if e.not_found() => {
+            trace_log::log("[démarrage] aucun fichier .env trouvé");
+            None
+        }
+        Err(e) => {
+            trace_log::log(&format!("[démarrage] .env illisible : {e}"));
+            None
+        }
     }
 }

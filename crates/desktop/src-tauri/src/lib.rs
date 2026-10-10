@@ -22,16 +22,18 @@ pub mod url_normalize;
 // Importation des crates externes
 use tauri::Manager;
 
-/// Configure et lance l'application Tauri : initialise l'état (traces,
-/// `.env`, dossiers, base SQLite), l'injecte comme état partagé, puis
-/// enregistre toutes les commandes IPC.
+/// Configure et lance l'application Tauri : initialise l'état (`.env`, mode
+/// d'exécution, traces, dossiers, base SQLite), l'injecte comme état
+/// partagé, crée la fenêtre principale, puis enregistre toutes les
+/// commandes IPC.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let context = startup::initialize(app.handle());
-            app.manage(context);
+            let startup = startup::initialize(app.handle());
+            app.manage(startup.context);
+            startup::main_window::create(app.handle(), startup.main_webview_dir.as_deref())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

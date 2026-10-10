@@ -71,7 +71,7 @@ crates/desktop/
     src/
       main.rs, lib.rs                  Tauri builder: setup (startup::initialize), managed AppContext, generate_handler!
       app_state.rs                     AppState { pool, data_dir, fonts_dir, progress } and AppContext (state or init error)
-      startup/                         .env loading, log file, data folders, pool + migrations, interrupted-generation cleanup
+      startup/                         .env loading, run mode (DEV/PROD) and folders, log file, pool + migrations, interrupted-generation cleanup, main window
       clock.rs                         single source of the current time and of the stored date formats
       storage_paths.rs                 builds every path of the data folder and resolves paths received from the frontend
       db/                              one file per table + joins.rs, profile.rs, init.rs (pool, migrations), transaction.rs
@@ -255,7 +255,7 @@ An offer enters the app only when the user adds it, one page at a time: there is
 
 **Final cleanup** (`core::scraping::finalize::finalize_fields`), on every path (JSON-LD, LLM, pasted text): the description goes through `core::text::html_to_plain` (no tags, emoji or Markdown decoration; headings and lists kept; escaped HTML from JSON-LD decoded), short fields are reduced to one line, and a contract type outside the form's values is dropped. The commands return `OfferExtraction { fields, stage }` with `stage` = `json_ld` or `llm`.
 
-**Capture window** (`crates/desktop/src-tauri/src/commands/capture.rs`): when the app cannot read the page by itself (access refused, content rendered by JavaScript), the user opens it in a secondary `capture` window, accepts cookies or logs in, then clicks « Capturer cette page » in the main window. The rendered HTML is read on the Rust side with `WebviewWindow::eval_with_callback` (no IPC from the page), capped at 5 MB, and passed to `services::scraping::extract_from_html`, so it goes through the same cascade. The window belongs to no capability: Tauri rejects every IPC call from a remote origin without a `remote` capability, so the remote page cannot reach any app command. The URL is validated before loading (a local URL such as the dev server would be treated as an app page with IPC access). The window's WebView profile (`<app local data>/capture_webview`) keeps the site session between uses, isolated from the main window.
+**Capture window** (`crates/desktop/src-tauri/src/commands/capture.rs`): when the app cannot read the page by itself (access refused, content rendered by JavaScript), the user opens it in a secondary `capture` window, accepts cookies or logs in, then clicks « Capturer cette page » in the main window. The rendered HTML is read on the Rust side with `WebviewWindow::eval_with_callback` (no IPC from the page), capped at 5 MB, and passed to `services::scraping::extract_from_html`, so it goes through the same cascade. The window belongs to no capability: Tauri rejects every IPC call from a remote origin without a `remote` capability, so the remote page cannot reach any app command. The URL is validated before loading (a local URL such as the dev server would be treated as an app page with IPC access). The window's WebView profile (`capture_webview/`, in the app local folder in PROD or in `dev-data/` in DEV — see §10) keeps the site session between uses, isolated from the main window.
 
 **Duplicates**: `find_candidatures_by_url` returns existing applications, across all sessions, whose `url_offre` matches after normalization (`crates/desktop/src-tauri/src/url_normalize.rs`: no scheme, `www.`, query, fragment or trailing slash, lowercase). The screen shows them as a non-blocking warning.
 
@@ -263,12 +263,20 @@ An offer enters the app only when the user adds it, one page at a time: there is
 
 `startup::initialize` runs once in Tauri's `setup`, before any command:
 
-1. Points `core::trace_log` at `<app log folder>/findmyjob.log` (Windows: `%LOCALAPPDATA%\com.findmyjob.app\logs\`). Every trace (fetch failures, templatization retries, writing-loop feedback, page fitting, cleanup failures) goes to stderr and to that file — a release build on Windows has no console.
-2. Loads `.env` (see §8).
-3. Creates the data folder and `polices/`, opens the pool and applies the migrations.
-4. Deletes interrupted generations (see §7.2).
+1. Loads `.env` (see §8) and keeps the path of the file loaded.
+2. Decides the run mode with `startup::run_mode::resolve` — a pure function of the `.env` path (or its absence), the value of `MODE` and the Tauri folders. `MODE` is read from the `.env` that was loaded: no `.env`, `MODE` absent or `MODE=PROD` → PROD; `MODE=DEV` → DEV; any other value is a startup error (case is ignored). An invalid value names the value received and the two accepted values; it becomes the initialization error shown by the UI.
 
-The result is managed as `AppContext`: either the `AppState`, or the initialization error returned by every command.
+   | Mode | Data (`findmyjob.db`, `documents/`, `polices/`) | Log file | Main window WebView profile | Capture window profile |
+   |---|---|---|---|---|
+   | PROD | `app_data_dir` (Windows `%APPDATA%\com.findmyjob.app\`; macOS `~/Library/Application Support/com.findmyjob.app/`; Linux `~/.local/share/com.findmyjob.app/`) | `<app log folder>/findmyjob.log` (Windows `%LOCALAPPDATA%\com.findmyjob.app\logs\`) | Tauri default (Windows `%LOCALAPPDATA%\com.findmyjob.app\EBWebView`) | `<app local data>/capture_webview` |
+   | DEV | `<folder of the .env>/dev-data/` | `dev-data/logs/findmyjob.log` | `dev-data/webview/` | `dev-data/capture_webview/` |
+
+   In DEV nothing is written to the system app folders. The rest of the code receives these folders (`AppState.data_dir`, `AppState.capture_profile_dir`) without knowing the mode.
+3. Creates the data and log folders (so `dev-data/` when missing), points `core::trace_log` at `findmyjob.log` and logs the mode and folders. Every trace (fetch failures, templatization retries, writing-loop feedback, page fitting, cleanup failures) goes to stderr and to that file — a release build on Windows has no console. Traces emitted before this step (the `.env` lookup) reach stderr only.
+4. Creates `polices/`, opens the pool and applies the migrations.
+5. Deletes interrupted generations (see §7.2).
+
+The result is managed as `AppContext`: either the `AppState`, or the initialization error returned by every command. Then `setup` creates the main window (`startup/main_window.rs`): it is declared with `"create": false` in `tauri.conf.json` so that its WebView profile can follow the mode.
 
 ## 11. Features — implemented, partial, and planned
 
@@ -312,7 +320,8 @@ Conventional Commits drive automated versioning: `<type>(<scope>): <description>
 Everything runs on the user's machine, in one process; there is no server and no Docker.
 
 - `cd crates/desktop && npm install && npm run tauri dev`. In development, `.env` is found at the repository root by walking up from the current directory.
-- Data folder (Tauri `app_data_dir`, identifier `com.findmyjob.app`): `findmyjob.db`, `documents/`, `polices/`. On Windows, `%APPDATA%\com.findmyjob.app\`; on macOS, `~/Library/Application Support/com.findmyjob.app/`; on Linux, `~/.local/share/com.findmyjob.app/`. An installed app reads its `.env` from the app config folder (the same folder on Windows).
+- With `MODE=DEV` in that `.env`, all data goes to `dev-data/` at the repository root (gitignored); without it, the app uses the system folders like an installed app (PROD). See §10 for the full table.
+- PROD data folder (Tauri `app_data_dir`, identifier `com.findmyjob.app`): `findmyjob.db`, `documents/`, `polices/`. On Windows, `%APPDATA%\com.findmyjob.app\`; on macOS, `~/Library/Application Support/com.findmyjob.app/`; on Linux, `~/.local/share/com.findmyjob.app/`. An installed app reads its `.env` from the app config folder (the same folder on Windows).
 
 ## 13. Known gaps and points of attention
 

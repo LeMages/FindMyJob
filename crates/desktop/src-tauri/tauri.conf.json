@@ -12,6 +12,8 @@
   "app": {
     "windows": [
       {
+        "label": "main",
+        "create": false,
         "title": "FindMyJob",
         "maximized": true,
         "minWidth": 800,

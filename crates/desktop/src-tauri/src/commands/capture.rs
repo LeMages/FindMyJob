@@ -29,10 +29,6 @@ use findmyjob_core::scraping::url_validation::validate_offer_url;
 
 /// Label de la fenêtre de capture (absent de toute capability).
 const CAPTURE_LABEL: &str = "capture";
-/// Sous-dossier du profil WebView de la fenêtre de capture : la session
-/// (cookies, connexion) y est conservée entre deux utilisations, isolée de
-/// la fenêtre principale.
-const CAPTURE_DATA_DIR: &str = "capture_webview";
 /// Taille maximale du HTML capturé : la même que pour une page récupérée par
 /// lien (5 Mo).
 const MAX_CAPTURE_BYTES: usize = MAX_RESPONSE_BYTES;
@@ -56,6 +52,8 @@ fn capture_script() -> String {
 /// # Arguments
 ///
 /// * `app` - Handle de l'application Tauri.
+/// * `ctx` - Contexte de l'application (profil WebView de la fenêtre, conservé
+///   entre deux utilisations et isolé de la fenêtre principale).
 /// * `url` - URL de l'offre, validée comme pour une récupération : seule une page
 ///   publique en http(s) est chargée. Indispensable ici : une URL locale
 ///   (ex. le serveur de développement) serait traitée par Tauri comme une
@@ -65,7 +63,11 @@ fn capture_script() -> String {
 ///
 /// `Ok(())` une fois la fenêtre ouverte, ou l'erreur de validation/création.
 #[tauri::command]
-pub async fn open_capture_window(app: AppHandle, url: String) -> Result<(), AppError> {
+pub async fn open_capture_window(
+    app: AppHandle,
+    ctx: tauri::State<'_, AppContext>,
+    url: String,
+) -> Result<(), AppError> {
     let url = validate_offer_url(&url)?;
 
     if let Some(window) = app.get_webview_window(CAPTURE_LABEL) {
@@ -76,11 +78,7 @@ pub async fn open_capture_window(app: AppHandle, url: String) -> Result<(), AppE
         return Ok(());
     }
 
-    let data_dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| window_error("localiser le dossier de session", e))?
-        .join(CAPTURE_DATA_DIR);
+    let data_dir = ctx.state()?.capture_profile_dir.clone();
     WebviewWindowBuilder::new(&app, CAPTURE_LABEL, WebviewUrl::External(url))
         .title("FindMyJob — page de l'offre")
         .inner_size(1100.0, 800.0)

@@ -87,6 +87,7 @@ async fn supprimer_une_session_supprime_son_dossier() {
         pool,
         fonts_dir: storage_paths::fonts_dir(&data_dir),
         data_dir: data_dir.clone(),
+        capture_profile_dir: data_dir.join("capture_webview"),
         progress: ProgressStore::new(),
     };
 

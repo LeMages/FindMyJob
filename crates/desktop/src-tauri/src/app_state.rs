@@ -23,12 +23,14 @@ use findmyjob_core::error::AppError;
 /// * `pool` - Pool de connexions SQLite.
 /// * `data_dir` - Dossier de données de l'application (base, documents, polices).
 /// * `fonts_dir` - Dossier des polices importées (`<data_dir>/polices`).
+/// * `capture_profile_dir` - Profil WebView de la fenêtre de capture (selon le mode d'exécution).
 /// * `progress` - Progression en mémoire des générations de documents.
 #[derive(Clone)]
 pub struct AppState {
     pub pool: SqlitePool,
     pub data_dir: PathBuf,
     pub fonts_dir: PathBuf,
+    pub capture_profile_dir: PathBuf,
     pub progress: ProgressStore,
 }
 

@@ -29,7 +29,16 @@ The Vue frontend calls Tauri commands, which call the business logic directly. S
 
 ## Data
 
-Everything is stored locally, in the app data folder (on Windows `%APPDATA%\com.findmyjob.app\`): a SQLite database (`findmyjob.db`), your reference documents and generated PDFs (`documents/`) and imported fonts (`polices/`). The schema is created and migrated automatically at startup; see [`db/schema.dbml`](db/schema.dbml) for the column-level reference.
+Everything is stored locally, in the data folder: a SQLite database (`findmyjob.db`), your reference documents and generated PDFs (`documents/`) and imported fonts (`polices/`). The schema is created and migrated automatically at startup; see [`db/schema.dbml`](db/schema.dbml) for the column-level reference.
+
+The data folder depends on the run mode, set by `MODE` in `.env`:
+
+| Mode | Data folder | Logs and WebView profiles |
+|---|---|---|
+| PROD (default) | app data folder (on Windows `%APPDATA%\com.findmyjob.app\`) | app local folder (on Windows `%LOCALAPPDATA%\com.findmyjob.app\`, logs in `logs\findmyjob.log`) |
+| DEV | `dev-data/` next to the `.env` that declared `MODE=DEV` (in development, the repository root) | same `dev-data/` folder (`logs/`, `webview/`, `capture_webview/`) |
+
+`MODE` is read from the `.env` that was loaded: no `.env`, `MODE` absent or `MODE=PROD` → PROD; `MODE=DEV` → DEV; any other value is a startup error (case is ignored). In DEV mode nothing is written to the system app folders. `dev-data/` is gitignored and created when missing.
 
 ## Prerequisites
 
@@ -43,13 +52,13 @@ Everything is stored locally, in the app data folder (on Windows `%APPDATA%\com.
 ```bash
 git clone https://github.com/KanASon/FindMyJob.git
 cd FindMyJob
-cp .env.example .env   # fill in ANTHROPIC_API_KEY
+cp .env.example .env   # fill in ANTHROPIC_API_KEY, set MODE=DEV for an isolated dev-data/ folder
 cd crates/desktop
 npm install
 npm run tauri dev
 ```
 
-In development, the `.env` at the repository root is found automatically. An installed app reads it from its config folder (on Windows `%APPDATA%\com.findmyjob.app\.env`). Logs are written to the app log folder (on Windows `%LOCALAPPDATA%\com.findmyjob.app\logs\findmyjob.log`).
+In development, the `.env` at the repository root is found automatically. An installed app reads it from its config folder (on Windows `%APPDATA%\com.findmyjob.app\.env`). Logs are written to `findmyjob.log` in the log folder of the run mode (see [Data](#data)); the first startup line gives the mode and the folders in use.
 
 ### Production build
 

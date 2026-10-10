@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
 
-# Legacy data directories (old SQLite dev database, former agent DATA_DIR)
+# Données du mode DEV (MODE=DEV dans le .env)
 dev-data/
+
+# Legacy data directory (former agent DATA_DIR)
 data/
 
 # Build output

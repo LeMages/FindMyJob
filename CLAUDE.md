@@ -26,7 +26,7 @@ The Rust side of `crates/desktop` is the single source of truth for business rul
 | Business logic beyond one DB call | `crates/desktop/src-tauri/src/services/*.rs` (applications, background generation, settings, offer import, sessions) |
 | Current time and stored date formats | `crates/desktop/src-tauri/src/clock.rs` — the only place that reads the clock |
 | Paths of the data folder | `crates/desktop/src-tauri/src/storage_paths.rs` — the only place that builds or resolves them |
-| Startup (log file, `.env`, folders, pool, cleanup) | `crates/desktop/src-tauri/src/startup/` |
+| Startup (`.env`, run mode, log file, folders, pool, cleanup, main window) | `crates/desktop/src-tauri/src/startup/` — the DEV/PROD decision is `run_mode::resolve`, the only place that picks the data, log and WebView folders |
 | Offer import by link (URL validation, guarded fetch, JSON-LD then page text + LLM, final cleanup) | `crates/core/src/scraping/` (pure logic), `crates/core/src/llm/scraping_extract.rs`, cascade in `crates/desktop/src-tauri/src/offer_extraction.rs`, entry points in `services/scraping.rs` |
 | Capture window (user-driven page capture when the app can't read a page) | `crates/desktop/src-tauri/src/commands/capture.rs` — captures and passes the HTML to `services::scraping::extract_from_html`, no extraction logic |
 | Documents pipeline (CV/LM tailoring + Typst) | `crates/desktop/src-tauri/src/pipeline.rs` (orchestration), `docgen/` (deterministic assembly), `documents/` (templatization, storage, versions, compilation, fonts), `crates/core/src/docgen/` (budgets, linter, selection — pure logic) |
@@ -78,13 +78,20 @@ Skipping a step usually means the feature is backend-only — that's a valid int
 ## Running the project locally
 
 ```bash
-cp .env.example .env      # fill in ANTHROPIC_API_KEY
+cp .env.example .env      # fill in ANTHROPIC_API_KEY, MODE=DEV for a local dev-data/ folder
 cd crates/desktop
 npm install
 npm run tauri dev
 ```
 
-There is no server and no Docker. At startup the app loads `.env` (app config folder first, then the current directory and its parents — in dev, the repository root), creates its data folder, opens `findmyjob.db` and applies the migrations. Data folder (Tauri `app_data_dir`, identifier `com.findmyjob.app`): on Windows `%APPDATA%\com.findmyjob.app\` (`findmyjob.db`, `documents/`, `polices/`). Log file: `<app log folder>/findmyjob.log` (Windows `%LOCALAPPDATA%\com.findmyjob.app\logs\`).
+There is no server and no Docker. At startup the app loads `.env` (app config folder first, then the current directory and its parents — in dev, the repository root), decides the run mode, creates its data folder, opens `findmyjob.db` and applies the migrations.
+
+Run mode (`startup/run_mode.rs`): `MODE` is read from the `.env` that was loaded: no `.env`, `MODE` absent or `MODE=PROD` → PROD; `MODE=DEV` → DEV; any other value is a startup error (case is ignored).
+
+- **PROD** — data folder = Tauri `app_data_dir` (identifier `com.findmyjob.app`; Windows `%APPDATA%\com.findmyjob.app\`: `findmyjob.db`, `documents/`, `polices/`); log file `<app log folder>/findmyjob.log` (Windows `%LOCALAPPDATA%\com.findmyjob.app\logs\`); WebView profiles in the app local folder (`EBWebView/`, `capture_webview/`).
+- **DEV** — everything in `dev-data/` next to the `.env` that declared `MODE=DEV` (the repository root): `findmyjob.db`, `documents/`, `polices/`, `logs/findmyjob.log`, `webview/` (main window profile), `capture_webview/`. Nothing goes to the system app folders. `dev-data/` is gitignored and created when missing.
+
+The main window is declared with `"create": false` in `tauri.conf.json` and built in `setup` (`startup/main_window.rs`) so its WebView profile follows the mode.
 
 `npm`/`vite`/`tauri` commands must be run from `crates/desktop/`, not the repo root — there is no root `package.json`.
 
@@ -103,7 +110,7 @@ There is no server and no Docker. At startup the app loads `.env` (app config fo
 
 - Don't reintroduce a local server, an HTTP layer between the frontend and the Rust side, PostgreSQL, or Docker — the server-mode version is archived at the Git tag `archive/agent-postgres`.
 - Don't enable another sqlx driver than SQLite, at the workspace or crate level.
-- Don't read the clock outside `clock.rs`, and don't build a data-folder path outside `storage_paths.rs`.
+- Don't read the clock outside `clock.rs`, and don't build a data-folder path outside `storage_paths.rs`. Don't pick a data, log or WebView folder outside `startup/run_mode.rs` — the rest of the code receives them.
 - Don't add database access, Tauri or file-system persistence to `crates/core` — it stays pure.
 - Don't add business logic to the Vue frontend or to a Tauri command file — it belongs in `db/` or `services/`.
 - Don't run `npm`, `vite`, or `tauri` commands from the repo root.
