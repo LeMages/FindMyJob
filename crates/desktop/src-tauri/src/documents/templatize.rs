@@ -24,6 +24,7 @@ use findmyjob_core::docgen::date_format::format_long_date;
 use findmyjob_core::docgen::text_diff::{alphanumeric_words, diff_words, orphan_separators};
 use findmyjob_core::error::AppError;
 use findmyjob_core::llm::{templatize_reference, TemplatizeFeedback, TemplatizeOutput};
+use findmyjob_core::llm::ClaudeTarget;
 use findmyjob_core::models::{CvExampleData, LmExampleData, TemplateArtifacts};
 use findmyjob_core::trace_log;
 
@@ -86,7 +87,7 @@ enum Validation {
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `root` - Dossier racine de compilation (fichiers annexes de la référence).
 /// * `fonts_dir` - Dossier des polices importées par l'utilisateur.
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -98,13 +99,13 @@ pub async fn templatize(
     doc_type: &str,
     root: &Path,
     fonts_dir: &Path,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<ValidatedTemplate, AppError> {
     let mut feedback: Option<TemplatizeFeedback> = None;
     let computes_date = reference_typ.contains("datetime.today");
 
     for attempt in 1..=MAX_ATTEMPTS {
-        let output = templatize_reference(reference_typ, doc_type, feedback.as_ref(), model).await?;
+        let output = templatize_reference(reference_typ, doc_type, feedback.as_ref(), target).await?;
         let example_data_json = serde_json::to_string_pretty(&output.example_data)
             .map_err(|e| AppError::Llm(format!("Données d'exemple non sérialisables : {e}")))?;
 

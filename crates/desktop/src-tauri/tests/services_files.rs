@@ -2,20 +2,26 @@
 //! frontend, nettoyage des générations interrompues, suppression d'une
 //! session avec son dossier, et validation des champs de candidature.
 
+#[path = "shared/fake_secret_store.rs"]
+mod fake_secret_store;
 #[path = "shared/seed.rs"]
 mod seed;
 
 // Importation des modules standard
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 // Importation des modules internes
+use fake_secret_store::FakeSecretStore;
 use findmyjob_core::error::AppError;
 use findmyjob_core::models::CreateCandidatureInput;
 use findmyjob_lib::app_state::AppState;
 use findmyjob_lib::documents;
 use findmyjob_lib::progress::ProgressStore;
+use findmyjob_lib::services::api_key::ApiKeyAccess;
 use findmyjob_lib::services::{candidature_validation, generation, sessions};
+use findmyjob_lib::startup::run_mode::RunMode;
 use findmyjob_lib::storage_paths;
 
 /// Dossier de données temporaire propre à un test.
@@ -89,6 +95,7 @@ async fn supprimer_une_session_supprime_son_dossier() {
         data_dir: data_dir.clone(),
         capture_profile_dir: data_dir.join("capture_webview"),
         progress: ProgressStore::new(),
+        api_key: ApiKeyAccess::new(RunMode::Prod, Arc::new(FakeSecretStore::default()), || None),
     };
 
     sessions::delete(&state, sid).await.unwrap();

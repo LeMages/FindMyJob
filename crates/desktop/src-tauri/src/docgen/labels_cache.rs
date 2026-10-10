@@ -12,6 +12,7 @@ use serde::{de::DeserializeOwned, Serialize};
 // Importation des modules internes
 use findmyjob_core::error::AppError;
 use findmyjob_core::llm::label_translation::{translate_cv_labels, translate_lm_labels};
+use findmyjob_core::llm::ClaudeTarget;
 use findmyjob_core::models::{CvLabels, LmLabels};
 use findmyjob_core::trace_log;
 
@@ -69,7 +70,7 @@ where
 /// * `example_lang` - Langue de la référence.
 /// * `target_lang` - Langue de l'offre.
 /// * `dir` - Dossier de la version de référence (emplacement du cache).
-/// * `model` - Identifiant du modèle Claude à utiliser pour une traduction.
+/// * `target` - Clé API et modèle Claude à utiliser pour une traduction.
 ///
 /// # Returns
 ///
@@ -79,11 +80,11 @@ pub async fn resolve_cv_labels(
     example_lang: &str,
     target_lang: &str,
     dir: &Path,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<ResolvedLabels<CvLabels>, AppError> {
     let cache = dir.join(format!("labels.{target_lang}.cv.json"));
     resolve(example, example_lang, target_lang, &cache, || {
-        translate_cv_labels(example, example_lang, target_lang, model)
+        translate_cv_labels(example, example_lang, target_lang, target)
     })
     .await
 }
@@ -99,7 +100,7 @@ pub async fn resolve_cv_labels(
 /// * `example_lang` - Langue de la référence.
 /// * `target_lang` - Langue de l'offre.
 /// * `dir` - Dossier de la version de référence (emplacement du cache).
-/// * `model` - Identifiant du modèle Claude à utiliser pour une traduction.
+/// * `target` - Clé API et modèle Claude à utiliser pour une traduction.
 ///
 /// # Returns
 ///
@@ -109,11 +110,11 @@ pub async fn resolve_lm_labels(
     example_lang: &str,
     target_lang: &str,
     dir: &Path,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<ResolvedLabels<LmLabels>, AppError> {
     let cache = dir.join(format!("labels.{target_lang}.lm.json"));
     let mut resolved = resolve(example, example_lang, target_lang, &cache, || {
-        translate_lm_labels(example, example_lang, target_lang, model)
+        translate_lm_labels(example, example_lang, target_lang, target)
     })
     .await?;
 

@@ -7,6 +7,7 @@
 use crate::error::AppError;
 use crate::llm::client::call_claude;
 use crate::models::{MatchingResult, ProfileDto};
+use crate::llm::target::ClaudeTarget;
 
 /// Schéma JSON attendu pour la stratégie de matching, utilisé comme
 /// structured output (`output_config.format`).
@@ -72,7 +73,7 @@ fn matching_schema() -> serde_json::Value {
 /// * `offer_analysis` - JSON produit par `llm::offer::analyze_offer`.
 /// * `profile` - Profil complet du candidat.
 /// * `project_count` - Nombre de projets à retenir (celui de la référence).
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -82,7 +83,7 @@ pub async fn match_profile(
     offer_analysis: &str,
     profile: &ProfileDto,
     project_count: usize,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<MatchingResult, AppError> {
     let system_prompt = format!(
         "Tu es un stratège de candidature. Tu compares le profil du candidat à l'offre et tu décides quoi mettre en avant.\n\n\
@@ -99,7 +100,7 @@ Les faits à mettre en avant viennent tous du profil : n'en invente aucun."
         .map_err(|e| AppError::Llm(format!("Erreur de sérialisation du profil : {e}")))?;
     let user_message = format!("Analyse d'offre :\n{offer_analysis}\n\nProfil du candidat :\n{profile_json}");
 
-    let raw_response = call_claude(&system_prompt, &user_message, Some(matching_schema()), model).await?;
+    let raw_response = call_claude(&system_prompt, &user_message, Some(matching_schema()), target).await?;
     serde_json::from_str(raw_response.trim()).map_err(|e| {
         AppError::Llm(format!("Le matching n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw_response}"))
     })

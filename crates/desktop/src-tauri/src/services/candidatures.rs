@@ -15,7 +15,6 @@ use crate::services::candidature_validation::validate_create;
 use crate::services::generation;
 use crate::url_normalize::normalize_offer_url;
 use findmyjob_core::error::AppError;
-use findmyjob_core::llm::client::DEFAULT_MODEL;
 use findmyjob_core::models::{CandidatureView, CreateCandidatureInput, DuplicateCandidatureView};
 use findmyjob_core::trace_log;
 
@@ -149,22 +148,23 @@ pub enum ApplicationMessage {
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
+/// * `state` - État de l'application (base, clé API).
 /// * `id` - Candidature concernée.
 /// * `kind` - Mail ou message court.
 ///
 /// # Returns
 ///
 /// Le texte rédigé, que l'interface exporte en `.txt`.
-pub async fn postuler_avec_message(pool: &SqlitePool, id: i64, kind: ApplicationMessage) -> Result<String, AppError> {
+pub async fn postuler_avec_message(state: &AppState, id: i64, kind: ApplicationMessage) -> Result<String, AppError> {
+    let pool = &state.pool;
     let detail = db::candidatures::fetch_detail(pool, id).await?;
     let profile = db::profile::build_profile(pool).await?;
-    let model = db::settings::resolve_llm_model(pool, DEFAULT_MODEL).await?;
+    let target = state.claude().resolve().await?;
 
     let text = match kind {
-        ApplicationMessage::Mail => findmyjob_core::llm::generate_application_email(&profile, &detail, &model).await?,
+        ApplicationMessage::Mail => findmyjob_core::llm::generate_application_email(&profile, &detail, &target).await?,
         ApplicationMessage::Message => {
-            findmyjob_core::llm::generate_application_message(&profile, &detail, &model).await?
+            findmyjob_core::llm::generate_application_message(&profile, &detail, &target).await?
         }
     };
     db::candidatures::mark_postule(pool, id, Some(&text), &clock::now_utc()).await?;

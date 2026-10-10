@@ -1,5 +1,6 @@
 //! Ré-exports publics des DTOs utilisés par les commandes Tauri.
 
+pub mod api_key_status;
 pub mod candidature;
 pub mod connection_test;
 pub mod contact;
@@ -23,6 +24,7 @@ pub mod status_history;
 pub mod timeline_event;
 pub mod user;
 
+pub use api_key_status::{ApiKeySource, ApiKeyStatus};
 pub use candidature::{
     CandidatureDetail, CandidatureView, CreateCandidatureInput, DuplicateCandidatureView, UpdateCandidatureInput,
 };

@@ -12,6 +12,8 @@ use sqlx::SqlitePool;
 
 // Importation des modules internes
 use crate::progress::ProgressStore;
+use crate::services::api_key::ApiKeyAccess;
+use crate::services::claude_target::ClaudeTargetSource;
 use findmyjob_core::error::AppError;
 
 /// Ressources partagées par les commandes et les tâches de fond. Clonable à
@@ -25,6 +27,7 @@ use findmyjob_core::error::AppError;
 /// * `fonts_dir` - Dossier des polices importées (`<data_dir>/polices`).
 /// * `capture_profile_dir` - Profil WebView de la fenêtre de capture (selon le mode d'exécution).
 /// * `progress` - Progression en mémoire des générations de documents.
+/// * `api_key` - Accès à la clé API Anthropic selon le mode d'exécution.
 #[derive(Clone)]
 pub struct AppState {
     pub pool: SqlitePool,
@@ -32,6 +35,18 @@ pub struct AppState {
     pub fonts_dir: PathBuf,
     pub capture_profile_dir: PathBuf,
     pub progress: ProgressStore,
+    pub api_key: ApiKeyAccess,
+}
+
+impl AppState {
+    /// Source de la cible des appels à Claude (modèle configuré et clé API).
+    ///
+    /// # Returns
+    ///
+    /// `ClaudeTargetSource` adossée au pool et à l'accès à la clé de l'état.
+    pub fn claude(&self) -> ClaudeTargetSource<'_> {
+        ClaudeTargetSource { pool: &self.pool, api_key: &self.api_key }
+    }
 }
 
 /// État géré par Tauri : l'état de l'application, ou la cause de l'échec

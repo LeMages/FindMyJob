@@ -1,11 +1,11 @@
 //! Commandes Tauri pour les paramètres applicatifs : modèle LLM, thème, test
-//! de connexion.
+//! de connexion, clé API Anthropic.
 
 // Importation des modules internes
 use crate::app_state::AppContext;
 use crate::db;
 use crate::error::AppError;
-use crate::models::TestConnectionResult;
+use crate::models::{ApiKeyStatus, TestConnectionResult};
 use crate::services;
 use findmyjob_core::llm::client::DEFAULT_MODEL;
 
@@ -78,5 +78,48 @@ pub async fn set_theme(ctx: tauri::State<'_, AppContext>, theme: String) -> Resu
 /// `TestConnectionResult`.
 #[tauri::command]
 pub async fn test_api_connection(ctx: tauri::State<'_, AppContext>) -> Result<TestConnectionResult, AppError> {
-    services::settings::test_connection(&ctx.state()?.pool).await
+    services::settings::test_connection(ctx.state()?).await
+}
+
+/// Renvoie l'état de la clé API Anthropic, sans la clé complète.
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+///
+/// # Returns
+///
+/// `ApiKeyStatus` (présence, source, 4 derniers caractères).
+#[tauri::command]
+pub async fn get_api_key_status(ctx: tauri::State<'_, AppContext>) -> Result<ApiKeyStatus, AppError> {
+    services::settings::api_key_status(&ctx.state()?.api_key).await
+}
+
+/// Enregistre la clé API Anthropic dans le trousseau du système (mode PROD).
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+/// * `key` - Clé saisie.
+///
+/// # Returns
+///
+/// L'état de la clé enregistrée, ou `AppError::Validation` (clé vide, mode DEV).
+#[tauri::command]
+pub async fn save_api_key(ctx: tauri::State<'_, AppContext>, key: String) -> Result<ApiKeyStatus, AppError> {
+    services::settings::save_api_key(&ctx.state()?.api_key, key).await
+}
+
+/// Supprime la clé API Anthropic du trousseau du système (mode PROD).
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+///
+/// # Returns
+///
+/// L'état de la clé (absente), ou `AppError::Validation` en mode DEV.
+#[tauri::command]
+pub async fn delete_api_key(ctx: tauri::State<'_, AppContext>) -> Result<ApiKeyStatus, AppError> {
+    services::settings::delete_api_key(&ctx.state()?.api_key).await
 }

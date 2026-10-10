@@ -12,6 +12,7 @@
 use crate::error::AppError;
 use crate::llm::client::call_claude_with_tokens;
 use crate::llm::doc_data_schema::{cv_example_data_schema, lm_example_data_schema, object};
+use crate::llm::target::ClaudeTarget;
 
 /// Plafond de tokens de sortie : le template Typst complet et les données
 /// d'exemple tiennent dans une seule réponse JSON, plus longue qu'une
@@ -129,7 +130,7 @@ fn build_user_message(reference_typ: &str, feedback: Option<&TemplatizeFeedback>
 /// * `reference_typ` - Source Typst complète de la référence.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `feedback` - Retour de validation de la tentative précédente, `None` au premier essai.
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -138,7 +139,7 @@ pub async fn templatize_reference(
     reference_typ: &str,
     doc_type: &str,
     feedback: Option<&TemplatizeFeedback>,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<TemplatizeOutput, AppError> {
     if reference_typ.trim().is_empty() {
         return Err(AppError::Validation("Le document de référence est vide.".to_string()));
@@ -169,7 +170,7 @@ pub async fn templatize_reference(
         ("dropped_text", serde_json::json!({ "type": "string" })),
     ]);
 
-    let raw = call_claude_with_tokens(&system_prompt, &user_message, Some(schema), TEMPLATIZE_MAX_TOKENS, model).await?;
+    let raw = call_claude_with_tokens(&system_prompt, &user_message, Some(schema), TEMPLATIZE_MAX_TOKENS, target).await?;
     parse_output(&raw)
 }
 

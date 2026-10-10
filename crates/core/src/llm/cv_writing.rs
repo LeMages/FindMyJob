@@ -16,6 +16,7 @@ use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
 use crate::llm::writing_rules::{language_rule, style_model_block, with_feedback, COMMON_RULES};
 use crate::models::{CvContent, CvData, ItemBullets, MatchingResult, ProfileDto};
+use crate::llm::target::ClaudeTarget;
 
 /// Entrées de la rédaction du CV.
 ///
@@ -245,10 +246,10 @@ fn review(content: &CvContent, input: &CvWritingInput<'_>, example_prose: &str) 
 async fn call_once(
     input: &CvWritingInput<'_>,
     feedback: Option<WritingFeedback>,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<CvContent, AppError> {
     let message = with_feedback(user_message(input), feedback.as_ref());
-    let raw = call_claude(&system_prompt(input), &message, Some(cv_content_schema(input)), model).await?;
+    let raw = call_claude(&system_prompt(input), &message, Some(cv_content_schema(input)), target).await?;
     let mut content: CvContent = serde_json::from_str(raw.trim()).map_err(|e| {
         AppError::Llm(format!("La rédaction du CV n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}"))
     })?;
@@ -261,16 +262,16 @@ async fn call_once(
 /// # Arguments
 ///
 /// * `input` - Entrées de la rédaction.
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
 /// `WritingOutcome<CvContent>`, entrées dans l'ordre d'affichage.
-pub async fn write_cv(input: &CvWritingInput<'_>, model: &str) -> Result<WritingOutcome<CvContent>, AppError> {
+pub async fn write_cv(input: &CvWritingInput<'_>, target: &ClaudeTarget) -> Result<WritingOutcome<CvContent>, AppError> {
     let prose = example_prose(input.example);
     let mut outcome = write_with_retries(
         "CV",
-        |feedback| call_once(input, feedback, model),
+        |feedback| call_once(input, feedback, target),
         |content| review(content, input, &prose),
         |content| {
             content.map_prose(strip_dashes);

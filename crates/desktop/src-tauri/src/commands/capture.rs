@@ -115,7 +115,7 @@ pub async fn capture_offer_page(
     let page_url = validate_offer_url(page_url.as_str())?;
 
     let html = read_rendered_html(window.clone()).await?;
-    let extraction = services::scraping::extract_from_html(&ctx.state()?.pool, page_url.as_str(), &html).await?;
+    let extraction = services::scraping::extract_from_html(ctx.state()?.claude(), page_url.as_str(), &html).await?;
 
     window.close().map_err(|e| window_error("fermer la fenêtre", e))?;
     Ok(extraction)

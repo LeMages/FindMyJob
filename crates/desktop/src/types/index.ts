@@ -411,6 +411,16 @@ export interface DocumentFileInfo {
 /** Thème d'affichage de l'application. */
 export type ThemeSetting = 'clair' | 'sombre' | 'systeme'
 
+/** Emplacement d'où la clé API Anthropic est lue : `.env` (DEV) ou trousseau du système (PROD). */
+export type ApiKeySource = 'env' | 'keyring'
+
+/** État de la clé API Anthropic (la clé complète ne quitte jamais le backend). */
+export interface ApiKeyStatus {
+  present: boolean
+  source: ApiKeySource
+  last4: string | null
+}
+
 /** Résultat d'un test de connexion à l'API Claude. */
 export interface TestConnectionResult {
   success: boolean

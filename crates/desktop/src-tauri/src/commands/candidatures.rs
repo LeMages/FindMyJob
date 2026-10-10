@@ -166,7 +166,7 @@ pub async fn postuler_sans_message(ctx: tauri::State<'_, AppContext>, id: i64) -
 /// Le mail rédigé.
 #[tauri::command]
 pub async fn postuler_par_mail(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<String, AppError> {
-    services::candidatures::postuler_avec_message(&ctx.state()?.pool, id, ApplicationMessage::Mail).await
+    services::candidatures::postuler_avec_message(ctx.state()?, id, ApplicationMessage::Mail).await
 }
 
 /// Fait rédiger le message court de candidature par l'IA et marque la
@@ -182,5 +182,5 @@ pub async fn postuler_par_mail(ctx: tauri::State<'_, AppContext>, id: i64) -> Re
 /// Le message rédigé.
 #[tauri::command]
 pub async fn postuler_par_message(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<String, AppError> {
-    services::candidatures::postuler_avec_message(&ctx.state()?.pool, id, ApplicationMessage::Message).await
+    services::candidatures::postuler_avec_message(ctx.state()?, id, ApplicationMessage::Message).await
 }

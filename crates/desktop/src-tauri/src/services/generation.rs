@@ -62,7 +62,13 @@ pub fn start(state: &AppState, candidature_id: i64, session_id: i64, description
 ///
 /// `Ok(())` une fois les documents sauvegardés et rattachés à la candidature.
 async fn run(state: &AppState, candidature_id: i64, session_id: i64, description_offre: &str) -> Result<(), AppError> {
-    let request = GenerationRequest { data_dir: &state.data_dir, session_id, candidature_id, description_offre };
+    let request = GenerationRequest {
+        data_dir: &state.data_dir,
+        session_id,
+        candidature_id,
+        description_offre,
+        api_key: &state.api_key,
+    };
     let progress = state.progress.clone();
     let generated = pipeline::generate_documents(&state.pool, &state.fonts_dir, request, |step, label| {
         progress.update(candidature_id, step, GENERATION_STEPS_TOTAL, label)

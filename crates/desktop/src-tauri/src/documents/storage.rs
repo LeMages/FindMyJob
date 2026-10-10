@@ -17,6 +17,7 @@ use base64::Engine as _;
 use sqlx::SqlitePool;
 
 // Importation des modules internes
+use crate::app_state::AppState;
 use crate::clock;
 use crate::db;
 use crate::db::document_versions::NewVersion;
@@ -217,9 +218,8 @@ async fn persist_version(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
-/// * `data_dir` - Dossier de données de l'application.
-/// * `fonts_dir` - Dossier des polices importées.
+/// * `state` - État de l'application (base, dossiers de données et de
+///   polices, clé API pour la templatisation).
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `filename` - Nom du fichier fourni par l'utilisateur (doit finir par `.typ`).
@@ -229,9 +229,7 @@ async fn persist_version(
 ///
 /// `DocumentReferenceView` pointant vers les fichiers `.typ` et `.pdf` sauvegardés.
 pub async fn save_reference(
-    pool: &SqlitePool,
-    data_dir: &Path,
-    fonts_dir: &Path,
+    state: &AppState,
     session_id: i64,
     doc_type: &'static str,
     filename: String,
@@ -243,6 +241,7 @@ pub async fn save_reference(
     if !filename.to_lowercase().ends_with(".typ") {
         return Err(AppError::Validation("Seuls les fichiers .typ sont acceptés.".to_string()));
     }
+    let (pool, data_dir, fonts_dir) = (&state.pool, state.data_dir.as_path(), state.fonts_dir.as_path());
 
     // ------------------------------------------------------------------
     // 2. Compilation en PDF, en mémoire (racine = dossier du type de
@@ -264,8 +263,8 @@ pub async fn save_reference(
     // 3. Conversion en template via l'API Claude, validée par compilation
     //    — hors transaction : les appels LLM ne bloquent pas les écritures
     // ------------------------------------------------------------------
-    let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
-    let validated = templatize(&content, &reference, doc_type, &doc_dir, fonts_dir, &model).await?;
+    let target = state.claude().resolve().await?;
+    let validated = templatize(&content, &reference, doc_type, &doc_dir, fonts_dir, &target).await?;
 
     // ------------------------------------------------------------------
     // 4. Version en base, fichiers et référence courante, atomiquement

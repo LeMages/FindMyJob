@@ -11,6 +11,7 @@ use crate::error::AppError;
 use crate::llm::client::call_claude;
 use crate::llm::doc_data_schema::{cv_labels_schema, lm_labels_schema};
 use crate::models::{CvLabels, LmLabels};
+use crate::llm::target::ClaudeTarget;
 
 /// Nom lisible d'une langue, pour le prompt.
 fn language_name(lang: &str) -> &'static str {
@@ -27,7 +28,7 @@ async fn translate<T: Serialize + DeserializeOwned>(
     schema: serde_json::Value,
     from: &str,
     to: &str,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<T, AppError> {
     let system_prompt = format!(
         "Tu traduis les libellés fixes d'un document de type {doc_label}. Langue source : {}. Langue cible : {}.\n\
@@ -39,7 +40,7 @@ async fn translate<T: Serialize + DeserializeOwned>(
     );
     let source = serde_json::to_string_pretty(labels)
         .map_err(|e| AppError::Llm(format!("Libellés non sérialisables : {e}")))?;
-    let raw = call_claude(&system_prompt, &format!("LIBELLÉS :\n{source}"), Some(schema), model).await?;
+    let raw = call_claude(&system_prompt, &format!("LIBELLÉS :\n{source}"), Some(schema), target).await?;
     serde_json::from_str(raw.trim())
         .map_err(|e| AppError::Llm(format!("La traduction des libellés n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}")))
 }
@@ -51,13 +52,13 @@ async fn translate<T: Serialize + DeserializeOwned>(
 /// * `labels` - Libellés de la référence.
 /// * `from` - Langue de la référence.
 /// * `to` - Langue cible.
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
 /// Libellés traduits (dont les 12 abréviations de mois de la langue cible).
-pub async fn translate_cv_labels(labels: &CvLabels, from: &str, to: &str, model: &str) -> Result<CvLabels, AppError> {
-    let translated: CvLabels = translate(labels, "CV", cv_labels_schema(), from, to, model).await?;
+pub async fn translate_cv_labels(labels: &CvLabels, from: &str, to: &str, target: &ClaudeTarget) -> Result<CvLabels, AppError> {
+    let translated: CvLabels = translate(labels, "CV", cv_labels_schema(), from, to, target).await?;
     if translated.months_short.len() != 12 {
         return Err(AppError::Llm(format!(
             "La traduction des libellés du CV a produit {} abréviations de mois au lieu de 12.",
@@ -74,11 +75,11 @@ pub async fn translate_cv_labels(labels: &CvLabels, from: &str, to: &str, model:
 /// * `labels` - Libellés de la référence.
 /// * `from` - Langue de la référence.
 /// * `to` - Langue cible.
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
 /// Libellés traduits.
-pub async fn translate_lm_labels(labels: &LmLabels, from: &str, to: &str, model: &str) -> Result<LmLabels, AppError> {
-    translate(labels, "lettre de motivation", lm_labels_schema(), from, to, model).await
+pub async fn translate_lm_labels(labels: &LmLabels, from: &str, to: &str, target: &ClaudeTarget) -> Result<LmLabels, AppError> {
+    translate(labels, "lettre de motivation", lm_labels_schema(), from, to, target).await
 }

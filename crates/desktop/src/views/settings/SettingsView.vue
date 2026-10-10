@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Vue « Paramètres » : modèle Claude, polices, thème d'affichage.
+ * Vue « Paramètres » : modèle Claude, clé API, polices, thème d'affichage.
  */
 
 // Importation des modules Vue / framework
@@ -10,6 +10,7 @@ import { onMounted, ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des composants
+import ApiKeySection from '@/views/settings/components/ApiKeySection.vue'
 import FontsSection from '@/views/settings/components/FontsSection.vue'
 
 // Importation des modules internes
@@ -91,6 +92,8 @@ async function onThemeChange(value: ThemeSetting) {
           <option v-for="opt in MODEL_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
       </div>
+
+      <ApiKeySection @saved="testConnection" />
 
       <div class="flex items-center justify-between gap-5 pt-2">
         <div>

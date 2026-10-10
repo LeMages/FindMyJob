@@ -7,6 +7,7 @@
 use crate::error::AppError;
 use crate::llm::client::call_claude;
 use crate::models::{CandidatureDetail, ProfileDto};
+use crate::llm::target::ClaudeTarget;
 
 /// Règles communes aux deux rédactions, rappelées dans chaque prompt système
 /// pour garantir l'honnêteté du contenu généré et éviter le remplissage IA
@@ -53,7 +54,7 @@ fn build_user_message(profile: &ProfileDto, candidature: &CandidatureDetail) -> 
 ///
 /// * `profile` - Profil complet du candidat.
 /// * `candidature` - Candidature visée.
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -61,7 +62,7 @@ fn build_user_message(profile: &ProfileDto, candidature: &CandidatureDetail) -> 
 pub async fn generate_application_email(
     profile: &ProfileDto,
     candidature: &CandidatureDetail,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<String, AppError> {
     let system_prompt = format!(
         "Tu rédiges un mail de candidature spontanée ou en réponse à une offre, au nom du candidat.\n\n\
@@ -74,7 +75,7 @@ pub async fn generate_application_email(
 
     let user_message = build_user_message(profile, candidature)?;
 
-    let raw_response = call_claude(&system_prompt, &user_message, None, model).await?;
+    let raw_response = call_claude(&system_prompt, &user_message, None, target).await?;
     Ok(raw_response.trim().to_string())
 }
 
@@ -86,7 +87,7 @@ pub async fn generate_application_email(
 ///
 /// * `profile` - Profil complet du candidat.
 /// * `candidature` - Candidature visée.
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -94,7 +95,7 @@ pub async fn generate_application_email(
 pub async fn generate_application_message(
     profile: &ProfileDto,
     candidature: &CandidatureDetail,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<String, AppError> {
     let system_prompt = format!(
         "Tu rédiges un message court de prise de contact au sujet d'une candidature, destiné à être \
@@ -107,6 +108,6 @@ pub async fn generate_application_message(
 
     let user_message = build_user_message(profile, candidature)?;
 
-    let raw_response = call_claude(&system_prompt, &user_message, None, model).await?;
+    let raw_response = call_claude(&system_prompt, &user_message, None, target).await?;
     Ok(raw_response.trim().to_string())
 }

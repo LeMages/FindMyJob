@@ -19,6 +19,9 @@ base64 = "0.22"
 scraper = "0.22"
 url = "2"
 dotenvy = "0.15"
+# Trousseau du système (clé API en mode PROD) : `v1` active seulement les
+# backends natifs Windows, macOS et Secret Service (Linux).
+keyring = { version = "4.2", default-features = false, features = ["v1"] }
 tauri = { version = "2", features = [] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-dialog = "2"

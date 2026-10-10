@@ -6,6 +6,7 @@ use crate::error::AppError;
 use crate::llm::client::call_claude;
 use crate::scraping::failure::ScrapingFailure;
 use crate::scraping::page_hints::PageHints;
+use crate::llm::target::ClaudeTarget;
 
 /// Champs du formulaire de candidature extraits d'une offre scrapée. Tous
 /// optionnels : le scraping peut ne pas trouver certaines informations.
@@ -70,7 +71,7 @@ Réponds uniquement en JSON valide, sans markdown ni commentaires."#;
 ///
 /// * `text` - Texte de l'offre (voir `scraping::extract`, ou texte collé).
 /// * `hints` - Indices de titre de la page (vides pour un texte collé).
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -81,10 +82,10 @@ Réponds uniquement en JSON valide, sans markdown ni commentaires."#;
 pub async fn extract_offer_fields(
     text: &str,
     hints: &PageHints,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<ScrapedOfferFields, AppError> {
     let user_message = build_user_message(text, hints);
-    let raw_response = call_claude(SYSTEM_PROMPT, &user_message, Some(scraped_offer_schema()), model).await?;
+    let raw_response = call_claude(SYSTEM_PROMPT, &user_message, Some(scraped_offer_schema()), target).await?;
 
     // Le structured output garantit normalement un JSON conforme au schéma ;
     // ce parsing reste un filet de sécurité plutôt qu'une validation de forme.

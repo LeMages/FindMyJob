@@ -15,6 +15,7 @@ use serde::Deserialize;
 
 // Importation des modules internes
 use crate::error::AppError;
+use crate::llm::target::ClaudeTarget;
 use crate::trace_log;
 
 /// Endpoint de l'API Messages d'Anthropic.
@@ -74,7 +75,7 @@ struct ApiResponse {
 /// * `output_schema` - Schéma JSON optionnel : si fourni, la requête active
 ///   les structured outputs (`output_config.format`) pour garantir une
 ///   réponse JSON strictement conforme.
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -83,9 +84,9 @@ pub async fn call_claude(
     system: &str,
     user_message: &str,
     output_schema: Option<serde_json::Value>,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<String, AppError> {
-    call_claude_with_tokens(system, user_message, output_schema, MAX_TOKENS, model).await
+    call_claude_with_tokens(system, user_message, output_schema, MAX_TOKENS, target).await
 }
 
 /// Variante de [`call_claude`] avec un plafond de tokens de sortie explicite.
@@ -101,7 +102,7 @@ pub async fn call_claude(
 ///   les structured outputs (`output_config.format`) pour garantir une
 ///   réponse JSON strictement conforme.
 /// * `max_tokens` - Plafond de tokens de sortie pour cette requête.
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
@@ -111,9 +112,9 @@ pub async fn call_claude_with_tokens(
     user_message: &str,
     output_schema: Option<serde_json::Value>,
     max_tokens: u32,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<String, AppError> {
-    call_claude_with_tokens_meta(system, user_message, output_schema, max_tokens, model)
+    call_claude_with_tokens_meta(system, user_message, output_schema, max_tokens, target)
         .await
         .map(|(text, _stop_reason)| text)
 }
@@ -131,25 +132,19 @@ pub async fn call_claude_with_tokens_meta(
     user_message: &str,
     output_schema: Option<serde_json::Value>,
     max_tokens: u32,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<(String, Option<String>), AppError> {
     // ------------------------------------------------------------------
-    // 1. Clé API — lue directement depuis l'environnement du processus.
-    //    `core` ignore d'où vient cette variable : l'application la
-    //    charge depuis un `.env` au démarrage (`startup::env_file`).
+    // 1. Construction du corps de la requête — la clé est fournie par
+    //    l'appelant : `core` ignore si elle vient du `.env` ou du trousseau
     // ------------------------------------------------------------------
-    let api_key = std::env::var("ANTHROPIC_API_KEY")
-        .map_err(|_| AppError::Config("Aucune clé API Anthropic configurée.".to_string()))?;
-
-    // ------------------------------------------------------------------
-    // 2. Construction du corps de la requête
     // ------------------------------------------------------------------
     // On désactive le thinking : ce pipeline est une génération structurée en
     // un seul tour (JSON ou Typst), le thinking n'apporte rien et partage le
     // même budget de tokens que la sortie visible — l'activer par défaut
     // tronquait les réponses avant même d'atteindre le contenu utile.
     let mut body = serde_json::json!({
-        "model": model,
+        "model": target.model,
         "max_tokens": max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": user_message}],
@@ -162,14 +157,14 @@ pub async fn call_claude_with_tokens_meta(
     }
 
     // ------------------------------------------------------------------
-    // 3. Appel réseau
+    // 2. Appel réseau
     // ------------------------------------------------------------------
     let client = CLIENT
         .as_ref()
         .map_err(|e| AppError::Config(format!("Impossible d'initialiser le client HTTP Claude : {e}")))?;
     let response = client
         .post(ANTHROPIC_API_URL)
-        .header("x-api-key", &api_key)
+        .header("x-api-key", target.api_key.expose())
         .header("anthropic-version", ANTHROPIC_VERSION)
         .header("content-type", "application/json")
         .json(&body)
@@ -192,7 +187,7 @@ pub async fn call_claude_with_tokens_meta(
     }
 
     // ------------------------------------------------------------------
-    // 4. Désérialisation et extraction du texte
+    // 3. Désérialisation et extraction du texte
     // ------------------------------------------------------------------
     let api_response: ApiResponse = response
         .json()

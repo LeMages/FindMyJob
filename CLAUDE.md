@@ -20,7 +20,8 @@ The Rust side of `crates/desktop` is the single source of truth for business rul
 | What | Where |
 |---|---|
 | Shared DTOs (serde structs crossing the IPC bridge) | `crates/core/src/models/*.rs`, one file per domain |
-| Claude API client and prompt assembly | `crates/core/src/llm/*.rs` (`client.rs` is the raw HTTP client) |
+| Claude API client and prompt assembly | `crates/core/src/llm/*.rs` (`client.rs` is the raw HTTP client; every call takes a `ClaudeTarget` = key + model, `core` never reads the key itself) |
+| Anthropic API key (DEV `.env` / PROD system keyring) | `crates/desktop/src-tauri/src/services/api_key.rs` (`ApiKeyAccess::resolve`, the only place that picks the source), `services/claude_target.rs` (key + model for every Claude call), `secrets/` (`SecretStore` trait, keyring implementation) |
 | Diagnostic traces (stderr + log file) | `crates/core/src/trace_log.rs` — use `trace_log::log`, never `eprintln!` |
 | Database access (SQLite via sqlx) | `crates/desktop/src-tauri/src/db/*.rs`, one file per table; `init.rs` (pool, migrations), `transaction.rs` (`begin_write`) |
 | Business logic beyond one DB call | `crates/desktop/src-tauri/src/services/*.rs` (applications, background generation, settings, offer import, sessions) |
@@ -78,7 +79,7 @@ Skipping a step usually means the feature is backend-only — that's a valid int
 ## Running the project locally
 
 ```bash
-cp .env.example .env      # fill in ANTHROPIC_API_KEY, MODE=DEV for a local dev-data/ folder
+cp .env.example .env      # MODE=DEV for a local dev-data/ folder, ANTHROPIC_API_KEY (read in DEV only)
 cd crates/desktop
 npm install
 npm run tauri dev
@@ -104,6 +105,7 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
 - **A reference version is all or nothing.** Its row is inserted in a write transaction before its files are written; any failure rolls back and removes the folder (`documents/storage.rs::persist_version`).
 - **Offer import is user-triggered, one page at a time.** No crawl, no retry loop, no proxy/identity rotation/captcha solving. Only a validated public `http(s)` URL is fetched (`core::scraping::url_validation`, DNS filtered by `safe_resolver`). Failures are typed (`ScrapingFailure`, serialized as a code in `AppError::Scraping`) and the UI chooses the message — don't hardcode user-facing advice in the backend. Every description, whatever its path, goes through `core::scraping::finalize::finalize_fields`.
 - **The capture window has no IPC access.** The `capture` window is deliberately absent from every capability; its HTML is read from Rust with `eval_with_callback`. Never add it to a capability or give it a `remote` capability, and keep validating the URL before loading it.
+- **The API key source follows the run mode.** DEV reads `ANTHROPIC_API_KEY` from the `.env` and never opens the keyring; PROD reads the system keyring (`keyring` crate, `v1` feature only; service = app identifier, account `anthropic_api_key`) and ignores any `.env` key. Code that calls Claude gets its `ClaudeTarget` from `ClaudeTargetSource::resolve`: never read the key elsewhere, never copy it into the environment, never log it, send it to the frontend (only its last 4 characters) or put it in an error. An unavailable keyring is an explicit error, never a fallback to a file. Tests use the in-memory `tests/shared/fake_secret_store.rs`, never the real keyring.
 - **Test coverage is narrow.** `cargo test` covers HTML/Markdown-to-text conversion, the offer import's pure logic (synthetic HTML fixtures, no network), the documents pipeline's pure logic, the `db` layer on in-memory SQLite and the file-handling services; nothing tests the LLM calls or the Tauri commands themselves.
 
 ## What NOT to do
@@ -120,4 +122,4 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
 
 - All user-facing text is in French.
 - The app's data (database, documents, fonts) lives in the Tauri app data folder, never inside the project tree.
-- The Anthropic API key (`ANTHROPIC_API_KEY`) is read from `.env`, never hardcoded, committed or stored in the database. `.env` is gitignored; `.env.example` documents it without a value.
+- The Anthropic API key is read from `ANTHROPIC_API_KEY` in `.env` in DEV mode, and from the system keyring in PROD mode (set from Paramètres). It is never hardcoded, committed or stored in the database. `.env` is gitignored; `.env.example` documents it without a value.

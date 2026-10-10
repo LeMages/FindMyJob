@@ -14,6 +14,7 @@ pub mod models;
 pub mod offer_extraction;
 pub mod pipeline;
 pub mod progress;
+pub mod secrets;
 pub mod services;
 pub mod startup;
 pub mod storage_paths;
@@ -104,6 +105,9 @@ pub fn run() {
             commands::get_theme,
             commands::set_theme,
             commands::test_api_connection,
+            commands::get_api_key_status,
+            commands::save_api_key,
+            commands::delete_api_key,
             commands::list_fonts,
             commands::import_font_folder,
             commands::delete_font,

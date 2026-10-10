@@ -4,6 +4,7 @@
 
 // Importation des modules standard
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 // Importation des crates externes
 use tauri::{AppHandle, Manager};
@@ -12,6 +13,8 @@ use tauri::{AppHandle, Manager};
 use crate::app_state::{AppContext, AppState};
 use crate::db;
 use crate::progress::ProgressStore;
+use crate::secrets::keyring_store::KeyringStore;
+use crate::services::api_key::{self, ApiKeyAccess};
 use crate::services::generation;
 use crate::startup::env_file;
 use crate::startup::run_mode::{self, RunLocation, SystemDirs};
@@ -105,16 +108,35 @@ fn locate(app: &AppHandle, env_file: Option<&Path>) -> Result<RunLocation, AppEr
     Ok(location)
 }
 
+/// Lit la clé API dans l'environnement du processus (chargé depuis le
+/// `.env`). N'est appelée qu'en mode DEV, par `ApiKeyAccess`.
+fn read_api_key_env() -> Option<String> {
+    std::env::var(api_key::ENV_VAR).ok()
+}
+
+/// Accès à la clé API pour le mode retenu : le trousseau n'est ouvert qu'au
+/// premier accès, et seulement en mode PROD.
+///
+/// # Arguments
+///
+/// * `app` - Handle de l'application Tauri (identifiant = service du trousseau).
+/// * `location` - Mode et dossiers retenus.
+fn api_key_access(app: &AppHandle, location: &RunLocation) -> ApiKeyAccess {
+    let store = KeyringStore::new(&app.config().identifier, api_key::KEYRING_ACCOUNT);
+    ApiKeyAccess::new(location.mode, Arc::new(store), read_api_key_env)
+}
+
 /// Construit l'état de l'application.
 ///
 /// # Arguments
 ///
 /// * `location` - Dossiers retenus pour le mode d'exécution.
+/// * `api_key` - Accès à la clé API pour ce mode.
 ///
 /// # Returns
 ///
 /// `AppState` prêt, ou l'erreur d'ouverture de la base.
-async fn build_state(location: RunLocation) -> Result<AppState, AppError> {
+async fn build_state(location: RunLocation, api_key: ApiKeyAccess) -> Result<AppState, AppError> {
     let data_dir = location.data_dir;
 
     // ------------------------------------------------------------------
@@ -144,6 +166,7 @@ async fn build_state(location: RunLocation) -> Result<AppState, AppError> {
         fonts_dir,
         capture_profile_dir: location.capture_profile_dir,
         progress: ProgressStore::new(),
+        api_key,
     })
 }
 
@@ -168,7 +191,8 @@ pub fn initialize(app: &AppHandle) -> Startup {
         Err(e) => return failed(e, None),
     };
     let main_webview_dir = location.main_webview_dir.clone();
-    match tauri::async_runtime::block_on(build_state(location)) {
+    let api_key = api_key_access(app, &location);
+    match tauri::async_runtime::block_on(build_state(location, api_key)) {
         Ok(state) => Startup { context: AppContext::ready(state), main_webview_dir },
         Err(e) => failed(e, main_webview_dir),
     }

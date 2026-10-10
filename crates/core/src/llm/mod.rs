@@ -4,6 +4,7 @@
 //! traduction des libellés) et rédaction de messages de candidature (mail,
 //! message court).
 
+pub mod api_key;
 pub mod candidature_message;
 pub mod client;
 pub mod cv_writing;
@@ -14,10 +15,13 @@ pub mod matching;
 pub mod offer;
 pub mod profile_facts;
 pub mod scraping_extract;
+pub mod target;
 pub mod templatize;
 pub mod writing_loop;
 pub mod writing_rules;
 
+pub use api_key::ApiKey;
 pub use candidature_message::{generate_application_email, generate_application_message};
 pub use client::{call_claude, call_claude_with_tokens};
+pub use target::ClaudeTarget;
 pub use templatize::{templatize_reference, TemplatizeFeedback, TemplatizeOutput};

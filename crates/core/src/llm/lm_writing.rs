@@ -17,6 +17,7 @@ use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
 use crate::llm::writing_rules::{language_rule, style_model_block, with_feedback, COMMON_RULES};
 use crate::models::{LmContent, LmData, MatchingResult, ProfileDto};
+use crate::llm::target::ClaudeTarget;
 
 /// Consignes propres à la lettre.
 const LM_RULES: &str = "Un paragraphe ne commence pas par une phrase nominale qui annonce son argument : il entre directement dans le propos, comme le paragraphe de même rang du modèle.
@@ -118,10 +119,10 @@ fn review(content: &LmContent, budget: &LmBudget, example_prose: &str) -> Review
 async fn call_once(
     input: &LmWritingInput<'_>,
     feedback: Option<WritingFeedback>,
-    model: &str,
+    target: &ClaudeTarget,
 ) -> Result<LmContent, AppError> {
     let message = with_feedback(user_message(input), feedback.as_ref());
-    let raw = call_claude(&system_prompt(input), &message, Some(lm_content_schema()), model).await?;
+    let raw = call_claude(&system_prompt(input), &message, Some(lm_content_schema()), target).await?;
     serde_json::from_str(raw.trim()).map_err(|e| {
         AppError::Llm(format!("La rédaction de la lettre n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}"))
     })
@@ -133,16 +134,16 @@ async fn call_once(
 /// # Arguments
 ///
 /// * `input` - Entrées de la rédaction.
-/// * `model` - Identifiant du modèle Claude à utiliser.
+/// * `target` - Clé API et modèle Claude à utiliser.
 ///
 /// # Returns
 ///
 /// `WritingOutcome<LmContent>`.
-pub async fn write_lm(input: &LmWritingInput<'_>, model: &str) -> Result<WritingOutcome<LmContent>, AppError> {
+pub async fn write_lm(input: &LmWritingInput<'_>, target: &ClaudeTarget) -> Result<WritingOutcome<LmContent>, AppError> {
     let prose = example_prose(input.example);
     write_with_retries(
         "lettre",
-        |feedback| call_once(input, feedback, model),
+        |feedback| call_once(input, feedback, target),
         |content| review(content, &input.budget, &prose),
         |content| content.map_prose(strip_dashes),
     )

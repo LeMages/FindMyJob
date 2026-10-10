@@ -19,7 +19,7 @@ use findmyjob_core::models::OfferExtraction;
 /// Champs extraits, ou l'échec typé de récupération.
 #[tauri::command]
 pub async fn scrape_offer(ctx: tauri::State<'_, AppContext>, url: String) -> Result<OfferExtraction, AppError> {
-    services::scraping::scrape_offer(&ctx.state()?.pool, &url).await
+    services::scraping::scrape_offer(ctx.state()?.claude(), &url).await
 }
 
 /// Extrait les champs d'une offre depuis un texte collé.
@@ -37,5 +37,5 @@ pub async fn extract_offer_from_text(
     ctx: tauri::State<'_, AppContext>,
     text: String,
 ) -> Result<OfferExtraction, AppError> {
-    services::scraping::extract_from_pasted_text(&ctx.state()?.pool, &text).await
+    services::scraping::extract_from_pasted_text(ctx.state()?.claude(), &text).await
 }

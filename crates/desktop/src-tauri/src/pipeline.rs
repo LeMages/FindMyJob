@@ -19,6 +19,8 @@ use sqlx::SqlitePool;
 
 // Importation des modules internes
 use crate::db;
+use crate::services::api_key::ApiKeyAccess;
+use crate::services::claude_target::ClaudeTargetSource;
 use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
 use crate::docgen::build_lm_data::build_lm_data;
 use crate::docgen::labels_cache::{resolve_cv_labels, resolve_lm_labels, ResolvedLabels};
@@ -35,6 +37,7 @@ use findmyjob_core::llm::lm_writing::{write_lm, LmWritingInput};
 use findmyjob_core::llm::matching::match_profile;
 use findmyjob_core::llm::offer::analyze_offer;
 use findmyjob_core::llm::writing_loop::WritingOutcome;
+use findmyjob_core::llm::ClaudeTarget;
 use findmyjob_core::models::{
     CvContent, CvExampleData, CvLabels, LmContent, LmExampleData, LmLabels, MatchingResult, ProfileDto,
     Recipient,
@@ -77,11 +80,13 @@ pub struct GeneratedDocuments {
 /// * `session_id` - Session de la candidature (fournit les références).
 /// * `candidature_id` - Candidature (fournit le destinataire).
 /// * `description_offre` - Texte brut de l'offre.
+/// * `api_key` - Accès à la clé API Anthropic.
 pub struct GenerationRequest<'a> {
     pub data_dir: &'a Path,
     pub session_id: i64,
     pub candidature_id: i64,
     pub description_offre: &'a str,
+    pub api_key: &'a ApiKeyAccess,
 }
 
 /// Construit le destinataire de la lettre depuis la candidature et ses
@@ -125,7 +130,7 @@ fn finish<C>(
 /// # Attributes
 ///
 /// * `profile` - Profil complet du candidat.
-/// * `model` - Modèle Claude configuré.
+/// * `target` - Clé API et modèle Claude configuré.
 /// * `cv_ref`, `lm_ref` - Références templatisées.
 /// * `recipient` - Destinataire de la lettre.
 /// * `offer_analysis` - Analyse de l'offre (JSON).
@@ -135,7 +140,7 @@ fn finish<C>(
 /// * `cv_labels`, `lm_labels` - Libellés dans la langue des documents.
 struct GenerationContext {
     profile: ProfileDto,
-    model: String,
+    target: ClaudeTarget,
     cv_ref: ReferenceTemplate<CvExampleData>,
     lm_ref: ReferenceTemplate<LmExampleData>,
     recipient: Recipient,
@@ -191,7 +196,7 @@ async fn prepare(
     // 1. Profil, modèle, références templatisées, destinataire
     // ------------------------------------------------------------------
     let profile = db::profile::build_profile(pool).await?;
-    let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
+    let target = ClaudeTargetSource { pool, api_key: request.api_key }.resolve().await?;
     let cv_ref: ReferenceTemplate<CvExampleData> =
         load_reference(pool, request.data_dir, request.session_id, "cv", "CV").await?;
     let lm_ref: ReferenceTemplate<LmExampleData> =
@@ -202,12 +207,12 @@ async fn prepare(
     // 2. Analyse de l'offre, matching, sélection et budgets
     // ------------------------------------------------------------------
     on_progress(1, "Analyse de l'offre…");
-    let offer_analysis = analyze_offer(request.description_offre, &model).await?;
+    let offer_analysis = analyze_offer(request.description_offre, &target).await?;
     let lang = target_language(&offer_analysis, &cv_ref.example.detected_lang);
 
     on_progress(2, "Matching profil / offre…");
     let project_count = cv_ref.example.data.projects.len();
-    let matching = match_profile(&offer_analysis, &profile, project_count, &model).await?;
+    let matching = match_profile(&offer_analysis, &profile, project_count, &target).await?;
     let selection = select(&profile, &matching, project_count);
     let mut cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count);
     // Un profil peut avoir moins de projets que la référence : on en attend
@@ -225,13 +230,13 @@ async fn prepare(
     // 3. Libellés dans la langue de l'offre (traduits et mis en cache si besoin)
     // ------------------------------------------------------------------
     let (cv_labels, lm_labels) = tokio::try_join!(
-        resolve_cv_labels(&cv_ref.example.data.labels, &cv_ref.example.detected_lang, &lang, &cv_ref.dir, &model),
-        resolve_lm_labels(&lm_ref.example.data.labels, &lm_ref.example.detected_lang, &lang, &lm_ref.dir, &model),
+        resolve_cv_labels(&cv_ref.example.data.labels, &cv_ref.example.detected_lang, &lang, &cv_ref.dir, &target),
+        resolve_lm_labels(&lm_ref.example.data.labels, &lm_ref.example.detected_lang, &lang, &lm_ref.dir, &target),
     )?;
 
     Ok(GenerationContext {
         profile,
-        model,
+        target,
         cv_ref,
         lm_ref,
         recipient,
@@ -272,7 +277,7 @@ async fn produce_cv(
         |content| build_cv_data(&ctx.profile, &ctx.selection, content, &layout),
         |factor| {
             let input = ctx.cv_input(ctx.cv_budget.scaled(factor));
-            async move { write_cv(&input, &ctx.model).await }
+            async move { write_cv(&input, &ctx.target).await }
         },
     )
     .await
@@ -298,7 +303,7 @@ async fn produce_lm(
         |content| build_lm_data(&ctx.profile, &ctx.recipient, content, &ctx.lm_labels.labels, today, &ctx.lang),
         |factor| {
             let input = ctx.lm_input(ctx.lm_budget.scaled(factor));
-            async move { write_lm(&input, &ctx.model).await }
+            async move { write_lm(&input, &ctx.target).await }
         },
     )
     .await
@@ -350,7 +355,7 @@ pub async fn generate_documents(
     on_progress(3, "Rédaction du CV et de la lettre…");
     let (cv_input, lm_input) = (ctx.cv_input(ctx.cv_budget.clone()), ctx.lm_input(ctx.lm_budget.clone()));
     let (cv_writing, lm_writing) =
-        tokio::try_join!(write_cv(&cv_input, &ctx.model), write_lm(&lm_input, &ctx.model))?;
+        tokio::try_join!(write_cv(&cv_input, &ctx.target), write_lm(&lm_input, &ctx.target))?;
 
     on_progress(4, "Assemblage et compilation du CV…");
     let cv_fitted = produce_cv(&ctx, cv_writing, fonts_dir).await?;

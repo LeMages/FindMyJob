@@ -25,7 +25,7 @@ Guiding principle: think the scope and schema through as completely as possible 
 
 The Claude model is selectable in settings: `AVAILABLE_MODELS = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]`, default `DEFAULT_MODEL = "claude-sonnet-4-6"` (`crates/core/src/llm/client.rs`), resolved per request via `crates/desktop/src-tauri/src/db/settings.rs::resolve_llm_model`.
 
-Other notable dependencies: `tauri-plugin-dialog` (native file picker), `dotenvy` (`.env` loading), `base64` (PDF bytes over IPC), `open` (opening folders/URLs from the OS), `scraper` (HTML parsing for offer extraction by link), `chrono` (dates).
+Other notable dependencies: `tauri-plugin-dialog` (native file picker), `dotenvy` (`.env` loading), `keyring` 4 with only its `v1` feature (system keyring for the API key in PROD: Windows Credential Manager, macOS Keychain, Linux Secret Service via zbus with pure-Rust crypto), `base64` (PDF bytes over IPC), `open` (opening folders/URLs from the OS), `scraper` (HTML parsing for offer extraction by link), `chrono` (dates).
 
 No vue-router: navigation is a homemade router via `state.screen` (`crates/desktop/src/stores/app.ts` + `src/App.vue`). No Pinia: the store is a plain exported `reactive` object.
 
@@ -70,12 +70,13 @@ crates/desktop/
   src-tauri/
     src/
       main.rs, lib.rs                  Tauri builder: setup (startup::initialize), managed AppContext, generate_handler!
-      app_state.rs                     AppState { pool, data_dir, fonts_dir, progress } and AppContext (state or init error)
+      app_state.rs                     AppState { pool, data_dir, fonts_dir, capture_profile_dir, progress, api_key } and AppContext (state or init error)
       startup/                         .env loading, run mode (DEV/PROD) and folders, log file, pool + migrations, interrupted-generation cleanup, main window
       clock.rs                         single source of the current time and of the stored date formats
       storage_paths.rs                 builds every path of the data folder and resolves paths received from the frontend
+      secrets/                         SecretStore trait (swappable in tests) and its system-keyring implementation
       db/                              one file per table + joins.rs, profile.rs, init.rs (pool, migrations), transaction.rs
-      services/                        business logic beyond a DB call: applications, generation, settings, offer import, sessions
+      services/                        business logic beyond a DB call: applications, generation, settings, API key, Claude target, offer import, sessions
       documents/                       Typst compilation, reference templatization, versions, on-disk document storage, fonts
       docgen/                          deterministic document assembly: cv_data/lm_data builders, labels cache, page fitting, trace
       pipeline.rs, progress.rs         generation orchestration, in-memory progress store
@@ -206,7 +207,20 @@ No LLM produces Typst during generation. **Compilation** uses `typst-as-lib` (`d
 
 ### HTTP client (`crates/core/src/llm/client.rs`)
 
-Raw HTTP calls to Anthropic's Messages API (`https://api.anthropic.com/v1/messages`, header `anthropic-version: 2023-06-01`) via `reqwest` — there is no official Rust SDK for the Anthropic API. The key is read from `ANTHROPIC_API_KEY` on every call. It comes from a `.env` file loaded at startup (`startup/env_file.rs`): first the app config folder, then the current directory and its parents (development). It is never stored in the database and cannot be set from the UI; when it is missing, AI features fail with « Aucune clé API Anthropic configurée. ».
+Raw HTTP calls to Anthropic's Messages API (`https://api.anthropic.com/v1/messages`, header `anthropic-version: 2023-06-01`) via `reqwest` — there is no official Rust SDK for the Anthropic API. `core` never reads the key itself: every `llm` function receives a `ClaudeTarget { api_key, model }` (`core::llm::target`) from its caller. `ApiKey` (`core::llm::api_key`) has no `Display` nor `Serialize` and a masked `Debug`, so the key cannot leak into a trace or an error message.
+
+### API key (`services/api_key.rs`, `services/claude_target.rs`, `secrets/`)
+
+`ApiKeyAccess::resolve` is the only place that decides where the key comes from, from the run mode decided at startup:
+
+| Mode | Source | Ignored |
+|---|---|---|
+| DEV | `ANTHROPIC_API_KEY` from the loaded `.env` | system keyring (never opened) |
+| PROD | system keyring, service = Tauri identifier (`com.findmyjob.app`), account = `anthropic_api_key` | any `ANTHROPIC_API_KEY` in a `.env` (never read, never copied to the environment) |
+
+Every code path that calls Claude goes through `ClaudeTargetSource::resolve` (configured model + key; the keyring call runs in `spawn_blocking`). The offer import resolves it only when it reaches the LLM stage, so a JSON-LD import still works without a key. The keyring sits behind the `SecretStore` trait (`secrets/store.rs`); `secrets/keyring_store.rs` implements it with `keyring::Entry` and turns an unavailable keyring (no Secret Service, locked store, unsupported platform) into an explicit French `AppError::Config`. There is no fallback to a file.
+
+Commands: `get_api_key_status` (present, source `env`/`keyring`, last 4 characters; the full key never crosses IPC), `save_api_key` (trimmed, refused if empty) and `delete_api_key`. The last two are PROD only; in DEV they return a `Validation` error pointing to the `.env`. When the key is missing, AI features fail with « Aucune clé API Anthropic configurée. » followed by « Saisis-la dans les Paramètres. » (PROD) or « Renseigne ANTHROPIC_API_KEY dans le fichier .env. » (DEV).
 
 - `thinking` is explicitly disabled on every request: the pipeline is a single-turn structured generation, and extended thinking shares the same output token budget as the visible response — leaving it on by default truncated responses before any useful content.
 - Structured outputs (JSON Schema) are used wherever a schema is provided, to guarantee a strictly conformant response (offer analysis, matching, templatization, CV/LM writing, label translation). The API caps the compiled grammar size: the templatization schema for a CV sits close to that cap, so fixed-value fields are plain strings checked in Rust rather than `enum`s.
@@ -288,7 +302,7 @@ The result is managed as `AppContext`: either the `AppState`, or the initializat
 - Apply flow: no message / by mail / by message, all exporting documents to disk.
 - Offer import from a link (JSON-LD, then page text + LLM), from a page captured in the FindMyJob window, or from pasted text, prefilling the new-application form; choice screen on failure, non-blocking duplicate warning.
 - Interview planning (week/month views).
-- Settings: LLM model selection, connection test, fonts, theme. The Anthropic API key is configured in `.env` only, never from the UI.
+- Settings: LLM model selection, Anthropic API key (system keyring in PROD with save/delete, read-only `.env` state in DEV), connection test (run again after a key is saved), fonts, theme.
 - CI/CD: lint + clippy on every PR to `dev`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
 
 ### Partial
@@ -322,9 +336,10 @@ Everything runs on the user's machine, in one process; there is no server and no
 - `cd crates/desktop && npm install && npm run tauri dev`. In development, `.env` is found at the repository root by walking up from the current directory.
 - With `MODE=DEV` in that `.env`, all data goes to `dev-data/` at the repository root (gitignored); without it, the app uses the system folders like an installed app (PROD). See §10 for the full table.
 - PROD data folder (Tauri `app_data_dir`, identifier `com.findmyjob.app`): `findmyjob.db`, `documents/`, `polices/`. On Windows, `%APPDATA%\com.findmyjob.app\`; on macOS, `~/Library/Application Support/com.findmyjob.app/`; on Linux, `~/.local/share/com.findmyjob.app/`. An installed app reads its `.env` from the app config folder (the same folder on Windows).
+- API key: in DEV, `ANTHROPIC_API_KEY` in the `.env`; in PROD, entered in Paramètres and stored in the system keyring (see §8). On Linux, PROD needs a running Secret Service (GNOME Keyring, KWallet).
 
 ## 13. Known gaps and points of attention
 
-- CI's `rust` job runs `cargo test --workspace` on every PR. Coverage: HTML/Markdown-to-text conversion, the offer import's pure logic (synthetic HTML, no network), the documents pipeline's pure logic (including template compilation on a fixture), the whole `db` layer on an in-memory SQLite database (CRUD, cascades, constraints, duplicates, timestamp ordering, one timestamp per transaction) and the file-handling services (path resolution, interrupted-generation cleanup, session folder removal). No test calls the LLM or exercises the Tauri commands themselves.
+- CI's `rust` job runs `cargo test --workspace` on every PR. Coverage: HTML/Markdown-to-text conversion, the offer import's pure logic (synthetic HTML, no network), the documents pipeline's pure logic (including template compilation on a fixture), the whole `db` layer on an in-memory SQLite database (CRUD, cascades, constraints, duplicates, timestamp ordering, one timestamp per transaction) and the file-handling services (path resolution, interrupted-generation cleanup, session folder removal), and the API key rules on an in-memory fake keyring (source per mode, missing key, save/delete, DEV refusal, masking); no test touches the real keyring. No test calls the LLM or exercises the Tauri commands themselves.
 - Generation progress is in memory only: closing the app during a generation loses it, and the half-created application is removed at the next startup (there is no way to resume a generation).
 - Only the profile was carried over from the PostgreSQL version: sessions, references and applications were not migrated.

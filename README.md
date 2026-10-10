@@ -46,19 +46,29 @@ The data folder depends on the run mode, set by `MODE` in `.env`:
 - [Rust](https://rustup.rs/) (stable)
 - Tauri system dependencies: [official guide](https://tauri.app/start/prerequisites/)
 - An [Anthropic API key](https://console.anthropic.com/) for the AI features
+- On Linux, a running Secret Service (GNOME Keyring, KWallet) to store the key in PROD mode
 
 ## Getting started
 
 ```bash
 git clone https://github.com/KanASon/FindMyJob.git
 cd FindMyJob
-cp .env.example .env   # fill in ANTHROPIC_API_KEY, set MODE=DEV for an isolated dev-data/ folder
+cp .env.example .env   # set MODE=DEV for an isolated dev-data/ folder, and fill in ANTHROPIC_API_KEY
 cd crates/desktop
 npm install
 npm run tauri dev
 ```
 
 In development, the `.env` at the repository root is found automatically. An installed app reads it from its config folder (on Windows `%APPDATA%\com.findmyjob.app\.env`). Logs are written to `findmyjob.log` in the log folder of the run mode (see [Data](#data)); the first startup line gives the mode and the folders in use.
+
+### Anthropic API key
+
+Where the key is read depends on the run mode:
+
+- **DEV**: from `ANTHROPIC_API_KEY` in the `.env`. The system keyring is never used; the Paramètres page shows the key's state read-only.
+- **PROD**: from the system keyring (Windows Credential Manager, macOS Keychain, Linux Secret Service; entry `com.findmyjob.app` / `anthropic_api_key`). A key in a `.env` is ignored. Open **Paramètres → Intelligence artificielle**, paste the key and click **Enregistrer**: the connection test runs right after. The key can be replaced or deleted from the same block.
+
+The full key never reaches the interface (only its last 4 characters) and never appears in logs or error messages. If the keyring is unavailable (for example Linux without Secret Service), the app reports it explicitly; there is no fallback to a file.
 
 ### Production build
 

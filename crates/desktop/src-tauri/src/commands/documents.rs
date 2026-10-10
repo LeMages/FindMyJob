@@ -77,9 +77,7 @@ pub async fn save_cv(
     filename: String,
     content: String,
 ) -> Result<DocumentReferenceView, AppError> {
-    let state = ctx.state()?;
-    documents::save_reference(&state.pool, &state.data_dir, &state.fonts_dir, session_id, "cv", filename, content)
-        .await
+    documents::save_reference(ctx.state()?, session_id, "cv", filename, content).await
 }
 
 /// Importe une lettre de motivation de référence `.typ` (voir `save_cv`).
@@ -101,17 +99,7 @@ pub async fn save_lettre_motivation(
     filename: String,
     content: String,
 ) -> Result<DocumentReferenceView, AppError> {
-    let state = ctx.state()?;
-    documents::save_reference(
-        &state.pool,
-        &state.data_dir,
-        &state.fonts_dir,
-        session_id,
-        "lettre_motivation",
-        filename,
-        content,
-    )
-    .await
+    documents::save_reference(ctx.state()?, session_id, "lettre_motivation", filename, content).await
 }
 
 /// Recompile le CV de référence courant pour aperçu.
