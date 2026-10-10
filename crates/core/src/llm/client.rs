@@ -135,9 +135,8 @@ pub async fn call_claude_with_tokens_meta(
 ) -> Result<(String, Option<String>), AppError> {
     // ------------------------------------------------------------------
     // 1. Clé API — lue directement depuis l'environnement du processus.
-    //    `core` ignore d'où vient cette variable (.env en développement,
-    //    trousseau OS en production) : cette résolution vit dans le
-    //    `security` de l'appelant (ex. `findmyjob-agent`).
+    //    `core` ignore d'où vient cette variable : l'application la
+    //    charge depuis un `.env` au démarrage (`startup::env_file`).
     // ------------------------------------------------------------------
     let api_key = std::env::var("ANTHROPIC_API_KEY")
         .map_err(|_| AppError::Config("Aucune clé API Anthropic configurée.".to_string()))?;

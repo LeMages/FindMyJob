@@ -4,31 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-FindMyJob is an open-source desktop app (Tauri 2) that helps students track job applications (internships, apprenticeships, permanent contracts). It's a Cargo workspace of three crates: a shared logic library, a headless Axum server that owns all persistence and AI pipelines, and the Tauri desktop shell, which is a pure HTTP client of that server. Everything runs locally: the server and PostgreSQL via Docker Compose, the desktop app on the same machine. Offers enter the app only through their link (or pasted text) — there is no automatic offer collection. See [`docs/project.md`](docs/project.md) for the exhaustive technical reference — this file is the day-to-day working guide.
+FindMyJob is an open-source desktop app (Tauri 2) that helps students track job applications (internships, apprenticeships, permanent contracts). It's a standalone application — one process, no server, no Docker — built as a Cargo workspace of two crates: a pure shared logic library, and the Tauri desktop app, whose Rust side owns the SQLite database, the AI pipelines and every business rule. Offers enter the app only through their link (or pasted text) — there is no automatic offer collection. See [`docs/project.md`](docs/project.md) for the exhaustive technical reference — this file is the day-to-day working guide.
 
 ## Workspace architecture
 
 ```
-crates/core     findmyjob-core   — shared business logic: models, LLM calls, offer page fetch and text extraction. No DB, no Tauri, no Axum dependency.
-crates/agent    findmyjob-agent — headless Axum server. Owns the PostgreSQL connection, offer extraction by link, the documents pipeline (Typst generation), and every business rule.
-crates/desktop  Vue 3 frontend at crates/desktop/, Tauri backend nested at crates/desktop/src-tauri/. Thin HTTP client of the agent — no database access, no business logic beyond proxying.
+crates/core     findmyjob-core — shared business logic: models, LLM calls, offer page fetch and text extraction, diagnostic traces. No DB, no Tauri dependency.
+crates/desktop  Vue 3 frontend at crates/desktop/, Tauri backend nested at crates/desktop/src-tauri/. The Rust side owns the SQLite pool, offer extraction by link, the documents pipeline (Typst generation) and every business rule.
 ```
 
-`crates/agent` is the single source of truth for business rules (status transitions, timeline rules, validation). `crates/desktop` never reimplements a rule the agent already enforces — it calls the agent and displays what comes back.
+The Rust side of `crates/desktop` is the single source of truth for business rules (status transitions, timeline rules, validation). The Vue frontend never reimplements a rule — it calls a Tauri command and displays what comes back. Tauri commands are themselves thin: they call one service or one `db` function.
 
 ## Where things live
 
 | What | Where |
 |---|---|
-| Shared DTOs (serde structs used by both agent and desktop) | `crates/core/src/models/*.rs`, one file per domain |
+| Shared DTOs (serde structs crossing the IPC bridge) | `crates/core/src/models/*.rs`, one file per domain |
 | Claude API client and prompt assembly | `crates/core/src/llm/*.rs` (`client.rs` is the raw HTTP client) |
-| Database access (PostgreSQL via sqlx) | `crates/agent/src/db/*.rs`, one file per table |
-| REST API routes | `crates/agent/src/api/*.rs`, one file per resource, mounted in `crates/agent/src/api/mod.rs` |
-| Offer import by link (URL validation, guarded fetch, JSON-LD then page text + LLM, final cleanup) | `crates/core/src/scraping/` (pure logic), `crates/core/src/llm/scraping_extract.rs`, cascade in `crates/agent/src/offer_extraction.rs`, exposed by `crates/agent/src/api/scraping.rs` (`POST /api/scraping/url`, `/html`, `/text`) |
-| Capture window (user-driven page capture when the agent can't read a page) | `crates/desktop/src-tauri/src/commands/capture.rs` — captures and forwards to `/api/scraping/html`, no extraction logic |
-| Documents pipeline (CV/LM tailoring + Typst) | `crates/agent/src/pipeline.rs` (orchestration), `crates/agent/src/docgen/` (deterministic assembly), `crates/agent/src/documents/` (templatization, storage, compilation), `crates/core/src/docgen/` (budgets, linter, selection — pure logic) |
-| Tauri commands | `crates/desktop/src-tauri/src/commands/*.rs`, one file per domain, each delegating to `api_client::ApiClient` |
-| HTTP client to the agent | `crates/desktop/src-tauri/src/api_client.rs` |
+| Diagnostic traces (stderr + log file) | `crates/core/src/trace_log.rs` — use `trace_log::log`, never `eprintln!` |
+| Database access (SQLite via sqlx) | `crates/desktop/src-tauri/src/db/*.rs`, one file per table; `init.rs` (pool, migrations), `transaction.rs` (`begin_write`) |
+| Business logic beyond one DB call | `crates/desktop/src-tauri/src/services/*.rs` (applications, background generation, settings, offer import, sessions) |
+| Current time and stored date formats | `crates/desktop/src-tauri/src/clock.rs` — the only place that reads the clock |
+| Paths of the data folder | `crates/desktop/src-tauri/src/storage_paths.rs` — the only place that builds or resolves them |
+| Startup (log file, `.env`, folders, pool, cleanup) | `crates/desktop/src-tauri/src/startup/` |
+| Offer import by link (URL validation, guarded fetch, JSON-LD then page text + LLM, final cleanup) | `crates/core/src/scraping/` (pure logic), `crates/core/src/llm/scraping_extract.rs`, cascade in `crates/desktop/src-tauri/src/offer_extraction.rs`, entry points in `services/scraping.rs` |
+| Capture window (user-driven page capture when the app can't read a page) | `crates/desktop/src-tauri/src/commands/capture.rs` — captures and passes the HTML to `services::scraping::extract_from_html`, no extraction logic |
+| Documents pipeline (CV/LM tailoring + Typst) | `crates/desktop/src-tauri/src/pipeline.rs` (orchestration), `docgen/` (deterministic assembly), `documents/` (templatization, storage, versions, compilation, fonts), `crates/core/src/docgen/` (budgets, linter, selection — pure logic) |
+| Tauri commands | `crates/desktop/src-tauri/src/commands/*.rs`, one file per domain, registered in `lib.rs` (`generate_handler!`) |
 | TypeScript types | `crates/desktop/src/types/index.ts` (hand-mirrored from `crates/core::models`, no codegen) |
 | Vue views and components | `crates/desktop/src/views/<view_name>/` (one folder per view) and `crates/desktop/src/components/` (shared) |
 
@@ -53,55 +55,62 @@ crates/desktop  Vue 3 frontend at crates/desktop/, Tauri backend nested at crate
 
 ### SQL / migrations
 
-- New migrations go in `db/migrations/postgres/`, numbered sequentially (`NNNN_description.sql`), applied via sqlx migrate at agent startup.
-- After adding or changing a migration, update `db/schema.dbml` to match — it's the hand-maintained reference for the full schema (columns, enums, foreign keys).
+- Migrations go in `db/migrations/sqlite/`, numbered sequentially (`NNNN_description.sql`), embedded in the binary by `sqlx::migrate!` and applied at app startup.
+- After adding or changing a migration, update `db/schema.dbml` to match — it's the hand-maintained reference for the full schema (columns, CHECK values, foreign keys).
+- Tables are `STRICT`. Timestamps are TEXT RFC 3339 UTC with millisecond precision, produced by `clock.rs` and passed to the writes (one timestamp per transaction); dates are `YYYY-MM-DD`; booleans 0/1. No time defaults, no triggers.
+- Write transactions go through `db::transaction::begin_write` (`BEGIN IMMEDIATE`). Never hold one across an LLM call.
+- File paths stored in the database are relative to the data folder, with `/` separators (`storage_paths`). A path received from the frontend is resolved with `storage_paths::resolve_untrusted`.
+- A UNIQUE constraint that the user can hit gets a check before the write with a clear French message — never surface the raw SQLite error.
 
 ## Adding a feature end-to-end
 
 For a change that touches the database and needs to reach the UI, follow the chain in order:
 
-1. **Migration** — add a `.sql` file in `db/migrations/postgres/`, update `db/schema.dbml`.
-2. **DB module** — add/extend the table's file in `crates/agent/src/db/`.
-3. **API route** — add the handler in `crates/agent/src/api/<resource>.rs`, register it in `crates/agent/src/api/mod.rs`.
-4. **Tauri command** — add the command in `crates/desktop/src-tauri/src/commands/<resource>.rs`, calling the new route via `api_client::ApiClient`; register it in the `generate_handler!` list in `crates/desktop/src-tauri/src/lib.rs`.
+1. **Migration** — add a `.sql` file in `db/migrations/sqlite/`, update `db/schema.dbml`.
+2. **DB module** — add/extend the table's file in `crates/desktop/src-tauri/src/db/`, with tests in `crates/desktop/src-tauri/tests/` (in-memory SQLite, `tests/shared/seed.rs`).
+3. **Service** — if the logic is more than one DB call (rules, orchestration, files), put it in `crates/desktop/src-tauri/src/services/`.
+4. **Tauri command** — add the command in `crates/desktop/src-tauri/src/commands/<resource>.rs`, calling the service or db function via `ctx.state()?`; register it in the `generate_handler!` list in `crates/desktop/src-tauri/src/lib.rs`.
 5. **TypeScript type** — mirror the DTO by hand in `crates/desktop/src/types/index.ts`.
 6. **Vue component** — wire the `invoke()` call into the relevant view or component.
 
-Skipping a step usually means the feature is backend-only — that's a valid intermediate state, but call it out rather than letting a route silently go unused.
+Skipping a step usually means the feature is backend-only — that's a valid intermediate state, but call it out rather than letting a function silently go unused.
 
 ## Running the project locally
 
 ```bash
-cp .env.example .env      # fill in ANTHROPIC_API_KEY at minimum
-docker compose up -d      # PostgreSQL (pgvector image) + the agent
+cp .env.example .env      # fill in ANTHROPIC_API_KEY
 cd crates/desktop
 npm install
 npm run tauri dev
 ```
 
-`docker compose up -d` is the single command that starts the agent locally (migrations run at startup); the desktop targets `API_URL`, which defaults to `http://localhost:3000`. To iterate on the agent alone, without Docker: `cargo run -p findmyjob-agent` against a Postgres reachable via the `DB_*` vars in `.env`. The agent is configured by environment variables only (see `.env.example`); the candidate profile lives in the DB.
+There is no server and no Docker. At startup the app loads `.env` (app config folder first, then the current directory and its parents — in dev, the repository root), creates its data folder, opens `findmyjob.db` and applies the migrations. Data folder (Tauri `app_data_dir`, identifier `com.findmyjob.app`): on Windows `%APPDATA%\com.findmyjob.app\` (`findmyjob.db`, `documents/`, `polices/`). Log file: `<app log folder>/findmyjob.log` (Windows `%LOCALAPPDATA%\com.findmyjob.app\logs\`).
 
 `npm`/`vite`/`tauri` commands must be run from `crates/desktop/`, not the repo root — there is no root `package.json`.
 
 ## Points of attention
 
 - **No automatic offer collection.** Scraping of job boards, filtering, LLM scoring, the scheduler and the Marché tab were removed (they went against several platforms' terms of use); the code is kept at the Git tag `archive/collecte-automatique`. An offer exists only inside its application (`url_offre`, `description_offre`), added by link or pasted text. Don't reintroduce bulk collection from job platforms.
-- **Recruiter contact creation is not persisted.** The agent only exposes `GET /api/candidatures/{id}/contacts` — there is no `POST` route. The desktop's "add contact" action is an explicit local-only stub in `crates/desktop/src/stores/app.ts` (`addRecruiter`). Implementing this for real means the full chain in the section above, not a frontend-only fix.
+- **Recruiter contact creation is not persisted.** Only `get_contacts` exists — there is no create command. The UI's "add contact" action is an explicit local-only stub in `crates/desktop/src/stores/app.ts` (`addRecruiter`). Implementing this for real means the full chain in the section above, not a frontend-only fix.
 - **No LLM writes Typst during generation.** References are converted once into `template.typ` + `example_data.json` at upload; generation fills a canonical `data.json` from the profile (facts) and LLM-written prose only. The reference is a style model, never a source of facts. See `docs/project.md` §7.
-- **Offer import is user-triggered, one page at a time.** No crawl, no retry loop, no proxy/identity rotation/captcha solving. The agent fetches only a validated public `http(s)` URL (`core::scraping::url_validation`, DNS filtered by `safe_resolver`). Failures are typed (`ScrapingFailure`, serialized as a code in `AppError::Scraping`) and the UI chooses the message — don't hardcode user-facing advice in the backend. Every description, whatever its path, goes through `core::scraping::finalize::finalize_fields`.
+- **Generation runs in the app process.** `services::generation` publishes progress before `create_candidature` returns, then runs the pipeline as a background task. A failed generation deletes the application and its partial files; a generation cut short by closing the app is cleaned up at the next startup (every `a_postuler` application with no document).
+- **A reference version is all or nothing.** Its row is inserted in a write transaction before its files are written; any failure rolls back and removes the folder (`documents/storage.rs::persist_version`).
+- **Offer import is user-triggered, one page at a time.** No crawl, no retry loop, no proxy/identity rotation/captcha solving. Only a validated public `http(s)` URL is fetched (`core::scraping::url_validation`, DNS filtered by `safe_resolver`). Failures are typed (`ScrapingFailure`, serialized as a code in `AppError::Scraping`) and the UI chooses the message — don't hardcode user-facing advice in the backend. Every description, whatever its path, goes through `core::scraping::finalize::finalize_fields`.
 - **The capture window has no IPC access.** The `capture` window is deliberately absent from every capability; its HTML is read from Rust with `eval_with_callback`. Never add it to a capability or give it a `remote` capability, and keep validating the URL before loading it.
-- **Test coverage is narrow.** `cargo test` covers HTML/Markdown-to-text conversion, the offer import's pure logic (synthetic HTML fixtures, no network) and the documents pipeline's pure logic; nothing tests the LLM calls, the database or the API routes.
+- **Test coverage is narrow.** `cargo test` covers HTML/Markdown-to-text conversion, the offer import's pure logic (synthetic HTML fixtures, no network), the documents pipeline's pure logic, the `db` layer on in-memory SQLite and the file-handling services; nothing tests the LLM calls or the Tauri commands themselves.
 
 ## What NOT to do
 
-- Don't use `rusqlite` or assume SQLite anywhere — it has been fully removed. The agent uses PostgreSQL via sqlx exclusively.
-- Don't look for or add migrations under a `db/migrations/sqlite/` path — it doesn't exist; only `db/migrations/postgres/` is live.
-- Don't add business logic to `crates/desktop` (Vue or Tauri commands) that duplicates a rule the agent already enforces — the agent is the single source of truth (see the thin-client principle in `docs/project.md`).
+- Don't reintroduce a local server, an HTTP layer between the frontend and the Rust side, PostgreSQL, or Docker — the server-mode version is archived at the Git tag `archive/agent-postgres`.
+- Don't enable another sqlx driver than SQLite, at the workspace or crate level.
+- Don't read the clock outside `clock.rs`, and don't build a data-folder path outside `storage_paths.rs`.
+- Don't add database access, Tauri or file-system persistence to `crates/core` — it stays pure.
+- Don't add business logic to the Vue frontend or to a Tauri command file — it belongs in `db/` or `services/`.
 - Don't run `npm`, `vite`, or `tauri` commands from the repo root.
 - Don't introduce a configurable AI provider base URL or an OpenAI-compatible abstraction — the provider is deliberately Anthropic-specific today (endpoint, auth headers, and structured-output format are all Claude-specific in `crates/core/src/llm/client.rs`).
 
 ## Key conventions
 
 - All user-facing text is in French.
-- The agent's data directory (`DATA_DIR`, documents, fonts) and PostgreSQL storage are never inside the project tree — configured via env vars, see `.env.example`.
-- Sensitive config (`ANTHROPIC_API_KEY`, `API_TOKEN`) is read from environment variables (`.env` in development), never hardcoded or committed. `.env` is gitignored; `.env.example` documents required variables without values.
+- The app's data (database, documents, fonts) lives in the Tauri app data folder, never inside the project tree.
+- The Anthropic API key (`ANTHROPIC_API_KEY`) is read from `.env`, never hardcoded, committed or stored in the database. `.env` is gitignored; `.env.example` documents it without a value.

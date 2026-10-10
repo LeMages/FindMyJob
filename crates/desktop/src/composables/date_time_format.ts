@@ -5,7 +5,7 @@
 /**
  * Formate une date ISO 8601 en "JJ/MM/AAAA HH:mm".
  *
- * @param iso - Date ISO 8601 (ex. `created_at` renvoyé par l'agent).
+ * @param iso - Date ISO 8601 (ex. `created_at` renvoyé par le backend).
  * @returns Date et heure au format français (ex. "24/09/2026 14:02"), ou `'?'` si la date est invalide.
  */
 export function formatDateTime(iso: string): string {

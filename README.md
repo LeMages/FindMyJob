@@ -18,35 +18,23 @@ Every offer enters the app through its link (or its pasted text): FindMyJob neve
 
 ## Architecture
 
-FindMyJob is a Cargo workspace with three crates:
+FindMyJob is a standalone desktop app: one process, no server, no Docker. It is a Cargo workspace with two crates:
 
 ```
 crates/core     shared business logic — models, LLM calls, offer page fetch and text extraction (no DB, no Tauri)
-crates/agent    headless Axum server — owns PostgreSQL, offer extraction by link, document generation
-crates/desktop  Tauri 2 + Vue 3 app — thin HTTP client of the agent, no direct DB access
+crates/desktop  Tauri 2 + Vue 3 app — the Rust side owns the SQLite database, the documents pipeline and the business rules
 ```
 
-The agent runs locally next to PostgreSQL (Docker Compose), and the desktop app never talks to the database directly: it calls the agent's REST API over HTTP, on `http://localhost:3000` by default. See [`docs/project.md`](docs/project.md) for the full technical reference (data model, pipelines, API routes, conventions).
+The Vue frontend calls Tauri commands, which call the business logic directly. See [`docs/project.md`](docs/project.md) for the full technical reference (data model, pipelines, commands, conventions).
 
-## Database
+## Data
 
-The database is a single PostgreSQL instance split into two schemas:
-
-**Profile** — User identity, skills, education, and app settings.
-
-![Profile schema](db/schema_profile.png)
-
-**Search** — Job search sessions, applications, interviews, and documents.
-
-![Search schema](db/schema_search.png)
-
-See [`db/schema.dbml`](db/schema.dbml) for the full column-level reference (the diagrams are static images and may lag behind it).
+Everything is stored locally, in the app data folder (on Windows `%APPDATA%\com.findmyjob.app\`): a SQLite database (`findmyjob.db`), your reference documents and generated PDFs (`documents/`) and imported fonts (`polices/`). The schema is created and migrated automatically at startup; see [`db/schema.dbml`](db/schema.dbml) for the column-level reference.
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 18+
 - [Rust](https://rustup.rs/) (stable)
-- [Docker](https://www.docker.com/) (to run PostgreSQL and the agent)
 - Tauri system dependencies: [official guide](https://tauri.app/start/prerequisites/)
 - An [Anthropic API key](https://console.anthropic.com/) for the AI features
 
@@ -55,28 +43,13 @@ See [`db/schema.dbml`](db/schema.dbml) for the full column-level reference (the 
 ```bash
 git clone https://github.com/KanASon/FindMyJob.git
 cd FindMyJob
-cp .env.example .env   # fill in ANTHROPIC_API_KEY at minimum
-```
-
-Start PostgreSQL and the agent, both on your machine (migrations are applied when the agent starts):
-
-```bash
-docker compose up -d
-```
-
-Or, to run the agent from source against a Postgres of your own (useful while iterating on the agent):
-
-```bash
-cargo run -p findmyjob-agent
-```
-
-Then run the desktop app:
-
-```bash
+cp .env.example .env   # fill in ANTHROPIC_API_KEY
 cd crates/desktop
 npm install
 npm run tauri dev
 ```
+
+In development, the `.env` at the repository root is found automatically. An installed app reads it from its config folder (on Windows `%APPDATA%\com.findmyjob.app\.env`). Logs are written to the app log folder (on Windows `%LOCALAPPDATA%\com.findmyjob.app\logs\findmyjob.log`).
 
 ### Production build
 
@@ -93,8 +66,8 @@ The installer is generated under `target/release/bundle/` at the repo root.
 |---|---|
 | Desktop shell | Tauri 2 (Windows / macOS / Linux) |
 | Frontend | Vue 3 + TypeScript + Vite + Tailwind CSS |
-| Backend | Rust, Axum |
-| Database | PostgreSQL + pgvector, via sqlx |
+| Backend | Rust, inside the Tauri app |
+| Database | SQLite, via sqlx |
 | Document generation | Typst (`typst-as-lib`) |
 | AI | Anthropic Claude Messages API |
 
@@ -109,6 +82,8 @@ Active early-stage development. Application tracking, AI document tailoring, and
 ## History
 
 An early version collected offers automatically (Welcome to the Jungle, filtering, LLM scoring). I removed it after realizing this approach went against the terms of use of several job platforms. The app now relies on adding offers by their link. The original pipeline is still available at the `archive/collecte-automatique` tag.
+
+Until October 2026, the app ran in server mode: a local Axum agent with PostgreSQL in Docker, the desktop being a thin HTTP client. It is now a standalone desktop application with an embedded SQLite database; the server-mode version is kept at the `archive/agent-postgres` tag.
 
 ## About
 

@@ -1,5 +1,5 @@
-//! Validation stricte de l'URL d'une offre avant toute requête : l'agent ne
-//! charge qu'une page publique en http(s), sur demande de l'utilisateur.
+//! Validation stricte de l'URL d'une offre avant toute requête : l'application
+//! ne charge qu'une page publique en http(s), sur demande de l'utilisateur.
 
 // Importation des modules standard
 use std::net::IpAddr;

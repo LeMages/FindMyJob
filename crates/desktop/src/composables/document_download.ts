@@ -32,7 +32,7 @@ const APPLY_ROOT_FOLDER = 'FindMyJob'
  * nom normalisé (`CV_…` / `LM_…`). Un fichier existant est écrasé.
  *
  * @param docType - `'cv'` ou `'lm'`.
- * @param docPath - Chemin du document côté agent.
+ * @param docPath - Chemin du document, relatif au dossier de données.
  * @param candidature - Candidature d'origine (entreprise, poste).
  * @param owner - Identité de l'utilisateur.
  * @param targetDir - Dossier de destination (défaut : dossier de téléchargements).

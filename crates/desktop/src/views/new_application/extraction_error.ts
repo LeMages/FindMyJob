@@ -1,6 +1,6 @@
 /**
  * Interprétation, pour l'écran « Nouvelle candidature », des erreurs
- * renvoyées par l'extraction d'une offre. L'agent renvoie un code
+ * renvoyées par l'extraction d'une offre. Le backend renvoie un code
  * (`{ kind: 'Scraping', message: 'access_denied' }`) : c'est ici que l'on
  * choisit le texte affiché et la suite proposée à l'utilisateur.
  */
@@ -13,7 +13,7 @@ import type { ScrapingFailure } from '@/types'
  * Suite à donner à un échec d'extraction :
  * - `choice` : écran de choix (capture dans FindMyJob, texte collé, saisie manuelle) ;
  * - `unavailable` : offre introuvable ou expirée, sans proposition de capture ;
- * - `error` : erreur réelle à afficher telle quelle (LLM, clé API, agent injoignable…).
+ * - `error` : erreur réelle à afficher telle quelle (LLM, clé API…).
  */
 export type ExtractionOutcome =
   | { kind: 'choice'; message: string; canCapture: boolean }
@@ -48,7 +48,7 @@ const CHOICE_FAILURES: ScrapingFailure[] = [...CAPTURABLE_FAILURES, 'not_html', 
 
 /**
  * Lit le code d'échec d'une erreur d'extraction, s'il s'agit d'une erreur
- * `Scraping` de l'agent.
+ * `Scraping` du backend.
  *
  * @param e - Erreur interceptée autour d'un `invoke()`.
  * @returns Le code d'échec, ou `null` pour toute autre erreur.

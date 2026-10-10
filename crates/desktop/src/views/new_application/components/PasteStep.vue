@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Étape « texte collé » : l'utilisateur colle le texte de l'offre, analysé
- * par l'agent comme une page.
+ * comme une page.
  */
 
 const text = defineModel<string>({ required: true })

@@ -45,7 +45,7 @@ const { downloading, download } = useDocumentDownload()
 /**
  * Ouvre l'aperçu PDF d'un document joint à la candidature.
  *
- * @param path - Chemin absolu du document.
+ * @param path - Chemin du document, relatif au dossier de données.
  * @param label - Titre affiché dans la modale d'aperçu.
  * @param docType - Type du document, pour nommer un éventuel téléchargement.
  */

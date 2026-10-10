@@ -28,7 +28,7 @@ export function useDocumentDownload() {
    * déjà en cours.
    *
    * @param docType - `'cv'` ou `'lm'`.
-   * @param path - Chemin du document côté agent.
+   * @param path - Chemin du document, relatif au dossier de données.
    */
   async function download(docType: DownloadDocType, path: string) {
     const candidature = state.detailCandidature

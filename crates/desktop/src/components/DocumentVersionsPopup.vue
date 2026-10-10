@@ -41,7 +41,7 @@ const emit = defineEmits<{
 
 const title = computed(() => (props.docType === 'cv' ? 'Versions – CV' : 'Versions – Lettre de motivation'))
 
-// Copie triée : on ne dépend pas de l'ordre renvoyé par l'agent.
+// Copie triée : on ne dépend pas de l'ordre renvoyé par le backend.
 const sortedVersions = computed(() => [...props.versions].sort((a, b) => b.version - a.version))
 
 const restoringVersion = ref<number | null>(null)

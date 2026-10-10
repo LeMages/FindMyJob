@@ -1,7 +1,7 @@
 /**
- * Avertissement non bloquant de doublon : cherche, via l'agent, les
- * candidatures existantes (toutes sessions) dont l'URL d'offre correspond à
- * celle saisie. La comparaison normalisée est faite par l'agent.
+ * Avertissement non bloquant de doublon : cherche, via une commande Tauri,
+ * les candidatures existantes (toutes sessions) dont l'URL d'offre correspond
+ * à celle saisie. La comparaison normalisée est faite côté Rust.
  */
 
 // Importation des modules Vue / framework

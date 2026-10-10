@@ -4,7 +4,7 @@
 //! dans le champ `message` de `AppError::Scraping` : c'est l'interface qui
 //! choisit le texte affiché et l'étape suivante proposée à l'utilisateur, pas
 //! le backend. Le détail technique (statut HTTP, erreur réseau) est seulement
-//! journalisé par l'agent.
+//! tracé dans le log de l'application.
 
 /// Raison d'échec de la récupération ou de l'extraction d'une page d'offre.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

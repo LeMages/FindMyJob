@@ -129,7 +129,7 @@ async function submit() {
       session_id: session.id,
     }
     // 2. Création de la candidature côté backend, puis suivi de la génération
-    //    des documents lancée en tâche de fond par l'agent (modale bloquante)
+    //    des documents lancée en tâche de fond (modale bloquante)
     const candidature = await invoke<CandidatureView>('create_candidature', { input })
     showProgressModal.value = true
     startProgressPolling(candidature.id)

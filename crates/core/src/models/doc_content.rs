@@ -1,7 +1,7 @@
 //! Contenu rédigé par le LLM pour un CV ou une lettre : uniquement les
 //! champs de prose. Identité, intitulés, entreprises, dates, formations,
 //! langues et destinataire sont remplis par Rust depuis le profil et
-//! l'offre (voir `crates/agent/src/docgen`).
+//! l'offre (voir `crates/desktop/src-tauri/src/docgen`).
 
 // Importation des crates externes
 use serde::{Deserialize, Serialize};

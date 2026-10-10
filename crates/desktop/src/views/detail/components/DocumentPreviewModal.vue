@@ -27,7 +27,7 @@ const { downloading, download } = useDocumentDownload()
 /**
  * Ouvre la modale et charge l'aperçu PDF d'un document joint à la candidature.
  *
- * @param path - Chemin absolu du document PDF.
+ * @param path - Chemin du document PDF, relatif au dossier de données.
  * @param label - Titre affiché dans la modale (ex. "Aperçu du CV").
  * @param type - Type du document, pour nommer le fichier téléchargé.
  */

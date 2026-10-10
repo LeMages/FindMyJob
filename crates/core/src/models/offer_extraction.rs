@@ -1,5 +1,6 @@
-//! Résultat de l'extraction d'une offre renvoyé par les routes
-//! `/api/scraping/*` : champs du formulaire et étage de la cascade utilisé.
+//! Résultat de l'extraction d'une offre renvoyé par les commandes
+//! d'import (lien, capture, texte collé) : champs du formulaire et étage de
+//! la cascade utilisé.
 
 // Importation des modules internes
 use crate::llm::scraping_extract::ScrapedOfferFields;

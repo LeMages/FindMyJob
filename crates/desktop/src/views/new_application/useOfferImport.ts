@@ -1,8 +1,8 @@
 /**
  * Parcours d'import d'une offre dans l'écran « Nouvelle candidature » :
  * lien → (écran de choix → capture dans FindMyJob | texte collé) →
- * formulaire. Le composable ne fait qu'appeler les commandes Tauri (relais
- * vers l'agent) et piloter les étapes ; l'extraction reste dans l'agent.
+ * formulaire. Le composable ne fait qu'appeler les commandes Tauri et
+ * piloter les étapes ; l'extraction reste côté Rust.
  */
 
 // Importation des modules Vue / framework
@@ -85,7 +85,7 @@ export function useOfferImport(url: Ref<string>, onExtracted: (extraction: Offer
     }
   }
 
-  /** Capture la page affichée dans la fenêtre et l'envoie à l'agent. */
+  /** Capture la page affichée dans la fenêtre et en extrait l'offre. */
   async function capturePage() {
     busy.value = true
     captureError.value = null

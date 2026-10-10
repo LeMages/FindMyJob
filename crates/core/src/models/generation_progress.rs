@@ -1,8 +1,8 @@
 //! DTO représentant la progression du pipeline de génération de documents
 //! (CV + lettre de motivation) d'une candidature — consultée par polling
-//! depuis le desktop pendant que l'agent génère les documents en tâche de
-//! fond (voir `crate::llm` côté core, `pipeline::generate_documents` et
-//! `progress::ProgressStore` côté agent).
+//! depuis l'interface pendant que l'application génère les documents en
+//! tâche de fond (voir `crate::llm` côté core, `pipeline::generate_documents`
+//! et `progress::ProgressStore` côté desktop).
 
 /// Statut d'une génération de documents en cours de suivi.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

@@ -21,7 +21,7 @@ pub struct DocumentFileInfo {
 
 /// État de préparation des documents de référence d'une session (CV et
 /// lettre de motivation) : `all_ready` conditionne la création d'une
-/// candidature liée à cette session (voir `api::candidatures::create_candidature`).
+/// candidature liée à cette session (voir `services::candidatures::create`).
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct DocumentsStatus {
     pub cv_ready: bool,
