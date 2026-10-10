@@ -1,92 +1,82 @@
 //! Commandes Tauri pour les paramètres applicatifs : modèle LLM, thème, test
 //! de connexion.
 
-// Importation des crates externes
-use serde_json::json;
-
 // Importation des modules internes
-use crate::api_client::ApiClient;
+use crate::app_state::AppContext;
+use crate::db;
 use crate::error::AppError;
+use crate::models::TestConnectionResult;
+use crate::services;
+use findmyjob_core::llm::client::DEFAULT_MODEL;
 
-/// Résultat du test de connexion à l'API Claude.
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct TestConnectionResult {
-    success: bool,
-    model: String,
-    message: String,
-    latency_ms: u64,
-}
-
-/// Retourne l'identifiant du modèle Claude actuellement configuré.
+/// Renvoie le modèle Claude configuré.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
+/// * `ctx` - Contexte de l'application.
 ///
 /// # Returns
 ///
-/// Le modèle configuré côté agent.
+/// Identifiant du modèle (modèle par défaut si aucun n'est enregistré).
 #[tauri::command]
-pub async fn get_llm_model(api: tauri::State<'_, ApiClient>) -> Result<String, AppError> {
-    api.get("/api/settings/model").await
+pub async fn get_llm_model(ctx: tauri::State<'_, AppContext>) -> Result<String, AppError> {
+    db::settings::resolve_llm_model(&ctx.state()?.pool, DEFAULT_MODEL).await
 }
 
-/// Change le modèle Claude utilisé pour les appels LLM.
+/// Enregistre le modèle Claude choisi.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `model` - Identifiant du modèle à sélectionner.
+/// * `ctx` - Contexte de l'application.
+/// * `model` - Identifiant du modèle.
 ///
 /// # Returns
 ///
-/// `Ok(())` si le modèle a été enregistré.
+/// `Ok(())`, ou `AppError::Validation` pour un modèle inconnu.
 #[tauri::command]
-pub async fn set_llm_model(api: tauri::State<'_, ApiClient>, model: String) -> Result<(), AppError> {
-    api.put_no_content("/api/settings/model", &json!({ "model": model })).await
+pub async fn set_llm_model(ctx: tauri::State<'_, AppContext>, model: String) -> Result<(), AppError> {
+    services::settings::set_llm_model(&ctx.state()?.pool, &model).await
 }
 
-/// Retourne le thème d'affichage actuellement configuré.
+/// Renvoie le thème d'affichage configuré.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
+/// * `ctx` - Contexte de l'application.
 ///
 /// # Returns
 ///
-/// Le thème configuré côté agent.
+/// `"clair"`, `"sombre"` ou `"systeme"`.
 #[tauri::command]
-pub async fn get_theme(api: tauri::State<'_, ApiClient>) -> Result<String, AppError> {
-    api.get("/api/settings/theme").await
+pub async fn get_theme(ctx: tauri::State<'_, AppContext>) -> Result<String, AppError> {
+    db::settings::resolve_theme(&ctx.state()?.pool).await
 }
 
-/// Change le thème d'affichage de l'application.
+/// Enregistre le thème d'affichage choisi.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `theme` - Thème à appliquer.
+/// * `ctx` - Contexte de l'application.
+/// * `theme` - Thème choisi.
 ///
 /// # Returns
 ///
-/// `Ok(())` si le thème a été enregistré.
+/// `Ok(())`, ou `AppError::Validation` pour un thème inconnu.
 #[tauri::command]
-pub async fn set_theme(api: tauri::State<'_, ApiClient>, theme: String) -> Result<(), AppError> {
-    api.put_no_content("/api/settings/theme", &json!({ "theme": theme })).await
+pub async fn set_theme(ctx: tauri::State<'_, AppContext>, theme: String) -> Result<(), AppError> {
+    services::settings::set_theme(&ctx.state()?.pool, &theme).await
 }
 
-/// Teste la connexion à l'API Claude avec la clé et le modèle actuellement
-/// configurés côté agent.
+/// Teste la connexion à l'API Claude.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
+/// * `ctx` - Contexte de l'application.
 ///
 /// # Returns
 ///
-/// `TestConnectionResult` : les échecs attendus (clé invalide, réseau, refus
-/// de l'API) sont retournés avec `success: false`, pas comme une erreur.
+/// `TestConnectionResult`.
 #[tauri::command]
-pub async fn test_api_connection(api: tauri::State<'_, ApiClient>) -> Result<TestConnectionResult, AppError> {
-    api.post("/api/settings/test-connection", &()).await
+pub async fn test_api_connection(ctx: tauri::State<'_, AppContext>) -> Result<TestConnectionResult, AppError> {
+    services::settings::test_connection(&ctx.state()?.pool).await
 }

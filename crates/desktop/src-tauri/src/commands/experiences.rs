@@ -1,59 +1,58 @@
 //! Commandes Tauri pour les expériences professionnelles du profil.
 
 // Importation des modules internes
-use crate::api_client::ApiClient;
+use crate::app_state::AppContext;
+use crate::clock;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{CreateExperienceInput, ExperienceView};
 
-/// Ajoute une expérience au profil de l'utilisateur.
+/// Ajoute une expérience au profil.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `input` - Données de l'expérience à créer.
+/// * `ctx` - Contexte de l'application.
+/// * `input` - Données à créer.
 ///
 /// # Returns
 ///
-/// `ExperienceView` fraîchement créée.
+/// `ExperienceView` fraîchement créé(e).
 #[tauri::command]
-pub async fn add_experience(
-    api: tauri::State<'_, ApiClient>,
-    input: CreateExperienceInput,
-) -> Result<ExperienceView, AppError> {
-    api.post("/api/experiences", &input).await
+pub async fn add_experience(ctx: tauri::State<'_, AppContext>, input: CreateExperienceInput) -> Result<ExperienceView, AppError> {
+    db::experiences::insert(&ctx.state()?.pool, input, &clock::now_utc()).await
 }
 
-/// Met à jour une expérience existante.
+/// Met à jour une expérience existant(e).
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `id` - Identifiant de l'expérience à modifier.
-/// * `input` - Nouvelles données de l'expérience.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à modifier.
+/// * `input` - Nouvelles données.
 ///
 /// # Returns
 ///
-/// `ExperienceView` mise à jour.
+/// `ExperienceView` mis(e) à jour.
 #[tauri::command]
 pub async fn update_experience(
-    api: tauri::State<'_, ApiClient>,
+    ctx: tauri::State<'_, AppContext>,
     id: i64,
     input: CreateExperienceInput,
 ) -> Result<ExperienceView, AppError> {
-    api.put(&format!("/api/experiences/{id}"), &input).await
+    db::experiences::update(&ctx.state()?.pool, id, input).await
 }
 
 /// Supprime une expérience du profil.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `id` - Identifiant de l'expérience à supprimer.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à supprimer.
 ///
 /// # Returns
 ///
-/// `Ok(())` si supprimée.
+/// `Ok(())` si supprimé(e).
 #[tauri::command]
-pub async fn delete_experience(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
-    api.delete(&format!("/api/experiences/{id}")).await
+pub async fn delete_experience(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<(), AppError> {
+    db::experiences::delete(&ctx.state()?.pool, id).await
 }

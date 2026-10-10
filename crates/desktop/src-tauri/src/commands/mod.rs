@@ -1,6 +1,6 @@
 //! Ré-exports publics des commandes Tauri, groupées par entité métier.
-//! Chaque commande délègue sa logique à l'agent via `api_client::ApiClient` —
-//! aucun accès direct à une base de données ici.
+//! Chaque commande reste fine : elle appelle un service (`crate::services`)
+//! ou un accès base (`crate::db`) et renvoie son résultat tel quel.
 
 pub mod candidatures;
 pub mod capture;

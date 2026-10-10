@@ -1,45 +1,43 @@
 //! Commandes Tauri pour les entretiens rattachés à une candidature.
 
 // Importation des modules internes
-use crate::api_client::ApiClient;
+use crate::app_state::AppContext;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{InterviewView, PlanningInterviewView};
 
-/// Liste les entretiens encore en attente d'une candidature — utilisé pour
-/// proposer à l'utilisateur lequel marquer comme passé.
+/// Liste les entretiens en attente d'une candidature.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `candidature_id` - Identifiant de la candidature.
+/// * `ctx` - Contexte de l'application.
+/// * `candidature_id` - Candidature concernée.
 ///
 /// # Returns
 ///
-/// Entretiens au statut `en_attente`, triés par date d'entretien croissante.
+/// Entretiens `en_attente`, par date croissante.
 #[tauri::command]
 pub async fn get_pending_interviews(
-    api: tauri::State<'_, ApiClient>,
+    ctx: tauri::State<'_, AppContext>,
     candidature_id: i64,
 ) -> Result<Vec<InterviewView>, AppError> {
-    api.get(&format!("/api/candidatures/{candidature_id}/interviews/pending"))
-        .await
+    db::interviews::list_pending_for_candidature(&ctx.state()?.pool, candidature_id).await
 }
 
-/// Liste tous les entretiens planifiés d'une session, enrichis de leur
-/// candidature — utilisé par la vue planning.
+/// Liste les entretiens datés d'une session (onglet Planning).
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `session_id` - Identifiant de la session.
+/// * `ctx` - Contexte de l'application.
+/// * `session_id` - Session affichée.
 ///
 /// # Returns
 ///
-/// Entretiens dont la date est renseignée, triés par date croissante.
+/// Entretiens par date croissante.
 #[tauri::command]
 pub async fn get_all_interviews_for_session(
-    api: tauri::State<'_, ApiClient>,
+    ctx: tauri::State<'_, AppContext>,
     session_id: i64,
 ) -> Result<Vec<PlanningInterviewView>, AppError> {
-    api.get(&format!("/api/sessions/{session_id}/interviews")).await
+    db::interviews::list_for_session(&ctx.state()?.pool, session_id).await
 }

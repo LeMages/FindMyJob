@@ -1,59 +1,58 @@
 //! Commandes Tauri pour les langues du profil.
 
 // Importation des modules internes
-use crate::api_client::ApiClient;
+use crate::app_state::AppContext;
+use crate::clock;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{CreateLangInput, LangView};
 
-/// Ajoute une langue au profil de l'utilisateur.
+/// Ajoute une langue au profil.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `input` - Données de la langue à créer.
+/// * `ctx` - Contexte de l'application.
+/// * `input` - Données à créer.
 ///
 /// # Returns
 ///
-/// `LangView` fraîchement créée.
+/// `LangView` fraîchement créé(e).
 #[tauri::command]
-pub async fn add_lang(
-    api: tauri::State<'_, ApiClient>,
-    input: CreateLangInput,
-) -> Result<LangView, AppError> {
-    api.post("/api/langues", &input).await
+pub async fn add_lang(ctx: tauri::State<'_, AppContext>, input: CreateLangInput) -> Result<LangView, AppError> {
+    db::langues::insert(&ctx.state()?.pool, input, &clock::now_utc()).await
 }
 
-/// Met à jour une langue existante.
+/// Met à jour une langue existant(e).
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `id` - Identifiant de la langue à modifier.
-/// * `input` - Nouvelles données de la langue.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à modifier.
+/// * `input` - Nouvelles données.
 ///
 /// # Returns
 ///
-/// `LangView` mise à jour.
+/// `LangView` mis(e) à jour.
 #[tauri::command]
 pub async fn update_lang(
-    api: tauri::State<'_, ApiClient>,
+    ctx: tauri::State<'_, AppContext>,
     id: i64,
     input: CreateLangInput,
 ) -> Result<LangView, AppError> {
-    api.put(&format!("/api/langues/{id}"), &input).await
+    db::langues::update(&ctx.state()?.pool, id, input).await
 }
 
 /// Supprime une langue du profil.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `id` - Identifiant de la langue à supprimer.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à supprimer.
 ///
 /// # Returns
 ///
-/// `Ok(())` si supprimée.
+/// `Ok(())` si supprimé(e).
 #[tauri::command]
-pub async fn delete_lang(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
-    api.delete(&format!("/api/langues/{id}")).await
+pub async fn delete_lang(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<(), AppError> {
+    db::langues::delete(&ctx.state()?.pool, id).await
 }

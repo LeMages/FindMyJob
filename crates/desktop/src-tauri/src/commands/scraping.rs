@@ -1,62 +1,41 @@
-//! Commande Tauri pour le scraping et l'extraction automatique d'une offre.
-
-// Importation des crates externes
-use serde_json::json;
+//! Commandes Tauri d'extraction d'une offre : depuis son lien ou depuis un
+//! texte collé (la capture de page est dans `commands::capture`).
 
 // Importation des modules internes
-use crate::api_client::ApiClient;
+use crate::app_state::AppContext;
 use crate::error::AppError;
+use crate::services;
 use findmyjob_core::models::OfferExtraction;
 
-/// Scrape une offre d'emploi depuis son URL et en extrait les champs du
-/// formulaire de candidature (poste, entreprise, lieu, type de contrat,
-/// rémunération, description) via l'agent.
+/// Récupère la page d'une offre et en extrait les champs.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `url` - URL de la page d'offre à analyser.
+/// * `ctx` - Contexte de l'application.
+/// * `url` - Lien de l'offre.
 ///
 /// # Returns
 ///
-/// Les champs extraits (chacun `None` si non trouvé) et l'étage de la
-/// cascade utilisé. Erreur si l'URL est vide, ou erreur typée de l'agent
-/// (accès refusé, offre introuvable, contenu insuffisant, erreur LLM...).
+/// Champs extraits, ou l'échec typé de récupération.
 #[tauri::command]
-pub async fn scrape_offer(
-    api: tauri::State<'_, ApiClient>,
-    url: String,
-) -> Result<OfferExtraction, AppError> {
-    let url = url.trim();
-    if url.is_empty() {
-        return Err(AppError::Validation("L'URL de l'offre est requise.".to_string()));
-    }
-
-    api.post("/api/scraping/url", &json!({ "url": url })).await
+pub async fn scrape_offer(ctx: tauri::State<'_, AppContext>, url: String) -> Result<OfferExtraction, AppError> {
+    services::scraping::scrape_offer(&ctx.state()?.pool, &url).await
 }
 
-/// Extrait les champs du formulaire de candidature depuis un texte d'offre
-/// collé manuellement — une des suites proposées quand l'extraction par lien
-/// échoue (site protégé, contenu insuffisant).
+/// Extrait les champs d'une offre depuis un texte collé.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `text` - Texte de l'offre collé par l'utilisateur.
+/// * `ctx` - Contexte de l'application.
+/// * `text` - Texte de l'offre.
 ///
 /// # Returns
 ///
-/// Les champs extraits (chacun `None` si non trouvé) et l'étage `llm`.
-/// Erreur si le texte est vide ou si l'extraction LLM échoue.
+/// Champs extraits.
 #[tauri::command]
 pub async fn extract_offer_from_text(
-    api: tauri::State<'_, ApiClient>,
+    ctx: tauri::State<'_, AppContext>,
     text: String,
 ) -> Result<OfferExtraction, AppError> {
-    let text = text.trim();
-    if text.is_empty() {
-        return Err(AppError::Validation("Le texte de l'offre est vide.".to_string()));
-    }
-
-    api.post("/api/scraping/text", &json!({ "text": text })).await
+    services::scraping::extract_from_pasted_text(&ctx.state()?.pool, &text).await
 }

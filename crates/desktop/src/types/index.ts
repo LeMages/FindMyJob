@@ -54,7 +54,6 @@ export interface UserView {
   /** Centres d'intérêt, une ligne = un item. */
   interets: string | null
   created_at: string
-  updated_at: string
 }
 // ── Suivi de candidatures (kanban) ───────────────────────────────────────────
 
@@ -222,7 +221,6 @@ export interface CandidatureView {
   status: string
   source: string | null
   type_contrat: string | null
-  date_candidature: string | null
   derniere_maj_statut: string
   cv_path: string | null
   lettre_motivation_path: string | null
@@ -319,7 +317,6 @@ export interface CandidatureDetail {
   url_offre: string | null
   description_offre: string | null
   notes: string | null
-  date_candidature: string | null
   cv_path: string | null
   lettre_motivation_path: string | null
   /** Numéro de la version du CV de référence utilisée pour la génération. */

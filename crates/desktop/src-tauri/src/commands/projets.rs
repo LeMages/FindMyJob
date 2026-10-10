@@ -1,59 +1,58 @@
 //! Commandes Tauri pour les projets personnels du profil.
 
 // Importation des modules internes
-use crate::api_client::ApiClient;
+use crate::app_state::AppContext;
+use crate::clock;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{CreateProjetInput, ProjetView};
 
-/// Ajoute un projet au profil de l'utilisateur.
+/// Ajoute un projet au profil.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `input` - Données du projet à créer.
+/// * `ctx` - Contexte de l'application.
+/// * `input` - Données à créer.
 ///
 /// # Returns
 ///
-/// `ProjetView` fraîchement créé.
+/// `ProjetView` fraîchement créé(e).
 #[tauri::command]
-pub async fn add_projet(
-    api: tauri::State<'_, ApiClient>,
-    input: CreateProjetInput,
-) -> Result<ProjetView, AppError> {
-    api.post("/api/projets", &input).await
+pub async fn add_projet(ctx: tauri::State<'_, AppContext>, input: CreateProjetInput) -> Result<ProjetView, AppError> {
+    db::projets::insert(&ctx.state()?.pool, input, &clock::now_utc()).await
 }
 
-/// Met à jour un projet existant.
+/// Met à jour un projet existant(e).
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `id` - Identifiant du projet à modifier.
-/// * `input` - Nouvelles données du projet.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à modifier.
+/// * `input` - Nouvelles données.
 ///
 /// # Returns
 ///
-/// `ProjetView` mis à jour.
+/// `ProjetView` mis(e) à jour.
 #[tauri::command]
 pub async fn update_projet(
-    api: tauri::State<'_, ApiClient>,
+    ctx: tauri::State<'_, AppContext>,
     id: i64,
     input: CreateProjetInput,
 ) -> Result<ProjetView, AppError> {
-    api.put(&format!("/api/projets/{id}"), &input).await
+    db::projets::update(&ctx.state()?.pool, id, input).await
 }
 
 /// Supprime un projet du profil.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `id` - Identifiant du projet à supprimer.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à supprimer.
 ///
 /// # Returns
 ///
-/// `Ok(())` si supprimé.
+/// `Ok(())` si supprimé(e).
 #[tauri::command]
-pub async fn delete_projet(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
-    api.delete(&format!("/api/projets/{id}")).await
+pub async fn delete_projet(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<(), AppError> {
+    db::projets::delete(&ctx.state()?.pool, id).await
 }

@@ -1,8 +1,8 @@
 //! Point d'entrée de la bibliothèque Tauri : déclaration des modules et
-//! configuration de l'application (client API partagé, commandes exposées à l'IPC).
+//! configuration de l'application (initialisation au démarrage, état
+//! partagé, commandes exposées à l'IPC).
 
 // Importation des modules internes
-pub mod api_client;
 pub mod app_state;
 pub mod clock;
 pub mod commands;
@@ -15,30 +15,25 @@ pub mod offer_extraction;
 pub mod pipeline;
 pub mod progress;
 pub mod services;
+pub mod startup;
 pub mod storage_paths;
 pub mod url_normalize;
 
 // Importation des crates externes
-use api_client::ApiClient;
+use tauri::Manager;
 
-/// Configure et lance l'application Tauri : construit le client HTTP vers
-/// l'agent, l'injecte comme état partagé, puis enregistre toutes les
-/// commandes IPC.
+/// Configure et lance l'application Tauri : initialise l'état (traces,
+/// `.env`, dossiers, base SQLite), l'injecte comme état partagé, puis
+/// enregistre toutes les commandes IPC.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Charge le .env à la racine du projet (API_URL, API_TOKEN, etc.) — no-op
-    // silencieux si le fichier est absent (ex. build de production packagée).
-    dotenvy::dotenv().ok();
-
-    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
-    let api_token = std::env::var("API_TOKEN").ok().filter(|t| !t.is_empty());
-    // Sans client HTTP (initialisation TLS impossible), l'application ne peut
-    // rien afficher : arrêt immédiat avec la cause, comme `run()` ci-dessous.
-    let client = ApiClient::new(&api_url, api_token).expect("client HTTP vers l'agent");
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(client)
+        .setup(|app| {
+            let context = startup::initialize(app.handle());
+            app.manage(context);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::user_exists,
             commands::create_user,

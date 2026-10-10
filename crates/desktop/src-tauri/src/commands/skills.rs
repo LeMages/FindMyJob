@@ -1,59 +1,58 @@
 //! Commandes Tauri pour les compétences du profil.
 
 // Importation des modules internes
-use crate::api_client::ApiClient;
+use crate::app_state::AppContext;
+use crate::clock;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{CreateSkillInput, SkillView};
 
-/// Ajoute une compétence au profil de l'utilisateur.
+/// Ajoute une compétence au profil.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `input` - Données de la compétence à créer.
+/// * `ctx` - Contexte de l'application.
+/// * `input` - Données à créer.
 ///
 /// # Returns
 ///
-/// `SkillView` fraîchement créée.
+/// `SkillView` fraîchement créé(e).
 #[tauri::command]
-pub async fn add_skill(
-    api: tauri::State<'_, ApiClient>,
-    input: CreateSkillInput,
-) -> Result<SkillView, AppError> {
-    api.post("/api/skills", &input).await
+pub async fn add_skill(ctx: tauri::State<'_, AppContext>, input: CreateSkillInput) -> Result<SkillView, AppError> {
+    db::skills::insert(&ctx.state()?.pool, input, &clock::now_utc()).await
 }
 
-/// Met à jour une compétence existante.
+/// Met à jour une compétence existant(e).
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `id` - Identifiant de la compétence à modifier.
-/// * `input` - Nouvelles données de la compétence.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à modifier.
+/// * `input` - Nouvelles données.
 ///
 /// # Returns
 ///
-/// `SkillView` mise à jour.
+/// `SkillView` mis(e) à jour.
 #[tauri::command]
 pub async fn update_skill(
-    api: tauri::State<'_, ApiClient>,
+    ctx: tauri::State<'_, AppContext>,
     id: i64,
     input: CreateSkillInput,
 ) -> Result<SkillView, AppError> {
-    api.put(&format!("/api/skills/{id}"), &input).await
+    db::skills::update(&ctx.state()?.pool, id, input).await
 }
 
 /// Supprime une compétence du profil.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `id` - Identifiant de la compétence à supprimer.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à supprimer.
 ///
 /// # Returns
 ///
-/// `Ok(())` si supprimée.
+/// `Ok(())` si supprimé(e).
 #[tauri::command]
-pub async fn delete_skill(api: tauri::State<'_, ApiClient>, id: i64) -> Result<(), AppError> {
-    api.delete(&format!("/api/skills/{id}")).await
+pub async fn delete_skill(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<(), AppError> {
+    db::skills::delete(&ctx.state()?.pool, id).await
 }

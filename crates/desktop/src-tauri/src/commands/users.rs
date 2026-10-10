@@ -1,77 +1,74 @@
-//! Commandes Tauri pour l'utilisateur unique de l'application et l'agrégation
-//! de son profil complet (expériences, formations, projets, compétences, langues).
+//! Commandes Tauri pour l'utilisateur unique de l'application et son profil.
 
 // Importation des modules internes
-use crate::api_client::ApiClient;
+use crate::app_state::AppContext;
+use crate::clock;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{CreateUserInput, ProfileDto, UpdateUserInfoInput, UserView};
 
-/// Indique si le profil a déjà été créé (déclenche ou non l'onboarding au démarrage).
+/// Indique si le profil a déjà été créé (déclenche l'onboarding sinon).
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
+/// * `ctx` - Contexte de l'application.
 ///
 /// # Returns
 ///
-/// `true` si un utilisateur existe déjà.
+/// `true` si l'utilisateur existe.
 #[tauri::command]
-pub async fn user_exists(api: tauri::State<'_, ApiClient>) -> Result<bool, AppError> {
-    api.get("/api/users/exists").await
+pub async fn user_exists(ctx: tauri::State<'_, AppContext>) -> Result<bool, AppError> {
+    db::users::user_exists(&ctx.state()?.pool).await
 }
 
-/// Crée l'utilisateur unique de l'application (fin de l'onboarding).
+/// Crée l'utilisateur unique à la fin de l'onboarding.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `input` - Données saisies dans l'assistant d'onboarding.
+/// * `ctx` - Contexte de l'application.
+/// * `input` - Données saisies lors de l'onboarding.
 ///
 /// # Returns
 ///
 /// `UserView` fraîchement créé.
 #[tauri::command]
-pub async fn create_user(
-    api: tauri::State<'_, ApiClient>,
-    input: CreateUserInput,
-) -> Result<UserView, AppError> {
-    api.post("/api/users", &input).await
+pub async fn create_user(ctx: tauri::State<'_, AppContext>, input: CreateUserInput) -> Result<UserView, AppError> {
+    db::users::insert_user(&ctx.state()?.pool, input, &clock::now_utc()).await
 }
 
-/// Récupère l'utilisateur unique de l'application.
+/// Récupère l'identité affichée de l'utilisateur.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
+/// * `ctx` - Contexte de l'application.
 ///
 /// # Returns
 ///
-/// `UserView` du profil.
+/// `UserView`, ou `AppError::NotFound` si le profil n'existe pas.
 #[tauri::command]
-pub async fn get_user(api: tauri::State<'_, ApiClient>) -> Result<UserView, AppError> {
-    api.get("/api/users/me").await
+pub async fn get_user(ctx: tauri::State<'_, AppContext>) -> Result<UserView, AppError> {
+    db::users::fetch_user(&ctx.state()?.pool).await
 }
 
-/// Récupère le profil complet de l'utilisateur : informations, expériences,
-/// formations, projets, compétences et langues.
+/// Récupère le profil complet (informations et entrées).
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
+/// * `ctx` - Contexte de l'application.
 ///
 /// # Returns
 ///
-/// `ProfileDto` agrégeant l'ensemble des données du profil.
+/// `ProfileDto`, ou `AppError::NotFound` si le profil n'existe pas.
 #[tauri::command]
-pub async fn get_profile(api: tauri::State<'_, ApiClient>) -> Result<ProfileDto, AppError> {
-    api.get("/api/profile").await
+pub async fn get_profile(ctx: tauri::State<'_, AppContext>) -> Result<ProfileDto, AppError> {
+    db::profile::build_profile(&ctx.state()?.pool).await
 }
 
 /// Met à jour la description libre du profil.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
+/// * `ctx` - Contexte de l'application.
 /// * `description` - Nouvelle description.
 ///
 /// # Returns
@@ -79,17 +76,17 @@ pub async fn get_profile(api: tauri::State<'_, ApiClient>) -> Result<ProfileDto,
 /// `UserView` mis à jour.
 #[tauri::command]
 pub async fn update_description(
-    api: tauri::State<'_, ApiClient>,
+    ctx: tauri::State<'_, AppContext>,
     description: Option<String>,
 ) -> Result<UserView, AppError> {
-    api.patch("/api/users/description", &description).await
+    db::users::update_description(&ctx.state()?.pool, description).await
 }
 
 /// Met à jour les informations de contact du profil.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
+/// * `ctx` - Contexte de l'application.
 /// * `input` - Champs à mettre à jour.
 ///
 /// # Returns
@@ -97,8 +94,8 @@ pub async fn update_description(
 /// `UserView` mis à jour.
 #[tauri::command]
 pub async fn update_user_info(
-    api: tauri::State<'_, ApiClient>,
+    ctx: tauri::State<'_, AppContext>,
     input: UpdateUserInfoInput,
 ) -> Result<UserView, AppError> {
-    api.patch("/api/users/info", &input).await
+    db::users::update_user_info(&ctx.state()?.pool, input).await
 }

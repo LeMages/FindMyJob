@@ -51,14 +51,13 @@ const trashedCandidatures = computed(() =>
 )
 
 /**
- * Date affichée dans la colonne « Candidaté » : date de création de la fiche
- * tant que la candidature n'a pas été envoyée, sinon date de candidature réelle.
+ * Date affichée dans la colonne « Candidaté » : date de création de la fiche.
  *
  * @param c - Candidature à afficher.
  * @returns Date formatée en français (ex. « 12 juin 2026 »).
  */
 function candidatedDate(c: CandidatureView): string {
-  const iso = c.status === 'a_postuler' ? c.created_at : (c.date_candidature ?? c.created_at)
+  const iso = c.created_at
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 

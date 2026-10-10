@@ -1,24 +1,25 @@
 //! Commandes Tauri pour l'historique de statut des candidatures.
 
 // Importation des modules internes
-use crate::api_client::ApiClient;
+use crate::app_state::AppContext;
+use crate::db;
 use crate::error::AppError;
 use crate::models::StatusHistoryView;
 
-/// Liste l'historique de statut d'une candidature.
+/// Liste la timeline de suivi d'une candidature.
 ///
 /// # Arguments
 ///
-/// * `api` - Client HTTP vers l'agent.
-/// * `candidature_id` - Identifiant de la candidature.
+/// * `ctx` - Contexte de l'application.
+/// * `candidature_id` - Candidature concernée.
 ///
 /// # Returns
 ///
-/// Entrées triées par date de changement croissante.
+/// Entrées dans l'ordre chronologique.
 #[tauri::command]
 pub async fn get_status_history(
-    api: tauri::State<'_, ApiClient>,
+    ctx: tauri::State<'_, AppContext>,
     candidature_id: i64,
 ) -> Result<Vec<StatusHistoryView>, AppError> {
-    api.get(&format!("/api/candidatures/{candidature_id}/history")).await
+    db::status_history::list_for_candidature(&ctx.state()?.pool, candidature_id).await
 }
