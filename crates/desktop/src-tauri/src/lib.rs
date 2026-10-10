@@ -3,7 +3,9 @@
 
 // Importation des modules internes
 pub mod api_client;
+pub mod clock;
 pub mod commands;
+pub mod db;
 pub mod error;
 pub mod models;
 

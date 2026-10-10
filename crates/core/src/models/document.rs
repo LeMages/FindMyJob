@@ -34,8 +34,8 @@ pub struct DocumentsStatus {
 ///
 /// # Attributes
 ///
-/// * `template_path` - Chemin absolu du `template.typ` (lit `data.json`).
-/// * `example_data_path` - Chemin absolu de `example_data.json` (contenu de
+/// * `template_path` - Chemin du `template.typ` (lit `data.json`), relatif au dossier de données.
+/// * `example_data_path` - Chemin de `example_data.json`, relatif au dossier de données (contenu de
 ///   la référence au schéma canonique, avec la langue détectée).
 /// * `page_count` - Nombre de pages du PDF de la référence.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -45,38 +45,34 @@ pub struct TemplateArtifacts {
     pub page_count: i32,
 }
 
-/// Modèle DB d'un document de référence (CV ou lettre de motivation) tracké
-/// dans la table `documents`. Le filesystem reste la source de vérité du
-/// contenu ; ce modèle ne porte que les métadonnées et les chemins des
-/// fichiers de templatisation (`template_path`, `example_data_path`).
+/// Référence courante (CV ou lettre de motivation) d'une session : la ligne
+/// `documents` n'est qu'un pointeur vers une version de `document_versions`,
+/// ce modèle en est la reconstruction par jointure (fichiers et templatisation
+/// lus sur la version pointée).
 ///
 /// # Attributes
 ///
-/// * `id` - Identifiant du document.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `current_version_id` - Version pointée dans `document_versions`.
 /// * `original_filename` - Nom du fichier tel qu'uploadé par l'utilisateur.
-/// * `file_path` - Chemin absolu vers `reference.typ` sur le disque.
-/// * `pdf_path` - Chemin absolu vers `reference.pdf`, si compilé.
-/// * `template_path` - Chemin du `template.typ`, `None` tant que la référence n'est pas templatisée.
-/// * `example_data_path` - Chemin de `example_data.json`, `None` tant que la référence n'est pas templatisée.
-/// * `page_count` - Nombre de pages du PDF de la référence, `None` tant que la référence n'est pas templatisée.
-/// * `current_version_id` - Version courante dans `document_versions`, `None` si antérieure au versioning.
-/// * `created_at` - Date de création (ISO 8601).
-/// * `updated_at` - Date de dernière mise à jour (ISO 8601).
+/// * `file_path` - Chemin de `reference.typ`, relatif au dossier de données.
+/// * `pdf_path` - Chemin de `reference.pdf`, relatif au dossier de données.
+/// * `template_path` - Chemin du `template.typ`, `None` si la version n'est pas templatisée.
+/// * `example_data_path` - Chemin de `example_data.json`, `None` si la version n'est pas templatisée.
+/// * `page_count` - Nombre de pages du PDF de la référence, `None` si la version n'est pas templatisée.
+/// * `updated_at` - Date du dernier changement de version courante (upload ou restauration).
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct Document {
-    pub id: i64,
     pub session_id: i64,
     pub doc_type: String,
+    pub current_version_id: i64,
     pub original_filename: String,
     pub file_path: String,
-    pub pdf_path: Option<String>,
+    pub pdf_path: String,
     pub template_path: Option<String>,
     pub example_data_path: Option<String>,
     pub page_count: Option<i32>,
-    pub current_version_id: Option<i64>,
-    pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -95,14 +91,13 @@ impl Document {
     }
 }
 
-/// Vue frontend de la référence courante, construite depuis sa ligne
-/// `documents` : `updated_at` reflète le dernier upload ou la dernière
-/// restauration de version.
+/// Vue frontend de la référence courante : `updated_at` reflète le dernier
+/// upload ou la dernière restauration de version.
 impl From<Document> for DocumentReferenceView {
     fn from(doc: Document) -> Self {
         DocumentReferenceView {
             file_path: doc.file_path,
-            pdf_path: doc.pdf_path.unwrap_or_default(),
+            pdf_path: doc.pdf_path,
             updated_at: doc.updated_at,
         }
     }
@@ -119,8 +114,8 @@ impl From<Document> for DocumentReferenceView {
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `version` - Numéro d'affichage (1, 2, 3…) propre au couple session/doc_type.
 /// * `original_filename` - Nom du fichier tel qu'uploadé par l'utilisateur.
-/// * `typst_path` - Chemin absolu du `.typ` de cette version.
-/// * `pdf_path` - Chemin absolu du `.pdf` de cette version.
+/// * `typst_path` - Chemin du `.typ` de cette version, relatif au dossier de données.
+/// * `pdf_path` - Chemin du `.pdf` de cette version, relatif au dossier de données.
 /// * `created_at` - Date d'upload.
 /// * `is_current` - Vrai si c'est la version utilisée par la génération.
 #[derive(serde::Serialize, serde::Deserialize, Clone)]

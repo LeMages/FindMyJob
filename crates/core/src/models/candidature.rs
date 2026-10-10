@@ -1,6 +1,6 @@
 //! DTOs liés aux candidatures.
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct CandidatureView {
@@ -12,7 +12,6 @@ pub struct CandidatureView {
     pub status: String,
     pub source: Option<String>,
     pub type_contrat: Option<String>,
-    pub date_candidature: Option<NaiveDate>,
     /// Horodatage du dernier changement de statut (issu de `status_history`),
     /// utilisé pour calculer l'inactivité affichée dans la vue pipeline.
     pub derniere_maj_statut: DateTime<Utc>,
@@ -38,7 +37,6 @@ pub struct CandidatureDetail {
     pub url_offre: Option<String>,
     pub description_offre: Option<String>,
     pub notes: Option<String>,
-    pub date_candidature: Option<NaiveDate>,
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
     /// Numéro de la version du CV de référence utilisée pour la génération,

@@ -21,3 +21,8 @@ serde_json = { workspace = true }
 reqwest = { workspace = true }
 open = { workspace = true }
 dotenvy = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt"] }

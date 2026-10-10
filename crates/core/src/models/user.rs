@@ -34,7 +34,6 @@ pub struct UserView {
     /// Centres d'intérêt, une ligne = un item.
     pub interets: Option<String>,
     pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

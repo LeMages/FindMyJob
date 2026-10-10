@@ -319,7 +319,6 @@ mod tests {
                 portfolio: None,
                 interets: None,
                 created_at: now,
-                updated_at: now,
             },
             experiences: Vec::new(),
             formations: Vec::new(),
