@@ -1,6 +1,7 @@
 //! Ré-exports publics des DTOs utilisés par les commandes Tauri.
 
 pub mod candidature;
+pub mod connection_test;
 pub mod contact;
 pub mod doc_content;
 pub mod doc_data;
@@ -25,6 +26,7 @@ pub mod user;
 pub use candidature::{
     CandidatureDetail, CandidatureView, CreateCandidatureInput, DuplicateCandidatureView, UpdateCandidatureInput,
 };
+pub use connection_test::TestConnectionResult;
 pub use contact::ContactView;
 pub use doc_content::{CvContent, ItemBullets, LmContent, ProseField};
 pub use doc_data::{

@@ -15,6 +15,7 @@ use serde::Deserialize;
 
 // Importation des modules internes
 use crate::error::AppError;
+use crate::trace_log;
 
 /// Endpoint de l'API Messages d'Anthropic.
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
@@ -203,10 +204,10 @@ pub async fn call_claude_with_tokens_meta(
     // de sécurité) renvoie un contenu vide ou partiel qu'il ne faut pas
     // interpréter comme une réponse exploitable.
     if api_response.stop_reason.as_deref() == Some("refusal") {
-        eprintln!(
+        trace_log::log(&format!(
             "[llm::client] Réponse refusée par l'API Claude (stop_reason={:?})",
             api_response.stop_reason
-        );
+        ));
         return Err(AppError::Llm(
             "L'API Claude a refusé de traiter cette requête.".to_string(),
         ));
@@ -217,10 +218,10 @@ pub async fn call_claude_with_tokens_meta(
     // correctement — mieux vaut échouer explicitement ici que de laisser
     // l'appelant se heurter à une erreur de parsing cryptique en aval.
     if api_response.stop_reason.as_deref() == Some("max_tokens") {
-        eprintln!(
+        trace_log::log(&format!(
             "[llm::client] Réponse tronquée par l'API Claude (stop_reason={:?})",
             api_response.stop_reason
-        );
+        ));
         return Err(AppError::Llm(
             "Réponse tronquée par le modèle (max_tokens atteint). Le contenu généré est incomplet."
                 .to_string(),
@@ -235,10 +236,10 @@ pub async fn call_claude_with_tokens_meta(
         .find(|b| b.block_type == "text")
         .and_then(|b| b.text.clone())
         .ok_or_else(|| {
-            eprintln!(
+            trace_log::log(&format!(
                 "[llm::client] Pas de contenu texte dans la réponse API (stop_reason={:?})",
                 api_response.stop_reason
-            );
+            ));
             AppError::Llm("Pas de contenu texte dans la réponse API".to_string())
         })?;
 

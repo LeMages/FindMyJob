@@ -2,10 +2,10 @@
 //! (`crate::pipeline::generate_documents`) pour une candidature donnée.
 //!
 //! Ce store n'est jamais persisté en base : c'est un état éphémère consulté
-//! par le desktop via un polling (`GET /api/candidatures/{id}/progress`)
+//! par l'interface via un polling (commande `get_generation_progress`)
 //! pendant que la génération tourne en tâche de fond (voir
-//! `api::candidatures::create_candidature`). Une entrée est retirée
-//! automatiquement 5 minutes après son passage à `Completed` ou `Failed`.
+//! `services::generation`). Une entrée est retirée automatiquement
+//! 5 minutes après son passage à `Completed` ou `Failed`.
 
 // Importation des modules standard
 use std::collections::HashMap;
@@ -22,7 +22,7 @@ const CLEANUP_DELAY: Duration = Duration::from_secs(300);
 
 /// Store partagé, thread-safe, des progressions en cours — une entrée par
 /// candidature en cours de génération. Clonable à coût constant (`Arc`),
-/// suit le même pattern d'injection que les autres champs de `AppState`.
+/// partagé avec les autres champs de `AppState`.
 #[derive(Clone, Default)]
 pub struct ProgressStore(Arc<Mutex<HashMap<i64, GenerationProgress>>>);
 
@@ -38,7 +38,7 @@ impl ProgressStore {
     /// # Arguments
     ///
     /// * `candidature_id` - Identifiant de la candidature suivie.
-    /// * `current_step` - Étape courante (1-based).
+    /// * `current_step` - Étape courante (1-based, 0 avant la première étape).
     /// * `total_steps` - Nombre total d'étapes.
     /// * `step_label` - Libellé lisible de l'étape courante.
     pub fn update(&self, candidature_id: i64, current_step: u8, total_steps: u8, step_label: &str) {
@@ -93,7 +93,7 @@ impl ProgressStore {
     /// ne pas laisser grossir le store indéfiniment au fil des générations.
     fn schedule_cleanup(&self, candidature_id: i64) {
         let store = self.clone();
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             tokio::time::sleep(CLEANUP_DELAY).await;
             store.0.lock().expect("verrou ProgressStore empoisonné").remove(&candidature_id);
         });

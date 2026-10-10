@@ -15,7 +15,7 @@
 use std::path::Path;
 
 // Importation des crates externes
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 
 // Importation des modules internes
 use crate::db;
@@ -59,7 +59,7 @@ const SUPPORTED_LANGS: [&str; 2] = ["fr", "en"];
 pub struct GeneratedDocument {
     pub pdf: Vec<u8>,
     pub data_json: String,
-    pub reference_version_id: Option<i64>,
+    pub reference_version_id: i64,
 }
 
 /// Documents générés pour une candidature, avec leur trace.
@@ -73,10 +73,12 @@ pub struct GeneratedDocuments {
 ///
 /// # Attributes
 ///
+/// * `data_dir` - Dossier de données de l'application (fichiers des références).
 /// * `session_id` - Session de la candidature (fournit les références).
 /// * `candidature_id` - Candidature (fournit le destinataire).
 /// * `description_offre` - Texte brut de l'offre.
 pub struct GenerationRequest<'a> {
+    pub data_dir: &'a Path,
     pub session_id: i64,
     pub candidature_id: i64,
     pub description_offre: &'a str,
@@ -84,7 +86,7 @@ pub struct GenerationRequest<'a> {
 
 /// Construit le destinataire de la lettre depuis la candidature et ses
 /// contacts.
-async fn load_recipient(pool: &PgPool, candidature_id: i64) -> Result<Recipient, AppError> {
+async fn load_recipient(pool: &SqlitePool, candidature_id: i64) -> Result<Recipient, AppError> {
     let candidature = db::candidatures::fetch_detail(pool, candidature_id).await?;
     let contacts = db::contacts::list_for_candidature(pool, candidature_id).await?;
     Ok(build_recipient(&candidature, &contacts))
@@ -103,7 +105,7 @@ fn target_language(offer_analysis: &str, fallback: &str) -> String {
 /// Convertit un document ajusté en trace et en document à sauvegarder.
 fn finish<C>(
     fitted: FittedDocument<C>,
-    reference_version_id: Option<i64>,
+    reference_version_id: i64,
     labels_translated: bool,
 ) -> (GeneratedDocument, DocumentTrace<C>) {
     let trace = DocumentTrace {
@@ -181,7 +183,7 @@ impl GenerationContext {
 /// Étapes 1 et 2 : profil, références, destinataire, analyse de l'offre,
 /// matching, sélection, budgets et libellés.
 async fn prepare(
-    pool: &PgPool,
+    pool: &SqlitePool,
     request: &GenerationRequest<'_>,
     on_progress: &impl Fn(u8, &str),
 ) -> Result<GenerationContext, AppError> {
@@ -190,9 +192,10 @@ async fn prepare(
     // ------------------------------------------------------------------
     let profile = db::profile::build_profile(pool).await?;
     let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
-    let cv_ref: ReferenceTemplate<CvExampleData> = load_reference(pool, request.session_id, "cv", "CV").await?;
+    let cv_ref: ReferenceTemplate<CvExampleData> =
+        load_reference(pool, request.data_dir, request.session_id, "cv", "CV").await?;
     let lm_ref: ReferenceTemplate<LmExampleData> =
-        load_reference(pool, request.session_id, "lettre_motivation", "lettre de motivation").await?;
+        load_reference(pool, request.data_dir, request.session_id, "lettre_motivation", "lettre de motivation").await?;
     let recipient = load_recipient(pool, request.candidature_id).await?;
 
     // ------------------------------------------------------------------
@@ -328,7 +331,7 @@ fn into_result(
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions PostgreSQL.
+/// * `pool` - Pool de connexions SQLite.
 /// * `fonts_dir` - Dossier des polices importées par l'utilisateur.
 /// * `request` - Session, candidature et texte de l'offre.
 /// * `on_progress` - Callback appelée à chaque étape (`step` 1-based, libellé).
@@ -337,7 +340,7 @@ fn into_result(
 ///
 /// `GeneratedDocuments`.
 pub async fn generate_documents(
-    pool: &PgPool,
+    pool: &SqlitePool,
     fonts_dir: &Path,
     request: GenerationRequest<'_>,
     on_progress: impl Fn(u8, &str),

@@ -15,19 +15,17 @@
 //!   lieux, niveaux), ne laisse aucun séparateur orphelin.
 
 // Importation des modules standard
-use std::path::{Path, PathBuf};
-
-// Importation des crates externes
-use sqlx::PgPool;
+use std::path::Path;
 
 // Importation des modules internes
-use crate::db;
-use crate::documents::typst::{compile_document, compile_template, CompiledDocument};
+use crate::documents::typst::{compile_template, CompiledDocument};
+use crate::storage_paths;
 use findmyjob_core::docgen::date_format::format_long_date;
 use findmyjob_core::docgen::text_diff::{alphanumeric_words, diff_words, orphan_separators};
 use findmyjob_core::error::AppError;
 use findmyjob_core::llm::{templatize_reference, TemplatizeFeedback, TemplatizeOutput};
-use findmyjob_core::models::{CvExampleData, Document, LmExampleData, TemplateArtifacts};
+use findmyjob_core::models::{CvExampleData, LmExampleData, TemplateArtifacts};
+use findmyjob_core::trace_log;
 
 /// Nombre total d'appels LLM autorisés : un essai + 2 retries avec feedback.
 const MAX_ATTEMPTS: u8 = 3;
@@ -124,7 +122,7 @@ pub async fn templatize(
             Validation::Rejected(problems) => problems,
         };
 
-        eprintln!("[templatize] {doc_type} : tentative {attempt}/{MAX_ATTEMPTS} rejetée : {problems:?}");
+        trace_log::log(&format!("[templatize] {doc_type} : tentative {attempt}/{MAX_ATTEMPTS} rejetée : {problems:?}"));
         feedback = Some(TemplatizeFeedback {
             previous_template: output.template_typ,
             previous_example_data: example_data_json,
@@ -466,103 +464,52 @@ fn quote_words(words: &[String]) -> String {
     }
 }
 
+/// Fichiers de templatisation d'une version : chemins relatifs dans son
+/// dossier et nombre de pages, calculés avant toute écriture.
+///
+/// # Arguments
+///
+/// * `dir` - Dossier relatif de la version.
+/// * `validated` - Template validé.
+///
+/// # Returns
+///
+/// `TemplateArtifacts` des fichiers à écrire par `write_template_files`.
+pub fn template_artifacts(dir: &str, validated: &ValidatedTemplate) -> Result<TemplateArtifacts, AppError> {
+    let page_count = i32::try_from(validated.page_count)
+        .map_err(|_| AppError::Validation(format!("Nombre de pages hors limites : {}", validated.page_count)))?;
+    Ok(TemplateArtifacts {
+        template_path: storage_paths::file_in(dir, TEMPLATE_FILE),
+        example_data_path: storage_paths::file_in(dir, EXAMPLE_DATA_FILE),
+        page_count,
+    })
+}
+
 /// Écrit `template.typ` et `example_data.json` dans le dossier de la
 /// référence.
 ///
 /// # Arguments
 ///
-/// * `dir` - Dossier contenant `reference.typ` (dossier de version).
+/// * `data_dir` - Dossier de données de l'application.
+/// * `artifacts` - Emplacements calculés par `template_artifacts`.
 /// * `validated` - Template validé.
 ///
 /// # Returns
 ///
-/// `TemplateArtifacts` pointant vers les fichiers écrits.
-pub fn write_template_files(dir: &Path, validated: &ValidatedTemplate) -> Result<TemplateArtifacts, AppError> {
-    let template_path = dir.join(TEMPLATE_FILE);
-    std::fs::write(&template_path, validated.template_typ.as_bytes())
-        .map_err(|e| AppError::Validation(format!("Écriture de {} impossible : {e}", template_path.display())))?;
-
-    let example_data_path = dir.join(EXAMPLE_DATA_FILE);
-    std::fs::write(&example_data_path, validated.example_data_json.as_bytes())
-        .map_err(|e| AppError::Validation(format!("Écriture de {} impossible : {e}", example_data_path.display())))?;
-
-    let page_count = i32::try_from(validated.page_count)
-        .map_err(|_| AppError::Validation(format!("Nombre de pages hors limites : {}", validated.page_count)))?;
-
-    Ok(TemplateArtifacts {
-        template_path: template_path.to_string_lossy().to_string(),
-        example_data_path: example_data_path.to_string_lossy().to_string(),
-        page_count,
-    })
-}
-
-/// Rapport d'une re-templatisation, renvoyé par la route dédiée.
-///
-/// # Attributes
-///
-/// * `template` - Fichiers écrits.
-/// * `dropped_text` - Textes de la référence volontairement absents du template.
-/// * `attempts` - Nombre d'appels LLM qu'il a fallu.
-#[derive(serde::Serialize)]
-pub struct RetemplatizeReport {
-    pub template: TemplateArtifacts,
-    pub dropped_text: Vec<String>,
-    pub attempts: u8,
-}
-
-/// Re-templatise la référence courante d'un type de document pour une
-/// session, sans nouvel upload : les fichiers sont écrits à côté de son
-/// `reference.typ`, la version courante et la ligne `documents` sont mises à jour.
-///
-/// # Arguments
-///
-/// * `pool` - Pool de connexions PostgreSQL.
-/// * `fonts_dir` - Dossier des polices importées par l'utilisateur.
-/// * `session_id` - Identifiant de la session propriétaire.
-/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
-///
-/// # Returns
-///
-/// `RetemplatizeReport`, ou `AppError::NotFound` si aucune référence n'existe.
-pub async fn retemplatize_current(
-    pool: &PgPool,
-    fonts_dir: &Path,
-    session_id: i64,
-    doc_type: &str,
-) -> Result<RetemplatizeReport, AppError> {
-    // ------------------------------------------------------------------
-    // 1. Référence courante et rendu de référence
-    // ------------------------------------------------------------------
-    let doc: Document = db::documents::get_by_session_and_type(pool, session_id, doc_type)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Aucun document de référence trouvé.".to_string()))?;
-    let reference_typ = std::fs::read_to_string(&doc.file_path)
-        .map_err(|e| AppError::Validation(format!("Impossible de lire {} : {e}", doc.file_path)))?;
-    let dir: PathBuf = Path::new(&doc.file_path)
-        .parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| AppError::Validation(format!("Chemin de référence invalide : {}", doc.file_path)))?;
-
-    let reference = {
-        let (content, root, fonts) = (reference_typ.clone(), dir.clone(), fonts_dir.to_path_buf());
-        tokio::task::spawn_blocking(move || compile_document(content, root, fonts))
-            .await
-            .map_err(|e| AppError::Validation(format!("Erreur interne de compilation Typst : {e}")))?
-            .map_err(AppError::Validation)?
-    };
-
-    // ------------------------------------------------------------------
-    // 2. Templatisation, écriture, puis mise à jour de la version et de
-    //    la référence courante
-    // ------------------------------------------------------------------
-    let model = db::settings::resolve_llm_model(pool, findmyjob_core::llm::client::DEFAULT_MODEL).await?;
-    let validated = templatize(&reference_typ, &reference, doc_type, &dir, fonts_dir, &model).await?;
-    let template = write_template_files(&dir, &validated)?;
-
-    if let Some(version_id) = doc.current_version_id {
-        db::document_versions::set_template(pool, version_id, &template).await?;
+/// `Ok(())` une fois les deux fichiers écrits.
+pub fn write_template_files(
+    data_dir: &Path,
+    artifacts: &TemplateArtifacts,
+    validated: &ValidatedTemplate,
+) -> Result<(), AppError> {
+    let files = [
+        (&artifacts.template_path, &validated.template_typ),
+        (&artifacts.example_data_path, &validated.example_data_json),
+    ];
+    for (relative, content) in files {
+        let path = storage_paths::to_absolute(data_dir, relative);
+        std::fs::write(&path, content.as_bytes())
+            .map_err(|e| AppError::Validation(format!("Écriture de {} impossible : {e}", path.display())))?;
     }
-    db::documents::set_template(pool, session_id, doc_type, &template).await?;
-
-    Ok(RetemplatizeReport { template, dropped_text: validated.dropped_text, attempts: validated.attempts })
+    Ok(())
 }

@@ -16,6 +16,7 @@ use serde::Serialize;
 // Importation des modules internes
 use crate::docgen::lint::Violation;
 use crate::error::AppError;
+use crate::trace_log;
 
 /// Nombre total d'appels LLM : un essai + 2 retries avec feedback.
 pub const MAX_WRITING_ATTEMPTS: u8 = 3;
@@ -121,7 +122,7 @@ where
             return Ok(WritingOutcome { content, attempts, residual_violations: Vec::new() });
         }
 
-        eprintln!("[writing] {label} : essai {attempt}/{MAX_WRITING_ATTEMPTS}, problèmes : {:?}", verdict.problems());
+        trace_log::log(&format!("[writing] {label} : essai {attempt}/{MAX_WRITING_ATTEMPTS}, problèmes : {:?}", verdict.problems()));
         let previous_output = serde_json::to_string_pretty(&content)
             .map_err(|e| AppError::Llm(format!("Sortie de rédaction non sérialisable ({label}) : {e}")))?;
         feedback = Some(WritingFeedback { previous_output, problems: verdict.problems() });
@@ -140,7 +141,7 @@ where
     finalize(&mut content);
     let residual = review(&content).violations;
     if !residual.is_empty() {
-        eprintln!("[writing] {label} : violations conservées après nettoyage : {residual:?}");
+        trace_log::log(&format!("[writing] {label} : violations conservées après nettoyage : {residual:?}"));
     }
     Ok(WritingOutcome { content, attempts, residual_violations: residual })
 }

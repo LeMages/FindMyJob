@@ -4,7 +4,7 @@
 //! associée.
 
 // Importation des modules standard
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // Importation des modules internes
 use findmyjob_core::error::AppError;
@@ -12,20 +12,6 @@ use findmyjob_core::models::FontFamilyView;
 
 /// Extensions de fichiers de police acceptées, comparées en minuscule.
 const FONT_EXTENSIONS: [&str; 2] = ["ttf", "otf"];
-
-/// Résout le dossier racine des polices importées par l'utilisateur, à
-/// partir du dossier de données déjà résolu par l'appelant.
-///
-/// # Arguments
-///
-/// * `data_dir` - Dossier de données de l'application.
-///
-/// # Returns
-///
-/// Chemin absolu vers `<data_dir>/polices/`.
-pub fn resolve_fonts_dir(data_dir: &Path) -> PathBuf {
-    data_dir.join("polices")
-}
 
 /// Indique si un fichier a une extension de police acceptée (`.ttf`/`.otf`,
 /// insensible à la casse).

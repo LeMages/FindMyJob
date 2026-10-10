@@ -9,3 +9,4 @@ pub mod llm;
 pub mod models;
 pub mod scraping;
 pub mod text;
+pub mod trace_log;

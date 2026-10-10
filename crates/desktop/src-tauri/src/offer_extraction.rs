@@ -1,7 +1,6 @@
 //! Cascade d'extraction des champs d'une offre à partir de son HTML brut,
-//! partagée par la récupération par lien (`POST /api/scraping/url`) et la
-//! fenêtre de capture du desktop (`POST /api/scraping/html`), ainsi que
-//! l'extraction depuis un texte collé (`POST /api/scraping/text`).
+//! partagée par la récupération par lien et la fenêtre de capture, ainsi
+//! que l'extraction depuis un texte collé (voir `services::scraping`).
 //!
 //! Étage A : JSON-LD `JobPosting`, sans LLM. Étage B, si A échoue : texte
 //! isolé de la page + indices de titre, analysés par le LLM. Les champs
@@ -21,7 +20,7 @@ use findmyjob_core::scraping::page_hints::PageHints;
 ///
 /// # Arguments
 ///
-/// * `html` - HTML brut de la page (récupéré par l'agent ou capturé).
+/// * `html` - HTML brut de la page (récupéré par lien ou capturé).
 /// * `model` - Modèle Claude à utiliser pour l'étage LLM.
 ///
 /// # Returns

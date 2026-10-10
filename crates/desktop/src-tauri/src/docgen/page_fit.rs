@@ -14,6 +14,7 @@ use serde::Serialize;
 use crate::documents::typst::compile_template;
 use findmyjob_core::error::AppError;
 use findmyjob_core::llm::writing_loop::{AttemptReport, WritingOutcome};
+use findmyjob_core::trace_log;
 
 /// Nombre maximal de relances de la rédaction pour tenir dans les pages.
 const MAX_PAGE_RETRIES: u8 = 2;
@@ -109,17 +110,17 @@ where
                 )
             });
             if let Some(w) = &warning {
-                eprintln!("[page_fit] {w}");
+                trace_log::log(&format!("[page_fit] {w}"));
             }
             return Ok(FittedDocument { pdf, data_json, page_count, page_retries, warning, writing, rounds });
         }
 
         page_retries += 1;
         let factor = BUDGET_REDUCTION.powi(i32::from(page_retries));
-        eprintln!(
+        trace_log::log(&format!(
             "[page_fit] {} : {page_count} page(s) pour {} attendue(s), relance avec budgets × {factor:.2}",
             target.label, target.max_pages
-        );
+        ));
         writing = rewrite(factor).await?;
         rounds.push(writing.attempts.clone());
     }

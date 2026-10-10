@@ -19,6 +19,7 @@ use crate::scraping::failure::ScrapingFailure;
 use crate::scraping::fetch_classification::{classify_status, classify_transport_error, is_html_content_type};
 use crate::scraping::safe_resolver::PublicOnlyResolver;
 use crate::scraping::url_validation::{is_allowed_url, validate_offer_url};
+use crate::trace_log;
 
 /// User-Agent envoyé avec chaque requête — certains sites d'offres bloquent
 /// les clients HTTP sans en-tête `User-Agent` reconnaissable.
@@ -63,7 +64,7 @@ pub async fn fetch_html(url: &str) -> Result<String, AppError> {
     let client = build_client()?;
     let response = client.get(url.clone()).send().await.map_err(|e| {
         let failure = classify_transport_error(&e);
-        eprintln!("[scraping::fetch] {url} : {failure} ({e})");
+        trace_log::log(&format!("[scraping::fetch] {url} : {failure} ({e})"));
         AppError::Scraping(failure)
     })?;
 
@@ -72,12 +73,12 @@ pub async fn fetch_html(url: &str) -> Result<String, AppError> {
     // ------------------------------------------------------------------
     let status = response.status().as_u16();
     if let Some(failure) = classify_status(status) {
-        eprintln!("[scraping::fetch] {url} : HTTP {status} → {failure}");
+        trace_log::log(&format!("[scraping::fetch] {url} : HTTP {status} → {failure}"));
         return Err(AppError::Scraping(failure));
     }
     let content_type = response.headers().get(CONTENT_TYPE).and_then(|v| v.to_str().ok());
     if !is_html_content_type(content_type) {
-        eprintln!("[scraping::fetch] {url} : Content-Type {content_type:?} refusé");
+        trace_log::log(&format!("[scraping::fetch] {url} : Content-Type {content_type:?} refusé"));
         return Err(AppError::Scraping(ScrapingFailure::NotHtml));
     }
 
@@ -137,7 +138,7 @@ async fn read_capped_body(mut response: Response) -> Result<Vec<u8>, AppError> {
     loop {
         let chunk = response.chunk().await.map_err(|e| {
             let failure = classify_transport_error(&e);
-            eprintln!("[scraping::fetch] lecture du corps : {failure} ({e})");
+            trace_log::log(&format!("[scraping::fetch] lecture du corps : {failure} ({e})"));
             AppError::Scraping(failure)
         })?;
         let Some(chunk) = chunk else {

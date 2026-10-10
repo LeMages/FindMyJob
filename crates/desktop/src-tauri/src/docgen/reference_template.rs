@@ -6,10 +6,11 @@ use std::path::{Path, PathBuf};
 
 // Importation des crates externes
 use serde::de::DeserializeOwned;
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 
 // Importation des modules internes
 use crate::db;
+use crate::storage_paths;
 use findmyjob_core::error::AppError;
 
 /// Référence prête pour la génération.
@@ -26,14 +27,15 @@ pub struct ReferenceTemplate<E> {
     pub example: E,
     pub dir: PathBuf,
     pub page_count: usize,
-    pub version_id: Option<i64>,
+    pub version_id: i64,
 }
 
 /// Charge la référence templatisée d'un type de document pour une session.
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions PostgreSQL.
+/// * `pool` - Pool de connexions SQLite.
+/// * `data_dir` - Dossier de données de l'application.
 /// * `session_id` - Identifiant de la session.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `label` - Libellé lisible du document, pour les messages d'erreur.
@@ -43,12 +45,13 @@ pub struct ReferenceTemplate<E> {
 /// `ReferenceTemplate`, ou `AppError::Validation` si la référence est
 /// absente ou pas encore templatisée.
 pub async fn load_reference<E: DeserializeOwned>(
-    pool: &PgPool,
+    pool: &SqlitePool,
+    data_dir: &Path,
     session_id: i64,
     doc_type: &str,
     label: &str,
 ) -> Result<ReferenceTemplate<E>, AppError> {
-    let doc = db::documents::get_by_session_and_type(pool, session_id, doc_type).await?;
+    let doc = db::documents::get_current(pool, session_id, doc_type).await?;
     let (doc, artifacts) = doc
         .and_then(|d| d.template().map(|t| (d, t)))
         .ok_or_else(|| {
@@ -57,12 +60,13 @@ pub async fn load_reference<E: DeserializeOwned>(
             ))
         })?;
 
-    let template = read(&artifacts.template_path)?;
-    let example_json = read(&artifacts.example_data_path)?;
+    let template_file = storage_paths::to_absolute(data_dir, &artifacts.template_path);
+    let template = read(&template_file)?;
+    let example_json = read(&storage_paths::to_absolute(data_dir, &artifacts.example_data_path))?;
     let example = serde_json::from_str(&example_json).map_err(|e| {
         AppError::Validation(format!("Données d'exemple illisibles ({}) : {e}", artifacts.example_data_path))
     })?;
-    let dir = Path::new(&artifacts.template_path)
+    let dir = template_file
         .parent()
         .map(Path::to_path_buf)
         .ok_or_else(|| AppError::Validation(format!("Chemin de template invalide : {}", artifacts.template_path)))?;
@@ -73,6 +77,7 @@ pub async fn load_reference<E: DeserializeOwned>(
 }
 
 /// Lit un fichier de la référence.
-fn read(path: &str) -> Result<String, AppError> {
-    std::fs::read_to_string(path).map_err(|e| AppError::Validation(format!("Impossible de lire {path} : {e}")))
+fn read(path: &Path) -> Result<String, AppError> {
+    std::fs::read_to_string(path)
+        .map_err(|e| AppError::Validation(format!("Impossible de lire {} : {e}", path.display())))
 }

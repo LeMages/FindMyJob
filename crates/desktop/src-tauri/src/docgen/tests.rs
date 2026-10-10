@@ -51,7 +51,6 @@ fn user() -> UserView {
         portfolio: None,
         interets: Some("• Escalade\n\nPhotographie".to_string()),
         created_at: now,
-        updated_at: now,
     }
 }
 

@@ -23,6 +23,15 @@ open = { workspace = true }
 dotenvy = { workspace = true }
 sqlx = { workspace = true }
 chrono = { workspace = true }
+# Déjà présent via Tauri : `rt` pour spawn_blocking (compilations Typst),
+# `time` pour la purge différée du suivi de génération.
+tokio = { workspace = true, features = ["rt", "time"] }
+typst-as-lib = { workspace = true }
+typst-pdf = { workspace = true }
+typst-layout = { workspace = true }
+typst-library = { workspace = true }
+typst-syntax = { workspace = true }
+base64 = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt"] }

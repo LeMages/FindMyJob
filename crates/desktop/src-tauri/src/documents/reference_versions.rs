@@ -7,11 +7,14 @@
 use std::path::Path;
 
 // Importation des crates externes
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 
 // Importation des modules internes
+use crate::clock;
 use crate::db;
-use crate::documents::storage::read_document_base64;
+use crate::db::transaction::begin_write;
+use crate::documents::storage::read_base64;
+use crate::storage_paths;
 use findmyjob_core::error::AppError;
 use findmyjob_core::models::DocumentReferenceView;
 
@@ -19,7 +22,8 @@ use findmyjob_core::models::DocumentReferenceView;
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions PostgreSQL.
+/// * `pool` - Pool de connexions SQLite.
+/// * `data_dir` - Dossier de données de l'application.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `version` - Numéro d'affichage de la version.
@@ -28,7 +32,8 @@ use findmyjob_core::models::DocumentReferenceView;
 ///
 /// PDF encodé en base64, ou `AppError::NotFound` si la version n'existe pas.
 pub async fn read_version_pdf(
-    pool: &PgPool,
+    pool: &SqlitePool,
+    data_dir: &Path,
     session_id: i64,
     doc_type: &str,
     version: i32,
@@ -36,37 +41,19 @@ pub async fn read_version_pdf(
     let found = db::document_versions::get_version(pool, session_id, doc_type, version)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("Version {version} introuvable.")))?;
-    read_document_base64(&found.pdf_path)
-}
-
-/// Lit le PDF de la version la plus récente d'un document de référence.
-///
-/// # Arguments
-///
-/// * `pool` - Pool de connexions PostgreSQL.
-/// * `session_id` - Identifiant de la session propriétaire.
-/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
-///
-/// # Returns
-///
-/// PDF encodé en base64, ou `AppError::NotFound` si aucune version n'existe.
-pub async fn read_latest_version_pdf(pool: &PgPool, session_id: i64, doc_type: &str) -> Result<String, AppError> {
-    let latest = db::document_versions::get_latest_version(pool, session_id, doc_type)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Aucune version enregistrée pour ce document.".to_string()))?;
-    read_document_base64(&latest.pdf_path)
+    read_base64(&storage_paths::to_absolute(data_dir, &found.pdf_path))
 }
 
 /// Restaure une version d'un document de référence comme référence courante
 /// de la session : c'est elle que le pipeline de génération utilisera pour
 /// les prochaines candidatures. Aucune version n'est créée ni supprimée, et
 /// le template stocké avec la version est réutilisé (pas d'appel à Claude).
-/// Une version jamais templatisée devient courante sans template : elle doit
-/// être re-templatisée avant toute génération.
+/// Lecture de la version et bascule du pointeur partagent une transaction.
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions PostgreSQL.
+/// * `pool` - Pool de connexions SQLite.
+/// * `data_dir` - Dossier de données de l'application.
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `version` - Numéro d'affichage de la version à restaurer.
@@ -77,35 +64,34 @@ pub async fn read_latest_version_pdf(pool: &PgPool, session_id: i64, doc_type: &
 /// `AppError::NotFound` si la version n'existe pas, `AppError::Validation`
 /// si ses fichiers ont disparu du disque.
 pub async fn restore_version(
-    pool: &PgPool,
+    pool: &SqlitePool,
+    data_dir: &Path,
     session_id: i64,
     doc_type: &str,
     version: i32,
 ) -> Result<DocumentReferenceView, AppError> {
-    let record = db::document_versions::get_version_record(pool, session_id, doc_type, version)
+    let now = clock::now_utc();
+    let mut tx = begin_write(pool).await?;
+    let record = db::document_versions::get_version_record(&mut tx, session_id, doc_type, version)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("Version {version} introuvable.")))?;
 
     // Une référence dont le fichier manque ferait échouer toutes les
     // générations suivantes : on refuse la bascule plutôt que de la subir.
-    if !Path::new(&record.typst_path).exists() || !Path::new(&record.pdf_path).exists() {
+    let typst_exists = storage_paths::to_absolute(data_dir, &record.typst_path).exists();
+    let pdf_exists = storage_paths::to_absolute(data_dir, &record.pdf_path).exists();
+    if !typst_exists || !pdf_exists {
         return Err(AppError::Validation(format!(
             "Les fichiers de la version {version} sont introuvables sur le disque ({}).",
             record.typst_path
         )));
     }
 
-    let doc = db::documents::upsert(
-        pool,
-        session_id,
-        doc_type,
-        &record.original_filename,
-        &record.typst_path,
-        Some(&record.pdf_path),
-        record.template.as_ref(),
-        record.id,
-    )
-    .await?;
+    db::documents::set_current(&mut tx, session_id, doc_type, record.id, &now).await?;
+    let doc = db::documents::get_current(&mut *tx, session_id, doc_type)
+        .await?
+        .ok_or_else(|| AppError::Database("Référence courante absente après restauration.".to_string()))?;
+    tx.commit().await.map_err(db::common::map_db_err)?;
 
     Ok(DocumentReferenceView::from(doc))
 }

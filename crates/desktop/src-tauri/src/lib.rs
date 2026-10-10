@@ -3,11 +3,20 @@
 
 // Importation des modules internes
 pub mod api_client;
+pub mod app_state;
 pub mod clock;
 pub mod commands;
 pub mod db;
+pub mod docgen;
+pub mod documents;
 pub mod error;
 pub mod models;
+pub mod offer_extraction;
+pub mod pipeline;
+pub mod progress;
+pub mod services;
+pub mod storage_paths;
+pub mod url_normalize;
 
 // Importation des crates externes
 use api_client::ApiClient;

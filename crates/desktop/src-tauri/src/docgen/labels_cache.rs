@@ -13,6 +13,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use findmyjob_core::error::AppError;
 use findmyjob_core::llm::label_translation::{translate_cv_labels, translate_lm_labels};
 use findmyjob_core::models::{CvLabels, LmLabels};
+use findmyjob_core::trace_log;
 
 /// Libellés résolus, et s'ils ont été traduits.
 ///
@@ -46,7 +47,7 @@ where
     if let Ok(cached) = std::fs::read_to_string(cache_file) {
         match serde_json::from_str(&cached) {
             Ok(labels) => return Ok(ResolvedLabels { labels, translated: true }),
-            Err(e) => eprintln!("[labels] cache illisible {} : {e}", cache_file.display()),
+            Err(e) => trace_log::log(&format!("[labels] cache illisible {} : {e}", cache_file.display())),
         }
     }
 
@@ -55,7 +56,7 @@ where
         .map_err(|e| AppError::Validation(format!("Libellés non sérialisables : {e}")))?;
     if let Err(e) = std::fs::write(cache_file, json) {
         // L'écriture du cache n'est pas nécessaire à la génération en cours.
-        eprintln!("[labels] écriture du cache {} impossible : {e}", cache_file.display());
+        trace_log::log(&format!("[labels] écriture du cache {} impossible : {e}", cache_file.display()));
     }
     Ok(ResolvedLabels { labels, translated: true })
 }
