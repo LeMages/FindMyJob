@@ -121,6 +121,7 @@ fn validation_des_champs_de_candidature() {
         cv_path: None,
         lettre_motivation_path: None,
         session_id: Some(1),
+        contacts: Vec::new(),
     };
     let new = candidature_validation::validate_create(&input).unwrap();
     assert_eq!((new.fields.poste.as_str(), new.fields.type_contrat.as_str()), ("Data engineer", "stage"));

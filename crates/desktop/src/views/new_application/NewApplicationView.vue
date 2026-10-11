@@ -16,6 +16,7 @@ import ExtractionChoiceStep from './components/ExtractionChoiceStep.vue'
 import CaptureStep from './components/CaptureStep.vue'
 import PasteStep from './components/PasteStep.vue'
 import DuplicateOfferWarning from './components/DuplicateOfferWarning.vue'
+import ContactsSection from './components/ContactsSection.vue'
 
 // Importation des modules internes
 import type { CandidatureView, CreateCandidatureInput, OfferExtraction } from '@/types'
@@ -23,10 +24,12 @@ import {
   state,
   currentSession,
   navigate,
-  addContact,
-  removeContact,
+  addContactDraft,
+  removeContactDraft,
+  resetContactDrafts,
 } from '@/stores/app'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { draftFromScraped, draftToCandidatureContact } from '@/composables/contact_draft'
 import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
 import { useGenerationProgress } from '@/composables/useGenerationProgress'
 import { useOfferImport } from './useOfferImport'
@@ -41,6 +44,9 @@ const remunerationRef = ref('')
 const urlOffreRef = ref('')
 const descriptionOffreRef = ref('')
 const notesRef = ref('')
+// Ligne de contact pré-remplie par la dernière extraction, remplacée par la
+// suivante pour ne pas mélanger deux offres.
+const extractedContactKey = ref<number | null>(null)
 
 const offerImport = useOfferImport(urlOffreRef, onOfferExtracted)
 const { step, busy, urlError, urlUnavailable, choice, captureError, pasteError, pasteText } = offerImport
@@ -94,6 +100,8 @@ function resetForm() {
   urlOffreRef.value = ''
   descriptionOffreRef.value = ''
   notesRef.value = ''
+  resetContactDrafts()
+  extractedContactKey.value = null
   saveError.value = null
   offerImport.reset()
   clearDuplicates()
@@ -127,6 +135,7 @@ async function submit() {
       cv_path: null,
       lettre_motivation_path: null,
       session_id: session.id,
+      contacts: state.newContacts.map(draftToCandidatureContact),
     }
     // 2. Création de la candidature côté backend, puis suivi de la génération
     //    des documents lancée en tâche de fond (modale bloquante)
@@ -182,6 +191,24 @@ function applyFields(extraction: OfferExtraction) {
   typeRef.value = fields.type_contrat ?? ''
   remunerationRef.value = fields.remuneration ?? ''
   descriptionOffreRef.value = fields.description_offre ?? ''
+  applyExtractedContact(extraction)
+}
+
+/**
+ * Pré-remplit une ligne de contact avec le contact nommé par l'offre, en
+ * remplaçant celle de l'extraction précédente (les lignes saisies à la main
+ * sont conservées). La ligne reste modifiable et supprimable.
+ */
+function applyExtractedContact(extraction: OfferExtraction) {
+  const previousIndex = state.newContacts.findIndex(d => d.key === extractedContactKey.value)
+  if (previousIndex !== -1) removeContactDraft(previousIndex)
+  extractedContactKey.value = null
+
+  const contact = extraction.fields.contact
+  if (!contact) return
+  const draft = draftFromScraped(contact)
+  addContactDraft(draft)
+  extractedContactKey.value = draft.key
 }
 
 /** Pré-remplit le formulaire après une extraction réussie et vérifie les doublons. */
@@ -330,45 +357,7 @@ async function goToManual() {
     </div>
 
     <!-- Contacts recruteur -->
-    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">CONTACTS RECRUTEUR</div>
-      <div
-        v-for="(ct, index) in state.newContacts"
-        :key="ct.id"
-        class="border border-neutral-200 rounded-10 px-[18px] py-4 mb-3 bg-neutral-50"
-      >
-        <div class="flex items-center justify-between mb-3">
-          <span class="text-[11px] font-semibold text-neutral-500 font-mono tracking-[.06em]">CONTACT {{ index + 1 }}</span>
-          <button
-            v-if="state.newContacts.length > 1"
-            class="bg-transparent border-none text-[12px] text-neutral-300 cursor-pointer font-sans px-[6px] py-1 rounded-md hover:text-neutral-800 hover:bg-surface-2"
-            @click="removeContact(index)"
-          >
-            Supprimer
-          </button>
-        </div>
-        <div class="flex gap-[14px]">
-          <div class="flex-1 mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom</label>
-            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom Nom" />
-          </div>
-          <div class="flex-1 mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">Poste</label>
-            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. Chargé·e de recrutement" />
-          </div>
-          <div class="flex-1 mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">Email</label>
-            <input class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="contact@entreprise.com" />
-          </div>
-        </div>
-      </div>
-      <button
-        class="w-full justify-center h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-        @click="addContact"
-      >
-        + Ajouter un contact
-      </button>
-    </div>
+    <ContactsSection />
 
     <!-- Notes -->
     <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">

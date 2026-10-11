@@ -1,6 +1,7 @@
 //! Tests de l'étage JSON-LD de la cascade d'extraction
 //! (`findmyjob_core::scraping::json_ld`), sur des pages synthétiques : objet
-//! simple, tableau, `@graph`, salaires, lieux multiples, entités HTML.
+//! simple, tableau, `@graph`, salaires, lieux multiples, entités HTML,
+//! contact de candidature.
 
 // Importation des modules internes
 use findmyjob_core::scraping::json_ld::{extract_job_posting_fields, find_job_posting};
@@ -173,6 +174,33 @@ fn teletravail_seul() {
     let html = page_with_json_ld(&[&posting(r#","jobLocationType":["TELECOMMUTE"]"#)]);
     let fields = extract_job_posting_fields(&html).expect("étage réussi");
     assert_eq!(fields.localisation.as_deref(), Some("Télétravail"));
+}
+
+// ======================================================================
+// Contact de candidature
+// ======================================================================
+
+#[test]
+fn contact_de_candidature_nomme() {
+    let html = page_with_json_ld(&[&posting(
+        r#","applicationContact":{"@type":"ContactPoint","name":" Camille Martin ","contactType":"Recrutement",
+            "email":"mailto:camille.martin@example.com","telephone":"+33 6 00 00 00 00"}"#,
+    )]);
+    let contact = extract_job_posting_fields(&html).expect("étage réussi").contact.expect("contact");
+    assert_eq!(contact.nom.as_deref(), Some("Camille Martin"));
+    assert_eq!(contact.role.as_deref(), Some("Recrutement"));
+    assert_eq!(contact.email.as_deref(), Some("camille.martin@example.com"));
+    assert_eq!(contact.telephone.as_deref(), Some("+33 6 00 00 00 00"));
+}
+
+#[test]
+fn contact_sans_nom_ignore() {
+    let html = page_with_json_ld(&[&posting(
+        r#","applicationContact":{"@type":"ContactPoint","email":"rh@example.com"}"#,
+    )]);
+    assert_eq!(extract_job_posting_fields(&html).expect("étage réussi").contact, None);
+    let sans_contact = page_with_json_ld(&[&posting("")]);
+    assert_eq!(extract_job_posting_fields(&sans_contact).expect("étage réussi").contact, None);
 }
 
 // ======================================================================

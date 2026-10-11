@@ -166,8 +166,6 @@ pub fn lm_example_data_schema() -> Value {
             object(&[
                 ("company", string()),
                 ("location", string()),
-                ("contact_name", string()),
-                ("contact_role", string()),
             ]),
         ),
         ("date", string()),

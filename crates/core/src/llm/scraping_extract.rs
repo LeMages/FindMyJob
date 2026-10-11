@@ -18,6 +18,19 @@ pub struct ScrapedOfferFields {
     pub type_contrat: Option<String>,
     pub remuneration: Option<String>,
     pub description_offre: Option<String>,
+    /// Personne à contacter nommée par l'offre, s'il y en a une.
+    #[serde(default)]
+    pub contact: Option<ScrapedContact>,
+}
+
+/// Personne à contacter nommée par une offre. Sert uniquement à pré-remplir
+/// le formulaire : rien n'est enregistré avant sa validation.
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct ScrapedContact {
+    pub nom: Option<String>,
+    pub role: Option<String>,
+    pub email: Option<String>,
+    pub telephone: Option<String>,
 }
 
 /// Schéma JSON attendu pour l'extraction, utilisé comme structured output
@@ -38,11 +51,27 @@ fn scraped_offer_schema() -> serde_json::Value {
                 ]
             },
             "remuneration": { "type": ["string", "null"] },
-            "description_offre": { "type": ["string", "null"] }
+            "description_offre": { "type": ["string", "null"] },
+            "contact": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "nom": { "type": ["string", "null"] },
+                            "role": { "type": ["string", "null"] },
+                            "email": { "type": ["string", "null"] },
+                            "telephone": { "type": ["string", "null"] }
+                        },
+                        "required": ["nom", "role", "email", "telephone"],
+                        "additionalProperties": false
+                    },
+                    { "type": "null" }
+                ]
+            }
         },
         "required": [
             "poste", "entreprise", "localisation", "type_contrat",
-            "remuneration", "description_offre"
+            "remuneration", "description_offre", "contact"
         ],
         "additionalProperties": false
     })
@@ -59,6 +88,7 @@ Règles :
 - "type_contrat" : DOIT être exactement une de ces valeurs : "stage", "alternance", "interim", "cdd", "cdi". Si le texte dit "internship" → "stage", "apprenticeship" → "alternance". Si indéterminé ou si aucune de ces valeurs ne correspond (ex. freelance), retourne null.
 - "remuneration" : le salaire ou la gratification tel qu'indiqué (montant + période). Si absent, null.
 - "description_offre" : le contenu de l'offre (présentation, missions, profil recherché, compétences, avantages), RECOPIÉ MOT POUR MOT depuis la page. Ne résume pas, ne reformule pas, ne traduis pas, n'ajoute rien. Garde les titres de section de la page tels qu'ils sont écrits et les listes sous forme de lignes commençant par "- ". Exclus seulement ce qui n'appartient pas à l'offre (menus, bandeaux cookies, offres similaires, pied de page).
+- "contact" : la personne à contacter pour cette candidature, UNIQUEMENT si l'offre nomme explicitement une personne (prénom et/ou nom). "nom" : son nom tel qu'écrit, sans civilité ajoutée ; "role" : sa fonction si elle est écrite ; "email" et "telephone" : ses coordonnées si elles sont écrites dans l'offre. Si l'offre ne nomme aucune personne (adresse générique, service RH, formulaire de candidature...), retourne null. N'invente jamais un nom, une fonction ou une coordonnée.
 
 Les indices de titre fournis (balise <title>, og:title) peuvent aider à identifier le poste et l'entreprise, mais le texte de la page fait foi.
 Si une information n'est pas trouvable dans le texte, retourne null pour ce champ.

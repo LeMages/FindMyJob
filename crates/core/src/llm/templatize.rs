@@ -94,7 +94,7 @@ const CV_FIELDS: &str = "Champs du CV :
 /// Consignes propres à la lettre : sens des champs du schéma et rendu attendu.
 const LM_FIELDS: &str = "Champs de la lettre :
 - identity : coordonnées de l'expéditeur. Le template n'affiche que les coordonnées présentes dans l'original, dans le même ordre ; la signature est construite avec prénom et nom.
-- recipient : destinataire. Affiche, chacune sur sa ligne et seulement si elle est non vide : company, contact_name, contact_role, location. Les autres lignes du destinataire de l'original (service, adresse postale) n'ont pas de champ et sont supprimées.
+- recipient : destinataire. Affiche, chacune sur sa ligne et seulement si elle est non vide : company, location. Les autres lignes du destinataire de l'original (nom ou fonction d'une personne, service, adresse postale) n'ont pas de champ et sont supprimées.
 - date : la date affichée, déjà formatée. La ligne de date compose `identity.adresse` (seulement s'il n'est pas vide), une virgule, `labels.date_prefix` s'il n'est pas vide, puis `data.date`. Si l'original calcule la date au lieu de l'écrire, mets une chaîne vide dans example_data.
 - subject : le texte de l'objet, sans son préfixe. `labels.subject_prefix` contient le préfixe (par exemple \"Objet :\").
 - labels.salutation : la formule d'appel. labels.closing : la formule de politesse finale, en entier.

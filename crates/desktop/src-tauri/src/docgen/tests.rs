@@ -17,7 +17,7 @@ use crate::docgen::recipient::build_recipient;
 use crate::documents::typst::compile_template;
 use findmyjob_core::docgen::selection::select;
 use findmyjob_core::models::{
-    CandidatureDetail, ContactView, CvContent, CvLabels, ExperienceView, FormationView, ItemBullets, LmContent, LmLabels,
+    CandidatureDetail, CvContent, CvLabels, ExperienceView, FormationView, ItemBullets, LmContent, LmLabels,
     MatchingResult, PeriodGranularity, PeriodStyle, ProfileDto, ProjetView, Recipient, SkillsGroup,
     UserView,
 };
@@ -166,7 +166,7 @@ fn liens_affichables_et_lignes_du_profil() {
 }
 
 #[test]
-fn destinataire_depuis_la_candidature_et_son_premier_contact_nomme() {
+fn destinataire_depuis_la_candidature_sans_contact() {
     let candidature: CandidatureDetail = serde_json::from_value(serde_json::json!({
         "id": 1, "session_id": 1, "poste": "Stage", "entreprise": " Société Exemple ", "localisation": "Lyon",
         "status": "a_postuler", "source": null, "type_contrat": null, "remuneration": null, "url_offre": null,
@@ -175,19 +175,12 @@ fn destinataire_depuis_la_candidature_et_son_premier_contact_nomme() {
         "created_at": "2026-01-01T00:00:00Z"
     }))
     .expect("candidature de fixture");
-    let contacts: Vec<ContactView> = serde_json::from_value(serde_json::json!([
-        { "id": 1, "candidature_id": 1, "nom": "  ", "role": "RH", "email": null, "telephone": null,
-          "notes": null, "created_at": "2026-01-01T00:00:00Z" },
-        { "id": 2, "candidature_id": 1, "nom": "Camille Martin", "role": "Responsable data", "email": null,
-          "telephone": null, "notes": null, "created_at": "2026-01-01T00:00:00Z" }
-    ]))
-    .expect("contacts de fixture");
 
-    let recipient = build_recipient(&candidature, &contacts);
+    let recipient = build_recipient(&candidature);
     assert_eq!(recipient.company, "Société Exemple");
     assert_eq!(recipient.location, "Lyon");
-    assert_eq!(recipient.contact_name, "Camille Martin");
-    assert_eq!(recipient.contact_role, "Responsable data");
+    assert_eq!(recipient.contact_name, "");
+    assert_eq!(recipient.contact_role, "");
 }
 
 // ======================================================================

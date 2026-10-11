@@ -10,6 +10,7 @@ use sqlx::{SqliteConnection, SqlitePool};
 use crate::clock::format_timestamp;
 use crate::db::candidatures;
 use crate::db::common::{map_db_err, normalize};
+use crate::db::contacts;
 use crate::db::interviews::{self, NewInterview};
 use crate::db::status_history::{self, NewHistoryEntry};
 use crate::db::transaction::begin_write;
@@ -169,6 +170,7 @@ async fn plan_interview(
             return Err(AppError::Validation("Modalité d'entretien invalide.".to_string()));
         }
     }
+    let contact_ids = linked_contact_ids(conn, candidature_id, &data.contact_ids).await?;
     let date_entretien = data.date_entretien.map(format_timestamp);
     let lieu = normalize(data.lieu);
     let new = NewInterview {
@@ -177,9 +179,43 @@ async fn plan_interview(
         date_entretien: date_entretien.as_deref(),
         lieu: lieu.as_deref(),
         modalite: modalite.as_deref(),
-        contact_id: data.contact_id,
+        contact_ids: &contact_ids,
     };
     interviews::insert(conn, &new, now).await
+}
+
+/// Vérifie les interlocuteurs choisis pour un entretien : chacun doit être
+/// un contact lié à la candidature (sinon le frontend pourrait rattacher le
+/// contact d'une autre candidature, ou un id inexistant qui remonterait en
+/// erreur SQLite brute).
+///
+/// # Arguments
+///
+/// * `conn` - Connexion de la transaction d'écriture en cours.
+/// * `candidature_id` - Identifiant de la candidature de l'entretien.
+/// * `contact_ids` - Interlocuteurs soumis par le frontend.
+///
+/// # Returns
+///
+/// Identifiants dédoublonnés, dans l'ordre reçu, ou `AppError::Validation`.
+async fn linked_contact_ids(
+    conn: &mut SqliteConnection,
+    candidature_id: i64,
+    contact_ids: &[i64],
+) -> Result<Vec<i64>, AppError> {
+    let mut unique: Vec<i64> = Vec::with_capacity(contact_ids.len());
+    for &contact_id in contact_ids {
+        if unique.contains(&contact_id) {
+            continue;
+        }
+        if !contacts::is_linked_to_candidature(&mut *conn, contact_id, candidature_id).await? {
+            return Err(AppError::Validation(
+                "Un interlocuteur choisi n'est pas un contact de cette candidature.".to_string(),
+            ));
+        }
+        unique.push(contact_id);
+    }
+    Ok(unique)
 }
 
 /// Marque passé l'entretien d'un événement `entretien_passe`.

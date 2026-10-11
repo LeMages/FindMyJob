@@ -18,7 +18,7 @@ async fn creation_et_historique_partagent_le_meme_horodatage() {
     let pool = seed::pool().await;
     let sid = seed::session(&pool).await;
     let now = clock::now_utc();
-    let view = candidatures::insert(&pool, sid, &seed::fields(None), "Offre", &now).await.unwrap();
+    let view = candidatures::insert(&pool, sid, &seed::fields(None), "Offre", &[], &now).await.unwrap();
     assert_eq!(view.derniere_maj_statut, view.created_at);
 
     let historique = status_history::list_for_candidature(&pool, view.id).await.unwrap();
@@ -113,8 +113,8 @@ async fn la_base_refuse_un_event_type_inconnu() {
 async fn doublons_par_url_toutes_sessions() {
     let pool = seed::pool().await;
     let sid = seed::session(&pool).await;
-    candidatures::insert(&pool, sid, &seed::fields(Some("https://a.fr/1")), "Offre", seed::NOW).await.unwrap();
-    candidatures::insert(&pool, sid, &seed::fields(Some("   ")), "Offre", seed::NOW).await.unwrap();
+    candidatures::insert(&pool, sid, &seed::fields(Some("https://a.fr/1")), "Offre", &[], seed::NOW).await.unwrap();
+    candidatures::insert(&pool, sid, &seed::fields(Some("   ")), "Offre", &[], seed::NOW).await.unwrap();
     seed::candidature(&pool, sid, seed::NOW).await;
 
     let lignes = joins::list_candidatures_with_offer_url(&pool).await.unwrap();

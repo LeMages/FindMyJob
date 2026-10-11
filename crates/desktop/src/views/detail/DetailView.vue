@@ -12,6 +12,9 @@ import {
   state,
   navigate,
   openDetailPopup,
+  openContactPopup,
+  openDeleteContactPopup,
+  unlinkContact,
   updateDetailCandidature,
 } from '@/stores/app'
 import { TYPE_CONTRAT_OPTIONS, SOURCE_OPTIONS, TRASHED_STATUSES, statusLabel } from '@/composables/candidature_display'
@@ -23,8 +26,20 @@ import StatusTimelineCard from '@/views/detail/components/StatusTimelineCard.vue
 import EditableField from '@/components/EditableField.vue'
 import type { DownloadDocType } from '@/composables/document_file_name'
 
-const initials = (nom: string | null) =>
-  (nom ?? '').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+const initials = (nom: string) =>
+  nom.split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+
+/** Erreur du dernier retrait de contact (affichée dans le bloc des contacts). */
+const contactActionError = ref<string | null>(null)
+
+/**
+ * Retire un contact de la candidature (il reste dans le carnet).
+ *
+ * @param contactId - Contact à retirer.
+ */
+async function removeContactFromCandidature(contactId: number) {
+  contactActionError.value = await unlinkContact(contactId)
+}
 
 // Les détails du poste et les notes ne sont modifiables que tant que la
 // candidature n'a pas encore été engagée (statut "à postuler").
@@ -250,18 +265,26 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
             <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500">CONTACTS RECRUTEUR</div>
             <button
               class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-              @click="openDetailPopup('addRecruiter')"
+              @click="openContactPopup(null)"
             >+ Ajouter</button>
           </div>
-          <div v-for="rec in state.detailContacts" :key="rec.id" class="flex items-center gap-3 py-[10px] border-b border-neutral-100">
-            <div class="w-[34px] h-[34px] rounded-full flex-none bg-neutral-200 flex items-center justify-center font-semibold text-[12px] text-neutral-700">{{ initials(rec.nom) }}</div>
+          <div v-for="contact in state.detailContacts" :key="contact.id" class="flex items-start gap-3 py-[10px] border-b border-neutral-100">
+            <div class="w-[34px] h-[34px] rounded-full flex-none bg-neutral-200 flex items-center justify-center font-semibold text-[12px] text-neutral-700">{{ initials(contact.nom) }}</div>
             <div class="flex-1 min-w-0">
-              <div class="text-[13.5px] font-semibold leading-[1.25]">{{ rec.nom ?? '—' }}</div>
-              <div class="text-[12px] text-neutral-500 mt-0.5">{{ rec.role ?? '—' }}</div>
-              <div class="font-mono text-[11px] text-neutral-500">{{ rec.email ?? '—' }}</div>
+              <div class="text-[13.5px] font-semibold leading-[1.25]">{{ contact.nom }}</div>
+              <div v-if="contact.role" class="text-[12px] text-neutral-500 mt-0.5">{{ contact.role }}</div>
+              <div v-if="contact.email" class="font-mono text-[11px] text-neutral-500">{{ contact.email }}</div>
+              <div v-if="contact.telephone" class="font-mono text-[11px] text-neutral-500">{{ contact.telephone }}</div>
+              <div v-if="contact.notes" class="text-[12px] text-neutral-600 mt-1 whitespace-pre-wrap">{{ contact.notes }}</div>
+              <div class="flex flex-wrap gap-x-3 mt-1">
+                <button class="bg-transparent border-none p-0 text-[11.5px] text-neutral-500 cursor-pointer font-sans hover:text-neutral-950" @click="openContactPopup(contact)">Modifier</button>
+                <button class="bg-transparent border-none p-0 text-[11.5px] text-neutral-500 cursor-pointer font-sans hover:text-neutral-950" @click="removeContactFromCandidature(contact.id)">Retirer de la candidature</button>
+                <button class="bg-transparent border-none p-0 text-[11.5px] text-neutral-500 cursor-pointer font-sans hover:text-red-600" @click="openDeleteContactPopup(contact)">Supprimer définitivement</button>
+              </div>
             </div>
           </div>
-          <div v-if="state.detailContacts.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">Aucun recruteur renseigné.</div>
+          <div v-if="state.detailContacts.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">Aucun contact renseigné.</div>
+          <div v-if="contactActionError" class="text-[12.5px] text-red-600 mt-2">{{ contactActionError }}</div>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ use scraper::{Html, Selector};
 use serde_json::Value;
 
 // Importation des modules internes
-use crate::llm::scraping_extract::ScrapedOfferFields;
+use crate::llm::scraping_extract::{ScrapedContact, ScrapedOfferFields};
 use crate::scraping::contract_type::resolve_contract_type;
 use crate::scraping::finalize::finalize_fields;
 use crate::scraping::salary_format::format_base_salary;
@@ -129,7 +129,27 @@ pub fn map_job_posting(posting: &Value) -> ScrapedOfferFields {
         type_contrat: type_contrat.map(str::to_string),
         remuneration: posting.get("baseSalary").and_then(format_base_salary),
         description_offre: text_of(posting.get("description")),
+        contact: posting.get("applicationContact").and_then(application_contact),
         poste,
+    }
+}
+
+/// Contact de candidature : `applicationContact` (`ContactPoint` ou
+/// `Person`, objet ou tableau — le premier qui porte un nom). Le rôle vient
+/// de `jobTitle`, sinon de `contactType`.
+fn application_contact(contact: &Value) -> Option<ScrapedContact> {
+    match contact {
+        Value::Object(map) => {
+            let nom = text_of(map.get("name"))?;
+            Some(ScrapedContact {
+                nom: Some(nom),
+                role: text_of(map.get("jobTitle")).or_else(|| text_of(map.get("contactType"))),
+                email: text_of(map.get("email")),
+                telephone: text_of(map.get("telephone")),
+            })
+        }
+        Value::Array(items) => items.iter().find_map(application_contact),
+        _ => None,
     }
 }
 

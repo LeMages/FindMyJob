@@ -20,7 +20,7 @@ async fn ouvre_un_fichier_en_wal_avec_cles_etrangeres() {
         let timeout: i64 = sqlx::query_scalar("PRAGMA busy_timeout").fetch_one(&pool).await.unwrap();
         let migrations: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations").fetch_one(&pool).await.unwrap();
-        assert_eq!((journal.as_str(), fk, timeout, migrations), ("wal", 1, 5000, 3));
+        assert_eq!((journal.as_str(), fk, timeout, migrations), ("wal", 1, 5000, 4));
         pool.close().await;
     }
 

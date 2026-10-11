@@ -1,8 +1,8 @@
 /**
  * Store applicatif global (état réactif partagé entre toutes les vues) :
- * navigation, sessions, candidature sélectionnée, popups. Les données de
- * candidatures/sessions viennent du backend ; le reste (recruteurs, corbeille)
- * est encore en mock en attendant leur implémentation backend.
+ * navigation, sessions, candidature sélectionnée, popups, carnet de
+ * contacts. Les données (candidatures, sessions, contacts) viennent du
+ * backend ; le store ne garde que l'état d'affichage.
  */
 
 // Importation des modules Vue / framework
@@ -14,11 +14,12 @@ import type {
   Screen, PopupKey,
   BoardCard, Session, UpdateSessionInput,
   CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
-  NewContact, NewTimelineEvent,
+  ContactDraft, ContactInput, NewTimelineEvent,
   UpdateCandidatureInput,
 } from '@/types'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 import { downloadApplyDocuments, type ApplyMessageExport } from '@/composables/document_download'
+import { draftToContactInput, emptyContactDraft } from '@/composables/contact_draft'
 
 // ---------------------------------------------------------------------------
 // Sessions — chargées depuis le backend
@@ -59,7 +60,12 @@ const state = reactive({
   detailLoading: false,
   detailError: null as string | null,
   detailStatusHistoryContent: null as string | null,
-  nextRecruiterId: 10,
+  // Contact modifié (popup `contact`) ou à supprimer (`confirmDeleteContact`) ;
+  // `null` dans la popup `contact` = ajout d'un contact
+  detailContact: null as ContactView | null,
+
+  // Carnet de contacts (tous les contacts, toutes candidatures confondues)
+  contactBook: [] as ContactView[],
 
   // Trash popup
   trashPopup: false,
@@ -70,9 +76,8 @@ const state = reactive({
   // Delete session popup
   deleteSessionPopup: null as { id: number; nom: string } | null,
 
-  // New application form contacts
-  newContacts: [{ id: 0 }] as NewContact[],
-  nextContactId: 1,
+  // Contacts saisis dans le formulaire de nouvelle candidature
+  newContacts: [] as ContactDraft[],
 })
 
 // ---------------------------------------------------------------------------
@@ -373,19 +378,164 @@ export async function updateDetailCandidature(patch: Partial<UpdateCandidatureIn
   }
 }
 
-/** Ajoute un contact vide au formulaire de nouvelle candidature. */
-export function addContact() {
-  state.newContacts.push({ id: state.nextContactId++ })
+/**
+ * Ajoute une ligne de contact au formulaire de nouvelle candidature.
+ *
+ * @param draft - Ligne à ajouter (vide par défaut).
+ */
+export function addContactDraft(draft: ContactDraft = emptyContactDraft()) {
+  state.newContacts.push(draft)
 }
 
 /**
- * Retire un contact du formulaire de nouvelle candidature (au moins un contact reste toujours présent).
+ * Retire une ligne de contact du formulaire de nouvelle candidature.
  *
- * @param index - Index du contact à retirer.
+ * @param index - Index de la ligne à retirer.
  */
-export function removeContact(index: number) {
-  if (state.newContacts.length <= 1) return
+export function removeContactDraft(index: number) {
   state.newContacts.splice(index, 1)
+}
+
+/** Vide les lignes de contact du formulaire de nouvelle candidature. */
+export function resetContactDrafts() {
+  state.newContacts = []
+}
+
+/**
+ * Charge le carnet de contacts depuis le backend.
+ *
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function loadContactBook(): Promise<string | null> {
+  try {
+    state.contactBook = await invoke<ContactView[]>('list_contacts')
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, 'Impossible de charger le carnet de contacts.')
+  }
+}
+
+/**
+ * Recharge les contacts de la candidature ouverte et le carnet, après une
+ * opération sur un contact.
+ */
+async function reloadContacts() {
+  const current = state.detailCandidature
+  if (current) {
+    state.detailContacts = await invoke<ContactView[]>('get_contacts', { candidatureId: current.id })
+  }
+  const error = await loadContactBook()
+  if (error) throw new Error(error)
+}
+
+/**
+ * Exécute une opération sur un contact, recharge les contacts et ferme la
+ * popup du détail en cas de succès.
+ *
+ * @param operation - Appel(s) au backend.
+ * @param errorFallback - Message d'erreur par défaut.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+async function runContactOperation(operation: () => Promise<unknown>, errorFallback: string): Promise<string | null> {
+  try {
+    await operation()
+    await reloadContacts()
+    state.detailPopup = null
+    state.detailContact = null
+    return null
+  } catch (e: unknown) {
+    return extractErrorMessage(e, errorFallback)
+  }
+}
+
+/**
+ * Ajoute un contact à la candidature ouverte : lie un contact du carnet, ou
+ * crée un nouveau contact lié à la candidature.
+ *
+ * @param draft - Ligne saisie dans la popup.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function addContactToDetail(draft: ContactDraft): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+  if (draft.mode === 'existing') {
+    if (draft.contact_id === null) return 'Choisis un contact du carnet.'
+    const contactId = draft.contact_id
+    return runContactOperation(
+      () => invoke<void>('link_contact', { candidatureId: current.id, contactId }),
+      'Impossible de lier le contact.',
+    )
+  }
+  return runContactOperation(
+    () => invoke<ContactView>('create_contact', { input: draftToContactInput(draft), candidatureId: current.id }),
+    'Impossible de créer le contact.',
+  )
+}
+
+/**
+ * Modifie un contact du carnet.
+ *
+ * @param id - Contact à modifier.
+ * @param input - Nouvelle saisie.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function updateContact(id: number, input: ContactInput): Promise<string | null> {
+  return runContactOperation(
+    () => invoke<ContactView>('update_contact', { id, input }),
+    'Impossible de modifier le contact.',
+  )
+}
+
+/**
+ * Retire un contact de la candidature ouverte (et de ses entretiens) ; le
+ * contact reste dans le carnet.
+ *
+ * @param contactId - Contact à retirer.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function unlinkContact(contactId: number): Promise<string | null> {
+  const current = state.detailCandidature
+  if (!current) return null
+  return runContactOperation(
+    () => invoke<void>('unlink_contact', { candidatureId: current.id, contactId }),
+    'Impossible de retirer le contact de la candidature.',
+  )
+}
+
+/**
+ * Supprime définitivement un contact du carnet (toutes ses liaisons partent avec).
+ *
+ * @param id - Contact à supprimer.
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function deleteContact(id: number): Promise<string | null> {
+  return runContactOperation(
+    () => invoke<void>('delete_contact', { id }),
+    'Impossible de supprimer le contact.',
+  )
+}
+
+/**
+ * Ouvre la popup d'ajout (sans contact) ou de modification d'un contact.
+ *
+ * @param contact - Contact à modifier, `null` pour un ajout.
+ */
+export function openContactPopup(contact: ContactView | null) {
+  state.detailContact = contact
+  state.detailPopup = 'contact'
+  void loadContactBook().then((error) => {
+    if (error) showToast(error, 'error')
+  })
+}
+
+/**
+ * Ouvre la confirmation de suppression définitive d'un contact.
+ *
+ * @param contact - Contact à supprimer.
+ */
+export function openDeleteContactPopup(contact: ContactView) {
+  state.detailContact = contact
+  state.detailPopup = 'confirmDeleteContact'
 }
 
 /** Ouvre la corbeille de la session courante. */
@@ -410,6 +560,7 @@ export function openDetailPopup(key: PopupKey) {
 /** Ferme la popup courante du détail de candidature. */
 export function closeDetailPopup() {
   state.detailPopup = null
+  state.detailContact = null
 }
 
 /**
@@ -421,24 +572,6 @@ export function closeDetailPopup() {
 export function openStatusHistoryPopup(content: string) {
   state.detailStatusHistoryContent = content
   state.detailPopup = 'statusHistoryContent'
-}
-
-// Ajout de recruteur non persistant en base : la commande Tauri `create_contact`
-// reste à implémenter (voir plan de gate suivante). En attendant, on affiche le
-// contact ajouté localement pour ne pas régresser l'UI existante.
-/** Ajoute un recruteur de démonstration au suivi de la candidature ouverte. */
-export function addRecruiter() {
-  state.detailContacts.push({
-    id: state.nextRecruiterId++,
-    candidature_id: state.detailCandidature?.id ?? 0,
-    nom: 'Nouveau Recruteur',
-    role: 'Chargé·e RH',
-    email: 'recruiter@entreprise.com',
-    telephone: null,
-    notes: null,
-    created_at: new Date().toISOString(),
-  })
-  state.detailPopup = null
 }
 
 /**

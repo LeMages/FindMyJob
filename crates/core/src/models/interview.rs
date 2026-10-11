@@ -12,7 +12,14 @@ pub struct InterviewView {
     pub lieu: Option<String>,
     pub issue: String,
     pub notes: Option<String>,
-    pub contact_id: Option<i64>,
+}
+
+/// Interlocuteur d'un entretien, pour la vue planning.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct InterviewContactView {
+    pub id: i64,
+    pub nom: String,
+    pub role: Option<String>,
 }
 
 /// Entretien enrichi des informations de sa candidature, pour la vue planning.
@@ -29,4 +36,6 @@ pub struct PlanningInterviewView {
     pub modalite: Option<String>,
     pub issue: String,
     pub notes: Option<String>,
+    /// Interlocuteurs de l'entretien, par nom.
+    pub contacts: Vec<InterviewContactView>,
 }

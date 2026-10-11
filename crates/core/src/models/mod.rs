@@ -29,7 +29,7 @@ pub use candidature::{
     CandidatureDetail, CandidatureView, CreateCandidatureInput, DuplicateCandidatureView, UpdateCandidatureInput,
 };
 pub use connection_test::TestConnectionResult;
-pub use contact::ContactView;
+pub use contact::{CandidatureContactInput, ContactInput, ContactView};
 pub use doc_content::{CvContent, ItemBullets, LmContent, ProseField};
 pub use doc_data::{
     CvData, CvExampleData, CvExperience, CvFormation, CvLabels, CvLangue, CvProject, Identity, LmData,
@@ -43,7 +43,7 @@ pub use experience::{CreateExperienceInput, ExperienceView};
 pub use font::FontFamilyView;
 pub use formation::{CreateFormationInput, FormationView};
 pub use generation_progress::{GenerationProgress, GenerationStatus};
-pub use interview::{InterviewView, PlanningInterviewView};
+pub use interview::{InterviewContactView, InterviewView, PlanningInterviewView};
 pub use lang::{CreateLangInput, LangView};
 pub use matching::{MatchedItem, MatchedSkill, MatchingResult};
 pub use offer_extraction::{ExtractionStage, OfferExtraction};

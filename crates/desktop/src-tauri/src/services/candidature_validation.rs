@@ -4,6 +4,7 @@
 // Importation des modules internes
 use crate::db::candidatures::CandidatureFields;
 use crate::db::common::normalize;
+use crate::db::contacts::{self, ContactToLink};
 use findmyjob_core::error::AppError;
 use findmyjob_core::models::{CreateCandidatureInput, UpdateCandidatureInput};
 
@@ -16,10 +17,12 @@ const TYPES_CONTRAT_VALIDES: [&str; 6] = ["stage", "alternance", "cdi", "cdd", "
 /// * `session_id` - Session de rattachement.
 /// * `fields` - Champs éditables validés.
 /// * `description_offre` - Contenu de l'offre.
+/// * `contacts` - Contacts à lier, validés.
 pub struct NewCandidature {
     pub session_id: i64,
     pub fields: CandidatureFields,
     pub description_offre: String,
+    pub contacts: Vec<ContactToLink>,
 }
 
 /// Champs obligatoires partagés par la création et la modification.
@@ -111,6 +114,7 @@ pub fn validate_create(input: &CreateCandidatureInput) -> Result<NewCandidature,
     let common = required_fields(&input.poste, &input.entreprise, &input.localisation, &input.source)?;
     let description_offre = required(&input.description_offre, "Le contenu de l'offre est requis.")?;
     let type_contrat = type_contrat(&input.type_contrat)?;
+    let contacts = contacts::validate_for_candidature(&input.contacts)?;
 
     Ok(NewCandidature {
         session_id,
@@ -125,6 +129,7 @@ pub fn validate_create(input: &CreateCandidatureInput) -> Result<NewCandidature,
             notes: normalize(input.notes.clone()),
         },
         description_offre,
+        contacts,
     })
 }
 

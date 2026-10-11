@@ -2,6 +2,8 @@
 
 use chrono::{DateTime, Utc};
 
+use crate::models::contact::CandidatureContactInput;
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct CandidatureView {
     pub id: i64,
@@ -61,6 +63,10 @@ pub struct CreateCandidatureInput {
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
     pub session_id: Option<i64>,
+    /// Contacts à lier à la candidature, créés ou repris du carnet dans la
+    /// même transaction.
+    #[serde(default)]
+    pub contacts: Vec<CandidatureContactInput>,
 }
 
 /// Champs modifiables depuis la page de détail, uniquement au statut

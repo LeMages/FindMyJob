@@ -156,12 +156,25 @@ pub struct CvExampleData {
 // Lettre de motivation
 // ============================================================================
 
-/// Destinataire de la lettre : uniquement les champs disponibles en base.
+/// Destinataire de la lettre : entreprise et lieu de la candidature. La
+/// lettre ne mentionne jamais de contact.
+///
+/// # Attributes
+///
+/// * `company` - Entreprise de la candidature.
+/// * `location` - Lieu de la candidature.
+/// * `contact_name`, `contact_role` - Toujours vides. Gardés uniquement pour
+///   les templates convertis avant l'abandon du contact dans la lettre, qui
+///   lisent encore ces clés (une clé absente ferait échouer leur
+///   compilation Typst). Absents du schéma de templatisation : `default`
+///   les tolère manquants à la lecture.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Recipient {
     pub company: String,
     pub location: String,
+    #[serde(default)]
     pub contact_name: String,
+    #[serde(default)]
     pub contact_role: String,
 }
 

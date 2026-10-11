@@ -9,6 +9,7 @@ use sqlx::{Row, SqliteConnection, SqliteExecutor, SqlitePool};
 
 // Importation des modules internes
 use crate::db::common::map_db_err;
+use crate::db::contacts::{self, ContactToLink};
 use crate::db::status_history::{self, NewHistoryEntry};
 use crate::db::transaction::begin_write;
 use findmyjob_core::error::AppError;
@@ -139,10 +140,12 @@ async fn ensure_a_postuler(conn: &mut SqliteConnection, id: i64, conflict_messag
     Ok(status)
 }
 
-/// Crée une candidature et son entrée d'historique `creation`, dans une même
+/// Crée une candidature, son entrée d'historique `creation` et ses contacts
+/// (nouveaux contacts créés, contacts du carnet liés), dans une même
 /// transaction et au même horodatage — la candidature ne doit jamais exister
-/// sans que son passage au statut « à postuler » soit tracé. Les chemins de
-/// documents sont renseignés ensuite par `set_documents`.
+/// sans que son passage au statut « à postuler » soit tracé, et un contact
+/// en échec annule toute la création. Les chemins de documents sont
+/// renseignés ensuite par `set_documents`.
 ///
 /// # Arguments
 ///
@@ -150,16 +153,19 @@ async fn ensure_a_postuler(conn: &mut SqliteConnection, id: i64, conflict_messag
 /// * `session_id` - Identifiant de la session de rattachement.
 /// * `fields` - Champs validés.
 /// * `description_offre` - Contenu de l'offre, validé.
+/// * `contacts` - Contacts à lier, validés.
 /// * `now` - Horodatage de la transaction.
 ///
 /// # Returns
 ///
-/// `CandidatureView` fraîchement créée (chemins de documents à `None`).
+/// `CandidatureView` fraîchement créée (chemins de documents à `None`), ou
+/// `AppError::NotFound` si un contact du carnet n'existe plus.
 pub async fn insert(
     pool: &SqlitePool,
     session_id: i64,
     fields: &CandidatureFields,
     description_offre: &str,
+    contacts: &[ContactToLink],
     now: &str,
 ) -> Result<CandidatureView, AppError> {
     let mut tx = begin_write(pool).await?;
@@ -199,6 +205,7 @@ pub async fn insert(
         interview_id: None,
     };
     status_history::record(&mut tx, &entry, now).await?;
+    contacts::link_all_in(&mut tx, view.id, contacts, now).await?;
 
     tx.commit().await.map_err(map_db_err)?;
     Ok(view)
@@ -289,7 +296,8 @@ pub async fn set_documents(
 /// Usage restreint : génération échouée juste après la création, ou
 /// génération interrompue retrouvée au démarrage. Le bouton « Supprimer »
 /// de la page de détail passe par `delete_a_postuler`, qui vérifie le statut.
-/// Historique, contacts et entretiens partent par `ON DELETE CASCADE`.
+/// Historique, liaisons aux contacts et entretiens partent par
+/// `ON DELETE CASCADE` ; les contacts restent dans le carnet.
 ///
 /// # Arguments
 ///

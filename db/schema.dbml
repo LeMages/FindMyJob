@@ -169,23 +169,30 @@ Table candidatures {
 
 Table contacts {
   id integer [pk, increment]
-  candidature_id integer [not null, ref: > candidatures.id, note: "ON DELETE CASCADE"]
-  nom text
+  nom text [not null]
   role text
   email text
   telephone text
   notes text
   created_at timestamp [not null]
 
+  Note: "Carnet global : un contact existe sans candidature et peut être lié à plusieurs (candidature_contacts)."
+}
+
+Table candidature_contacts {
+  candidature_id integer [not null, ref: > candidatures.id, note: "ON DELETE CASCADE"]
+  contact_id integer [not null, ref: > contacts.id, note: "ON DELETE CASCADE"]
+  created_at timestamp [not null]
+
   indexes {
-    candidature_id
+    (candidature_id, contact_id) [pk]
+    contact_id
   }
 }
 
 Table interviews {
   id integer [pk, increment]
   candidature_id integer [not null, ref: > candidatures.id, note: "ON DELETE CASCADE"]
-  contact_id integer [ref: > contacts.id, note: "ON DELETE SET NULL"]
   type_entretien interview_type
   modalite interview_mode
   date_entretien timestamp
@@ -196,6 +203,15 @@ Table interviews {
 
   indexes {
     candidature_id
+  }
+}
+
+Table interview_contacts {
+  interview_id integer [not null, ref: > interviews.id, note: "ON DELETE CASCADE"]
+  contact_id integer [not null, ref: > contacts.id, note: "ON DELETE CASCADE"]
+
+  indexes {
+    (interview_id, contact_id) [pk]
   }
 }
 

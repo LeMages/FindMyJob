@@ -1,13 +1,17 @@
 //! Accès et logique de persistance pour les entretiens rattachés à une
 //! candidature.
 
+// Importation des modules standard
+use std::collections::HashMap;
+
 // Importation des crates externes
 use sqlx::{Row, SqliteConnection, SqliteExecutor, SqlitePool};
 
 // Importation des modules internes
 use crate::db::common::map_db_err;
+use crate::db::joins;
 use findmyjob_core::error::AppError;
-use findmyjob_core::models::{InterviewView, PlanningInterviewView};
+use findmyjob_core::models::{InterviewContactView, InterviewView, PlanningInterviewView};
 
 /// Types d'entretien acceptés (voir `interviews.type_entretien` en base).
 pub const TYPES_ENTRETIEN_VALIDES: [&str; 5] = ["rh", "technique", "manager", "final", "autre"];
@@ -27,14 +31,14 @@ pub const MODALITES_VALIDES: [&str; 3] = ["visio", "presentiel", "telephone"];
 /// * `date_entretien` - Date/heure de l'entretien au format de stockage, si renseignée.
 /// * `lieu` - Lieu de l'entretien, si renseigné.
 /// * `modalite` - Modalité (voir `MODALITES_VALIDES`), si renseignée.
-/// * `contact_id` - Contact recruteur rencontré, si renseigné.
+/// * `contact_ids` - Interlocuteurs, déjà vérifiés comme liés à la candidature.
 pub struct NewInterview<'a> {
     pub candidature_id: i64,
     pub type_entretien: &'a str,
     pub date_entretien: Option<&'a str>,
     pub lieu: Option<&'a str>,
     pub modalite: Option<&'a str>,
-    pub contact_id: Option<i64>,
+    pub contact_ids: &'a [i64],
 }
 
 /// Liste les entretiens encore en attente d'une candidature — utilisé pour
@@ -54,7 +58,7 @@ pub async fn list_pending_for_candidature(
     candidature_id: i64,
 ) -> Result<Vec<InterviewView>, AppError> {
     let rows = sqlx::query(
-        "SELECT id, candidature_id, type_entretien, date_entretien, lieu, issue, notes, contact_id \
+        "SELECT id, candidature_id, type_entretien, date_entretien, lieu, issue, notes \
          FROM interviews \
          WHERE candidature_id = $1 AND issue = 'en_attente' \
          ORDER BY date_entretien NULLS LAST, id",
@@ -74,7 +78,6 @@ pub async fn list_pending_for_candidature(
                 lieu: r.try_get("lieu")?,
                 issue: r.try_get("issue")?,
                 notes: r.try_get("notes")?,
-                contact_id: r.try_get("contact_id")?,
             })
         })
         .collect::<Result<_, _>>()
@@ -91,7 +94,8 @@ pub async fn list_pending_for_candidature(
 ///
 /// # Returns
 ///
-/// Entretiens dont la date est renseignée, triés par date croissante.
+/// Entretiens dont la date est renseignée, triés par date croissante, avec
+/// leurs interlocuteurs.
 pub async fn list_for_session(pool: &SqlitePool, session_id: i64) -> Result<Vec<PlanningInterviewView>, AppError> {
     let rows = sqlx::query(
         "SELECT i.id, i.candidature_id, c.entreprise, c.poste, i.type_entretien, \
@@ -106,10 +110,16 @@ pub async fn list_for_session(pool: &SqlitePool, session_id: i64) -> Result<Vec<
     .await
     .map_err(map_db_err)?;
 
+    let mut contacts_by_interview: HashMap<i64, Vec<InterviewContactView>> = HashMap::new();
+    for (interview_id, contact) in joins::list_interview_contacts_for_session(pool, session_id).await? {
+        contacts_by_interview.entry(interview_id).or_default().push(contact);
+    }
+
     rows.iter()
         .map(|r| -> Result<PlanningInterviewView, sqlx::Error> {
+            let id: i64 = r.try_get("id")?;
             Ok(PlanningInterviewView {
-                id: r.try_get("id")?,
+                id,
                 candidature_id: r.try_get("candidature_id")?,
                 entreprise: r.try_get("entreprise")?,
                 poste: r.try_get("poste")?,
@@ -119,6 +129,7 @@ pub async fn list_for_session(pool: &SqlitePool, session_id: i64) -> Result<Vec<
                 modalite: r.try_get("modalite")?,
                 issue: r.try_get("issue")?,
                 notes: r.try_get("notes")?,
+                contacts: contacts_by_interview.remove(&id).unwrap_or_default(),
             })
         })
         .collect::<Result<_, _>>()
@@ -146,7 +157,7 @@ pub async fn count_pending<'e, E: SqliteExecutor<'e>>(executor: E, candidature_i
         .map_err(map_db_err)
 }
 
-/// Crée un entretien planifié pour une candidature.
+/// Crée un entretien planifié pour une candidature, avec ses interlocuteurs.
 ///
 /// Appelé uniquement depuis `db::timeline_events::add_event` (l'événement
 /// `entretien_planifie` est le seul point d'entrée pour créer un entretien),
@@ -162,21 +173,61 @@ pub async fn count_pending<'e, E: SqliteExecutor<'e>>(executor: E, candidature_i
 ///
 /// Identifiant de l'entretien créé.
 pub(crate) async fn insert(conn: &mut SqliteConnection, new: &NewInterview<'_>, now: &str) -> Result<i64, AppError> {
-    sqlx::query_scalar(
+    let id: i64 = sqlx::query_scalar(
         "INSERT INTO interviews \
-           (candidature_id, type_entretien, date_entretien, lieu, modalite, contact_id, created_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+           (candidature_id, type_entretien, date_entretien, lieu, modalite, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
     )
     .bind(new.candidature_id)
     .bind(new.type_entretien)
     .bind(new.date_entretien)
     .bind(new.lieu)
     .bind(new.modalite)
-    .bind(new.contact_id)
     .bind(now)
-    .fetch_one(conn)
+    .fetch_one(&mut *conn)
     .await
-    .map_err(map_db_err)
+    .map_err(map_db_err)?;
+
+    for contact_id in new.contact_ids {
+        sqlx::query("INSERT INTO interview_contacts (interview_id, contact_id) VALUES ($1, $2)")
+            .bind(id)
+            .bind(contact_id)
+            .execute(&mut *conn)
+            .await
+            .map_err(map_db_err)?;
+    }
+    Ok(id)
+}
+
+/// Retire un contact des entretiens d'une candidature — appelé quand le
+/// contact est retiré de la candidature (`contacts::unlink`).
+///
+/// # Arguments
+///
+/// * `conn` - Connexion de la transaction d'écriture en cours.
+/// * `contact_id` - Identifiant du contact.
+/// * `candidature_id` - Identifiant de la candidature.
+///
+/// # Returns
+///
+/// `Ok(())` une fois les liaisons supprimées (n'en trouver aucune n'est pas
+/// une erreur).
+pub(crate) async fn remove_contact_for_candidature(
+    conn: &mut SqliteConnection,
+    contact_id: i64,
+    candidature_id: i64,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "DELETE FROM interview_contacts \
+         WHERE contact_id = $1 \
+           AND interview_id IN (SELECT id FROM interviews WHERE candidature_id = $2)",
+    )
+    .bind(contact_id)
+    .bind(candidature_id)
+    .execute(conn)
+    .await
+    .map_err(map_db_err)?;
+    Ok(())
 }
 
 /// Marque un entretien en attente comme passé.

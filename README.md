@@ -96,7 +96,7 @@ The installer is generated under `target/release/bundle/` at the repo root.
 
 ## Project status
 
-Active early-stage development. Application tracking, AI document tailoring, and offer import by link are implemented end to end. Recruiter-contact creation isn't persisted yet — see [`docs/project.md`](docs/project.md#11-features--implemented-partial-and-planned) for the full picture.
+Active early-stage development. Application tracking (including a global recruiter-contact book shared across applications), AI document tailoring, and offer import by link are implemented end to end — see [`docs/project.md`](docs/project.md#11-features--implemented-partial-and-planned) for the full picture.
 
 ## History
 

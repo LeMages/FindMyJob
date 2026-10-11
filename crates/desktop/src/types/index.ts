@@ -54,7 +54,8 @@ export interface UserView {
 }
 // ── Suivi de candidatures (kanban) ───────────────────────────────────────────
 
-export type PopupKey = 'mail' | 'addRecruiter' | 'offer' | 'statusHistoryContent' | 'confirmDelete' | 'apply' | null
+export type PopupKey =
+  | 'mail' | 'contact' | 'confirmDeleteContact' | 'offer' | 'statusHistoryContent' | 'confirmDelete' | 'apply' | null
 
 export interface BoardCard {
   id: number
@@ -79,10 +80,6 @@ export interface Session {
 export interface UpdateSessionInput {
   nom: string
   statut: SessionStatut
-}
-
-export interface NewContact {
-  id: number
 }
 
 // ── Profil : expériences, compétences, langues, formations, projets ──────────
@@ -247,6 +244,8 @@ export interface CreateCandidatureInput {
   cv_path: string | null
   lettre_motivation_path: string | null
   session_id: number | null
+  /** Contacts à lier, créés ou repris du carnet dans la même transaction. */
+  contacts: CandidatureContactInput[]
 }
 
 /** Champs extraits d'une offre scrapée (voir `scrape_offer`), pour pré-remplir le formulaire. */
@@ -257,6 +256,16 @@ export interface ScrapedOfferFields {
   type_contrat: string | null
   remuneration: string | null
   description_offre: string | null
+  /** Personne à contacter nommée par l'offre (pré-remplit le formulaire, rien n'est enregistré). */
+  contact: ScrapedContact | null
+}
+
+/** Personne à contacter extraite d'une offre (miroir de `ScrapedContact`). */
+export interface ScrapedContact {
+  nom: string | null
+  role: string | null
+  email: string | null
+  telephone: string | null
 }
 
 /** Candidature existante pointant vers la même offre (miroir de `DuplicateCandidatureView`). */
@@ -323,15 +332,45 @@ export interface CandidatureDetail {
   created_at: string
 }
 
+/** Contact du carnet (miroir de `ContactView`). */
 export interface ContactView {
   id: number
-  candidature_id: number
-  nom: string | null
+  nom: string
   role: string | null
   email: string | null
   telephone: string | null
   notes: string | null
+  /** Nombre de candidatures auxquelles le contact est lié. */
+  candidature_count: number
   created_at: string
+}
+
+/** Saisie d'un contact, en création comme en modification (miroir de `ContactInput`). */
+export interface ContactInput {
+  nom: string
+  role: string | null
+  email: string | null
+  telephone: string | null
+  notes: string | null
+}
+
+/** Contact lié à une candidature à sa création : existant du carnet ou nouveau. */
+export type CandidatureContactInput =
+  | { kind: 'existing'; contact_id: number }
+  | { kind: 'new'; contact: ContactInput }
+
+/** Ligne de saisie d'un contact dans un formulaire (choix existant / nouveau). */
+export interface ContactDraft {
+  /** Clé locale de la ligne (rendu de liste), jamais envoyée au backend. */
+  key: number
+  mode: 'existing' | 'new'
+  /** Contact du carnet choisi, en mode `existing`. */
+  contact_id: number | null
+  nom: string
+  role: string
+  email: string
+  telephone: string
+  notes: string
 }
 
 export interface StatusHistoryView {
@@ -363,7 +402,6 @@ export interface InterviewView {
   lieu: string | null
   issue: string
   notes: string | null
-  contact_id: number | null
 }
 
 /** Données de l'entretien à créer, pour un événement `entretien_planifie`. */
@@ -372,7 +410,8 @@ export interface NewInterviewData {
   date_entretien: string | null
   lieu: string | null
   modalite: string | null
-  contact_id: number | null
+  /** Interlocuteurs, parmi les contacts liés à la candidature. */
+  contact_ids: number[]
 }
 
 /** Entretien enrichi de sa candidature, pour la vue planning. */
@@ -387,6 +426,15 @@ export interface PlanningInterviewView {
   modalite: string | null
   issue: string
   notes: string | null
+  /** Interlocuteurs de l'entretien. */
+  contacts: InterviewContactView[]
+}
+
+/** Interlocuteur d'un entretien (miroir de `InterviewContactView`). */
+export interface InterviewContactView {
+  id: number
+  nom: string
+  role: string | null
 }
 
 /** Entrée soumise pour ajouter un événement à la timeline d'une candidature. */

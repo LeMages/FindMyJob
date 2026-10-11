@@ -165,8 +165,8 @@ pub async fn update(pool: &SqlitePool, id: i64, input: &UpdateSessionInput) -> R
 }
 
 /// Supprime une session et toutes les données qui en dépendent
-/// (candidatures, historique, contacts, entretiens, versions et références
-/// de documents), par les `ON DELETE CASCADE` du schéma. Les fichiers de la
+/// (candidatures, historique, liaisons aux contacts, entretiens, versions et
+/// références de documents ; les contacts restent dans le carnet), par les `ON DELETE CASCADE` du schéma. Les fichiers de la
 /// session sont supprimés par l'appelant.
 ///
 /// # Arguments

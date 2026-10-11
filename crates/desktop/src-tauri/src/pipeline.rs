@@ -89,12 +89,10 @@ pub struct GenerationRequest<'a> {
     pub api_key: &'a ApiKeyAccess,
 }
 
-/// Construit le destinataire de la lettre depuis la candidature et ses
-/// contacts.
+/// Construit le destinataire de la lettre depuis la candidature.
 async fn load_recipient(pool: &SqlitePool, candidature_id: i64) -> Result<Recipient, AppError> {
     let candidature = db::candidatures::fetch_detail(pool, candidature_id).await?;
-    let contacts = db::contacts::list_for_candidature(pool, candidature_id).await?;
-    Ok(build_recipient(&candidature, &contacts))
+    Ok(build_recipient(&candidature))
 }
 
 /// Langue du document : celle de l'offre si elle est prise en charge,

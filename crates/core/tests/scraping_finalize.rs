@@ -4,7 +4,7 @@
 //! ni emoji, ni décoration Markdown, titres et listes conservés.
 
 // Importation des modules internes
-use findmyjob_core::llm::scraping_extract::ScrapedOfferFields;
+use findmyjob_core::llm::scraping_extract::{ScrapedContact, ScrapedOfferFields};
 use findmyjob_core::scraping::finalize::finalize_fields;
 use findmyjob_core::scraping::json_ld::extract_job_posting_fields;
 
@@ -44,6 +44,7 @@ fn llm_fields(description: &str) -> ScrapedOfferFields {
         type_contrat: Some("Stage".to_string()),
         remuneration: Some("1 200 € par mois".to_string()),
         description_offre: Some(description.to_string()),
+        contact: None,
     }
 }
 
@@ -125,6 +126,35 @@ fn champs_vides_et_type_hors_formulaire() {
         type_contrat: Some("freelance".to_string()),
         remuneration: Some("null".to_string()),
         description_offre: Some("  ".to_string()),
+        contact: None,
     });
     assert_eq!(fields, ScrapedOfferFields::default());
+}
+
+#[test]
+fn contact_nettoye() {
+    let mut fields = llm_fields("Missions");
+    fields.contact = Some(ScrapedContact {
+        nom: Some("  Camille   Martin ".to_string()),
+        role: Some("Responsable <b>data</b>".to_string()),
+        email: Some(" mailto:camille.martin@example.com ".to_string()),
+        telephone: Some("tel:+33 6 00 00 00 00".to_string()),
+    });
+    let contact = finalize_fields(fields).contact.expect("contact");
+    assert_eq!(contact.nom.as_deref(), Some("Camille Martin"));
+    assert_eq!(contact.role.as_deref(), Some("Responsable data"));
+    assert_eq!(contact.email.as_deref(), Some("camille.martin@example.com"));
+    assert_eq!(contact.telephone.as_deref(), Some("+33 6 00 00 00 00"));
+}
+
+#[test]
+fn contact_sans_nom_ecarte() {
+    let mut fields = llm_fields("Missions");
+    fields.contact = Some(ScrapedContact {
+        nom: Some("   ".to_string()),
+        role: None,
+        email: Some("rh@example.com".to_string()),
+        telephone: None,
+    });
+    assert_eq!(finalize_fields(fields).contact, None);
 }

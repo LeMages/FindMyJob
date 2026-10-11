@@ -95,7 +95,7 @@ pub fn fields(url: Option<&str>) -> CandidatureFields {
 
 /// Crée une candidature dans une session ; retourne son identifiant.
 pub async fn candidature(pool: &SqlitePool, session_id: i64, now: &str) -> i64 {
-    candidatures::insert(pool, session_id, &fields(None), "Offre", now)
+    candidatures::insert(pool, session_id, &fields(None), "Offre", &[], now)
         .await
         .expect("candidature")
         .id

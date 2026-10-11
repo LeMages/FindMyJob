@@ -1,5 +1,6 @@
-//! Tests de `db::timeline_events`, `db::interviews` et `db::contacts` :
-//! événements autorisés, entretiens, changement de statut et historique.
+//! Tests de `db::timeline_events` et `db::interviews` : événements
+//! autorisés, entretiens, changement de statut et historique. Les
+//! interlocuteurs d'un entretien sont testés dans `db_contacts.rs`.
 
 #[path = "shared/seed.rs"]
 mod seed;
@@ -10,7 +11,7 @@ use chrono::{TimeZone, Utc};
 // Importation des modules internes
 use findmyjob_core::error::AppError;
 use findmyjob_core::models::{NewInterviewData, NewTimelineEvent};
-use findmyjob_lib::db::{candidatures, contacts, interviews, status_history, timeline_events};
+use findmyjob_lib::db::{candidatures, interviews, status_history, timeline_events};
 
 fn event(event_type: &str) -> NewTimelineEvent {
     NewTimelineEvent {
@@ -36,7 +37,7 @@ async fn parcours_entretien_complet() {
         date_entretien: Some(Utc.with_ymd_and_hms(2026, 10, 20, 14, 0, 0).unwrap()),
         lieu: Some("Visio".into()),
         modalite: Some("Visio".into()),
-        contact_id: None,
+        contact_ids: Vec::new(),
     });
     timeline_events::add_event(&pool, cid, planifie, "2026-10-11T08:00:00.000Z").await.unwrap();
     assert_eq!(candidatures::fetch_status(&pool, cid).await.unwrap(), "entretien");
@@ -89,12 +90,4 @@ async fn evenements_refuses() {
     let historique = status_history::list_for_candidature(&pool, cid).await.unwrap();
     assert_eq!(historique[1].content.as_deref(), Some("Relancer lundi"));
     assert_eq!(candidatures::fetch_status(&pool, cid).await.unwrap(), "a_postuler");
-}
-
-#[tokio::test]
-async fn contacts_vides_par_defaut() {
-    let pool = seed::pool().await;
-    let sid = seed::session(&pool).await;
-    let cid = seed::candidature(&pool, sid, seed::NOW).await;
-    assert!(contacts::list_for_candidature(&pool, cid).await.unwrap().is_empty());
 }

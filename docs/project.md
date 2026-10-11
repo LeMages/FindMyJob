@@ -142,8 +142,10 @@ Table summary:
 | `documents` | Pointer `(session_id, doc_type) → current_version_id`, plus `updated_at` |
 | `candidatures` | Core entity — one row per application (company, status, metadata, generated document paths, reference versions used) |
 | `status_history` | Unified timeline of events for an application (`event_type` and statuses constrained by CHECK) |
-| `contacts` | People associated with an application — read-only today, see §11 |
+| `contacts` | Global recruiter-contact book: name (required), role, email, phone, notes. A contact exists on its own and can be linked to several applications |
+| `candidature_contacts` | Link application ↔ contact (composite key, `created_at` gives the link order, CASCADE on both sides: deleting an application removes its links, never the contacts) |
 | `interviews` | Scheduled or completed interviews for an application |
+| `interview_contacts` | Interviewers of an interview (composite key, CASCADE on both sides); only contacts linked to the interview's application are accepted (`db::timeline_events::plan_interview`), and unlinking a contact from an application also removes it from that application's interviews |
 
 Deleting a session cascades to everything that depends on it in the database, and `services::sessions::delete` also removes its `documents/sessions/<id>/` folder. Duplicate skills and languages are checked before writing, inside the transaction, and refused with a French message (never the raw SQLite constraint error). Skills and languages are sorted case-insensitively (`COLLATE NOCASE`).
 
@@ -196,7 +198,7 @@ Each session owns one reference CV and one reference cover letter, stored under 
 3. Budgets (`core::docgen::budgets`) from `example_data`: exact element counts (paragraphs, projects, skill groups, bullets per entry by rank), word counts at ±10 %, page count.
 4. Labels in the offer's language: the reference's own labels, or a Claude translation cached per reference version and language (`docgen/labels_cache.rs`, `labels.<lang>.{cv,lm}.json`).
 5. Writing, CV and letter in parallel (`tokio::try_join!`): `core::llm::cv_writing::write_cv` (title, summary, bullets per selected entry id, skill groups) and `core::llm::lm_writing::write_lm` (subject, paragraphs). Prompts carry the offer analysis, the selected profile facts, the reference's prose clearly delimited as a style model, the budgets and the target language. Each output is reviewed (`core::llm::writing_loop`): blocking validation (ids match the selection, every skill exists in the profile, no empty field) plus the linter (`core::docgen::lint`: em/en dashes, Markdown bold, backticks, forbidden phrases from `core::docgen::forbidden_phrases` unless present in the reference, budgets). Violations trigger a new call with the previous output and the problem list, 2 retries at most; after the last one, remaining dashes are replaced mechanically and other lint violations are logged without blocking.
-6. Deterministic assembly (`docgen/build_cv_data.rs`, `docgen/build_lm_data.rs`): identity, titles, companies, periods (`core::docgen::period_format`, in the reference's style), education, languages, interests and recipient (company, location, contact — only what the database holds, `docgen/recipient.rs`) come from Rust; prose comes from step 5.
+6. Deterministic assembly (`docgen/build_cv_data.rs`, `docgen/build_lm_data.rs`): identity, titles, companies, periods (`core::docgen::period_format`, in the reference's style), education, languages, interests and recipient (company and location of the application, `docgen/recipient.rs` — the letter never mentions a contact) come from Rust; prose comes from step 5. `Recipient.contact_name` / `contact_role` are always empty: they are only kept so that templates converted before this rule still compile, and are absent from the templatization schema.
 7. Compilation of `template.typ` with the data (`docgen/page_fit.rs`): if the PDF exceeds the reference's page count, writing is re-run with budgets reduced by 15 % (cumulative), twice at most, then the document is kept with a warning.
 
 No LLM produces Typst during generation. **Compilation** uses `typst-as-lib` (`documents/typst.rs`) inside `spawn_blocking`, serving the data as a virtual `data.json` file, with fonts from the system, `typst-kit` embedded fonts and fonts imported by the user into `<data folder>/polices/<family>/`.
@@ -230,11 +232,11 @@ Commands: `get_api_key_status` (present, source `env`/`keyring`, last 4 characte
 
 ### Application message drafting (`core::llm::candidature_message`)
 
-Two functions (`generate_application_email`, `generate_application_message`), plain text ready to paste, one Claude call each, no structured output. Shared rules: only rephrase what already exists in the profile, no placeholders, no markdown, minimal signature (first + last name only).
+Two functions (`generate_application_email`, `generate_application_message`), plain text ready to paste, one Claude call each, no structured output. Shared rules: only rephrase what already exists in the profile, no placeholders, no markdown, minimal signature (first + last name only). When a contact is linked to the application, the first one (link order) is passed with its role and the greeting becomes « Bonjour <name as written> » (or its direct equivalent in the offer's language), never with a guessed title; without a contact, the email keeps « Madame, Monsieur » and the message has no greeting.
 
 ## 9. Tauri commands (`crates/desktop/src-tauri/src/commands/`)
 
-70 commands are registered in `lib.rs` (`generate_handler!`). Each takes the managed `AppContext` and calls one service or `db` function; if startup failed, every command returns that error (`AppError::Config`), which `App.vue` shows on its startup error screen.
+79 commands are registered in `lib.rs` (`generate_handler!`). Each takes the managed `AppContext` and calls one service or `db` function; if startup failed, every command returns that error (`AppError::Config`), which `App.vue` shows on its startup error screen.
 
 | Module | Commands (summary) |
 |---|---|
@@ -242,7 +244,7 @@ Two functions (`generate_application_email`, `generate_application_message`), pl
 | `experiences` / `formations` / `langues` / `projets` / `skills` | add / update / delete per sub-entity |
 | `sessions` | list / create / update / delete (with its documents folder) |
 | `candidatures` | list by session, create (+ background generation), generation progress, get, update, delete (à postuler only), apply (no message / by mail / by message), find by normalized offer URL |
-| `contacts` | list for an application (read-only, no create command yet) |
+| `contacts` | contact book, contacts of an application, create (optionally linked to an application), update, delete (all its links go with it), link to / unlink from an application |
 | `status_history` | history for an application |
 | `timeline_events` | list available events, add an event |
 | `interviews` | pending interviews for an application, all interviews for a session |
@@ -264,10 +266,10 @@ An offer enters the app only when the user adds it, one page at a time: there is
 
 **Cascade** (`crates/desktop/src-tauri/src/offer_extraction.rs::run_cascade`, shared by `scrape_offer` and `capture_offer_page`), on the raw HTML:
 
-1. **JSON-LD, no LLM** (`core::scraping::json_ld`): every `application/ld+json` block is read, and a `JobPosting` is searched in objects, arrays and `@graph` (`@type` string or array). Mapping: `title` → poste, `hiringOrganization.name` → entreprise, `jobLocation` (object or array) → localisation, prefixed by « Télétravail » when `jobLocationType` is `TELECOMMUTE`, `baseSalary` → readable text (`salary_format.rs`, French number formats, empty or zero amounts ignored), `description` → description. Contract type (`contract_type.rs`): `employmentType: INTERN` → `stage`, otherwise an explicit keyword in the title (stage, stagiaire, intern, alternance, apprentissage, CDI, CDD, intérim), otherwise `null` (a title naming two different types also gives `null`). The stage succeeds when the title is present and the cleaned description exceeds 200 characters.
-2. **Page text + LLM** (`core::scraping::extract::extract_page_text`, then `core::llm::scraping_extract`): among the semantic containers (`article`, `main`, `section`, `[class*=job]`…), the one with the longest text wins (fallback `<body>`); navigation, headers, footers and forms are dropped; headings and lists are kept; truncation (12 000 characters) happens after isolation. `<title>` and `og:title` are passed to the LLM as hints. The prompt asks for the description copied word for word, with the page's own section titles. The stage fails with `insufficient_content` when the text is too short or looks like a JavaScript shell, an anti-bot challenge or a lone cookie banner (`content_check.rs`), or when the LLM returns an empty title or description.
+1. **JSON-LD, no LLM** (`core::scraping::json_ld`): every `application/ld+json` block is read, and a `JobPosting` is searched in objects, arrays and `@graph` (`@type` string or array). Mapping: `title` → poste, `hiringOrganization.name` → entreprise, `jobLocation` (object or array) → localisation, prefixed by « Télétravail » when `jobLocationType` is `TELECOMMUTE`, `baseSalary` → readable text (`salary_format.rs`, French number formats, empty or zero amounts ignored), `description` → description, `applicationContact` (`ContactPoint` or `Person`, object or array; `name`, `jobTitle` or `contactType`, `email`, `telephone`) → contact. Contract type (`contract_type.rs`): `employmentType: INTERN` → `stage`, otherwise an explicit keyword in the title (stage, stagiaire, intern, alternance, apprentissage, CDI, CDD, intérim), otherwise `null` (a title naming two different types also gives `null`). The stage succeeds when the title is present and the cleaned description exceeds 200 characters.
+2. **Page text + LLM** (`core::scraping::extract::extract_page_text`, then `core::llm::scraping_extract`): among the semantic containers (`article`, `main`, `section`, `[class*=job]`…), the one with the longest text wins (fallback `<body>`); navigation, headers, footers and forms are dropped; headings and lists are kept; truncation (12 000 characters) happens after isolation. `<title>` and `og:title` are passed to the LLM as hints. The prompt asks for the description copied word for word, with the page's own section titles, and for a `contact` only when the offer explicitly names a person (`null` otherwise, nothing invented). The stage fails with `insufficient_content` when the text is too short or looks like a JavaScript shell, an anti-bot challenge or a lone cookie banner (`content_check.rs`), or when the LLM returns an empty title or description.
 
-**Final cleanup** (`core::scraping::finalize::finalize_fields`), on every path (JSON-LD, LLM, pasted text): the description goes through `core::text::html_to_plain` (no tags, emoji or Markdown decoration; headings and lists kept; escaped HTML from JSON-LD decoded), short fields are reduced to one line, and a contract type outside the form's values is dropped. The commands return `OfferExtraction { fields, stage }` with `stage` = `json_ld` or `llm`.
+**Final cleanup** (`core::scraping::finalize::finalize_fields`), on every path (JSON-LD, LLM, pasted text): the description goes through `core::text::html_to_plain` (no tags, emoji or Markdown decoration; headings and lists kept; escaped HTML from JSON-LD decoded), short fields are reduced to one line, a contract type outside the form's values is dropped, and a contact without a name is dropped. The extracted contact only prefills a row of the form's contacts section (editable, removable); nothing is saved before the form is submitted, and `create_candidature` inserts the application and its contacts (new ones or picked from the book) in one transaction. The commands return `OfferExtraction { fields, stage }` with `stage` = `json_ld` or `llm`.
 
 **Capture window** (`crates/desktop/src-tauri/src/commands/capture.rs`): when the app cannot read the page by itself (access refused, content rendered by JavaScript), the user opens it in a secondary `capture` window, accepts cookies or logs in, then clicks « Capturer cette page » in the main window. The rendered HTML is read on the Rust side with `WebviewWindow::eval_with_callback` (no IPC from the page), capped at 5 MB, and passed to `services::scraping::extract_from_html`, so it goes through the same cascade. The window belongs to no capability: Tauri rejects every IPC call from a remote origin without a `remote` capability, so the remote page cannot reach any app command. The URL is validated before loading (a local URL such as the dev server would be treated as an app page with IPC access). The window's WebView profile (`capture_webview/`, in the app local folder in PROD or in `dev-data/` in DEV — see §10) keeps the site session between uses, isolated from the main window.
 
@@ -299,19 +301,16 @@ The result is managed as `AppContext`: either the `AppState`, or the initializat
 - Onboarding and full profile management (experiences, formations, languages, projects, skills).
 - Sessions: CRUD, reference CV/cover letter per session (import, compile, templatization, version history with restore, PDF preview).
 - Applications: creation with mandatory AI-generated documents (failure blocks creation), table view per session, editable detail while `a_postuler`, typed timeline, interview management, trash for negative terminal statuses.
+- Recruiter contacts: global book shared across applications, picked or created from the new-application form and the application detail, editable and removable whatever the status, several interviewers per interview (shown in the planning), used by the application email/message (never by the cover letter).
 - Apply flow: no message / by mail / by message, all exporting documents to disk.
 - Offer import from a link (JSON-LD, then page text + LLM), from a page captured in the FindMyJob window, or from pasted text, prefilling the new-application form; choice screen on failure, non-blocking duplicate warning.
 - Interview planning (week/month views).
 - Settings: LLM model selection, Anthropic API key (system keyring in PROD with save/delete, read-only `.env` state in DEV), connection test (run again after a key is saved), fonts, theme.
 - CI/CD: lint + clippy on every PR to `dev`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
 
-### Partial
-
-- **Recruiter contacts**: reading works (`get_contacts`), but there is no create command, and the "add contact" action (`addRecruiter` in `crates/desktop/src/stores/app.ts`) is an explicit local-only stub — nothing is persisted.
-
 ### Planned / out of MVP scope
 
-- A persisted contact-creation flow (db function + Tauri command + UI), completing the item above.
+- A dedicated contact-book page (the book is reachable today only through the application forms).
 - Smart follow-ups: automatic detection of stale applications and a drafted follow-up message (distinct from the existing manual `relance` status/event).
 - A standalone profile-to-offer matching feature (project ranking by relevance), distinct from the internal matching step already used inside the tailoring pipeline (`core::llm::matching::match_profile`).
 - A provider-agnostic LLM layer (OpenAI-compatible, configurable base URL) to support Ollama Cloud or a local runtime — not implemented; the provider is Anthropic-specific today (see `CLAUDE.md`).

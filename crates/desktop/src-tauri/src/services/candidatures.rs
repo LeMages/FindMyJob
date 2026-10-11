@@ -66,6 +66,7 @@ pub async fn create(state: &AppState, input: &CreateCandidatureInput) -> Result<
         new.session_id,
         &new.fields,
         &new.description_offre,
+        &new.contacts,
         &clock::now_utc(),
     )
     .await?;
@@ -159,12 +160,16 @@ pub async fn postuler_avec_message(state: &AppState, id: i64, kind: ApplicationM
     let pool = &state.pool;
     let detail = db::candidatures::fetch_detail(pool, id).await?;
     let profile = db::profile::build_profile(pool).await?;
+    // Le message est adressé au premier contact lié (ordre de liaison).
+    let contact = db::contacts::list_for_candidature(pool, id).await?.into_iter().next();
     let target = state.claude().resolve().await?;
 
     let text = match kind {
-        ApplicationMessage::Mail => findmyjob_core::llm::generate_application_email(&profile, &detail, &target).await?,
+        ApplicationMessage::Mail => {
+            findmyjob_core::llm::generate_application_email(&profile, &detail, contact.as_ref(), &target).await?
+        }
         ApplicationMessage::Message => {
-            findmyjob_core::llm::generate_application_message(&profile, &detail, &target).await?
+            findmyjob_core::llm::generate_application_message(&profile, &detail, contact.as_ref(), &target).await?
         }
     };
     db::candidatures::mark_postule(pool, id, Some(&text), &clock::now_utc()).await?;

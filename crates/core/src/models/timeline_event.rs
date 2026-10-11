@@ -22,7 +22,9 @@ pub struct NewInterviewData {
     pub date_entretien: Option<DateTime<Utc>>,
     pub lieu: Option<String>,
     pub modalite: Option<String>,
-    pub contact_id: Option<i64>,
+    /// Interlocuteurs de l'entretien, parmi les contacts liés à la candidature.
+    #[serde(default)]
+    pub contact_ids: Vec<i64>,
 }
 
 /// Entrée soumise par le frontend pour ajouter un événement à la timeline
