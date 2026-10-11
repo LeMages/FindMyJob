@@ -117,7 +117,7 @@ The source of truth for the IPC contract is the Rust DTOs in `crates/core::model
 
 The database is a single SQLite file, `findmyjob.db`, in the app data folder (see §12). The desktop crate owns the pool (`sqlx::SqlitePool`, `db/init.rs`): WAL journal, foreign keys enabled on every connection, 5 s `busy_timeout`. Every write transaction is opened with `BEGIN IMMEDIATE` (`db/transaction.rs::begin_write`) so a read-then-write transaction takes the write lock up front instead of failing with `SQLITE_BUSY`.
 
-There is one migration, `db/migrations/sqlite/0001_init.sql`, embedded in the binary by `sqlx::migrate!` and applied at startup. `db/schema.dbml` is the hand-maintained column-level reference.
+Migrations live in `db/migrations/sqlite/` (`0001_init.sql`, the initial schema; `0002_adresse_libre.sql`, which merges the street and postal code into `adresse` and drops `code_postal`; `0003_adresse_seul_lieu.sql`, which makes the free-text `adresse` the profile's only location field, taking over the former `ville`, and drops `ville`), embedded in the binary by `sqlx::migrate!` and applied at startup. `db/schema.dbml` is the hand-maintained column-level reference.
 
 Storage conventions:
 

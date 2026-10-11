@@ -64,7 +64,6 @@ interface UserInfoDraft {
   email: string
   telephone: string
   adresse: string
-  code_postal: string
   permis: boolean
   linkedin: string
   github: string
@@ -78,7 +77,6 @@ const draftUserInfo = ref<UserInfoDraft>({
   email: '',
   telephone: '',
   adresse: '',
-  code_postal: '',
   permis: false,
   linkedin: '',
   github: '',
@@ -95,7 +93,6 @@ function isUserInfoDirty(): boolean {
     draftUserInfo.value.email !== (u.email ?? '') ||
     draftUserInfo.value.telephone !== (u.telephone ?? '') ||
     draftUserInfo.value.adresse !== (u.adresse ?? '') ||
-    draftUserInfo.value.code_postal !== (u.code_postal ?? '') ||
     draftUserInfo.value.interets !== (u.interets ?? '') ||
     draftUserInfo.value.permis !== (u.permis ?? false) ||
     draftUserInfo.value.linkedin !== (u.linkedin ?? '') ||
@@ -130,7 +127,6 @@ function enterEditMode() {
     email: u?.email ?? '',
     telephone: u?.telephone ?? '',
     adresse: u?.adresse ?? '',
-    code_postal: u?.code_postal ?? '',
     permis: u?.permis ?? false,
     linkedin: u?.linkedin ?? '',
     github: u?.github ?? '',
@@ -198,7 +194,6 @@ async function saveUserInfo(): Promise<void> {
     email: d.email.trim() || null,
     telephone: d.telephone.trim() || null,
     adresse: d.adresse.trim() || null,
-    code_postal: d.code_postal.trim() || null,
     permis: d.permis,
     linkedin: linkedin || null,
     github: github || null,
@@ -307,7 +302,7 @@ const initials = computed(() => {
         <div class="flex gap-[18px] mt-[11px] font-mono text-[12px] text-neutral-600 flex-wrap">
           <span v-if="profile.user.email">{{ profile.user.email }}</span>
           <span v-if="profile.user.telephone">{{ profile.user.telephone }}</span>
-          <span v-if="profile.user.ville">{{ profile.user.ville }}</span>
+          <span v-if="profile.user.adresse">{{ profile.user.adresse }}</span>
           <a
             v-if="profile.user.linkedin"
             href="#"
@@ -383,15 +378,9 @@ const initials = computed(() => {
           <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
         </div>
       </div>
-      <div class="flex gap-[14px]">
-        <div class="flex-[2] mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse</label>
-          <input v-model="draftUserInfo.adresse" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="12 rue de l'Exemple" />
-        </div>
-        <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Code postal</label>
-          <input v-model="draftUserInfo.code_postal" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="75000" />
-        </div>
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse</label>
+        <input v-model="draftUserInfo.adresse" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="12 rue de l'Exemple, 75000 Paris" />
       </div>
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Centres d'intérêt (un par ligne)</label>

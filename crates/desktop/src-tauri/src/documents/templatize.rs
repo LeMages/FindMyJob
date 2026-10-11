@@ -278,8 +278,8 @@ fn contains_year(text: &str) -> bool {
 /// Champs secondaires vidés pour le rendu « clairsemé » : coordonnées,
 /// organisations, lieux et niveaux, que le profil d'un utilisateur peut
 /// ne pas renseigner.
-const SPARSE_FIELDS: [&str; 15] = [
-    "email", "telephone", "ville", "adresse", "code_postal", "linkedin", "github", "portfolio", "entreprise", "lieu",
+const SPARSE_FIELDS: [&str; 13] = [
+    "email", "telephone", "adresse", "linkedin", "github", "portfolio", "entreprise", "lieu",
     "pour_qui", "ecole", "level", "location", "contact_role",
 ];
 

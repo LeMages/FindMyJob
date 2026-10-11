@@ -52,8 +52,7 @@ async fn met_a_jour_les_infos_avec_coalesce() {
         nom: Some("Durand".into()),
         email: None,
         telephone: Some("0600000000".into()),
-        adresse: None,
-        code_postal: Some("69001".into()),
+        adresse: Some("  12 rue X, 69001 Lyon  ".into()),
         permis: Some(true),
         linkedin: None,
         github: None,
@@ -64,10 +63,33 @@ async fn met_a_jour_les_infos_avec_coalesce() {
     assert_eq!(user.nom.as_deref(), Some("Durand"));
     assert_eq!(user.prenom.as_deref(), Some("Alex"), "un champ absent est conservé");
     assert_eq!(user.permis, Some(true));
-    assert_eq!(user.code_postal.as_deref(), Some("69001"));
+    assert_eq!(user.adresse.as_deref(), Some("12 rue X, 69001 Lyon"), "adresse libre, seulement trimée");
 
     let user = users::update_description(&pool, Some("  Profil data  ".into())).await.unwrap();
     assert_eq!(user.description.as_deref(), Some("Profil data"));
+}
+
+#[tokio::test]
+async fn une_adresse_vide_devient_null() {
+    let pool = seed::pool().await;
+    seed::user(&pool).await;
+
+    let input = |adresse: &str| UpdateUserInfoInput {
+        prenom: None,
+        nom: None,
+        email: None,
+        telephone: None,
+        adresse: Some(adresse.into()),
+        permis: None,
+        linkedin: None,
+        github: None,
+        portfolio: None,
+        interets: None,
+    };
+    let user = users::update_user_info(&pool, input("Lyon")).await.unwrap();
+    assert_eq!(user.adresse.as_deref(), Some("Lyon"));
+    let user = users::update_user_info(&pool, input("   ")).await.unwrap();
+    assert_eq!(user.adresse, None, "une adresse faite d'espaces efface la valeur");
 }
 
 #[tokio::test]

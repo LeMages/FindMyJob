@@ -69,6 +69,14 @@ const EXAMPLE_DATA_RULES: &str = "Règles de example_data :
 3. `lang` et `detected_lang` valent la langue dans laquelle l'original est rédigé.
 4. `identity.permis` vaut true seulement si l'original affiche le permis de conduire.";
 
+/// Règle de lieu commune aux deux types de documents : le profil stocke le
+/// lieu du candidat en un seul texte libre, que la génération place tel quel
+/// dans `identity.adresse`.
+const ADDRESS_RULE: &str = "Lieu de l'expéditeur :
+- `identity.adresse` est le seul champ de lieu du candidat : il remplace toute adresse postale, code postal ou ville de l'expéditeur affichés par l'original. Il reçoit ce lieu en une seule valeur, ses lignes jointes par \", \", et le template l'affiche tel quel, sur une seule ligne, sans le découper.
+- Si l'original affiche à la fois une adresse complète et, ailleurs, seulement la ville (par exemple dans la ligne de date d'une lettre), `identity.adresse` reçoit la ville ; les autres éléments de l'adresse (rue, code postal) sont supprimés et listés dans dropped_text.
+- Si `identity.adresse` est vide, il disparaît entièrement, sans ligne vide ni séparateur orphelin.";
+
 /// Consignes propres au CV : sens des champs du schéma et rendu attendu.
 const CV_FIELDS: &str = "Champs du CV :
 - identity : coordonnées du candidat. Le template n'affiche que les coordonnées présentes dans l'original, dans le même ordre. `labels.permis` s'affiche à la place du permis, seulement si `identity.permis` est vrai.
@@ -87,7 +95,7 @@ const CV_FIELDS: &str = "Champs du CV :
 const LM_FIELDS: &str = "Champs de la lettre :
 - identity : coordonnées de l'expéditeur. Le template n'affiche que les coordonnées présentes dans l'original, dans le même ordre ; la signature est construite avec prénom et nom.
 - recipient : destinataire. Affiche, chacune sur sa ligne et seulement si elle est non vide : company, contact_name, contact_role, location. Les autres lignes du destinataire de l'original (service, adresse postale) n'ont pas de champ et sont supprimées.
-- date : la date affichée, déjà formatée. La ligne de date compose la ville de l'expéditeur, une virgule, `labels.date_prefix` s'il n'est pas vide, puis `data.date`. Si l'original calcule la date au lieu de l'écrire, mets une chaîne vide dans example_data.
+- date : la date affichée, déjà formatée. La ligne de date compose `identity.adresse` (seulement s'il n'est pas vide), une virgule, `labels.date_prefix` s'il n'est pas vide, puis `data.date`. Si l'original calcule la date au lieu de l'écrire, mets une chaîne vide dans example_data.
 - subject : le texte de l'objet, sans son préfixe. `labels.subject_prefix` contient le préfixe (par exemple \"Objet :\").
 - labels.salutation : la formule d'appel. labels.closing : la formule de politesse finale, en entier.
 - paragraphs : les paragraphes du corps, entre la formule d'appel et la formule de politesse finale, rendus par une boucle avec l'espacement de l'original entre deux paragraphes.";
@@ -159,7 +167,7 @@ pub async fn templatize_reference(
          même mise en page, même nombre de pages.\n\n\
          example_data : le contenu de l'original rangé dans le schéma JSON imposé. \
          Le template lit exactement ces champs, avec `data` à la racine.\n\n\
-         {TEMPLATE_RULES}\n\n{EXAMPLE_DATA_RULES}\n\n{fields}"
+         {TEMPLATE_RULES}\n\n{EXAMPLE_DATA_RULES}\n\n{fields}\n\n{ADDRESS_RULE}"
     );
     let user_message = build_user_message(reference_typ, feedback);
     let schema = object(&[

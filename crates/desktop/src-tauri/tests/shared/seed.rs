@@ -31,7 +31,7 @@ pub fn user_input() -> CreateUserInput {
         prenom: "Alex".into(),
         email: "alex@example.com".into(),
         telephone: None,
-        ville: Some("Lyon".into()),
+        adresse: Some("Lyon".into()),
         permis: None,
         description: None,
         linkedin: None,

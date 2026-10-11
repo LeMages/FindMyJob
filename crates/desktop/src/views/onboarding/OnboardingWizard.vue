@@ -28,7 +28,7 @@ const formRaw = ref({
   prenom: '',
   email: '',
   telephone: '',
-  ville: '',
+  adresse: '',
   permis: null as boolean | null,
   description: '',
   linkedin: '',
@@ -73,7 +73,7 @@ async function finish() {
     prenom: formRaw.value.prenom,
     email: formRaw.value.email,
     telephone: formRaw.value.telephone || null,
-    ville: formRaw.value.ville || null,
+    adresse: formRaw.value.adresse || null,
     permis: formRaw.value.permis,
     description: formRaw.value.description || null,
     linkedin: formRaw.value.linkedin || null,
@@ -168,12 +168,12 @@ async function finish() {
       <!-- Step 2: Localisation -->
       <div v-else-if="currentStep === 2" class="mb-4 min-h-[160px]">
         <div class="mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Ville</label>
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse</label>
           <input
-            v-model="formRaw.ville"
+            v-model="formRaw.adresse"
             class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
             type="text"
-            placeholder="Paris"
+            placeholder="12 rue de l'Exemple, 75000 Paris"
           />
         </div>
         <div class="mb-[14px]">

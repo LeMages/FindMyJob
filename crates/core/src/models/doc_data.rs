@@ -20,7 +20,10 @@ use serde::{Deserialize, Serialize};
 ///
 /// * `prenom`, `nom` - Identité, valeurs naturelles (le template applique
 ///   lui-même une éventuelle mise en majuscules).
-/// * `email`, `telephone`, `ville`, `adresse`, `code_postal` - Coordonnées.
+/// * `email`, `telephone` - Coordonnées.
+/// * `adresse` - Lieu du candidat, texte libre du profil (adresse complète,
+///   ville seule…), affiché tel quel, jamais découpé : coordonnées et ligne
+///   de date de la lettre.
 /// * `linkedin`, `github`, `portfolio` - Liens, tels que saisis dans le profil.
 /// * `permis` - Vrai si le candidat a le permis B (affiché via un libellé).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -29,9 +32,7 @@ pub struct Identity {
     pub nom: String,
     pub email: String,
     pub telephone: String,
-    pub ville: String,
     pub adresse: String,
-    pub code_postal: String,
     pub linkedin: String,
     pub github: String,
     pub portfolio: String,
@@ -172,7 +173,7 @@ pub struct Recipient {
 /// * `subject_prefix` - Préfixe de l'objet (ex. « Objet : »).
 /// * `salutation` - Formule d'appel (ex. « Madame, Monsieur, »).
 /// * `closing` - Formule de politesse finale, en entier.
-/// * `date_prefix` - Mot entre la ville et la date (ex. « le »).
+/// * `date_prefix` - Mot entre le lieu (`identity.adresse`) et la date (ex. « le »).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct LmLabels {
     pub subject_prefix: String,

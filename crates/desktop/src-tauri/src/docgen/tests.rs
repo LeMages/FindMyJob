@@ -41,9 +41,7 @@ fn user() -> UserView {
         prenom: Some("Camille".to_string()),
         email: Some("camille.martin@example.org".to_string()),
         telephone: None,
-        ville: Some("Lyon".to_string()),
-        adresse: Some("1 rue de l'Exemple".to_string()),
-        code_postal: Some("69000".to_string()),
+        adresse: Some("1 rue de l'Exemple, 69000 Lyon".to_string()),
         permis: Some(true),
         description: None,
         linkedin: Some("https://www.linkedin.com/in/camille-martin/".to_string()),
@@ -229,7 +227,7 @@ fn lm_data_date_et_destinataire() {
 
     assert_eq!(data.date, "9 octobre 2026");
     assert_eq!(data.recipient.company, "Société Exemple");
-    assert_eq!(data.identity.adresse, "1 rue de l'Exemple");
+    assert_eq!(data.identity.adresse, "1 rue de l'Exemple, 69000 Lyon");
     assert_eq!(data.paragraphs, vec!["Paragraphe.".to_string()]);
 }
 

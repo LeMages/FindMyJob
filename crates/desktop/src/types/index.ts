@@ -15,7 +15,6 @@ export interface UpdateUserInfoInput {
   email: string | null
   telephone: string | null
   adresse: string | null
-  code_postal: string | null
   permis: boolean | null
   linkedin: string | null
   github: string | null
@@ -29,7 +28,7 @@ export interface CreateUserInput {
   prenom: string
   email: string
   telephone: string | null
-  ville: string | null
+  adresse: string | null
   permis: boolean | null
   description: string | null
   linkedin: string | null
@@ -43,9 +42,7 @@ export interface UserView {
   prenom: string | null
   email: string | null
   telephone: string | null
-  ville: string | null
   adresse: string | null
-  code_postal: string | null
   permis: boolean | null
   description: string | null
   linkedin: string | null

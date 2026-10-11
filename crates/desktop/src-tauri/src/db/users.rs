@@ -15,7 +15,7 @@ use findmyjob_core::models::{CreateUserInput, UpdateUserInfoInput, UserView};
 const USER_ID: i64 = 1;
 
 /// Colonnes lues pour reconstruire un `UserView`.
-const USER_COLUMNS: &str = "id, nom, prenom, email, telephone, ville, adresse, code_postal, permis, \
+const USER_COLUMNS: &str = "id, nom, prenom, email, telephone, adresse, permis, \
      description, linkedin, github, portfolio, interets, created_at";
 
 /// Construit un `UserView` à partir d'une ligne SQL brute.
@@ -34,9 +34,7 @@ fn row_to_user(row: &SqliteRow) -> Result<UserView, sqlx::Error> {
         prenom: row.try_get("prenom")?,
         email: row.try_get("email")?,
         telephone: row.try_get("telephone")?,
-        ville: row.try_get("ville")?,
         adresse: row.try_get("adresse")?,
-        code_postal: row.try_get("code_postal")?,
         permis: row.try_get("permis")?,
         description: row.try_get("description")?,
         linkedin: row.try_get("linkedin")?,
@@ -136,7 +134,7 @@ pub async fn insert_user(pool: &SqlitePool, input: CreateUserInput, now: &str) -
 
     sqlx::query(
         "INSERT INTO users \
-           (id, nom, prenom, email, telephone, ville, permis, description, linkedin, github, portfolio, \
+           (id, nom, prenom, email, telephone, adresse, permis, description, linkedin, github, portfolio, \
             created_at) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
     )
@@ -145,7 +143,7 @@ pub async fn insert_user(pool: &SqlitePool, input: CreateUserInput, now: &str) -
     .bind(&prenom)
     .bind(&email)
     .bind(normalize(input.telephone))
-    .bind(normalize(input.ville))
+    .bind(normalize(input.adresse))
     .bind(input.permis)
     .bind(normalize(input.description))
     .bind(normalize(input.linkedin))
@@ -187,8 +185,9 @@ pub async fn update_description(pool: &SqlitePool, description: Option<String>) 
 /// Met à jour les informations de contact du profil.
 ///
 /// Les champs `None` conservent leur valeur existante (`COALESCE`), à
-/// l'exception de `telephone`, `adresse`, `code_postal`, `interets` et
-/// `permis` qui sont toujours remplacés (y compris par `None`).
+/// l'exception de `telephone`, `adresse`, `interets` et `permis` qui sont
+/// toujours remplacés (y compris par `None`). `adresse` est un texte libre :
+/// seulement nettoyé (trim, chaîne vide → NULL), jamais validé ni formaté.
 /// `linkedin`, `github` et `portfolio` suivent le même comportement
 /// `COALESCE` que `prenom`/`nom`/`email` : un champ vidé côté client
 /// (`None`) ne l'efface pas en base.
@@ -221,9 +220,8 @@ pub async fn update_user_info(pool: &SqlitePool, input: UpdateUserInfoInput) -> 
            github    = COALESCE($7, github), \
            portfolio = COALESCE($8, portfolio), \
            adresse   = $9, \
-           code_postal = $10, \
-           interets  = $11 \
-         WHERE id = $12",
+           interets  = $10 \
+         WHERE id = $11",
     )
     .bind(normalize(input.prenom))
     .bind(normalize(input.nom))
@@ -234,7 +232,6 @@ pub async fn update_user_info(pool: &SqlitePool, input: UpdateUserInfoInput) -> 
     .bind(normalize(input.github))
     .bind(normalize(input.portfolio))
     .bind(normalize(input.adresse))
-    .bind(normalize(input.code_postal))
     .bind(normalize(input.interets))
     .bind(USER_ID)
     .execute(&mut *tx)
