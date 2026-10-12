@@ -1,0 +1,7 @@
+{
+  "title": "",
+  "summary": "",
+  "experiences": [ { "id": 1, "bullets": [""] } ],
+  "projects": [ { "id": 1, "bullets": [""] } ],
+  "skills_groups": [ { "category": "Données", "skills": ["SQL"] } ]
+}

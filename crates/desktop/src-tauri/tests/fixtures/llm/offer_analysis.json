@@ -1,0 +1,10 @@
+{
+  "job_title": "Data engineer stagiaire",
+  "company_context": "Éditeur de logiciels de santé en forte croissance.",
+  "required_skills": { "technical": ["SQL", "Python"], "soft": ["rigueur"] },
+  "preferred_skills": { "technical": ["Airflow"], "soft": ["curiosité"] },
+  "experience_level": "junior",
+  "key_responsibilities": ["Construire des pipelines de données", "Fiabiliser les tableaux de bord"],
+  "keywords": ["SQL", "Python", "pipelines"],
+  "language": "fr"
+}

@@ -1,0 +1,57 @@
+{
+  "identity": {
+    "prenom": "Camille",
+    "nom": "Exemple",
+    "email": "camille@exemple.invalid",
+    "telephone": "00 00 00 00 00",
+    "adresse": "Exempleville",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "permis": false
+  },
+  "lang": "fr",
+  "title": "Exemple de titre professionnel",
+  "summary": "Exemple de résumé du profil, qui présente le parcours et les envies de la candidate en quelques phrases simples.",
+  "skills_groups": [
+    { "category": "Exemple outils", "skills": ["ExempleSQL", "ExemplePython"] }
+  ],
+  "experiences": [
+    {
+      "poste": "Exemple de poste",
+      "entreprise": "Exemple SARL",
+      "lieu": "Exempleville",
+      "period": "Janv. 2024 - Juin 2024",
+      "bullets": ["Exemple de réalisation chiffrée sur un projet interne.", "Exemple de mission menée avec une équipe."]
+    }
+  ],
+  "projects": [
+    {
+      "titre": "Exemple de projet",
+      "pour_qui": "Exemple association",
+      "period": "2023",
+      "bullets": ["Exemple de livrable présenté au client."]
+    }
+  ],
+  "formations": [
+    { "titre": "Exemple de master", "ecole": "Université Exemple", "period": "2022 - 2024", "details": ["Exemple de spécialité"] }
+  ],
+  "langues": [
+    { "nom": "Exemplais", "level": "courant" }
+  ],
+  "interets": ["Exemple de loisir"],
+  "labels": {
+    "section_profile": "Profil",
+    "section_skills": "Compétences",
+    "section_experiences": "Expériences",
+    "section_projects": "Projets",
+    "section_formations": "Formations",
+    "section_langues": "Langues",
+    "interets_label": "Intérêts :",
+    "permis": "Permis B",
+    "present": "aujourd'hui",
+    "months_short": ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."]
+  },
+  "detected_lang": "fr",
+  "period_style": { "experiences": "month", "projects": "year", "formations": "year" }
+}

@@ -1,0 +1,12 @@
+{
+  "section_profile": "Profile",
+  "section_skills": "Skills",
+  "section_experiences": "Experience",
+  "section_projects": "Projects",
+  "section_formations": "Education",
+  "section_langues": "Languages",
+  "interets_label": "Interests:",
+  "permis": "Driving licence",
+  "present": "present",
+  "months_short": ["Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."]
+}

@@ -1,184 +1,272 @@
 // ============================================
 // FindMyJob - Schéma de base de données (SQLite)
-// Généré à partir de db/migrations/0001 à 0017.
+// Mis à jour le 2026-10-11 (migrations db/migrations/sqlite/0001_init.sql à 0003_adresse_seul_lieu.sql).
+//
+// Base locale de l'application desktop : <dossier de données>/findmyjob.db.
+// Toutes les tables sont STRICT ; PRAGMA foreign_keys = ON à chaque connexion.
+// App mono-utilisateur : aucune table ne porte de user_id, users n'a qu'une
+// ligne (id = 1).
+//
+// Conventions de ce fichier (pour rester lisible dans dbdiagram) :
+//   - `integer [pk, increment]` = INTEGER PRIMARY KEY (AUTOINCREMENT quand
+//     l'identifiant nomme un dossier : sessions, document_versions,
+//     candidatures) ;
+//   - les `Enum` DBML représentent des colonnes TEXT contraintes par un CHECK ;
+//   - `timestamp` = TEXT RFC 3339 UTC en millisecondes
+//     ('YYYY-MM-DDTHH:MM:SS.mmmZ'), écrit par le code (aucun trigger, aucun
+//     défaut) ; `date` = TEXT 'YYYY-MM-DD' ; `boolean` = INTEGER 0/1 ;
+//   - les chemins de fichiers sont relatifs au dossier de données, séparateur '/'.
 // ============================================
+
+
+// ****************************************************
+//                      PROFIL
+// ****************************************************
 
 Table users {
-  id integer [pk, increment]
-  nom varchar
-  prenom varchar
-  email varchar
-  telephone varchar
-  ville varchar
-  permis boolean
+  id integer [pk, note: "CHECK (id = 1)"]
+  nom text [not null]
+  prenom text [not null]
+  email text [not null]
+  telephone text
+  adresse text        // lieu du candidat, texte libre (adresse complète, ville seule…), affiché tel quel dans les documents
+  permis boolean [note: "NULL = non renseigné"]
   description text
-  linkedin varchar
-  github varchar
-  portfolio varchar
-  created_at timestamp
-  updated_at timestamp
-}
-
-Table lang {
-  id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
-  nom text
-  level text
-}
-
-// ============================================
-// Profil : formations, projets, expériences, skills
-// ============================================
-
-Table formations {
-  id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
-  titre varchar [not null]
-  ecole varchar
-  date_debut date
-  date_fin date
-  created_at timestamp
-  updated_at timestamp
-}
-
-Table projets {
-  id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
-  titre varchar [not null]
-  description text
-  stack text          // technologies utilisées, texte libre
-  url varchar         // repo ou démo
-  pour_qui text        // client / employeur / projet perso (migration 0004)
-  date_debut date
-  date_fin date
-  created_at timestamp
-  updated_at timestamp
+  linkedin text
+  github text
+  portfolio text
+  interets text       // une ligne = un centre d'intérêt
+  created_at timestamp [not null]
 }
 
 Table experiences {
   id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
-  poste varchar [not null]
-  entreprise varchar
-  lieu varchar
+  poste text [not null]
+  entreprise text
+  lieu text
   description text
   date_debut date
   date_fin date
-  type_contrat experience_type_contrat  // migration 0002
-  created_at timestamp
-  updated_at timestamp
+  type_contrat contract_type
+  created_at timestamp [not null]
+}
+
+Table formations {
+  id integer [pk, increment]
+  titre text [not null]
+  ecole text
+  description text    // une ligne = un détail
+  date_debut date
+  date_fin date
+  created_at timestamp [not null]
+}
+
+Table projets {
+  id integer [pk, increment]
+  titre text [not null]
+  description text
+  stack text
+  url text
+  pour_qui text
+  date_debut date
+  date_fin date
+  created_at timestamp [not null]
 }
 
 Table skills {
   id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
-  domaine varchar [not null]   // "Langages", "Data & ML", "Data Engineering"...
-  nom varchar [not null]       // "Python", "PyTorch"...
-  created_at timestamp
-  updated_at timestamp
+  domaine text [not null]
+  nom text [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    (domaine, nom) [unique]
+  }
 }
 
-// ============================================
-// Sessions de candidature
-// ============================================
+Table langues {
+  id integer [pk, increment]
+  nom text [not null, unique]
+  level text
+  created_at timestamp [not null]
+}
+
+Table settings {
+  cle text [pk, note: "'llm_model', 'theme'"]
+  valeur text
+}
+
+
+// ****************************************************
+//               SESSIONS ET DOCUMENTS
+// ****************************************************
 
 Table sessions {
-  id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
-  nom varchar [not null]
-  contexte text            // migration 0010
-  statut session_statut [not null, default: 'active']  // migration 0010
-  zone varchar              // migration 0010
-  created_at timestamp
-  updated_at timestamp
-
-  Note: 'Regroupe un ensemble de candidatures. Possède son propre CV et sa\npropre lettre de motivation de référence, tracés dans documents\n(session.cv_path / lm_path ont été droppées en 0012, remplacées par la table documents en 0011).'
+  id integer [pk, increment, note: "AUTOINCREMENT"]
+  nom text [not null]
+  statut session_status [not null, default: 'active']
+  created_at timestamp [not null]
 }
 
-// ============================================
-// Candidatures (cœur)
-// ============================================
+Table document_versions {
+  id integer [pk, increment, note: "AUTOINCREMENT ; nomme le dossier versions/<id>/"]
+  session_id integer [not null, ref: > sessions.id, note: "ON DELETE CASCADE"]
+  doc_type doc_type [not null]
+  version integer [not null]          // numéro d'affichage par (session, doc_type)
+  original_filename text [not null]
+  typst_path text [not null]
+  pdf_path text [not null]
+  template_path text
+  example_data_path text
+  page_count integer
+  created_at timestamp [not null]
 
-Enum candidature_type {
+  indexes {
+    (session_id, doc_type, version) [unique]
+  }
+}
+
+// Pointeur vers la version courante de chaque référence.
+Table documents {
+  session_id integer [not null, ref: > sessions.id, note: "ON DELETE CASCADE"]
+  doc_type doc_type [not null]
+  current_version_id integer [not null, ref: > document_versions.id, note: "ON DELETE CASCADE"]
+  updated_at timestamp [not null]     // dernier upload ou dernière restauration
+
+  indexes {
+    (session_id, doc_type) [pk]
+  }
+}
+
+
+// ****************************************************
+//                   CANDIDATURES
+// ****************************************************
+
+Table candidatures {
+  id integer [pk, increment, note: "AUTOINCREMENT ; nomme artefact/<id>.* et debug/<id>/"]
+  session_id integer [not null, ref: > sessions.id, note: "ON DELETE CASCADE"]
+  poste text [not null]
+  type_contrat contract_type [not null]
+  status candidature_status [not null, default: 'a_postuler']
+  source text [not null]
+  url_offre text
+  description_offre text [not null]
+  entreprise text [not null]
+  localisation text [not null]
+  remuneration text
+  notes text
+  cv_path text
+  lettre_motivation_path text
+  cv_reference_version_id integer [ref: > document_versions.id, note: "ON DELETE SET NULL"]
+  lm_reference_version_id integer [ref: > document_versions.id, note: "ON DELETE SET NULL"]
+  created_at timestamp [not null]
+
+  indexes {
+    session_id
+  }
+}
+
+Table contacts {
+  id integer [pk, increment]
+  nom text [not null]
+  role text
+  email text
+  telephone text
+  notes text
+  created_at timestamp [not null]
+
+  Note: "Carnet global : un contact existe sans candidature et peut être lié à plusieurs (candidature_contacts)."
+}
+
+Table candidature_contacts {
+  candidature_id integer [not null, ref: > candidatures.id, note: "ON DELETE CASCADE"]
+  contact_id integer [not null, ref: > contacts.id, note: "ON DELETE CASCADE"]
+  created_at timestamp [not null]
+
+  indexes {
+    (candidature_id, contact_id) [pk]
+    contact_id
+  }
+}
+
+Table interviews {
+  id integer [pk, increment]
+  candidature_id integer [not null, ref: > candidatures.id, note: "ON DELETE CASCADE"]
+  type_entretien interview_type
+  modalite interview_mode
+  date_entretien timestamp
+  lieu text
+  issue interview_outcome [not null, default: 'en_attente']
+  notes text
+  created_at timestamp [not null]
+
+  indexes {
+    candidature_id
+  }
+}
+
+Table interview_contacts {
+  interview_id integer [not null, ref: > interviews.id, note: "ON DELETE CASCADE"]
+  contact_id integer [not null, ref: > contacts.id, note: "ON DELETE CASCADE"]
+
+  indexes {
+    (interview_id, contact_id) [pk]
+  }
+}
+
+Table status_history {
+  id integer [pk, increment]
+  candidature_id integer [not null, ref: > candidatures.id, note: "ON DELETE CASCADE"]
+  event_type event_type [not null]
+  ancien_status candidature_status
+  nouveau_status candidature_status
+  content text
+  interview_id integer [ref: > interviews.id, note: "ON DELETE SET NULL"]
+  changed_at timestamp [not null]
+
+  indexes {
+    candidature_id
+  }
+}
+
+
+// ****************************************************
+//            VALEURS CONTRAINTES (CHECK)
+// ****************************************************
+
+Enum contract_type {
   stage
   alternance
   cdi
   cdd
-  interim   // ajouté en migration 0005
+  interim
   freelance
 }
 
-// Recréée en 0005 (ajout interim), 0014 (ajout ghosting), 0015 (ajout
-// accepte / offre_refusee), 0017 (ajout entretien_passe) : SQLite ne permet
-// pas d'altérer un CHECK.
+Enum session_status {
+  active
+  pause
+  termine
+}
+
+Enum doc_type {
+  cv
+  lettre_motivation
+}
+
 Enum candidature_status {
   a_postuler
   postule
   relance
   entretien
-  entretien_passe // migration 0017 : entretien passé, en attente de retour
-  offre           // statut intermédiaire depuis 0015 : peut encore être accepté ou décliné
+  entretien_passe
+  offre
   refus
   abandon
-  ghosting        // migration 0014
-  accepte         // migration 0015
-  offre_refusee   // migration 0015
-}
-
-Table candidatures {
-  id integer [pk, increment]
-  user_id integer [ref: > users.id, not null]
-  session_id integer [ref: > sessions.id]        // migration 0008
-  poste varchar [not null]
-  type candidature_type
-  status candidature_status [not null, default: 'a_postuler']
-  source varchar              // canal de candidature, voir SOURCE_OPTIONS côté frontend
-  url_offre varchar
-  description_offre text      // texte brut de l'annonce, entrée du pipeline IA
-  entreprise text
-  localisation varchar
-  remuneration varchar
-  date_candidature date       // colonne présente mais jamais écrite par le code actuel
-  next_relance date           // colonne présente mais jamais écrite par le code actuel
-  last_relance date           // colonne présente mais jamais écrite par le code actuel
-  notes text
-  cv_path text                    // migration 0009 : chemin du CV généré/joint, remplace documents.candidature_id
-  lettre_motivation_path text     // migration 0009
-  created_at timestamp
-  updated_at timestamp
-}
-
-// status_history est devenue une timeline unifiée en migration 0014 :
-// event_type n'a pas de CHECK SQL, la validation vit côté Rust
-// (EventType, src-tauri/src/models/event_type.rs) — 15 valeurs possibles :
-// creation, candidature_envoyee, relance, entretien_planifie,
-// entretien_passe, offre_recue, refus_recu, ghosting, desistement,
-// accepter_offre, decliner_offre, message_envoye, message_recu, appel, note.
-Table status_history {
-  id integer [pk, increment]
-  candidature_id integer [ref: > candidatures.id, not null]
-  event_type varchar [not null]        // voir EventType côté Rust, pas de CHECK SQL
-  ancien_status candidature_status
-  nouveau_status candidature_status    // nullable depuis 0014 : un événement ne change pas toujours le statut
-  content text                         // migration 0013 : mail/message associé à l'événement
-  interview_id integer [ref: > interviews.id]  // migration 0014
-  changed_at timestamp
-}
-
-// ============================================
-// Contacts & entretiens
-// ============================================
-
-Table contacts {
-  id integer [pk, increment]
-  candidature_id integer [ref: > candidatures.id, not null]
-  nom varchar
-  role varchar         // "RH", "Manager", "Lead Tech"
-  email varchar
-  telephone varchar
-  notes text
-  created_at timestamp
-  updated_at timestamp
+  ghosting
+  accepte
+  offre_refusee
 }
 
 Enum interview_type {
@@ -189,141 +277,32 @@ Enum interview_type {
   autre
 }
 
-Enum interview_issue {
-  en_attente
-  positif
-  negatif
-}
-
-// Migration 0016 : modalité structurée de l'entretien, distincte de `lieu`
-// qui reste du texte libre (adresse, lien de visio, numéro).
-Enum interview_modalite {
+Enum interview_mode {
   visio
   presentiel
   telephone
 }
 
-Table interviews {
-  id integer [pk, increment]
-  candidature_id integer [ref: > candidatures.id, not null]
-  type interview_type
-  date_entretien timestamp
-  lieu varchar         // texte libre : adresse, lien de visio, numéro
-  modalite interview_modalite  // migration 0016, nullable
-  issue interview_issue [default: 'en_attente']
-  notes text
-  contact_id integer [ref: > contacts.id]  // migration 0014 : contact rencontré
-  created_at timestamp
-  updated_at timestamp
+Enum interview_outcome {
+  en_attente
+  positif
+  negatif
 }
 
-// ============================================
-// Documents (CV / LM) — fichiers sur disque
-// ============================================
-// Table refondue en 0009 (suppression de l'ancienne table documents liée aux
-// candidatures) puis recréée en 0011 avec un rôle différent : un document
-// de référence par type et par session, contenu sur le filesystem, métadonnées
-// et cache d'analyse de style en base. Le document rattaché à une candidature
-// (généré ou joint) est tracé par candidatures.cv_path / lettre_motivation_path,
-// pas par cette table.
-
-Enum document_type {
-  cv
-  lettre_motivation
-}
-
-Table documents {
-  id integer [pk, increment]
-  session_id integer [ref: > sessions.id, not null]
-  doc_type document_type [not null]
-  original_filename varchar [not null]
-  file_path varchar [not null]
-  pdf_path varchar
-  style_analysis text   // cache JSON de l'analyse de style LLM, calculé à la sauvegarde de la référence
-  created_at timestamp
-  updated_at timestamp
-
-  indexes {
-    (session_id, doc_type) [unique]
-  }
-}
-
-// ============================================
-// Emails envoyés depuis l'app
-// ============================================
-
-Enum email_type {
-  candidature
+Enum event_type {
+  creation
+  candidature_envoyee
   relance
-  remerciement
-  reponse
-  autre
-}
-
-Table emails {
-  id integer [pk, increment]
-  candidature_id integer [ref: > candidatures.id, not null]
-  contact_id integer [ref: > contacts.id]
-  type email_type
-  sujet varchar
-  corps text
-  destinataire varchar
-  sent_at timestamp
-  created_at timestamp
-
-  Note: 'email_attachments a été supprimée en migration 0009 : plus de table de\ndocuments partagée à joindre à un email.'
-}
-
-// ============================================
-// Profil : type de contrat des expériences
-// ============================================
-// Distinct de candidature_type : ordre et valeurs légèrement différents
-// (pas de "freelance" ici), ajouté en migration 0002.
-Enum experience_type_contrat {
-  stage
-  alternance
-  interim
-  cdd
-  cdi
-}
-
-Enum session_statut {
-  active
-  pause
-  termine
-}
-
-// ============================================
-// Embeddings (matching) — table polymorphe, non utilisée par le code actuel
-// ============================================
-// Prévue pour un matching par similarité vectorielle (modèle bge-m3,
-// cosinus en brute-force). Le matching profil ↔ offre passe aujourd'hui par
-// un appel LLM (src-tauri/src/llm/matching.rs), pas par cette table.
-
-Table embeddings {
-  id integer [pk, increment]
-  entity_type varchar [not null]   // "projet", "experience", "candidature"
-  entity_id integer [not null]     // FK logique (pas de contrainte stricte)
-  model varchar [not null]         // "bge-m3"
-  dimensions integer
-  vector blob [not null]           // vecteur sérialisé
-  created_at timestamp
-
-  indexes {
-    (entity_type, entity_id)
-  }
-}
-
-// ============================================
-// Paramètres de l'app (clé-valeur)
-// ============================================
-// Utilisée par src-tauri/src/db/settings.rs : get/set génériques, plus
-// des résolveurs typés pour le modèle LLM et le thème, lus/écrits par la
-// page Settings (get_llm_model / set_llm_model / get_theme / set_theme).
-
-Table settings {
-  id integer [pk, increment]
-  cle varchar [not null, unique]   // "llm_model", "theme"
-  valeur varchar
-  updated_at timestamp
+  entretien_planifie
+  entretien_passe
+  offre_recue
+  refus_recu
+  ghosting
+  desistement
+  accepter_offre
+  decliner_offre
+  message_envoye
+  message_recu
+  appel
+  note
 }
