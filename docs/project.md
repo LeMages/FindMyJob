@@ -306,7 +306,7 @@ The result is managed as `AppContext`: either the `AppState`, or the initializat
 - Offer import from a link (JSON-LD, then page text + LLM), from a page captured in the FindMyJob window, or from pasted text, prefilling the new-application form; choice screen on failure, non-blocking duplicate warning.
 - Interview planning (week/month views).
 - Settings: LLM model selection, Anthropic API key (system keyring in PROD with save/delete, read-only `.env` state in DEV), connection test (run again after a key is saved), fonts, theme.
-- CI/CD: lint + clippy on every PR to `dev`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
+- CI/CD: lint, clippy and tests (Linux + Windows) on every PR to `dev`, full Tauri build check on PRs to `staging`/`main`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
 
 ### Planned / out of MVP scope
 
@@ -324,7 +324,8 @@ Conventional Commits drive automated versioning: `<type>(<scope>): <description>
 
 ### Branch flow and CI (as actually configured)
 
-- `feature/*` → PR to `dev` — `.github/workflows/ci.yml`: `frontend` job (`npm run lint` + `npm run build`, working directory `crates/desktop`), `rust` job (`cargo clippy --workspace -- -D warnings` + `cargo test --workspace`, on `ubuntu-22.04`; the desktop crate compiles Typst and a bundled SQLite).
+- `feature/*` → PR to `dev` — `.github/workflows/ci.yml`: `frontend` job (`npm run lint` + `npm run build`, working directory `crates/desktop`), `rust` job (`cargo clippy --workspace --all-targets -- -D warnings` + `cargo test --workspace`, matrix `ubuntu-22.04` + `windows-latest`, `fail-fast: false`, Cargo cache per OS; the desktop crate compiles Typst and a bundled SQLite). The Rust toolchain is pinned by `rust-toolchain.toml` (exact stable version, clippy, rustfmt, macOS targets) and installed with `rustup toolchain install`.
+- PR to `staging` or `main` — `.github/workflows/build-check.yml`: full Tauri build (`npm run tauri build`) on the same matrix and with the same setup as `release.yml`, without version injection, publication or upload.
 - `dev` → PR to `staging`, `staging` → PR to `main` — `.github/workflows/gatekeeper.yml` blocks any other source branch (only `staging` can merge into `main`, only `dev` can merge into `staging`).
 - Push to `main` — `.github/workflows/release.yml`: `semantic-release` (`.releaserc.json`) determines the version, then a Tauri build matrix (macOS ARM64/x64, Ubuntu 22.04, Windows) and a GitHub release if a version was computed.
 
