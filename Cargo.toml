@@ -25,6 +25,8 @@ keyring = { version = "4.2", default-features = false, features = ["v1"] }
 tauri = { version = "2", features = [] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+# Tests uniquement : serveur HTTP local des tests d'import d'offre.
+wiremock = "0.6"
 
 [profile.dev]
 incremental = true

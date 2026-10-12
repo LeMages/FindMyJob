@@ -38,3 +38,4 @@ base64 = { workspace = true }
 # récupération sur un serveur local) ; jamais activée par `[dependencies]`.
 findmyjob-core = { path = "../../core", features = ["test-support"] }
 tokio = { workspace = true, features = ["rt"] }
+wiremock = { workspace = true }

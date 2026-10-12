@@ -1,0 +1,29 @@
+{
+  "identity": {
+    "prenom": "Camille",
+    "nom": "Exemple",
+    "email": "camille@exemple.invalid",
+    "telephone": "00 00 00 00 00",
+    "adresse": "Exempleville",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "permis": false
+  },
+  "lang": "fr",
+  "recipient": { "company": "Exemple Corp", "location": "Exempleville" },
+  "date": "1 janvier 2026",
+  "subject": "Candidature exemple pour un stage",
+  "paragraphs": [
+    "Exemple de premier paragraphe qui présente la candidate et explique pourquoi l'entreprise l'intéresse particulièrement.",
+    "Exemple de second paragraphe qui relie une expérience passée aux missions décrites dans l'offre de stage.",
+    "Exemple de dernier paragraphe qui propose un entretien pour échanger sur le poste."
+  ],
+  "labels": {
+    "subject_prefix": "Objet :",
+    "salutation": "Madame, Monsieur,",
+    "closing": "Je vous prie d'agréer, Madame, Monsieur, mes salutations distinguées.",
+    "date_prefix": "le"
+  },
+  "detected_lang": "fr"
+}

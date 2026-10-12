@@ -83,7 +83,7 @@ crates/desktop/
       offer_extraction.rs, url_normalize.rs   import cascade, duplicate detection
       commands/                        one #[tauri::command] file per domain, each calling a service or a db function
       models/mod.rs                    `pub use findmyjob_core::models::*;` — no local duplication
-    tests/                             SQLite in-memory tests of the db layer and of the file-handling services
+    tests/                             SQLite in-memory tests of the db layer, service-level tests (offer import, generation, lifecycles, end-to-end); shared/ helpers (seed, fake keyring, fake LLM, local offer server, test AppState), fixtures/ (see its README)
     tauri.conf.json, capabilities/, icons/
 ```
 
@@ -209,7 +209,7 @@ No LLM produces Typst during generation. **Compilation** uses `typst-as-lib` (`d
 
 ### HTTP client (`crates/core/src/llm/client.rs`)
 
-Raw HTTP calls to Anthropic's Messages API (`https://api.anthropic.com/v1/messages`, header `anthropic-version: 2023-06-01`) via `reqwest` — there is no official Rust SDK for the Anthropic API. `core` never reads the key itself: every `llm` function receives a `ClaudeTarget { api_key, model }` (`core::llm::target`) from its caller. `ApiKey` (`core::llm::api_key`) has no `Display` nor `Serialize` and a masked `Debug`, so the key cannot leak into a trace or an error message.
+Raw HTTP calls to Anthropic's Messages API (`https://api.anthropic.com/v1/messages`, header `anthropic-version: 2023-06-01`) via `reqwest` — there is no official Rust SDK for the Anthropic API. `core` never reads the key itself: every `llm` function receives a `ClaudeTarget { api_key, model, caller }` (`core::llm::target`) from its caller. `caller` is an `Arc<dyn LlmCaller>` (`core::llm::caller`): the app always uses `AnthropicCaller`, the HTTP implementation in `client.rs` (held by `AppState.llm`), and tests substitute canned answers. The provider stays Anthropic-only; there is no configurable base URL. `ApiKey` (`core::llm::api_key`) has no `Display` nor `Serialize` and a masked `Debug`, so the key cannot leak into a trace or an error message.
 
 ### API key (`services/api_key.rs`, `services/claude_target.rs`, `secrets/`)
 
@@ -339,6 +339,12 @@ Everything runs on the user's machine, in one process; there is no server and no
 
 ## 13. Known gaps and points of attention
 
-- CI's `rust` job runs `cargo test --workspace` on every PR. Coverage: HTML/Markdown-to-text conversion, the offer import's pure logic (synthetic HTML, no network), the documents pipeline's pure logic (including template compilation on a fixture), the whole `db` layer on an in-memory SQLite database (CRUD, cascades, constraints, duplicates, timestamp ordering, one timestamp per transaction) and the file-handling services (path resolution, interrupted-generation cleanup, session folder removal), and the API key rules on an in-memory fake keyring (source per mode, missing key, save/delete, DEV refusal, masking); no test touches the real keyring. No test calls the LLM or exercises the Tauri commands themselves.
+- CI's `rust` job runs `cargo test --workspace` on every PR. Coverage: HTML/Markdown-to-text conversion, the offer import's pure logic (synthetic HTML, no network), the documents pipeline's pure logic (including template compilation on a fixture), the whole `db` layer on an in-memory SQLite database (CRUD, cascades, constraints, duplicates, timestamp ordering, one timestamp per transaction) and the file-handling services (path resolution, interrupted-generation cleanup, session folder removal), and the API key rules on an in-memory fake keyring (source per mode, missing key, save/delete, DEV refusal, masking); no test touches the real keyring. Service-level tests, at the level the Tauri commands call, add the following:
+  - offer import by link and by capture: real reduced pages served by a local `wiremock` server (127.0.0.1, random port), finalized fields, typed failures;
+  - CV/LM generation: profile-sourced `data.json`, real Typst compilation, one-page CV, prose lint, empty-prose retries, failure cleanup;
+  - profile, session and application-deletion lifecycles;
+  - one end-to-end scenario.
+
+  The Claude API is replaced by `tests/shared/fake_llm.rs`, an `LlmCaller` with canned answers. Loopback fetching (`fetch_html_allowing_loopback`) is compiled only under `findmyjob-core`'s `test-support` feature, which only `findmyjob`'s dev-dependencies enable. No test reaches the network, the Claude API, `.env` or `dev-data`. The Tauri commands themselves and the capture window remain untested.
 - Generation progress is in memory only: closing the app during a generation loses it, and the half-created application is removed at the next startup (there is no way to resume a generation).
 - Only the profile was carried over from the PostgreSQL version: sessions, references and applications were not migrated.

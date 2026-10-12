@@ -20,7 +20,7 @@ The Rust side of `crates/desktop` is the single source of truth for business rul
 | What | Where |
 |---|---|
 | Shared DTOs (serde structs crossing the IPC bridge) | `crates/core/src/models/*.rs`, one file per domain |
-| Claude API client and prompt assembly | `crates/core/src/llm/*.rs` (`client.rs` is the raw HTTP client; every call takes a `ClaudeTarget` = key + model, `core` never reads the key itself) |
+| Claude API client and prompt assembly | `crates/core/src/llm/*.rs` (`client.rs` is the raw HTTP client; every call takes a `ClaudeTarget` = key + model + caller, `core` never reads the key itself; the caller is the `LlmCaller` trait in `caller.rs`, always `AnthropicCaller` in the app, held by `AppState.llm`) |
 | Anthropic API key (DEV `.env` / PROD system keyring) | `crates/desktop/src-tauri/src/services/api_key.rs` (`ApiKeyAccess::resolve`, the only place that picks the source), `services/claude_target.rs` (key + model for every Claude call), `secrets/` (`SecretStore` trait, keyring implementation) |
 | Diagnostic traces (stderr + log file) | `crates/core/src/trace_log.rs` — use `trace_log::log`, never `eprintln!` |
 | Database access (SQLite via sqlx) | `crates/desktop/src-tauri/src/db/*.rs`, one file per table; `init.rs` (pool, migrations), `transaction.rs` (`begin_write`) |
@@ -105,7 +105,20 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
 - **Offer import is user-triggered, one page at a time.** No crawl, no retry loop, no proxy/identity rotation/captcha solving. Only a validated public `http(s)` URL is fetched (`core::scraping::url_validation`, DNS filtered by `safe_resolver`). Failures are typed (`ScrapingFailure`, serialized as a code in `AppError::Scraping`) and the UI chooses the message — don't hardcode user-facing advice in the backend. Every description, whatever its path, goes through `core::scraping::finalize::finalize_fields`.
 - **The capture window has no IPC access.** The `capture` window is deliberately absent from every capability; its HTML is read from Rust with `eval_with_callback`. Never add it to a capability or give it a `remote` capability, and keep validating the URL before loading it.
 - **The API key source follows the run mode.** DEV reads `ANTHROPIC_API_KEY` from the `.env` and never opens the keyring; PROD reads the system keyring (`keyring` crate, `v1` feature only; service = app identifier, account `anthropic_api_key`) and ignores any `.env` key. Code that calls Claude gets its `ClaudeTarget` from `ClaudeTargetSource::resolve`: never read the key elsewhere, never copy it into the environment, never log it, send it to the frontend (only its last 4 characters) or put it in an error. An unavailable keyring is an explicit error, never a fallback to a file. Tests use the in-memory `tests/shared/fake_secret_store.rs`, never the real keyring.
-- **Test coverage is narrow.** `cargo test` covers HTML/Markdown-to-text conversion, the offer import's pure logic (synthetic HTML fixtures, no network), the documents pipeline's pure logic, the `db` layer on in-memory SQLite and the file-handling services; nothing tests the LLM calls or the Tauri commands themselves.
+- **Test coverage.** `cargo test` covers HTML/Markdown-to-text conversion, the offer import's pure logic, the documents pipeline's pure logic, the `db` layer on in-memory SQLite and the file-handling services. It also runs service-level tests, at the level the Tauri commands call:
+  - offer import by link (real reduced pages served by a local `wiremock` server, typed failures) and by capture (`offer_import.rs`);
+  - CV/LM generation with real Typst compilation, empty-prose retries and failure cleanup (`generation.rs`);
+  - profile, session and application-deletion lifecycles;
+  - one end-to-end scenario (`end_to_end.rs`).
+
+  Helpers live in `tests/shared/`:
+  - `fake_llm.rs` is an `LlmCaller` with canned answers from `tests/fixtures/llm/`, routed by output schema;
+  - `offer_server.rs` is the local HTTP server;
+  - `test_state.rs` builds an `AppState` (in-memory pool, temp data folder, fake keyring, fake LLM), seeds a profile and test references, and waits for a generation.
+
+  Fixtures and their sources are listed in `tests/fixtures/README.md`. Loopback fetching exists only in `core::scraping::fetch::fetch_html_allowing_loopback`, compiled under `findmyjob-core`'s `test-support` feature. Only `findmyjob`'s `[dev-dependencies]` enable that feature, so no app build has it; tests inject it through `services::scraping::scrape_offer_with`.
+
+  No test calls the network, the Claude API or the real keyring, or reads `.env` or `dev-data`. The Tauri commands themselves (thin wrappers) and the capture window are not tested.
 
 ## What NOT to do
 
