@@ -68,7 +68,7 @@ The Rust side of `crates/desktop` is the single source of truth for business rul
 For a change that touches the database and needs to reach the UI, follow the chain in order:
 
 1. **Migration** — add a `.sql` file in `db/migrations/sqlite/`, update `db/schema.dbml`.
-2. **DB module** — add/extend the table's file in `crates/desktop/src-tauri/src/db/`, with tests in `crates/desktop/src-tauri/tests/` (in-memory SQLite, `tests/shared/seed.rs`).
+2. **DB module** — add/extend the table's file in `crates/desktop/src-tauri/src/db/`, with tests in `crates/desktop/src-tauri/tests/integration/` (in-memory SQLite, `tests/integration/shared/seed.rs`).
 3. **Service** — if the logic is more than one DB call (rules, orchestration, files), put it in `crates/desktop/src-tauri/src/services/`.
 4. **Tauri command** — add the command in `crates/desktop/src-tauri/src/commands/<resource>.rs`, calling the service or db function via `ctx.state()?`; register it in the `generate_handler!` list in `crates/desktop/src-tauri/src/lib.rs`.
 5. **TypeScript type** — mirror the DTO by hand in `crates/desktop/src/types/index.ts`.
@@ -104,16 +104,19 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
 - **A reference version is all or nothing.** Its row is inserted in a write transaction before its files are written; any failure rolls back and removes the folder (`documents/storage.rs::persist_version`).
 - **Offer import is user-triggered, one page at a time.** No crawl, no retry loop, no proxy/identity rotation/captcha solving. Only a validated public `http(s)` URL is fetched (`core::scraping::url_validation`, DNS filtered by `safe_resolver`). Failures are typed (`ScrapingFailure`, serialized as a code in `AppError::Scraping`) and the UI chooses the message — don't hardcode user-facing advice in the backend. Every description, whatever its path, goes through `core::scraping::finalize::finalize_fields`.
 - **The capture window has no IPC access.** The `capture` window is deliberately absent from every capability; its HTML is read from Rust with `eval_with_callback`. Never add it to a capability or give it a `remote` capability, and keep validating the URL before loading it.
-- **The API key source follows the run mode.** DEV reads `ANTHROPIC_API_KEY` from the `.env` and never opens the keyring; PROD reads the system keyring (`keyring` crate, `v1` feature only; service = app identifier, account `anthropic_api_key`) and ignores any `.env` key. Code that calls Claude gets its `ClaudeTarget` from `ClaudeTargetSource::resolve`: never read the key elsewhere, never copy it into the environment, never log it, send it to the frontend (only its last 4 characters) or put it in an error. An unavailable keyring is an explicit error, never a fallback to a file. Tests use the in-memory `tests/shared/fake_secret_store.rs`, never the real keyring.
+- **The API key source follows the run mode.** DEV reads `ANTHROPIC_API_KEY` from the `.env` and never opens the keyring; PROD reads the system keyring (`keyring` crate, `v1` feature only; service = app identifier, account `anthropic_api_key`) and ignores any `.env` key. Code that calls Claude gets its `ClaudeTarget` from `ClaudeTargetSource::resolve`: never read the key elsewhere, never copy it into the environment, never log it, send it to the frontend (only its last 4 characters) or put it in an error. An unavailable keyring is an explicit error, never a fallback to a file. Tests use the in-memory `tests/integration/shared/fake_secret_store.rs`, never the real keyring.
 - **Test coverage.** `cargo test` covers HTML/Markdown-to-text conversion, the offer import's pure logic, the documents pipeline's pure logic, the `db` layer on in-memory SQLite and the file-handling services. It also runs service-level tests, at the level the Tauri commands call:
   - offer import by link (real reduced pages served by a local `wiremock` server, typed failures) and by capture (`offer_import.rs`);
   - CV/LM generation with real Typst compilation, empty-prose retries and failure cleanup (`generation.rs`);
   - profile, session and application-deletion lifecycles;
   - one end-to-end scenario (`end_to_end.rs`).
 
-  Helpers live in `tests/shared/`:
+  Each crate has a single integration test binary, `tests/integration/` (`main.rs` declares one module per test file), to keep disk use and link time down. Every new integration test is a module of `tests/integration/`, declared in its `main.rs` — never a new file at the root of `tests/`. All integration tests of a crate run in one process: anything shared on disk must be unique per test, not per process.
+
+  Desktop helpers live in `crates/desktop/src-tauri/tests/integration/shared/` (core's shared fixtures in `crates/core/tests/integration/common/`):
   - `fake_llm.rs` is an `LlmCaller` with canned answers from `tests/fixtures/llm/`, routed by output schema;
   - `offer_server.rs` is the local HTTP server;
+  - `temp_dir.rs` gives each test a unique temporary folder;
   - `test_state.rs` builds an `AppState` (in-memory pool, temp data folder, fake keyring, fake LLM), seeds a profile and test references, and waits for a generation.
 
   Fixtures and their sources are listed in `tests/fixtures/README.md`. Loopback fetching exists only in `core::scraping::fetch::fetch_html_allowing_loopback`, compiled under `findmyjob-core`'s `test-support` feature. Only `findmyjob`'s `[dev-dependencies]` enable that feature, so no app build has it; tests inject it through `services::scraping::scrape_offer_with`.

@@ -1,6 +1,6 @@
 # Fixtures des tests desktop
 
-Aucune fixture ne contient de script exécutable, de traceur ni de donnée personnelle. Les tests ne vont jamais chercher ces pages sur Internet : elles sont servies par un serveur local (`tests/shared/offer_server.rs`) ou passées directement aux services.
+Aucune fixture ne contient de script exécutable, de traceur ni de donnée personnelle. Les tests ne vont jamais chercher ces pages sur Internet : elles sont servies par un serveur local (`tests/integration/shared/offer_server.rs`) ou passées directement aux services.
 
 ## `offers/` : pages d'offres
 
@@ -21,7 +21,7 @@ La référence déposée par les tests (`test_state::reference_source`) est le t
 
 ## `llm/` : réponses figées du modèle
 
-Une réponse par étape, renvoyée par `tests/shared/fake_llm.rs` (l'étape est reconnue d'après le schéma de sortie demandé) :
+Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l'étape est reconnue d'après le schéma de sortie demandé) :
 
 | Fichier | Étape | Particularité |
 |---|---|---|
