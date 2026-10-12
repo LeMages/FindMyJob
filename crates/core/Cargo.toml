@@ -6,6 +6,12 @@ edition = "2021"
 [lib]
 name = "findmyjob_core"
 
+[features]
+# Exceptions réservées aux tests (ex. récupération sur un serveur local de
+# bouclage). Activée seulement par les dev-dependencies de `findmyjob` :
+# jamais présente dans un build de l'application.
+test-support = []
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }

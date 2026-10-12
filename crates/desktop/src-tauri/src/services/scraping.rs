@@ -22,11 +22,32 @@ use findmyjob_core::scraping::url_validation::validate_offer_url;
 /// Champs extraits, `AppError::Validation` si le lien est vide, ou l'échec
 /// typé de récupération (`AppError::Scraping`).
 pub async fn scrape_offer(claude: ClaudeTargetSource<'_>, url: &str) -> Result<OfferExtraction, AppError> {
+    scrape_offer_with(claude, url, fetch_html).await
+}
+
+/// [`scrape_offer`] avec la fonction de récupération en paramètre.
+/// L'application passe toujours [`fetch_html`] ; les tests y passent la
+/// variante qui vise leur serveur local.
+///
+/// # Arguments
+///
+/// * `claude` - Source de la clé API et du modèle configuré.
+/// * `url` - Lien de l'offre.
+/// * `fetch` - Récupère le HTML d'une URL déjà non vide.
+///
+/// # Returns
+///
+/// Champs extraits, `AppError::Validation` si le lien est vide, ou l'échec
+/// typé de récupération (`AppError::Scraping`).
+pub async fn scrape_offer_with<F>(claude: ClaudeTargetSource<'_>, url: &str, fetch: F) -> Result<OfferExtraction, AppError>
+where
+    F: AsyncFnOnce(&str) -> Result<String, AppError>,
+{
     let url = url.trim();
     if url.is_empty() {
         return Err(AppError::Validation("L'URL de l'offre est requise.".to_string()));
     }
-    let html = fetch_html(url).await?;
+    let html = fetch(url).await?;
     run_cascade(&html, claude).await
 }
 

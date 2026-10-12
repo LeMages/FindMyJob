@@ -15,6 +15,7 @@ use std::sync::Arc;
 // Importation des modules internes
 use fake_secret_store::FakeSecretStore;
 use findmyjob_core::error::AppError;
+use findmyjob_core::llm::AnthropicCaller;
 use findmyjob_core::models::CreateCandidatureInput;
 use findmyjob_lib::app_state::AppState;
 use findmyjob_lib::documents;
@@ -96,6 +97,8 @@ async fn supprimer_une_session_supprime_son_dossier() {
         capture_profile_dir: data_dir.join("capture_webview"),
         progress: ProgressStore::new(),
         api_key: ApiKeyAccess::new(RunMode::Prod, Arc::new(FakeSecretStore::default()), || None),
+        // Jamais appelé : supprimer une session ne passe pas par Claude.
+        llm: Arc::new(AnthropicCaller),
     };
 
     sessions::delete(&state, sid).await.unwrap();

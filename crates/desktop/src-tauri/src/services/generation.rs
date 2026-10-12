@@ -68,6 +68,7 @@ async fn run(state: &AppState, candidature_id: i64, session_id: i64, description
         candidature_id,
         description_offre,
         api_key: &state.api_key,
+        llm: &state.llm,
     };
     let progress = state.progress.clone();
     let generated = pipeline::generate_documents(&state.pool, &state.fonts_dir, request, |step, label| {

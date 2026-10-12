@@ -12,6 +12,7 @@ use reqwest::cookie::Jar;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, ACCEPT_LANGUAGE, CONTENT_TYPE};
 use reqwest::redirect::Policy;
 use reqwest::{Client, Response};
+use url::Url;
 
 // Importation des modules internes
 use crate::error::AppError;
@@ -57,11 +58,82 @@ pub const MAX_RESPONSE_BYTES: usize = 5 * 1024 * 1024;
 /// (URL invalide, offre introuvable, accès refusé, délai dépassé, erreur
 /// réseau, contenu non HTML, page trop lourde, page vide).
 pub async fn fetch_html(url: &str) -> Result<String, AppError> {
+    fetch_with_policy(url, AddressPolicy::PublicOnly).await
+}
+
+/// Variante de [`fetch_html`] qui accepte aussi une IP littérale de bouclage
+/// (`127.0.0.1`, `::1`), pour viser un serveur HTTP lancé par les tests.
+///
+/// Compilée seulement avec la feature `test-support`, activée uniquement par
+/// les dev-dependencies : l'application ne peut jamais contacter le
+/// bouclage. Tout le reste (en-têtes, délais, statuts, type de contenu,
+/// plafond de taille, revalidation des redirections) est commun.
+///
+/// # Arguments
+///
+/// * `url` - URL de l'offre à récupérer.
+///
+/// # Returns
+///
+/// Le HTML de la page, ou `AppError::Scraping` avec la raison typée.
+#[cfg(feature = "test-support")]
+pub async fn fetch_html_allowing_loopback(url: &str) -> Result<String, AppError> {
+    fetch_with_policy(url, AddressPolicy::PublicOrLoopback).await
+}
+
+/// Adresses que la récupération a le droit de contacter.
+#[derive(Clone, Copy)]
+enum AddressPolicy {
+    /// Adresses publiques uniquement : le seul cas de l'application.
+    PublicOnly,
+    /// Adresses publiques et IP littérales de bouclage (tests uniquement).
+    #[cfg(feature = "test-support")]
+    PublicOrLoopback,
+}
+
+impl AddressPolicy {
+    /// Valide une URL saisie selon la politique.
+    fn validate(self, raw: &str) -> Result<Url, AppError> {
+        match self {
+            AddressPolicy::PublicOnly => validate_offer_url(raw),
+            #[cfg(feature = "test-support")]
+            AddressPolicy::PublicOrLoopback => match Url::parse(raw.trim()) {
+                Ok(url) if is_loopback_literal(&url) => Ok(url),
+                _ => validate_offer_url(raw),
+            },
+        }
+    }
+
+    /// Indique si une cible de redirection est autorisée par la politique.
+    fn allows(self, url: &Url) -> bool {
+        match self {
+            AddressPolicy::PublicOnly => is_allowed_url(url),
+            #[cfg(feature = "test-support")]
+            AddressPolicy::PublicOrLoopback => is_allowed_url(url) || is_loopback_literal(url),
+        }
+    }
+}
+
+/// URL `http(s)` dont l'hôte est une IP littérale de bouclage. Une IP
+/// littérale n'est jamais résolue : le résolveur filtrant n'intervient pas.
+#[cfg(feature = "test-support")]
+fn is_loopback_literal(url: &Url) -> bool {
+    let scheme_ok = matches!(url.scheme(), "http" | "https");
+    let loopback = match url.host() {
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        _ => false,
+    };
+    scheme_ok && loopback
+}
+
+/// Récupération commune à toutes les politiques d'adresses.
+async fn fetch_with_policy(url: &str, policy: AddressPolicy) -> Result<String, AppError> {
     // ------------------------------------------------------------------
     // 1. Validation de l'URL puis requête unique
     // ------------------------------------------------------------------
-    let url = validate_offer_url(url)?;
-    let client = build_client()?;
+    let url = policy.validate(url)?;
+    let client = build_client(policy)?;
     let response = client.get(url.clone()).send().await.map_err(|e| {
         let failure = classify_transport_error(&e);
         trace_log::log(&format!("[scraping::fetch] {url} : {failure} ({e})"));
@@ -95,17 +167,17 @@ pub async fn fetch_html(url: &str) -> Result<String, AppError> {
 
 /// Construit un client neuf pour une récupération : cookie store vierge,
 /// résolveur DNS filtrant, redirections bornées et revalidées à chaque saut.
-fn build_client() -> Result<Client, AppError> {
+fn build_client(policy: AddressPolicy) -> Result<Client, AppError> {
     let mut headers = HeaderMap::new();
     headers.insert(ACCEPT, HeaderValue::from_static(ACCEPT_VALUE));
     headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static(ACCEPT_LANGUAGE_VALUE));
 
     // Une redirection vers une IP littérale privée échapperait au résolveur
     // (aucune résolution DNS) : chaque cible est donc revalidée ici.
-    let redirect_policy = Policy::custom(|attempt| {
+    let redirect_policy = Policy::custom(move |attempt| {
         if attempt.previous().len() >= MAX_REDIRECTS {
             attempt.error("trop de redirections")
-        } else if !is_allowed_url(attempt.url()) {
+        } else if !policy.allows(attempt.url()) {
             attempt.error("redirection vers une adresse refusée")
         } else {
             attempt.follow()

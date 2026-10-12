@@ -13,6 +13,7 @@
 
 // Importation des modules standard
 use std::path::Path;
+use std::sync::Arc;
 
 // Importation des crates externes
 use sqlx::SqlitePool;
@@ -37,7 +38,7 @@ use findmyjob_core::llm::lm_writing::{write_lm, LmWritingInput};
 use findmyjob_core::llm::matching::match_profile;
 use findmyjob_core::llm::offer::analyze_offer;
 use findmyjob_core::llm::writing_loop::WritingOutcome;
-use findmyjob_core::llm::ClaudeTarget;
+use findmyjob_core::llm::{ClaudeTarget, LlmCaller};
 use findmyjob_core::models::{
     CvContent, CvExampleData, CvLabels, LmContent, LmExampleData, LmLabels, MatchingResult, ProfileDto,
     Recipient,
@@ -81,12 +82,14 @@ pub struct GeneratedDocuments {
 /// * `candidature_id` - Candidature (fournit le destinataire).
 /// * `description_offre` - Texte brut de l'offre.
 /// * `api_key` - Accès à la clé API Anthropic.
+/// * `llm` - Exécutant des appels à Claude.
 pub struct GenerationRequest<'a> {
     pub data_dir: &'a Path,
     pub session_id: i64,
     pub candidature_id: i64,
     pub description_offre: &'a str,
     pub api_key: &'a ApiKeyAccess,
+    pub llm: &'a Arc<dyn LlmCaller>,
 }
 
 /// Construit le destinataire de la lettre depuis la candidature.
@@ -194,7 +197,7 @@ async fn prepare(
     // 1. Profil, modèle, références templatisées, destinataire
     // ------------------------------------------------------------------
     let profile = db::profile::build_profile(pool).await?;
-    let target = ClaudeTargetSource { pool, api_key: request.api_key }.resolve().await?;
+    let target = ClaudeTargetSource { pool, api_key: request.api_key, llm: request.llm }.resolve().await?;
     let cv_ref: ReferenceTemplate<CvExampleData> =
         load_reference(pool, request.data_dir, request.session_id, "cv", "CV").await?;
     let lm_ref: ReferenceTemplate<LmExampleData> =

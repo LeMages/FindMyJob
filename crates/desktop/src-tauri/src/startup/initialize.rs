@@ -20,6 +20,7 @@ use crate::startup::env_file;
 use crate::startup::run_mode::{self, RunLocation, SystemDirs};
 use crate::storage_paths;
 use findmyjob_core::error::AppError;
+use findmyjob_core::llm::AnthropicCaller;
 use findmyjob_core::trace_log;
 
 /// Nom de la variable du `.env` qui porte le mode d'exécution.
@@ -167,6 +168,7 @@ async fn build_state(location: RunLocation, api_key: ApiKeyAccess) -> Result<App
         capture_profile_dir: location.capture_profile_dir,
         progress: ProgressStore::new(),
         api_key,
+        llm: Arc::new(AnthropicCaller),
     })
 }
 

@@ -6,6 +6,7 @@
 
 // Importation des modules standard
 use std::path::PathBuf;
+use std::sync::Arc;
 
 // Importation des crates externes
 use sqlx::SqlitePool;
@@ -15,6 +16,7 @@ use crate::progress::ProgressStore;
 use crate::services::api_key::ApiKeyAccess;
 use crate::services::claude_target::ClaudeTargetSource;
 use findmyjob_core::error::AppError;
+use findmyjob_core::llm::LlmCaller;
 
 /// Ressources partagées par les commandes et les tâches de fond. Clonable à
 /// coût constant (pool et store reposent sur des `Arc`), pour être déplacé
@@ -28,6 +30,7 @@ use findmyjob_core::error::AppError;
 /// * `capture_profile_dir` - Profil WebView de la fenêtre de capture (selon le mode d'exécution).
 /// * `progress` - Progression en mémoire des générations de documents.
 /// * `api_key` - Accès à la clé API Anthropic selon le mode d'exécution.
+/// * `llm` - Exécutant des appels à Claude (`AnthropicCaller` dans l'application).
 #[derive(Clone)]
 pub struct AppState {
     pub pool: SqlitePool,
@@ -36,6 +39,7 @@ pub struct AppState {
     pub capture_profile_dir: PathBuf,
     pub progress: ProgressStore,
     pub api_key: ApiKeyAccess,
+    pub llm: Arc<dyn LlmCaller>,
 }
 
 impl AppState {
@@ -43,9 +47,10 @@ impl AppState {
     ///
     /// # Returns
     ///
-    /// `ClaudeTargetSource` adossée au pool et à l'accès à la clé de l'état.
+    /// `ClaudeTargetSource` adossée au pool, à l'accès à la clé et à
+    /// l'exécutant des appels de l'état.
     pub fn claude(&self) -> ClaudeTargetSource<'_> {
-        ClaudeTargetSource { pool: &self.pool, api_key: &self.api_key }
+        ClaudeTargetSource { pool: &self.pool, api_key: &self.api_key, llm: &self.llm }
     }
 }
 

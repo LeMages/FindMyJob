@@ -34,4 +34,7 @@ typst-syntax = { workspace = true }
 base64 = { workspace = true }
 
 [dev-dependencies]
+# `test-support` : exceptions compilées pour les tests seulement (ex.
+# récupération sur un serveur local) ; jamais activée par `[dependencies]`.
+findmyjob-core = { path = "../../core", features = ["test-support"] }
 tokio = { workspace = true, features = ["rt"] }

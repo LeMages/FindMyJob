@@ -4,6 +4,10 @@
 //! `reqwest` en HTTP brut. Ce module ne connaît que le transport (auth,
 //! requête, désérialisation minimale) — la construction du prompt et la
 //! logique métier vivent dans les modules appelants (ex. `llm::style`).
+//!
+//! Les fonctions publiques délèguent au [`LlmCaller`] porté par le
+//! [`ClaudeTarget`] ; [`AnthropicCaller`] est l'implémentation réelle, qui
+//! fait l'appel HTTP.
 
 // Importation des modules standard
 use std::sync::LazyLock;
@@ -15,6 +19,7 @@ use serde::Deserialize;
 
 // Importation des modules internes
 use crate::error::AppError;
+use crate::llm::caller::{LlmCaller, LlmFuture, LlmRequest, LlmResponse};
 use crate::llm::target::ClaudeTarget;
 use crate::trace_log;
 
@@ -134,6 +139,40 @@ pub async fn call_claude_with_tokens_meta(
     max_tokens: u32,
     target: &ClaudeTarget,
 ) -> Result<(String, Option<String>), AppError> {
+    let request = LlmRequest {
+        system,
+        user_message,
+        output_schema,
+        max_tokens,
+        api_key: &target.api_key,
+        model: &target.model,
+    };
+    let response = target.caller.call(request).await?;
+    Ok((response.text, response.stop_reason))
+}
+
+/// Implémentation réelle de [`LlmCaller`] : appel HTTP à l'API Messages
+/// d'Anthropic. C'est la seule utilisée par l'application.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AnthropicCaller;
+
+impl LlmCaller for AnthropicCaller {
+    fn call<'a>(&'a self, request: LlmRequest<'a>) -> LlmFuture<'a> {
+        Box::pin(send_request(request))
+    }
+}
+
+/// Envoie la requête à l'API Messages et extrait le texte de la réponse.
+///
+/// # Arguments
+///
+/// * `request` - Prompts, schéma optionnel, plafond de tokens, clé et modèle.
+///
+/// # Returns
+///
+/// Le texte du premier bloc `text` de la réponse, et le `stop_reason` associé.
+async fn send_request(request: LlmRequest<'_>) -> Result<LlmResponse, AppError> {
+    let LlmRequest { system, user_message, output_schema, max_tokens, api_key, model } = request;
     // ------------------------------------------------------------------
     // 1. Construction du corps de la requête — la clé est fournie par
     //    l'appelant : `core` ignore si elle vient du `.env` ou du trousseau
@@ -144,7 +183,7 @@ pub async fn call_claude_with_tokens_meta(
     // même budget de tokens que la sortie visible — l'activer par défaut
     // tronquait les réponses avant même d'atteindre le contenu utile.
     let mut body = serde_json::json!({
-        "model": target.model,
+        "model": model,
         "max_tokens": max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": user_message}],
@@ -164,7 +203,7 @@ pub async fn call_claude_with_tokens_meta(
         .map_err(|e| AppError::Config(format!("Impossible d'initialiser le client HTTP Claude : {e}")))?;
     let response = client
         .post(ANTHROPIC_API_URL)
-        .header("x-api-key", target.api_key.expose())
+        .header("x-api-key", api_key.expose())
         .header("anthropic-version", ANTHROPIC_VERSION)
         .header("content-type", "application/json")
         .json(&body)
@@ -237,5 +276,5 @@ pub async fn call_claude_with_tokens_meta(
             AppError::Llm("Pas de contenu texte dans la réponse API".to_string())
         })?;
 
-    Ok((text, stop_reason))
+    Ok(LlmResponse { text, stop_reason })
 }

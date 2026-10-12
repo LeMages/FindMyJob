@@ -5,6 +5,7 @@
 //! message court).
 
 pub mod api_key;
+pub mod caller;
 pub mod candidature_message;
 pub mod client;
 pub mod cv_writing;
@@ -21,7 +22,8 @@ pub mod writing_loop;
 pub mod writing_rules;
 
 pub use api_key::ApiKey;
+pub use caller::{LlmCaller, LlmFuture, LlmRequest, LlmResponse};
 pub use candidature_message::{generate_application_email, generate_application_message};
-pub use client::{call_claude, call_claude_with_tokens};
+pub use client::{call_claude, call_claude_with_tokens, AnthropicCaller};
 pub use target::ClaudeTarget;
 pub use templatize::{templatize_reference, TemplatizeFeedback, TemplatizeOutput};
