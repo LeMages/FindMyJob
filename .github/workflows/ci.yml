@@ -40,6 +40,12 @@ jobs:
       matrix:
         os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
+    # Les infos de debug (~300 Mo par binaire de test) et le cache incrémental
+    # saturent le disque du runner Linux au link des tests.
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,5 +69,13 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: Disk usage before tests (Linux)
+        if: runner.os == 'Linux'
+        run: df -h /
+
       - name: Test
         run: cargo test --workspace
+
+      - name: Disk usage after tests (Linux)
+        if: always() && runner.os == 'Linux'
+        run: df -h /

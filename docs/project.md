@@ -52,6 +52,9 @@ crates/core/src/
   models/         serde DTOs shared with the Tauri commands
   scraping/       add-by-link flow: URL validation, guarded fetch, typed failures, JSON-LD and page-text extraction, final cleanup
   text/           deterministic HTML/Markdown to plain text conversion (html_to_plain)
+crates/core/tests/
+  integration/    single integration test binary (main.rs declares one module per file); common/ shared fixtures
+  fixtures/       offer texts used by the conversion tests
 ```
 
 ### `crates/desktop` — Vue 3 frontend + Tauri application
@@ -83,7 +86,8 @@ crates/desktop/
       offer_extraction.rs, url_normalize.rs   import cascade, duplicate detection
       commands/                        one #[tauri::command] file per domain, each calling a service or a db function
       models/mod.rs                    `pub use findmyjob_core::models::*;` — no local duplication
-    tests/                             SQLite in-memory tests of the db layer, service-level tests (offer import, generation, lifecycles, end-to-end); shared/ helpers (seed, fake keyring, fake LLM, local offer server, test AppState), fixtures/ (see its README)
+    tests/integration/                 single integration test binary (main.rs declares one module per file): SQLite in-memory tests of the db layer, service-level tests (offer import, generation, lifecycles, end-to-end); shared/ helpers (seed, fake keyring, fake LLM, local offer server, unique temp folders, test AppState)
+    tests/fixtures/                    test fixtures (see its README)
     tauri.conf.json, capabilities/, icons/
 ```
 
@@ -324,7 +328,7 @@ Conventional Commits drive automated versioning: `<type>(<scope>): <description>
 
 ### Branch flow and CI (as actually configured)
 
-- `feature/*` → PR to `dev` — `.github/workflows/ci.yml`: `frontend` job (`npm run lint` + `npm run build`, working directory `crates/desktop`), `rust` job (`cargo clippy --workspace --all-targets -- -D warnings` + `cargo test --workspace`, matrix `ubuntu-22.04` + `windows-latest`, `fail-fast: false`, Cargo cache per OS; the desktop crate compiles Typst and a bundled SQLite). The Rust toolchain is pinned by `rust-toolchain.toml` (exact stable version, clippy, rustfmt, macOS targets) and installed with `rustup toolchain install`.
+- `feature/*` → PR to `dev` — `.github/workflows/ci.yml`: `frontend` job (`npm run lint` + `npm run build`, working directory `crates/desktop`), `rust` job (`cargo clippy --workspace --all-targets -- -D warnings` + `cargo test --workspace`, matrix `ubuntu-22.04` + `windows-latest`, `fail-fast: false`, Cargo cache per OS; the desktop crate compiles Typst and a bundled SQLite; `CARGO_INCREMENTAL=0` and no debug info (`CARGO_PROFILE_DEV_DEBUG=0`, `CARGO_PROFILE_TEST_DEBUG=0`) to keep the Linux runner's disk from filling up, with `df -h /` logged before and after the tests on Linux). The Rust toolchain is pinned by `rust-toolchain.toml` (exact stable version, clippy, rustfmt, macOS targets) and installed with `rustup toolchain install`.
 - PR to `staging` or `main` — `.github/workflows/build-check.yml`: full Tauri build (`npm run tauri build`) on the same matrix and with the same setup as `release.yml`, without version injection, publication or upload.
 - `dev` → PR to `staging`, `staging` → PR to `main` — `.github/workflows/gatekeeper.yml` blocks any other source branch (only `staging` can merge into `main`, only `dev` can merge into `staging`).
 - Push to `main` — `.github/workflows/release.yml`: `semantic-release` (`.releaserc.json`) determines the version, then a Tauri build matrix (macOS ARM64/x64, Ubuntu 22.04, Windows) and a GitHub release if a version was computed.
@@ -346,6 +350,6 @@ Everything runs on the user's machine, in one process; there is no server and no
   - profile, session and application-deletion lifecycles;
   - one end-to-end scenario.
 
-  The Claude API is replaced by `tests/shared/fake_llm.rs`, an `LlmCaller` with canned answers. Loopback fetching (`fetch_html_allowing_loopback`) is compiled only under `findmyjob-core`'s `test-support` feature, which only `findmyjob`'s dev-dependencies enable. No test reaches the network, the Claude API, `.env` or `dev-data`. The Tauri commands themselves and the capture window remain untested.
+  Each crate builds a single integration test binary from `tests/integration/` (`main.rs` declares one module per test file), which keeps disk use and link time down; every new integration test is a module of `tests/integration/`, never a new file at the root of `tests/`. Since all of a crate's integration tests share one process, each test gets its own temporary folder (`tests/integration/shared/temp_dir.rs`). The Claude API is replaced by `tests/integration/shared/fake_llm.rs`, an `LlmCaller` with canned answers. Loopback fetching (`fetch_html_allowing_loopback`) is compiled only under `findmyjob-core`'s `test-support` feature, which only `findmyjob`'s dev-dependencies enable. No test reaches the network, the Claude API, `.env` or `dev-data`. The Tauri commands themselves and the capture window remain untested.
 - Generation progress is in memory only: closing the app during a generation loses it, and the half-created application is removed at the next startup (there is no way to resume a generation).
 - Only the profile was carried over from the PostgreSQL version: sessions, references and applications were not migrated.
