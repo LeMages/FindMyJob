@@ -30,6 +30,14 @@ fn touch(data_dir: &Path, relative: &str) -> PathBuf {
     path
 }
 
+/// Vérifie que `resolve_untrusted` refuse le chemin reçu.
+fn assert_refused(data_dir: &Path, relative: &str) {
+    assert!(
+        matches!(storage_paths::resolve_untrusted(data_dir, relative), Err(AppError::Validation(_))),
+        "« {relative} » doit être refusé"
+    );
+}
+
 #[test]
 fn les_chemins_recus_restent_sous_le_dossier_de_donnees() {
     let data_dir = unique_temp_dir("paths");
@@ -39,11 +47,30 @@ fn les_chemins_recus_restent_sous_le_dossier_de_donnees() {
 
     assert!(storage_paths::resolve_untrusted(&data_dir, &pdf).unwrap().is_file());
     assert!(!storage_paths::resolve_untrusted(&data_dir, "documents/absent.pdf").unwrap().exists());
-    for refused in ["", "../secret.pdf", "documents/../../secret.pdf", "/etc/passwd", "C:\\Windows\\win.ini"] {
-        assert!(
-            matches!(storage_paths::resolve_untrusted(&data_dir, refused), Err(AppError::Validation(_))),
-            "« {refused} » doit être refusé"
-        );
+    // Un chemin commençant par `/` a une racine sur les deux systèmes.
+    for refused in ["", "  ", "../secret.pdf", "documents/../../secret.pdf", "/etc/passwd", "/tmp/../etc/passwd"] {
+        assert_refused(&data_dir, refused);
+    }
+
+    // Lettre de lecteur, `\` et chemins UNC n'ont de sens que sous Windows.
+    #[cfg(windows)]
+    for refused in [
+        "C:\\Windows\\win.ini",
+        "C:secret.pdf",
+        "\\Windows\\win.ini",
+        "\\\\serveur\\partage\\secret.pdf",
+        "..\\secret.pdf",
+        "documents\\..\\..\\secret.pdf",
+    ] {
+        assert_refused(&data_dir, refused);
+    }
+
+    // Sous Unix, `\` n'est pas un séparateur : ces chaînes sont des noms de
+    // fichier relatifs, qui restent sous le dossier de données.
+    #[cfg(unix)]
+    for accepted in ["C:\\Windows\\win.ini", "..\\secret.pdf"] {
+        let resolved = storage_paths::resolve_untrusted(&data_dir, accepted).unwrap();
+        assert!(resolved.starts_with(&data_dir), "« {accepted} » doit rester sous le dossier de données");
     }
 
     assert_eq!(documents::read_document_bytes(&data_dir, &pdf).unwrap(), b"%PDF");
