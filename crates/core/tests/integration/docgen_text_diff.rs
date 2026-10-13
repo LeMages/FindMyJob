@@ -24,14 +24,6 @@ fn mots_manquants_et_en_trop() {
 }
 
 #[test]
-fn mots_manquants_couverts_par_le_texte_declare() {
-    let diff = diff_words("Entreprise SA Direction des RH Paris", "Entreprise SA Paris").expect("diff");
-    let declared = vec!["Direction des RH".to_string()];
-    assert!(diff.uncovered_missing(&declared).is_empty());
-    assert_eq!(diff.uncovered_missing(&["Direction".to_string()]), vec!["des".to_string(), "RH".to_string()]);
-}
-
-#[test]
 fn seuls_les_separateurs_ne_sont_pas_du_contenu() {
     assert!(alphanumeric_words("•  |  : – ,").is_empty());
     assert_eq!(alphanumeric_words("• Objet :"), vec!["Objet".to_string()]);
@@ -43,4 +35,18 @@ fn separateurs_orphelins_detectes() {
     assert_eq!(orphan_separators("FindMyJob  |    |  2025"), vec!["| |".to_string()]);
     assert_eq!(orphan_separators("Anglais : | Français : natif"), vec![": |".to_string()]);
     assert!(orphan_separators("Need4Viz  |  Nov. 2025 – Avr. 2026 • Lyon").is_empty());
+}
+
+#[test]
+fn ponctuation_de_bord_ignoree() {
+    let diff = diff_words("Thyez, 74300 Thyez, le 9 octobre", "Thyez 74300 Thyez, le 9 octobre.").expect("diff");
+    assert_eq!(diff.distance(), 0, "écart : {diff:?}");
+    let diff = diff_words("« Objet : stage »", "Objet stage").expect("diff");
+    assert_eq!(diff.missing, vec!["«".to_string(), ":".to_string(), "»".to_string()], "ponctuation seule comparée telle quelle");
+}
+
+#[test]
+fn ecarts_cites_dans_leur_forme_d_origine() {
+    let diff = diff_words("Thyez, 74300", "Lyon").expect("diff");
+    assert_eq!(diff.missing, vec!["Thyez,".to_string(), "74300".to_string()]);
 }

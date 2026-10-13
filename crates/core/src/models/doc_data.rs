@@ -2,13 +2,18 @@
 //! motivation), identiques pour tous les utilisateurs.
 //!
 //! Un template Typst (`template.typ`, produit à l'upload d'une référence) lit
-//! toutes ses données depuis un fichier `data.json` qui suit l'un de ces
-//! schémas : `CvData` pour un CV, `LmData` pour une lettre. Un champ
+//! depuis un fichier `data.json` qui suit l'un de ces schémas (`CvData` pour
+//! un CV, `LmData` pour une lettre) tout ce que le profil, l'offre ou la
+//! rédaction fournissent ; le reste de son texte est celui de la référence,
+//! écrit en dur et jamais retiré. Un champ
 //! optionnel absent vaut la chaîne vide (ou une liste vide), jamais `null` :
 //! le template teste `!= ""` pour faire disparaître la ligne correspondante.
 
 // Importation des crates externes
 use serde::{Deserialize, Serialize};
+
+// Importation des modules internes
+use crate::models::prose_guidance::ProseGuidance;
 
 // ============================================================================
 // Partie commune
@@ -20,19 +25,24 @@ use serde::{Deserialize, Serialize};
 ///
 /// * `prenom`, `nom` - Identité, valeurs naturelles (le template applique
 ///   lui-même une éventuelle mise en majuscules).
+/// * `title` - Sous-titre professionnel affiché sous le nom, commun au CV et
+///   à la lettre. Pas tiré du profil : rédigé pour l'offre à la génération.
 /// * `email`, `telephone` - Coordonnées.
-/// * `adresse` - Lieu du candidat, texte libre du profil (adresse complète,
-///   ville seule…), affiché tel quel, jamais découpé : coordonnées et ligne
-///   de date de la lettre.
+/// * `ville`, `zip_code` - Lieu du candidat (chaîne vide = non renseigné).
+///   Le template compose lui-même le lieu affiché, dans l'ordre et avec la
+///   ponctuation de la référence ; la ligne de date de la lettre n'utilise
+///   que `ville`.
 /// * `linkedin`, `github`, `portfolio` - Liens, tels que saisis dans le profil.
 /// * `permis` - Vrai si le candidat a le permis B (affiché via un libellé).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Identity {
     pub prenom: String,
     pub nom: String,
+    pub title: String,
     pub email: String,
     pub telephone: String,
-    pub adresse: String,
+    pub ville: String,
+    pub zip_code: String,
     pub linkedin: String,
     pub github: String,
     pub portfolio: String,
@@ -114,7 +124,6 @@ pub struct CvLabels {
 pub struct CvData {
     pub identity: Identity,
     pub lang: String,
-    pub title: String,
     pub summary: String,
     pub skills_groups: Vec<SkillsGroup>,
     pub experiences: Vec<CvExperience>,
@@ -143,13 +152,15 @@ pub struct PeriodStyle {
 }
 
 /// Contenu d'un CV de référence rangé dans le schéma canonique
-/// (`example_data.json`), avec les métadonnées détectées à l'upload.
+/// (`example_data.json`), avec les métadonnées détectées à l'upload et les
+/// consignes de rédaction de la référence.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvExampleData {
     #[serde(flatten)]
     pub data: CvData,
     pub detected_lang: String,
     pub period_style: PeriodStyle,
+    pub guidance: ProseGuidance,
 }
 
 // ============================================================================
@@ -163,6 +174,11 @@ pub struct CvExampleData {
 ///
 /// * `company` - Entreprise de la candidature.
 /// * `location` - Lieu de la candidature.
+/// * `extra_lines` - Autres lignes du destinataire (service, adresse
+///   postale), tirées de l'offre. Remplies dans les données d'exemple avec
+///   celles de la référence ; vides à la génération, l'offre ne les donnant
+///   pas : la ligne disparaît plutôt que d'afficher l'adresse d'une autre
+///   entreprise. `default` tolère leur absence dans les anciennes données.
 /// * `contact_name`, `contact_role` - Toujours vides. Gardés uniquement pour
 ///   les templates convertis avant l'abandon du contact dans la lettre, qui
 ///   lisent encore ces clés (une clé absente ferait échouer leur
@@ -172,6 +188,8 @@ pub struct CvExampleData {
 pub struct Recipient {
     pub company: String,
     pub location: String,
+    #[serde(default)]
+    pub extra_lines: Vec<String>,
     #[serde(default)]
     pub contact_name: String,
     #[serde(default)]
@@ -186,7 +204,7 @@ pub struct Recipient {
 /// * `subject_prefix` - Préfixe de l'objet (ex. « Objet : »).
 /// * `salutation` - Formule d'appel (ex. « Madame, Monsieur, »).
 /// * `closing` - Formule de politesse finale, en entier.
-/// * `date_prefix` - Mot entre le lieu (`identity.adresse`) et la date (ex. « le »).
+/// * `date_prefix` - Mot entre la ville (`identity.ville`) et la date (ex. « le »).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct LmLabels {
     pub subject_prefix: String,
@@ -208,10 +226,12 @@ pub struct LmData {
 }
 
 /// Contenu d'une lettre de référence rangé dans le schéma canonique
-/// (`example_data.json`), avec la langue détectée à l'upload.
+/// (`example_data.json`), avec la langue détectée à l'upload et les
+/// consignes de rédaction de la référence.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct LmExampleData {
     #[serde(flatten)]
     pub data: LmData,
     pub detected_lang: String,
+    pub guidance: ProseGuidance,
 }

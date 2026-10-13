@@ -5,6 +5,7 @@
 
 pub mod build_cv_data;
 pub mod build_lm_data;
+pub mod document_fallback;
 pub mod identity;
 pub mod labels_cache;
 pub mod page_fit;

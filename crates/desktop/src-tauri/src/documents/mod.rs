@@ -5,6 +5,7 @@
 pub mod doc_type;
 pub mod fonts;
 pub mod reference_versions;
+pub mod sparse_check;
 pub mod storage;
 pub mod templatize;
 pub mod typst;

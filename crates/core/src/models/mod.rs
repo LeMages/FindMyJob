@@ -18,6 +18,7 @@ pub mod matching;
 pub mod offer_extraction;
 pub mod profile;
 pub mod projet;
+pub mod prose_guidance;
 pub mod session;
 pub mod skill;
 pub mod status_history;
@@ -35,6 +36,7 @@ pub use doc_data::{
     CvData, CvExampleData, CvExperience, CvFormation, CvLabels, CvLangue, CvProject, Identity, LmData,
     LmExampleData, LmLabels, PeriodGranularity, PeriodStyle, Recipient, SkillsGroup,
 };
+pub use prose_guidance::{ProseGuidance, ProseZone, ZoneMode};
 pub use document::{
     Document, DocumentFileInfo, DocumentReferenceView, DocumentVersionView, DocumentsStatus, TemplateArtifacts,
 };

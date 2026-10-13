@@ -11,15 +11,15 @@ use chrono::{NaiveDate, Utc};
 
 // Importation des modules internes
 use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
-use crate::docgen::build_lm_data::build_lm_data;
+use crate::docgen::build_lm_data::{build_lm_data, LmLayout};
 use crate::docgen::identity::{display_url, lines};
 use crate::docgen::recipient::build_recipient;
 use crate::documents::typst::compile_template;
 use findmyjob_core::docgen::selection::select;
 use findmyjob_core::models::{
-    CandidatureDetail, CvContent, CvLabels, ExperienceView, FormationView, ItemBullets, LmContent, LmLabels,
-    MatchingResult, PeriodGranularity, PeriodStyle, ProfileDto, ProjetView, Recipient, SkillsGroup,
-    UserView,
+    CandidatureDetail, CvContent, CvData, CvLabels, CvProject, ExperienceView, FormationView, Identity, ItemBullets,
+    LmContent, LmData, LmLabels, MatchingResult, PeriodGranularity, PeriodStyle, ProfileDto, ProjetView, Recipient,
+    SkillsGroup, UserView,
 };
 
 /// Template de CV de test.
@@ -41,7 +41,8 @@ fn user() -> UserView {
         prenom: Some("Camille".to_string()),
         email: Some("camille.martin@example.org".to_string()),
         telephone: None,
-        adresse: Some("1 rue de l'Exemple, 69000 Lyon".to_string()),
+        ville: Some("Lyon".to_string()),
+        zip_code: Some("69000".to_string()),
         permis: Some(true),
         description: None,
         linkedin: Some("https://www.linkedin.com/in/camille-martin/".to_string()),
@@ -192,7 +193,7 @@ fn cv_data_fusionne_profil_contenu_et_libelles() {
     let profile = profile();
     let selection = select(&profile, &empty_matching(), 1);
     let (labels, style) = (cv_labels(), period_style());
-    let layout = CvLayout { labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
+    let layout = CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
 
     let data = build_cv_data(&profile, &selection, &cv_content(&[20]), &layout);
 
@@ -216,12 +217,54 @@ fn lm_data_date_et_destinataire() {
     let content = LmContent { subject: "Candidature".to_string(), paragraphs: vec!["Paragraphe.".to_string()] };
     let labels = LmLabels { date_prefix: "le ".to_string(), ..Default::default() };
 
-    let data = build_lm_data(&profile(), &recipient, &content, &labels, date(2026, 10, 9), "fr");
+    let document = LmData::default();
+    let data = build_lm_data(&profile(), &recipient, &content, &lm_layout(&document, &labels));
 
     assert_eq!(data.date, "9 octobre 2026");
     assert_eq!(data.recipient.company, "Société Exemple");
-    assert_eq!(data.identity.adresse, "1 rue de l'Exemple, 69000 Lyon");
+    assert_eq!(data.identity.ville, "Lyon");
+    assert_eq!(data.identity.title, "Ingénieure data", "sous-titre repris du CV");
+    assert_eq!(data.identity.zip_code, "69000");
     assert_eq!(data.paragraphs, vec!["Paragraphe.".to_string()]);
+}
+
+/// Mise en page de la lettre de test : sous-titre du CV, 9 octobre 2026.
+fn lm_layout<'a>(document: &'a LmData, labels: &'a LmLabels) -> LmLayout<'a> {
+    LmLayout { document, labels, title: "Ingénieure data", date: date(2026, 10, 9), lang: "fr" }
+}
+
+// ======================================================================
+// Repli sur le document de référence
+// ======================================================================
+
+#[test]
+fn le_document_complete_ce_que_le_profil_n_a_pas() {
+    let mut profile = profile();
+    profile.user.telephone = None;
+    profile.user.ville = Some("Thyez".to_string());
+    profile.projets.clear();
+    let document = CvData {
+        identity: Identity {
+            telephone: "+41 00 000 00 00".to_string(),
+            ville: "Genève".to_string(),
+            portfolio: "exemple.invalid".to_string(),
+            ..Default::default()
+        },
+        projects: vec![CvProject { titre: "Projet du document".to_string(), ..Default::default() }],
+        ..Default::default()
+    };
+    let selection = select(&profile, &empty_matching(), 2);
+    let (labels, style) = (cv_labels(), period_style());
+    let layout = CvLayout { document: &document, labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
+
+    let data = build_cv_data(&profile, &selection, &cv_content(&[]), &layout);
+
+    assert_eq!(data.identity.ville, "Thyez", "le profil prime sur le document");
+    assert_eq!(data.identity.telephone, "+41 00 000 00 00", "profil vide : valeur du document");
+    assert_eq!(data.identity.portfolio, "exemple.invalid");
+    assert_eq!(data.projects.len(), 1);
+    assert_eq!(data.projects[0].titre, "Projet du document", "profil sans projet : projets du document");
+    assert_eq!(data.experiences[0].poste, "Stage data", "profil avec expériences : celles du profil");
 }
 
 // ======================================================================
@@ -233,7 +276,7 @@ fn template_compile_avec_donnees_completes() {
     let profile = profile();
     let selection = select(&profile, &empty_matching(), 2);
     let (labels, style) = (cv_labels(), period_style());
-    let layout = CvLayout { labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
+    let layout = CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
     let data = build_cv_data(&profile, &selection, &cv_content(&[20, 21]), &layout);
 
     let doc = compile_cv(&data);
@@ -254,7 +297,7 @@ fn template_compile_sans_champs_optionnels() {
     profile.user.interets = None;
     let selection = select(&profile, &empty_matching(), 0);
     let (labels, style) = (cv_labels(), period_style());
-    let layout = CvLayout { labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
+    let layout = CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
     let data = build_cv_data(&profile, &selection, &cv_content(&[]), &layout);
 
     let doc = compile_cv(&data);
@@ -264,4 +307,59 @@ fn template_compile_sans_champs_optionnels() {
     assert!(!doc.text.contains("Projets"), "section vide masquée : {}", doc.text);
     assert!(!doc.text.contains("Intérêts"), "{}", doc.text);
     assert!(!doc.text.trim_end().ends_with('•'), "pas de séparateur orphelin : {}", doc.text);
+}
+
+// ======================================================================
+// Lieu de la lettre : en-tête et ligne de date
+// ======================================================================
+
+/// Template de lettre de test.
+const LM_TEMPLATE: &str = include_str!("../../tests/fixtures/references/lm_template.typ");
+
+/// Compile la lettre de fixture pour un lieu donné, texte rendu aux espaces
+/// normalisés.
+fn lm_text(ville: &str, zip_code: &str) -> String {
+    let mut profile = profile();
+    profile.user.ville = Some(ville.to_string());
+    profile.user.zip_code = Some(zip_code.to_string());
+    let recipient = Recipient { company: "Société Exemple".to_string(), ..Default::default() };
+    let content = LmContent { subject: "Candidature".to_string(), paragraphs: vec!["Paragraphe.".to_string()] };
+    let labels = LmLabels { date_prefix: "le".to_string(), ..Default::default() };
+    let data = build_lm_data(&profile, &recipient, &content, &lm_layout(&LmData::default(), &labels));
+
+    let json = serde_json::to_vec(&data).expect("données sérialisables");
+    let doc = compile_template(LM_TEMPLATE.to_string(), json, std::env::temp_dir(), PathBuf::from("introuvable"))
+        .expect("le template de fixture compile");
+    doc.text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[test]
+fn lettre_ville_et_code_postal_dans_l_en_tete_ville_seule_dans_la_date() {
+    let text = lm_text("Thyez", "74300");
+    assert!(text.contains("Thyez, 74300"), "{text}");
+    assert!(text.contains("Thyez, le 9 octobre 2026"), "{text}");
+    assert!(!text.contains("74300, le"), "le code postal n'est pas dans la ligne de date : {text}");
+}
+
+#[test]
+fn lettre_sans_ville_ni_separateur_orphelin() {
+    let text = lm_text("", "74300");
+    assert!(text.contains("le 9 octobre 2026"), "{text}");
+    assert!(!text.contains(", le"), "pas de virgule orpheline devant la date : {text}");
+    assert!(!text.contains(", 74300"), "pas de virgule orpheline devant le code postal : {text}");
+}
+
+#[test]
+fn reference_d_une_version_precedente_a_reimporter() {
+    use crate::docgen::reference_template::check_current_schema;
+    use findmyjob_core::error::AppError;
+
+    let current_example = r#"{"lang": "fr", "guidance": {"general": "", "zones": []}}"#;
+    let old = "#let data = json(\"data.json\")\n#text(data.identity.adresse)";
+    assert!(matches!(check_current_schema(old, current_example, "CV"), Err(AppError::OutdatedReference(_))));
+    assert!(
+        matches!(check_current_schema(LM_TEMPLATE, r#"{"lang": "fr"}"#, "CV"), Err(AppError::OutdatedReference(_))),
+        "données d'exemple sans consignes : référence à réimporter"
+    );
+    assert!(check_current_schema(LM_TEMPLATE, current_example, "lettre de motivation").is_ok());
 }

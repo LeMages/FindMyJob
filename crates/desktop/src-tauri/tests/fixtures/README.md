@@ -19,6 +19,15 @@ La référence déposée par les tests (`test_state::reference_source`) est le t
 
 `cv_template.typ` à la racine de `fixtures/` est un autre template, utilisé par les tests unitaires de `src/docgen/tests.rs`.
 
+### `references/real/` : références réelles anonymisées
+
+| Fichier | Source | Réduction |
+|---|---|---|
+| `cv_suisse.typ` | CV de référence réel d'un utilisateur (2026-10-13) | **Anonymisé** : nom, e-mail, téléphone, LinkedIn, GitHub et site remplacés par des valeurs fictives de même forme (`Camille Exemple`, `camille@exemple.invalid`, `+33 6 00 00 00 00`…). Mise en page, commentaires, parcours, ville et code postal inchangés |
+| `lm_exemple.typ` | Lettre de référence réelle du même utilisateur, avec ses commentaires de consignes (`[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) | Même anonymisation |
+
+`cv_suisse_template.typ`, `lm_exemple_template.typ` et leurs `*_example_data.json` sont une templatisation correcte écrite à la main : rien n'est retiré de la référence (la ligne de disponibilité et « Références disponibles sur demande » restent en dur dans le template du CV), les lignes service et rue du destinataire sont dans `recipient.extra_lines`, et les consignes de la lettre sont dans `guidance`. Les tests de `src/documents/templatize_tests.rs` les passent dans `validate` (rendus exemple, vide, clairsemé, sentinelle, comparaison avec la référence) : si l'un d'eux est refusé, la validation est devenue trop stricte. La police `Arimo` des références n'est pas embarquée : sans elle, Typst prend une police de repli, la référence passe à 2 pages et le template doit rester en dessous.
+
 ## `llm/` : réponses figées du modèle
 
 Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l'étape est reconnue d'après le schéma de sortie demandé) :

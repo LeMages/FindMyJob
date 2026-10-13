@@ -10,11 +10,11 @@
 #align(center, {
   text(size: 16pt, weight: "bold", upper(data.identity.prenom + " " + data.identity.nom))
   linebreak()
-  let parts = (data.identity.adresse, data.identity.email, data.identity.telephone, data.identity.linkedin)
+  let parts = (joined((data.identity.zip_code, data.identity.ville), " "), data.identity.email, data.identity.telephone, data.identity.linkedin)
   if data.identity.permis { parts.push(data.labels.permis) }
   text(joined(parts, "  •  "))
   linebreak()
-  text(style: "italic", data.title)
+  text(style: "italic", data.identity.title)
 })
 
 #if data.summary != "" {

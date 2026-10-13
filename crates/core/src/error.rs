@@ -19,6 +19,10 @@ pub enum AppError {
     /// Échec typé de la récupération ou de l'extraction d'une offre, sérialisé
     /// en code (`{"kind":"Scraping","message":"access_denied"}`).
     Scraping(ScrapingFailure),
+    /// Référence templatisée par une version précédente, dont le template ne
+    /// compile plus avec le schéma actuel : elle doit être réimportée. Le
+    /// message est la phrase française affichée à l'utilisateur.
+    OutdatedReference(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -29,7 +33,8 @@ impl std::fmt::Display for AppError {
             | AppError::Conflict(m)
             | AppError::NotFound(m)
             | AppError::Config(m)
-            | AppError::Llm(m) => write!(f, "{}", m),
+            | AppError::Llm(m)
+            | AppError::OutdatedReference(m) => write!(f, "{}", m),
             AppError::Scraping(failure) => write!(f, "Échec de l'extraction de l'offre ({failure})"),
         }
     }

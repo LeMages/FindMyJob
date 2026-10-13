@@ -1,8 +1,11 @@
 //! Linter de la prose générée : caractères interdits, formules interdites
 //! et respect des budgets de longueur. Fonctions pures, sans LLM.
 //!
-//! Le linter ne corrige rien, sauf `strip_dashes`, appliqué en dernier
-//! recours après le dernier essai de rédaction.
+//! Le linter ne corrige rien, sauf `strip_dashes` / `strip_forbidden_marks`,
+//! appliqués en dernier recours après le dernier essai de rédaction.
+//!
+//! Une marque ou une formule que la prose de la référence emploie elle-même
+//! est autorisée : la référence est la source de vérité du style.
 
 // Importation des crates externes
 use serde::Serialize;
@@ -39,18 +42,24 @@ impl Violation {
     }
 }
 
+/// Marques interdites que la prose de la référence n'emploie pas.
+fn forbidden_marks(example_prose: &str) -> Vec<(&'static str, &'static str)> {
+    FORBIDDEN_MARKS.into_iter().filter(|(mark, _)| !example_prose.contains(mark)).collect()
+}
+
 /// Vérifie les caractères et formules interdits dans chaque champ de prose.
 ///
 /// # Arguments
 ///
 /// * `fields` - Champs de prose du contenu rédigé.
-/// * `example_prose` - Prose de la référence : une formule qui y figure est
-///   autorisée.
+/// * `example_prose` - Prose de la référence : une marque ou une formule
+///   qui y figure est autorisée.
 ///
 /// # Returns
 ///
 /// Violations relevées, dans l'ordre des champs.
 pub fn lint_prose(fields: &[ProseField], example_prose: &str) -> Vec<Violation> {
+    let marks = forbidden_marks(example_prose);
     let example = example_prose.to_lowercase();
     let allowed_phrases: Vec<&str> = FORBIDDEN_PHRASES_FR
         .iter()
@@ -61,7 +70,7 @@ pub fn lint_prose(fields: &[ProseField], example_prose: &str) -> Vec<Violation> 
 
     let mut violations = Vec::new();
     for field in fields {
-        for (mark, label) in FORBIDDEN_MARKS {
+        for (mark, label) in &marks {
             if field.text.contains(mark) {
                 violations.push(Violation::new(&field.path, format!("contient un {label}, interdit")));
             }
@@ -173,9 +182,28 @@ pub fn lint_lm_budget(content: &LmContent, budget: &LmBudget) -> Vec<Violation> 
 ///
 /// Texte sans tiret cadratin, demi-cadratin, gras Markdown ni backtick.
 pub fn strip_dashes(text: &str) -> String {
+    strip_forbidden_marks(text, "")
+}
+
+/// Comme `strip_dashes`, mais ne retire que les marques que la prose de la
+/// référence n'emploie pas.
+///
+/// # Arguments
+///
+/// * `text` - Texte à nettoyer.
+/// * `example_prose` - Prose de la référence.
+///
+/// # Returns
+///
+/// Texte sans les marques que la référence n'emploie pas.
+pub fn strip_forbidden_marks(text: &str, example_prose: &str) -> String {
+    let marks: Vec<&str> = forbidden_marks(example_prose).into_iter().map(|(mark, _)| mark).collect();
     let mut cleaned = text.to_string();
-    for dash in ["\u{2014}", "\u{2013}"] {
+    for dash in ["\u{2014}", "\u{2013}"].into_iter().filter(|dash| marks.contains(dash)) {
         cleaned = cleaned.replace(&format!(" {dash} "), ", ").replace(dash, "-");
     }
-    cleaned.replace("**", "").replace('`', "").replace(" ,", ",")
+    for mark in ["**", "`"].into_iter().filter(|mark| marks.contains(mark)) {
+        cleaned = cleaned.replace(mark, "");
+    }
+    cleaned.replace(" ,", ",")
 }

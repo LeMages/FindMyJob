@@ -63,7 +63,8 @@ interface UserInfoDraft {
   nom: string
   email: string
   telephone: string
-  adresse: string
+  ville: string
+  zip_code: string
   permis: boolean
   linkedin: string
   github: string
@@ -76,7 +77,8 @@ const draftUserInfo = ref<UserInfoDraft>({
   nom: '',
   email: '',
   telephone: '',
-  adresse: '',
+  ville: '',
+  zip_code: '',
   permis: false,
   linkedin: '',
   github: '',
@@ -92,7 +94,8 @@ function isUserInfoDirty(): boolean {
     draftUserInfo.value.nom !== (u.nom ?? '') ||
     draftUserInfo.value.email !== (u.email ?? '') ||
     draftUserInfo.value.telephone !== (u.telephone ?? '') ||
-    draftUserInfo.value.adresse !== (u.adresse ?? '') ||
+    draftUserInfo.value.ville !== (u.ville ?? '') ||
+    draftUserInfo.value.zip_code !== (u.zip_code ?? '') ||
     draftUserInfo.value.interets !== (u.interets ?? '') ||
     draftUserInfo.value.permis !== (u.permis ?? false) ||
     draftUserInfo.value.linkedin !== (u.linkedin ?? '') ||
@@ -126,7 +129,8 @@ function enterEditMode() {
     nom: u?.nom ?? '',
     email: u?.email ?? '',
     telephone: u?.telephone ?? '',
-    adresse: u?.adresse ?? '',
+    ville: u?.ville ?? '',
+    zip_code: u?.zip_code ?? '',
     permis: u?.permis ?? false,
     linkedin: u?.linkedin ?? '',
     github: u?.github ?? '',
@@ -193,7 +197,8 @@ async function saveUserInfo(): Promise<void> {
     nom: d.nom.trim() || null,
     email: d.email.trim() || null,
     telephone: d.telephone.trim() || null,
-    adresse: d.adresse.trim() || null,
+    ville: d.ville.trim() || null,
+    zip_code: d.zip_code.trim() || null,
     permis: d.permis,
     linkedin: linkedin || null,
     github: github || null,
@@ -272,6 +277,14 @@ const initials = computed(() => {
   if (!u) return '?'
   return ((u.prenom?.[0] ?? '') + (u.nom?.[0] ?? '')).toUpperCase() || '?'
 })
+
+// Lieu affiché dans l'en-tête du profil : code postal puis ville, valeurs
+// absentes omises.
+const lieu = computed(() => {
+  const u = profile.value?.user
+  if (!u) return ''
+  return [u.zip_code, u.ville].filter(Boolean).join(' ')
+})
 </script>
 
 <template>
@@ -302,7 +315,7 @@ const initials = computed(() => {
         <div class="flex gap-[18px] mt-[11px] font-mono text-[12px] text-neutral-600 flex-wrap">
           <span v-if="profile.user.email">{{ profile.user.email }}</span>
           <span v-if="profile.user.telephone">{{ profile.user.telephone }}</span>
-          <span v-if="profile.user.adresse">{{ profile.user.adresse }}</span>
+          <span v-if="lieu">{{ lieu }}</span>
           <a
             v-if="profile.user.linkedin"
             href="#"
@@ -378,9 +391,15 @@ const initials = computed(() => {
           <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
         </div>
       </div>
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse</label>
-        <input v-model="draftUserInfo.adresse" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="12 rue de l'Exemple, 75000 Paris" />
+      <div class="flex gap-[14px]">
+        <div class="flex-1 mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Ville</label>
+          <input v-model="draftUserInfo.ville" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Lyon" />
+        </div>
+        <div class="w-[140px] mb-[14px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">Code postal</label>
+          <input v-model="draftUserInfo.zip_code" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="69000" />
+        </div>
       </div>
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Centres d'intérêt (un par ligne)</label>

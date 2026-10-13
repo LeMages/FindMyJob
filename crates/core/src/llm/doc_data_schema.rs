@@ -55,9 +55,11 @@ fn identity_schema() -> Value {
     object(&[
         ("prenom", string()),
         ("nom", string()),
+        ("title", string()),
         ("email", string()),
         ("telephone", string()),
-        ("adresse", string()),
+        ("ville", string()),
+        ("zip_code", string()),
         ("linkedin", string()),
         ("github", string()),
         ("portfolio", string()),
@@ -107,7 +109,6 @@ pub fn cv_example_data_schema() -> Value {
     object(&[
         ("identity", identity_schema()),
         ("lang", lang_schema()),
-        ("title", string()),
         ("summary", string()),
         (
             "skills_groups",
@@ -166,6 +167,7 @@ pub fn lm_example_data_schema() -> Value {
             object(&[
                 ("company", string()),
                 ("location", string()),
+                ("extra_lines", string_list()),
             ]),
         ),
         ("date", string()),

@@ -145,13 +145,15 @@ fn default_reply(step: Step) -> String {
     }
 }
 
-/// Réponse de templatisation : template et données d'exemple de test.
+/// Réponse de templatisation : template et données d'exemple de test, les
+/// consignes rendues à part en chaîne JSON comme le fait le vrai modèle.
 fn templatize_reply(template: &str, example_data: &str) -> String {
-    let example: Value = serde_json::from_str(&read_reference(example_data)).expect("données d'exemple JSON");
+    let mut example: Value = serde_json::from_str(&read_reference(example_data)).expect("données d'exemple JSON");
+    let guidance = example.as_object_mut().and_then(|map| map.remove("guidance")).unwrap_or_default();
     serde_json::json!({
         "template_typ": read_reference(template),
         "example_data": example,
-        "dropped_text": "",
+        "guidance": guidance.to_string(),
     })
     .to_string()
 }

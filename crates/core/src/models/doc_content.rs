@@ -81,13 +81,16 @@ impl CvContent {
         fields
     }
 
-    /// Applique une transformation à chaque champ de prose.
-    pub fn map_prose(&mut self, transform: impl Fn(&str) -> String) {
-        self.title = transform(&self.title);
-        self.summary = transform(&self.summary);
-        for item in self.experiences.iter_mut().chain(self.projects.iter_mut()) {
-            for bullet in item.bullets.iter_mut() {
-                *bullet = transform(bullet);
+    /// Applique une transformation à chaque champ de prose ; elle reçoit le
+    /// chemin du champ (celui de `prose_fields`) puis son texte.
+    pub fn map_prose(&mut self, transform: impl Fn(&str, &str) -> String) {
+        self.title = transform("title", &self.title);
+        self.summary = transform("summary", &self.summary);
+        for (kind, items) in [("experiences", &mut self.experiences), ("projects", &mut self.projects)] {
+            for (i, item) in items.iter_mut().enumerate() {
+                for (j, bullet) in item.bullets.iter_mut().enumerate() {
+                    *bullet = transform(&format!("{kind}[{i}].bullets[{j}]"), bullet);
+                }
             }
         }
     }
@@ -103,11 +106,12 @@ impl LmContent {
         fields
     }
 
-    /// Applique une transformation à chaque champ de prose.
-    pub fn map_prose(&mut self, transform: impl Fn(&str) -> String) {
-        self.subject = transform(&self.subject);
-        for paragraph in self.paragraphs.iter_mut() {
-            *paragraph = transform(paragraph);
+    /// Applique une transformation à chaque champ de prose ; elle reçoit le
+    /// chemin du champ (celui de `prose_fields`) puis son texte.
+    pub fn map_prose(&mut self, transform: impl Fn(&str, &str) -> String) {
+        self.subject = transform("subject", &self.subject);
+        for (i, paragraph) in self.paragraphs.iter_mut().enumerate() {
+            *paragraph = transform(&format!("paragraphs[{i}]"), paragraph);
         }
     }
 }

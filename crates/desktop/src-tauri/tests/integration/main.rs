@@ -10,6 +10,7 @@ mod db_candidatures;
 mod db_contacts;
 mod db_init;
 mod db_migration_adresse;
+mod db_migration_ville;
 mod db_profile_entries;
 mod db_sessions_documents;
 mod db_skills_langues;

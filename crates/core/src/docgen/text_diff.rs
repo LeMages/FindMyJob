@@ -1,11 +1,18 @@
 //! Comparaison mot à mot de deux textes rendus (texte extrait d'un PDF
 //! compilé), utilisée pour vérifier qu'un template rendu avec ses données
-//! d'exemple reproduit le texte de la référence, et qu'un template rendu
-//! avec des données vides ne contient aucun contenu en dur.
+//! d'exemple reproduit le texte de la référence, que les zones des
+//! consignes redonnent la prose, et qu'une zone fixe est recopiée.
+//!
+//! Les mots sont comparés sans leur ponctuation de bord (`word_key`) : une
+//! virgule collée à un mot (« Thyez, » contre « Thyez ») tient à la mise en
+//! page, pas au contenu. Les écarts citent toujours les mots d'origine.
 
 /// Nombre maximal de mots par texte comparé : borne la table de la plus
 /// longue sous-séquence commune (quadratique) à quelques millions de cases.
 const MAX_WORDS: usize = 4000;
+/// Ponctuation retirée en tête et en fin de mot avant comparaison
+/// (guillemets typographiques déjà ramenés à leur forme droite).
+const EDGE_PUNCTUATION: [char; 10] = [',', '.', ';', ':', '!', '?', '"', '\'', '«', '»'];
 
 /// Écart mot à mot entre un texte attendu et un texte obtenu.
 ///
@@ -26,37 +33,31 @@ impl TextDiff {
     pub fn distance(&self) -> usize {
         self.missing.len() + self.extra.len()
     }
-
-    /// Mots manquants qui ne sont pas couverts par une liste de mots
-    /// autorisés à manquer (chaque mot autorisé ne couvre qu'une occurrence).
-    ///
-    /// # Arguments
-    ///
-    /// * `allowed` - Texte dont les mots peuvent légitimement manquer
-    ///   (texte retiré volontairement du template), quotes normalisées ou non.
-    ///
-    /// # Returns
-    ///
-    /// Mots manquants restants, dans l'ordre.
-    pub fn uncovered_missing(&self, allowed: &[String]) -> Vec<String> {
-        let mut pool: Vec<String> =
-            allowed.iter().flat_map(|t| words(&normalize_quotes(t)).into_iter().map(str::to_string).collect::<Vec<_>>()).collect();
-        let mut uncovered = Vec::new();
-        for word in &self.missing {
-            match pool.iter().position(|w| w == word) {
-                Some(index) => {
-                    pool.swap_remove(index);
-                }
-                None => uncovered.push(word.clone()),
-            }
-        }
-        uncovered
-    }
 }
 
 /// Découpe un texte en mots (séparateurs : espaces de tout type).
 pub fn words(text: &str) -> Vec<&str> {
     text.split_whitespace().collect()
+}
+
+/// Clé de comparaison d'un mot : le mot sans sa ponctuation de bord
+/// (`EDGE_PUNCTUATION`). Un mot fait uniquement de ponctuation (« : »,
+/// « ! ») garde sa forme : il reste comparé tel quel.
+///
+/// # Arguments
+///
+/// * `word` - Mot, guillemets déjà normalisés.
+///
+/// # Returns
+///
+/// Clé de comparaison, empruntée au mot.
+pub fn word_key(word: &str) -> &str {
+    let trimmed = word.trim_matches(|c: char| EDGE_PUNCTUATION.contains(&c));
+    if trimmed.is_empty() {
+        word
+    } else {
+        trimmed
+    }
 }
 
 /// Ramène les apostrophes et guillemets typographiques à leur forme droite.
@@ -65,7 +66,7 @@ pub fn words(text: &str) -> Vec<&str> {
 /// typographiques (smartquotes), mais pas ceux d'une chaîne insérée depuis
 /// les données : sans cette normalisation, un template fidèle serait
 /// signalé en écart sur chaque apostrophe.
-fn normalize_quotes(text: &str) -> String {
+pub fn normalize_quotes(text: &str) -> String {
     text.chars()
         .map(|c| match c {
             '\u{2018}' | '\u{2019}' => '\'',
@@ -78,7 +79,8 @@ fn normalize_quotes(text: &str) -> String {
 /// Calcule l'écart mot à mot entre deux textes, par plus longue
 /// sous-séquence commune : un mot n'est compté en écart que s'il ne peut
 /// pas être aligné, ce qui rend la comparaison insensible aux coupures de
-/// lignes, aux espaces et à la forme des apostrophes et guillemets.
+/// lignes, aux espaces, à la forme des apostrophes et guillemets et à la
+/// ponctuation de bord des mots (`word_key`).
 ///
 /// # Arguments
 ///
@@ -92,6 +94,8 @@ pub fn diff_words(expected: &str, actual: &str) -> Result<TextDiff, String> {
     let (expected, actual) = (normalize_quotes(expected), normalize_quotes(actual));
     let a = words(&expected);
     let b = words(&actual);
+    let key_a: Vec<&str> = a.iter().map(|w| word_key(w)).collect();
+    let key_b: Vec<&str> = b.iter().map(|w| word_key(w)).collect();
     if a.len() > MAX_WORDS || b.len() > MAX_WORDS {
         return Err(format!(
             "Texte trop long pour la comparaison ({} et {} mots, maximum {MAX_WORDS}).",
@@ -108,7 +112,7 @@ pub fn diff_words(expected: &str, actual: &str) -> Result<TextDiff, String> {
     let mut lcs = vec![0u16; (a.len() + 1) * width];
     for i in (0..a.len()).rev() {
         for j in (0..b.len()).rev() {
-            lcs[i * width + j] = if a[i] == b[j] {
+            lcs[i * width + j] = if key_a[i] == key_b[j] {
                 lcs[(i + 1) * width + j + 1] + 1
             } else {
                 lcs[(i + 1) * width + j].max(lcs[i * width + j + 1])
@@ -123,7 +127,7 @@ pub fn diff_words(expected: &str, actual: &str) -> Result<TextDiff, String> {
     let mut missing = Vec::new();
     let mut extra = Vec::new();
     while i < a.len() && j < b.len() {
-        if a[i] == b[j] {
+        if key_a[i] == key_b[j] {
             i += 1;
             j += 1;
         } else if lcs[(i + 1) * width + j] >= lcs[i * width + j + 1] {

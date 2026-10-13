@@ -50,7 +50,8 @@ async fn met_a_jour_les_infos_avec_coalesce() {
         nom: Some("Durand".into()),
         email: None,
         telephone: Some("0600000000".into()),
-        adresse: Some("  12 rue X, 69001 Lyon  ".into()),
+        ville: Some("  Lyon  ".into()),
+        zip_code: Some(" 69001 ".into()),
         permis: Some(true),
         linkedin: None,
         github: None,
@@ -61,23 +62,25 @@ async fn met_a_jour_les_infos_avec_coalesce() {
     assert_eq!(user.nom.as_deref(), Some("Durand"));
     assert_eq!(user.prenom.as_deref(), Some("Alex"), "un champ absent est conservé");
     assert_eq!(user.permis, Some(true));
-    assert_eq!(user.adresse.as_deref(), Some("12 rue X, 69001 Lyon"), "adresse libre, seulement trimée");
+    assert_eq!(user.ville.as_deref(), Some("Lyon"), "ville seulement trimée");
+    assert_eq!(user.zip_code.as_deref(), Some("69001"), "code postal seulement trimé");
 
     let user = users::update_description(&pool, Some("  Profil data  ".into())).await.unwrap();
     assert_eq!(user.description.as_deref(), Some("Profil data"));
 }
 
 #[tokio::test]
-async fn une_adresse_vide_devient_null() {
+async fn un_lieu_vide_devient_null() {
     let pool = seed::pool().await;
     seed::user(&pool).await;
 
-    let input = |adresse: &str| UpdateUserInfoInput {
+    let input = |value: &str| UpdateUserInfoInput {
         prenom: None,
         nom: None,
         email: None,
         telephone: None,
-        adresse: Some(adresse.into()),
+        ville: Some(value.into()),
+        zip_code: Some(value.into()),
         permis: None,
         linkedin: None,
         github: None,
@@ -85,9 +88,10 @@ async fn une_adresse_vide_devient_null() {
         interets: None,
     };
     let user = users::update_user_info(&pool, input("Lyon")).await.unwrap();
-    assert_eq!(user.adresse.as_deref(), Some("Lyon"));
+    assert_eq!(user.ville.as_deref(), Some("Lyon"));
     let user = users::update_user_info(&pool, input("   ")).await.unwrap();
-    assert_eq!(user.adresse, None, "une adresse faite d'espaces efface la valeur");
+    assert_eq!(user.ville, None, "une ville faite d'espaces efface la valeur");
+    assert_eq!(user.zip_code, None, "un code postal fait d'espaces efface la valeur");
 }
 
 #[tokio::test]

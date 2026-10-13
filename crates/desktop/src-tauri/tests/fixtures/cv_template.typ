@@ -8,7 +8,8 @@
 #align(center, {
   text(size: 16pt, weight: "bold", upper(data.identity.prenom + " " + data.identity.nom))
   linebreak()
-  let parts = (data.identity.adresse, data.identity.email, data.identity.telephone, data.identity.linkedin)
+  let lieu = (data.identity.zip_code, data.identity.ville).filter(p => p != "").join(" ", default: "")
+  let parts = (lieu, data.identity.email, data.identity.telephone, data.identity.linkedin)
     .filter(p => p != "")
   if data.identity.permis { parts.push(data.labels.permis) }
   text(parts.join("  •  "))
