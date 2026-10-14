@@ -11,9 +11,6 @@ concurrency:
 jobs:
   frontend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: crates/desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +20,7 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: crates/desktop/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci

@@ -18,11 +18,11 @@ Every offer enters the app through its link (or its pasted text): FindMyJob neve
 
 ## Architecture
 
-FindMyJob is a standalone desktop app: one process, no server, no Docker. It is a Cargo workspace with two crates:
+FindMyJob is a standalone desktop app: one process, no server, no Docker. It follows the standard Tauri layout:
 
 ```
-crates/core     shared business logic — models, LLM calls, offer page fetch and text extraction (no DB, no Tauri)
-crates/desktop  Tauri 2 + Vue 3 app — the Rust side owns the SQLite database, the documents pipeline and the business rules
+src/        Vue 3 frontend
+src-tauri/  Tauri 2 Rust backend — owns the SQLite database, the LLM calls, the offer import, the documents pipeline and the business rules
 ```
 
 The Vue frontend calls Tauri commands, which call the business logic directly. See [`docs/project.md`](docs/project.md) for the full technical reference (data model, pipelines, commands, conventions).
@@ -54,7 +54,6 @@ The data folder depends on the run mode, set by `MODE` in `.env`:
 git clone https://github.com/KanASon/FindMyJob.git
 cd FindMyJob
 cp .env.example .env   # set MODE=DEV for an isolated dev-data/ folder, and fill in ANTHROPIC_API_KEY
-cd crates/desktop
 npm install
 npm run tauri dev
 ```
@@ -73,11 +72,18 @@ The full key never reaches the interface (only its last 4 characters) and never 
 ### Production build
 
 ```bash
-cd crates/desktop
 npm run tauri build
 ```
 
 The installer is generated under `target/release/bundle/` at the repo root.
+
+### Tests
+
+```bash
+cargo test --workspace
+```
+
+Run from the repository root.
 
 ## Tech stack
 
