@@ -186,3 +186,45 @@ async fn cv_reel_separateur_de_niveau_orphelin_designe_et_tolere() {
         Validation::Accepted { .. } => panic!("séparateur orphelin non détecté"),
     }
 }
+
+// ======================================================================
+// Structure en paragraphes de la lettre
+// ======================================================================
+
+/// Boucle des paragraphes du template réel de la lettre.
+const REAL_LM_LOOP: &str = "#for p in data.paragraphs {\n  p\n  parbreak()\n}";
+
+/// Valide le template réel de la lettre avec une autre boucle de paragraphes.
+async fn validate_real_letter_loop(paragraphs_loop: &str) -> Vec<String> {
+    // Fins de ligne normalisées : la fixture peut être extraite en CRLF.
+    let template = read_real("lm_exemple_template.typ").replace("\r\n", "\n");
+    assert!(template.contains(REAL_LM_LOOP), "boucle des paragraphes introuvable dans le template réel");
+    let example = real_example("lm_exemple_example_data.json");
+    validate_real("lm_exemple.typ", template.replace(REAL_LM_LOOP, paragraphs_loop), example, "lettre_motivation").await
+}
+
+#[tokio::test]
+async fn lettre_reelle_paragraphes_colles_refuses() {
+    // Le cas remonté : « SA.Lors », « Docker).Intéressé », « international.Résidant ».
+    let problems = validate_real_letter_loop("#for p in data.paragraphs [#p]").await;
+    for i in 1..4 {
+        let expected = format!("paragraphs[{}] et paragraphs[{i}] sont rendus sans séparateur", i - 1);
+        assert!(problems.iter().any(|p| p.contains(&expected)), "frontière {i} : {problems:?}");
+    }
+    assert!(problems.iter().any(|p| p.contains("\"SA.Lors\" colle \"SA.\" et \"Lors\"")), "{problems:?}");
+}
+
+#[tokio::test]
+async fn lettre_reelle_en_un_seul_bloc_refusee() {
+    // Le texte est identique mot pour mot : seul le contrôle structurel le voit.
+    let problems = validate_real_letter_loop("#data.paragraphs.join(\" \")\n").await;
+    assert!(problems.iter().any(|p| p.contains("est rendu à la suite de paragraphs")), "{problems:?}");
+}
+
+#[test]
+fn mot_colle_designe_ses_deux_mots() {
+    let missing = ["chez", "SA.", "Lors", "de"].map(String::from);
+    let problems = glued_words(&missing, &["SA.Lors".to_string(), "autre".to_string()]);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("\"SA.Lors\" colle \"SA.\" et \"Lors\""), "{}", problems[0]);
+}

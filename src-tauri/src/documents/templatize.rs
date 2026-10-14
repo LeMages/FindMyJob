@@ -24,6 +24,7 @@
 use std::path::Path;
 
 // Importation des modules internes
+use crate::documents::paragraph_check::paragraph_problems;
 use crate::documents::sparse_check::{cleared_data, sparse_problems, SPARSE_FIELDS};
 use crate::documents::typst::{compile_template, CompiledDocument};
 use crate::storage_paths;
@@ -33,7 +34,7 @@ use crate::docgen::example_facts::{
 };
 use crate::docgen::guidance_consistency::guidance_problems;
 use crate::docgen::sentinel_data::{hardcoded_values, is_month_word, sentinel_cv_data, sentinel_lm_data};
-use crate::docgen::text_diff::diff_words;
+use crate::docgen::text_diff::{diff_words, normalize_quotes};
 use crate::error::AppError;
 use crate::llm::{templatize_reference, TemplatizeFeedback, TemplatizeOutput};
 use crate::llm::ClaudeTarget;
@@ -96,6 +97,8 @@ enum Validation {
 /// * `root` - Dossier racine de compilation (fichiers annexes de la référence).
 /// * `fonts_dir` - Dossier des polices importées par l'utilisateur.
 /// * `target` - Clé API et modèle Claude à utiliser.
+/// * `debug_dir` - Dossier où conserver les sorties rejetées (mode DEV
+///   uniquement, `None` en PROD).
 ///
 /// # Returns
 ///
@@ -108,6 +111,7 @@ pub async fn templatize(
     root: &Path,
     fonts_dir: &Path,
     target: &ClaudeTarget,
+    debug_dir: Option<&Path>,
 ) -> Result<ValidatedTemplate, AppError> {
     let mut feedback: Option<TemplatizeFeedback> = None;
     let mut previous_problems: Vec<Vec<String>> = Vec::new();
@@ -147,6 +151,9 @@ pub async fn templatize(
         let problems = flag_oscillation(problems, &mut previous_problems);
 
         trace_log::log(&format!("[templatize] {doc_type} : tentative {attempt}/{MAX_ATTEMPTS} rejetée : {problems:?}"));
+        if let Some(dir) = debug_dir {
+            save_rejected_attempt(dir, attempt, &output.template_typ, &example_data_json, &problems);
+        }
         feedback = Some(TemplatizeFeedback {
             previous_template: output.template_typ,
             previous_example_data: example_data_json,
@@ -220,6 +227,7 @@ async fn validate(
     let page_count = match with_example {
         Ok(rendered) => {
             problems.extend(compare_with_reference(context, &rendered));
+            problems.extend(paragraph_problems(&context.reference.lines, &rendered.lines, &checked.paragraphs));
             Some(rendered.page_count)
         }
         Err(errors) => {
@@ -239,6 +247,22 @@ async fn validate(
         Some(page_count) if blocking == 0 => Validation::Rejected { problems, tolerable: Some(page_count) },
         _ => Validation::Rejected { problems, tolerable: None },
     })
+}
+
+/// Conserve une sortie rejetée (template, données d'exemple, problèmes)
+/// dans le dossier de debug. Un échec d'écriture est tracé sans faire
+/// échouer l'import : le debug ne doit jamais bloquer l'utilisateur.
+fn save_rejected_attempt(dir: &Path, attempt: u8, template_typ: &str, example_data_json: &str, problems: &[String]) {
+    let files = [
+        (format!("attempt_{attempt}_template.typ"), template_typ.to_string()),
+        (format!("attempt_{attempt}_example_data.json"), example_data_json.to_string()),
+        (format!("attempt_{attempt}_problems.txt"), problems.join("\n")),
+    ];
+    let written = std::fs::create_dir_all(dir)
+        .and_then(|()| files.iter().try_for_each(|(name, content)| std::fs::write(dir.join(name), content)));
+    if let Err(e) = written {
+        trace_log::log(&format!("[templatize] sortie rejetée non conservée dans {} : {e}", dir.display()));
+    }
 }
 
 /// Ajoute `OSCILLATION_HINT` aux problèmes d'une tentative s'ils sont
@@ -329,10 +353,13 @@ fn static_problems(template: &str) -> Vec<String> {
 /// * `values` - Valeurs qui ont un champ (informations et prose), qu'aucun
 ///   texte en dur du template ne doit reproduire.
 /// * `guidance_problems` - Incohérences des consignes avec la prose.
+/// * `paragraphs` - Paragraphes du corps d'une lettre, dont la structure
+///   est contrôlée sur le rendu (vide pour un CV).
 struct CheckedExample {
     blank_json: String,
     values: Vec<String>,
     guidance_problems: Vec<String>,
+    paragraphs: Vec<String>,
 }
 
 /// Vérifie que les données d'exemple respectent le schéma canonique typé
@@ -365,6 +392,7 @@ fn check_example(example_data: &serde_json::Value, doc_type: &str) -> Result<Che
                 blank_json: to_json(serde_json::to_string(&blank))?,
                 values: [cv_information_values(&example.data), cv_prose_values(&example.data)].concat(),
                 guidance_problems: guidance_problems(&example.guidance, &prose_fields(&prose)),
+                paragraphs: Vec::new(),
             })
         }
         _ => {
@@ -380,6 +408,7 @@ fn check_example(example_data: &serde_json::Value, doc_type: &str) -> Result<Che
                 blank_json: to_json(serde_json::to_string(&blank))?,
                 values: [lm_information_values(&example.data), lm_prose_values(&example.data)].concat(),
                 guidance_problems: guidance_problems(&example.guidance, &fields),
+                paragraphs: example.data.paragraphs.clone(),
             })
         }
     }
@@ -426,7 +455,35 @@ fn compare_with_reference(context: &ValidationContext<'_>, rendered: &CompiledDo
     if !missing.is_empty() || !extra.is_empty() {
         problems.push(describe_text_diff(&missing, &extra));
     }
+    problems.extend(glued_words(&missing, &extra));
     problems
+}
+
+/// Signale chaque mot en trop qui est la concaténation de deux mots
+/// manquants consécutifs : deux textes rendus sans séparateur.
+///
+/// # Arguments
+///
+/// * `missing` - Mots de la référence absents du rendu, dans l'ordre.
+/// * `extra` - Mots du rendu absents de la référence.
+///
+/// # Returns
+///
+/// Un problème par mot collé.
+fn glued_words(missing: &[String], extra: &[String]) -> Vec<String> {
+    extra
+        .iter()
+        .filter_map(|word| {
+            let glued = normalize_quotes(word);
+            let pair = missing.windows(2).find(|pair| normalize_quotes(&format!("{}{}", pair[0], pair[1])) == glued)?;
+            Some(format!(
+                "Le mot rendu \"{word}\" colle \"{}\" et \"{}\" : deux textes sont rendus sans séparateur. Si ce sont \
+                 la fin d'un paragraphe et le début du suivant, chaque entrée de paragraphs doit être rendue comme un \
+                 paragraphe distinct.",
+                pair[0], pair[1]
+            ))
+        })
+        .collect()
 }
 
 /// Données servant au rendu de validation : les données d'exemple telles

@@ -113,6 +113,7 @@ async fn supprimer_une_session_supprime_son_dossier() {
         api_key: ApiKeyAccess::new(RunMode::Prod, Arc::new(FakeSecretStore::default()), || None),
         // Jamais appelé : supprimer une session ne passe pas par Claude.
         llm: Arc::new(AnthropicCaller),
+        run_mode: RunMode::Prod,
     };
 
     sessions::delete(&state, sid).await.unwrap();

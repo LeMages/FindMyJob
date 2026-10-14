@@ -127,6 +127,21 @@ pub fn debug_dir(session_id: i64, candidature_id: i64) -> String {
     format!("{}/debug/{candidature_id}", session_dir(session_id))
 }
 
+/// Dossier relatif des sorties rejetées d'une templatisation (mode DEV).
+///
+/// # Arguments
+///
+/// * `session_id` - Identifiant de la session.
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `stamp` - Horodatage de la templatisation (`clock::file_stamp`).
+///
+/// # Returns
+///
+/// `documents/sessions/<session_id>/<doc_type>/templatize_debug/<stamp>`.
+pub fn templatize_debug_dir(session_id: i64, doc_type: &str, stamp: &str) -> String {
+    format!("{}/templatize_debug/{stamp}", doc_type_dir(session_id, doc_type))
+}
+
 /// Chemin relatif d'un fichier dans un dossier relatif.
 ///
 /// # Arguments

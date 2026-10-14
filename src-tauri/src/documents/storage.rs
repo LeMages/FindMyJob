@@ -24,6 +24,7 @@ use crate::db::document_versions::NewVersion;
 use crate::db::transaction::begin_write;
 use crate::documents::templatize::{templatize, template_artifacts, write_template_files, ValidatedTemplate};
 use crate::documents::typst::{compile_document, compile_to_pdf};
+use crate::startup::run_mode::RunMode;
 use crate::storage_paths;
 use crate::error::AppError;
 use crate::models::{DocumentFileInfo, DocumentReferenceView};
@@ -264,7 +265,15 @@ pub async fn save_reference(
     //    — hors transaction : les appels LLM ne bloquent pas les écritures
     // ------------------------------------------------------------------
     let target = state.claude().resolve().await?;
-    let validated = templatize(&content, &reference, doc_type, &doc_dir, fonts_dir, &target).await?;
+    // En DEV seulement, les sorties rejetées sont conservées pour le debug.
+    let debug_dir = (state.run_mode == RunMode::Dev).then(|| {
+        storage_paths::to_absolute(
+            data_dir,
+            &storage_paths::templatize_debug_dir(session_id, doc_type, &clock::file_stamp()),
+        )
+    });
+    let validated =
+        templatize(&content, &reference, doc_type, &doc_dir, fonts_dir, &target, debug_dir.as_deref()).await?;
 
     // ------------------------------------------------------------------
     // 4. Version en base, fichiers et référence courante, atomiquement

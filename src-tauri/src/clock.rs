@@ -11,6 +11,9 @@ use chrono::{DateTime, NaiveDate, Utc};
 /// Format des dates-heures stockées (RFC 3339 UTC, millisecondes, suffixe `Z`).
 const TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3fZ";
 
+/// Format d'horodatage utilisable dans un nom de dossier (sans `:`).
+const FILE_STAMP_FORMAT: &str = "%Y%m%dT%H%M%S%3fZ";
+
 /// Format des dates simples stockées.
 const DATE_FORMAT: &str = "%Y-%m-%d";
 
@@ -24,6 +27,16 @@ const DATE_FORMAT: &str = "%Y-%m-%d";
 /// Horodatage RFC 3339 UTC en millisecondes.
 pub fn now_utc() -> String {
     format_timestamp(Utc::now())
+}
+
+/// Heure courante sous une forme utilisable dans un nom de dossier
+/// (`20261014T081530125Z`) : triable, sans caractère interdit sous Windows.
+///
+/// # Returns
+///
+/// Horodatage UTC compact, en millisecondes.
+pub fn file_stamp() -> String {
+    Utc::now().format(FILE_STAMP_FORMAT).to_string()
 }
 
 /// Convertit une date-heure au format de stockage.

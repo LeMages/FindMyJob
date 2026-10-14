@@ -15,6 +15,7 @@ use sqlx::SqlitePool;
 use crate::progress::ProgressStore;
 use crate::services::api_key::ApiKeyAccess;
 use crate::services::claude_target::ClaudeTargetSource;
+use crate::startup::run_mode::RunMode;
 use crate::error::AppError;
 use crate::llm::LlmCaller;
 
@@ -31,6 +32,7 @@ use crate::llm::LlmCaller;
 /// * `progress` - Progression en mémoire des générations de documents.
 /// * `api_key` - Accès à la clé API Anthropic selon le mode d'exécution.
 /// * `llm` - Exécutant des appels à Claude (`AnthropicCaller` dans l'application).
+/// * `run_mode` - Mode d'exécution décidé au démarrage (traces de debug en DEV).
 #[derive(Clone)]
 pub struct AppState {
     pub pool: SqlitePool,
@@ -40,6 +42,7 @@ pub struct AppState {
     pub progress: ProgressStore,
     pub api_key: ApiKeyAccess,
     pub llm: Arc<dyn LlmCaller>,
+    pub run_mode: RunMode,
 }
 
 impl AppState {
