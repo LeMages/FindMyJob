@@ -8,7 +8,7 @@
 #let joined(values, sep) = values.filter(v => v != "").join(sep, default: "")
 
 #block(strong(joined((data.identity.prenom, data.identity.nom), " ")))
-#for line in (data.identity.adresse, data.identity.email, data.identity.telephone).filter(v => v != "") {
+#for line in (joined((data.identity.ville, data.identity.zip_code), ", "), data.identity.email, data.identity.telephone).filter(v => v != "") {
   block(line)
 }
 
@@ -19,7 +19,7 @@
 })
 
 #if data.date != "" {
-  align(right, text(joined((data.identity.adresse, joined((data.labels.date_prefix, data.date), " ")), ", ")))
+  align(right, text(joined((data.identity.ville, joined((data.labels.date_prefix, data.date), " ")), ", ")))
 }
 
 #if data.subject != "" {

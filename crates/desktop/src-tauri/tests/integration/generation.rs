@@ -46,7 +46,8 @@ fn prose_fields(data: &Value) -> Vec<ProseField> {
             fields.push(ProseField { path, text: text.to_string() });
         }
     };
-    for key in ["title", "summary", "subject"] {
+    push("identity.title".to_string(), &data["identity"]["title"]);
+    for key in ["summary", "subject"] {
         push(key.to_string(), &data[key]);
     }
     for (i, p) in data["paragraphs"].as_array().into_iter().flatten().enumerate() {
@@ -86,12 +87,14 @@ async fn generation_remplit_data_json_depuis_le_profil() {
     assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
 
     // ------------------------------------------------------------------
-    // 1. data.json : faits du profil, jamais les valeurs d'exemple
+    // 1. data.json : faits du profil ; ce que le profil n'a pas (ville et
+    //    code postal, vidés par `seed_profile`) vient du document
     // ------------------------------------------------------------------
     let (cv_raw, cv) = read_data(&app.state, sid, "cv", view.id);
-    let (lm_raw, lm) = read_data(&app.state, sid, "lettre_motivation", view.id);
-    for raw in [&cv_raw, &lm_raw] {
-        assert!(!raw.contains("Exemple"), "valeur de la référence recopiée : {raw}");
+    let (_, lm) = read_data(&app.state, sid, "lettre_motivation", view.id);
+    for data in [&cv, &lm] {
+        assert_eq!(data["identity"]["ville"], "Exempleville", "profil vide : ville du document");
+        assert_eq!(data["identity"]["zip_code"], "00000", "profil vide : code postal du document");
     }
     assert_eq!(cv["identity"]["prenom"], "Alex");
     assert_eq!(cv["identity"]["nom"], "Martin");
@@ -102,6 +105,8 @@ async fn generation_remplit_data_json_depuis_le_profil() {
     assert_eq!(cv["langues"][0]["nom"], "Anglais");
     assert_eq!(cv["skills_groups"][0]["skills"], serde_json::json!(["SQL", "Python"]));
     assert_eq!(lm["identity"]["nom"], "Martin");
+    assert_eq!(lm["identity"]["title"], cv["identity"]["title"], "même sous-titre sur les deux documents");
+    assert_ne!(cv["identity"]["title"], "", "sous-titre rédigé pour l'offre");
     assert_eq!(lm["recipient"]["company"], "Lumen Santé");
     assert_eq!(lm["paragraphs"].as_array().map(Vec::len), Some(3));
 

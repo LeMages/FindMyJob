@@ -23,7 +23,7 @@ use crate::db;
 use crate::services::api_key::ApiKeyAccess;
 use crate::services::claude_target::ClaudeTargetSource;
 use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
-use crate::docgen::build_lm_data::build_lm_data;
+use crate::docgen::build_lm_data::{build_lm_data, LmLayout};
 use crate::docgen::labels_cache::{resolve_cv_labels, resolve_lm_labels, ResolvedLabels};
 use crate::docgen::page_fit::{fit_to_pages, CompileTarget, FittedDocument};
 use crate::docgen::recipient::build_recipient;
@@ -164,6 +164,7 @@ impl GenerationContext {
             selection: &self.selection,
             profile: &self.profile,
             example: &self.cv_ref.example.data,
+            guidance: &self.cv_ref.example.guidance,
             budget,
             target_lang: &self.lang,
             example_lang: &self.cv_ref.example.detected_lang,
@@ -178,6 +179,7 @@ impl GenerationContext {
             selection: &self.selection,
             profile: &self.profile,
             example: &self.lm_ref.example.data,
+            guidance: &self.lm_ref.example.guidance,
             budget,
             company: &self.recipient.company,
             target_lang: &self.lang,
@@ -215,7 +217,7 @@ async fn prepare(
     let project_count = cv_ref.example.data.projects.len();
     let matching = match_profile(&offer_analysis, &profile, project_count, &target).await?;
     let selection = select(&profile, &matching, project_count);
-    let mut cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count);
+    let mut cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count).with_fixed_words(&cv_ref.example.guidance);
     // Un profil peut avoir moins de projets que la référence : on en attend
     // autant que la sélection en contient, jamais plus.
     cv_budget.project_count = selection.projects.len();
@@ -225,7 +227,7 @@ async fn prepare(
     domains.sort_unstable();
     domains.dedup();
     cv_budget.skills_group_count = cv_budget.skills_group_count.min(domains.len());
-    let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count);
+    let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count).with_fixed_words(&lm_ref.example.guidance);
 
     // ------------------------------------------------------------------
     // 3. Libellés dans la langue de l'offre (traduits et mis en cache si besoin)
@@ -260,6 +262,7 @@ async fn produce_cv(
 ) -> Result<FittedDocument<CvContent>, AppError> {
     let separator = detect_separator(ctx.cv_ref.example.data.experiences.iter().map(|e| e.period.as_str()));
     let layout = CvLayout {
+        document: &ctx.cv_ref.example.data,
         labels: &ctx.cv_labels.labels,
         period_style: &ctx.cv_ref.example.period_style,
         separator: &separator,
@@ -285,12 +288,20 @@ async fn produce_cv(
 }
 
 /// Assemble, compile et ajuste la lettre au nombre de pages de la référence.
+/// `title` est le sous-titre professionnel du CV final, repris tel quel.
 async fn produce_lm(
     ctx: &GenerationContext,
     writing: WritingOutcome<LmContent>,
+    title: &str,
     fonts_dir: &Path,
 ) -> Result<FittedDocument<LmContent>, AppError> {
-    let today = chrono::Local::now().date_naive();
+    let layout = LmLayout {
+        document: &ctx.lm_ref.example.data,
+        labels: &ctx.lm_labels.labels,
+        title,
+        date: chrono::Local::now().date_naive(),
+        lang: &ctx.lang,
+    };
     let target = CompileTarget {
         label: "lettre",
         template: &ctx.lm_ref.template,
@@ -301,7 +312,7 @@ async fn produce_lm(
     fit_to_pages(
         &target,
         writing,
-        |content| build_lm_data(&ctx.profile, &ctx.recipient, content, &ctx.lm_labels.labels, today, &ctx.lang),
+        |content| build_lm_data(&ctx.profile, &ctx.recipient, content, &layout),
         |factor| {
             let input = ctx.lm_input(ctx.lm_budget.scaled(factor));
             async move { write_lm(&input, &ctx.target).await }
@@ -362,7 +373,8 @@ pub async fn generate_documents(
     let cv_fitted = produce_cv(&ctx, cv_writing, fonts_dir).await?;
 
     on_progress(5, "Assemblage et compilation de la lettre…");
-    let lm_fitted = produce_lm(&ctx, lm_writing, fonts_dir).await?;
+    let cv_title = cv_fitted.writing.content.title.clone();
+    let lm_fitted = produce_lm(&ctx, lm_writing, &cv_title, fonts_dir).await?;
 
     Ok(into_result(ctx, cv_fitted, lm_fitted))
 }

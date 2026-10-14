@@ -2,16 +2,22 @@
   "identity": {
     "prenom": "Camille",
     "nom": "Exemple",
+    "title": "",
     "email": "camille@exemple.invalid",
     "telephone": "00 00 00 00 00",
-    "adresse": "Exempleville",
+    "ville": "Exempleville",
+    "zip_code": "00000",
     "linkedin": "",
     "github": "",
     "portfolio": "",
     "permis": false
   },
   "lang": "fr",
-  "recipient": { "company": "Exemple Corp", "location": "Exempleville" },
+  "recipient": {
+    "company": "Exemple Corp",
+    "location": "Exempleville",
+    "extra_lines": []
+  },
   "date": "1 janvier 2026",
   "subject": "Candidature exemple pour un stage",
   "paragraphs": [
@@ -25,5 +31,9 @@
     "closing": "Je vous prie d'agréer, Madame, Monsieur, mes salutations distinguées.",
     "date_prefix": "le"
   },
-  "detected_lang": "fr"
+  "detected_lang": "fr",
+  "guidance": {
+    "general": "",
+    "zones": []
+  }
 }

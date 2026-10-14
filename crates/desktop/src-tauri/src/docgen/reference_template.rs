@@ -63,6 +63,7 @@ pub async fn load_reference<E: DeserializeOwned>(
     let template_file = storage_paths::to_absolute(data_dir, &artifacts.template_path);
     let template = read(&template_file)?;
     let example_json = read(&storage_paths::to_absolute(data_dir, &artifacts.example_data_path))?;
+    check_current_schema(&template, &example_json, label)?;
     let example = serde_json::from_str(&example_json).map_err(|e| {
         AppError::Validation(format!("Données d'exemple illisibles ({}) : {e}", artifacts.example_data_path))
     })?;
@@ -74,6 +75,44 @@ pub async fn load_reference<E: DeserializeOwned>(
         .map_err(|_| AppError::Validation(format!("Nombre de pages invalide : {}", artifacts.page_count)))?;
 
     Ok(ReferenceTemplate { template, example, dir, page_count, version_id: doc.current_version_id })
+}
+
+/// Champs retirés du schéma canonique : un template qui les lit a été
+/// converti par une version précédente et ne compilerait plus.
+const REMOVED_FIELDS: [&str; 1] = ["identity.adresse"];
+/// Clés ajoutées aux données d'exemple : une référence convertie avant leur
+/// ajout n'a ni consignes de rédaction, ni texte sans champ gardé en dur.
+const REQUIRED_EXAMPLE_KEYS: [&str; 1] = ["guidance"];
+
+/// Refuse une référence convertie par une version précédente : template
+/// qui lit un champ retiré du schéma (`REMOVED_FIELDS`), ou données
+/// d'exemple sans une clé ajoutée depuis (`REQUIRED_EXAMPLE_KEYS`). L'erreur
+/// demande de réimporter la référence plutôt qu'une erreur de compilation
+/// Typst ou de lecture.
+///
+/// # Arguments
+///
+/// * `template` - Source du `template.typ`.
+/// * `example_json` - Contenu de `example_data.json`.
+/// * `label` - Libellé lisible du document, pour le message.
+///
+/// # Returns
+///
+/// `Ok(())`, ou `AppError::OutdatedReference`.
+pub fn check_current_schema(template: &str, example_json: &str, label: &str) -> Result<(), AppError> {
+    // Un JSON illisible n'est pas une ancienne version : sa lecture typée,
+    // juste après, le signale avec son erreur.
+    let missing_key = match serde_json::from_str::<serde_json::Value>(example_json) {
+        Ok(example) => REQUIRED_EXAMPLE_KEYS.iter().any(|key| example.get(key).is_none()),
+        Err(_) => false,
+    };
+    if missing_key || REMOVED_FIELDS.iter().any(|field| template.contains(field)) {
+        return Err(AppError::OutdatedReference(format!(
+            "Votre {label} de référence a été converti par une version précédente de l'application et n'est \
+             plus compatible. Réimportez-le dans les paramètres de session."
+        )));
+    }
+    Ok(())
 }
 
 /// Lit un fichier de la référence.

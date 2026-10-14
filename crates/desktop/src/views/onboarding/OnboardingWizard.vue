@@ -28,7 +28,8 @@ const formRaw = ref({
   prenom: '',
   email: '',
   telephone: '',
-  adresse: '',
+  ville: '',
+  zip_code: '',
   permis: null as boolean | null,
   description: '',
   linkedin: '',
@@ -73,7 +74,8 @@ async function finish() {
     prenom: formRaw.value.prenom,
     email: formRaw.value.email,
     telephone: formRaw.value.telephone || null,
-    adresse: formRaw.value.adresse || null,
+    ville: formRaw.value.ville.trim() || null,
+    zip_code: formRaw.value.zip_code.trim() || null,
     permis: formRaw.value.permis,
     description: formRaw.value.description || null,
     linkedin: formRaw.value.linkedin || null,
@@ -167,14 +169,27 @@ async function finish() {
 
       <!-- Step 2: Localisation -->
       <div v-else-if="currentStep === 2" class="mb-4 min-h-[160px]">
-        <div class="mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse</label>
-          <input
-            v-model="formRaw.adresse"
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
-            type="text"
-            placeholder="12 rue de l'Exemple, 75000 Paris"
-          />
+        <div class="flex gap-[14px]">
+          <div class="flex-1 mb-[14px]">
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">Ville</label>
+            <input
+              v-model="formRaw.ville"
+              class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+              type="text"
+              placeholder="Lyon"
+              autocomplete="address-level2"
+            />
+          </div>
+          <div class="w-[140px] mb-[14px]">
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">Code postal</label>
+            <input
+              v-model="formRaw.zip_code"
+              class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+              type="text"
+              placeholder="69000"
+              autocomplete="postal-code"
+            />
+          </div>
         </div>
         <div class="mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">Permis de conduire</label>

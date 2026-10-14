@@ -2,42 +2,50 @@
 //! (`llm::templatize`), validation du template obtenu par compilation, et
 //! retry avec les problèmes relevés en feedback.
 //!
-//! Un template est accepté s'il :
+//! La référence est la source de vérité de la structure et du texte : rien
+//! n'en est retiré, un texte sans champ dans le schéma reste écrit en dur
+//! dans le template. Un template est accepté s'il :
 //! - lit ses données depuis `data.json` et n'évalue ni ne calcule rien
 //!   (`eval`, `datetime.today`, `read` interdits) ;
 //! - compilé avec ses données d'exemple, n'a pas plus de pages que la
-//!   référence, et rend le même texte qu'elle, à l'exception des textes
-//!   déclarés supprimés (`dropped_text` : éléments sans champ dans le
-//!   schéma) et d'une date calculée à la compilation ;
-//! - compilé avec des données vides, compile toujours et n'affiche aucun mot
-//!   (preuve qu'aucun contenu n'est resté écrit en dur) ;
+//!   référence, et rend exactement son texte (seule une date calculée à la
+//!   compilation peut différer) ;
+//! - compile avec des données vides ;
 //! - compilé avec les champs secondaires vides (coordonnées, organisations,
-//!   lieux, niveaux), ne laisse aucun séparateur orphelin.
+//!   lieux, niveaux), ne laisse aucun séparateur orphelin ;
+//! - compilé avec un marqueur unique dans chaque champ (rendu sentinelle),
+//!   ne garde en dur aucune valeur qui a un champ (nom, ville, entreprise,
+//!   résumé…) : elle ne serait jamais remplacée par celle du profil.
+//!
+//! Les consignes extraites de la référence (`guidance`) doivent redonner
+//! exactement la prose des données d'exemple.
 
 // Importation des modules standard
 use std::path::Path;
 
 // Importation des modules internes
+use crate::documents::sparse_check::{cleared_data, sparse_problems, SPARSE_FIELDS};
 use crate::documents::typst::{compile_template, CompiledDocument};
 use crate::storage_paths;
 use findmyjob_core::docgen::date_format::format_long_date;
-use findmyjob_core::docgen::text_diff::{alphanumeric_words, diff_words, orphan_separators};
+use findmyjob_core::docgen::example_facts::{
+    cv_information_values, cv_prose_values, lm_information_values, lm_prose_values,
+};
+use findmyjob_core::docgen::guidance_consistency::guidance_problems;
+use findmyjob_core::docgen::sentinel_data::{hardcoded_values, is_month_word, sentinel_cv_data, sentinel_lm_data};
+use findmyjob_core::docgen::text_diff::diff_words;
 use findmyjob_core::error::AppError;
 use findmyjob_core::llm::{templatize_reference, TemplatizeFeedback, TemplatizeOutput};
 use findmyjob_core::llm::ClaudeTarget;
-use findmyjob_core::models::{CvExampleData, LmExampleData, TemplateArtifacts};
+use findmyjob_core::models::{CvData, CvExampleData, LmData, LmExampleData, ProseField, TemplateArtifacts};
 use findmyjob_core::trace_log;
 
 /// Nombre total d'appels LLM autorisés : un essai + 2 retries avec feedback.
 const MAX_ATTEMPTS: u8 = 3;
-/// Noms de mois (anglais puis français, en minuscules) : une date calculée
-/// par la référence (`datetime.today`) s'affiche avec l'un d'eux, entier ou
-/// abrégé, et n'a pas d'équivalent dans les données d'exemple.
-const MONTH_NAMES: [&str; 24] = [
-    "january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
-    "november", "december", "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
-    "septembre", "octobre", "novembre", "décembre",
-];
+/// Phrase ajoutée au feedback quand une tentative reproduit exactement les
+/// problèmes d'une tentative précédente.
+const OSCILLATION_HINT: &str = "Cette tentative reproduit exactement les problèmes d'une tentative précédente : \
+     tu oscilles entre deux solutions qui échouent. Change d'approche au lieu de revenir à une sortie déjà refusée.";
 /// Nombre de mots en écart cités dans un message de feedback.
 const MAX_WORDS_REPORTED: usize = 30;
 /// Constructions interdites dans un template : elles évalueraient une valeur
@@ -60,13 +68,11 @@ pub const EXAMPLE_DATA_FILE: &str = "example_data.json";
 /// * `example_data_json` - Données d'exemple, JSON indenté.
 /// * `page_count` - Nombre de pages du template rendu avec ses données
 ///   d'exemple : plafond de pages des documents générés.
-/// * `dropped_text` - Textes de la référence volontairement absents du template.
 /// * `attempts` - Nombre d'appels LLM qu'il a fallu.
 pub struct ValidatedTemplate {
     pub template_typ: String,
     pub example_data_json: String,
     pub page_count: usize,
-    pub dropped_text: Vec<String>,
     pub attempts: u8,
 }
 
@@ -74,8 +80,10 @@ pub struct ValidatedTemplate {
 enum Validation {
     /// Template accepté ; nombre de pages du rendu avec les données d'exemple.
     Accepted { page_count: usize },
-    /// Template refusé ; problèmes à renvoyer en feedback.
-    Rejected(Vec<String>),
+    /// Template refusé ; problèmes à renvoyer en feedback. `tolerable` vaut
+    /// le nombre de pages quand les seuls problèmes sont des séparateurs
+    /// orphelins : le template reste utilisable en dernier recours.
+    Rejected { problems: Vec<String>, tolerable: Option<usize> },
 }
 
 /// Convertit une référence en template validé, avec jusqu'à 2 retries.
@@ -102,6 +110,7 @@ pub async fn templatize(
     target: &ClaudeTarget,
 ) -> Result<ValidatedTemplate, AppError> {
     let mut feedback: Option<TemplatizeFeedback> = None;
+    let mut previous_problems: Vec<Vec<String>> = Vec::new();
     let computes_date = reference_typ.contains("datetime.today");
 
     for attempt in 1..=MAX_ATTEMPTS {
@@ -116,18 +125,31 @@ pub async fn templatize(
                     template_typ: output.template_typ,
                     example_data_json,
                     page_count,
-                    dropped_text: output.dropped_text,
                     attempts: attempt,
                 });
             }
-            Validation::Rejected(problems) => problems,
+            // Dernière tentative et seulement des séparateurs orphelins : un
+            // défaut d'affichage limité aux champs vides du profil ne doit
+            // pas faire échouer l'import.
+            Validation::Rejected { problems, tolerable: Some(page_count) } if attempt == MAX_ATTEMPTS => {
+                trace_log::log(&format!(
+                    "[templatize] {doc_type} : template accepté malgré des séparateurs orphelins : {problems:?}"
+                ));
+                return Ok(ValidatedTemplate {
+                    template_typ: output.template_typ,
+                    example_data_json,
+                    page_count,
+                    attempts: attempt,
+                });
+            }
+            Validation::Rejected { problems, .. } => problems,
         };
+        let problems = flag_oscillation(problems, &mut previous_problems);
 
         trace_log::log(&format!("[templatize] {doc_type} : tentative {attempt}/{MAX_ATTEMPTS} rejetée : {problems:?}"));
         feedback = Some(TemplatizeFeedback {
             previous_template: output.template_typ,
             previous_example_data: example_data_json,
-            previous_dropped_text: output.dropped_text,
             problems,
         });
     }
@@ -166,41 +188,38 @@ async fn validate(
     // 1. Contrôles statiques du template et typage des données d'exemple
     // ------------------------------------------------------------------
     let mut problems = static_problems(&output.template_typ);
-    if context.doc_type == "cv" {
-        problems.extend(dated_drops(&output.dropped_text));
-    }
-    let blank_json = match blank_data_json(&output.example_data, context.doc_type) {
-        Ok(json) => json,
+    let checked = match check_example(&output.example_data, context.doc_type) {
+        Ok(checked) => checked,
         Err(problem) => {
             problems.push(problem);
-            return Ok(Validation::Rejected(problems));
+            return Ok(Validation::Rejected { problems, tolerable: None });
         }
     };
+    problems.extend(checked.guidance_problems);
 
     // ------------------------------------------------------------------
-    // 2. Rendus avec les données d'exemple puis avec des données vides
-    //    (compilation bloquante, hors du runtime async)
+    // 2. Rendus avec les données d'exemple, vides, clairsemées et
+    //    sentinelles (compilation bloquante, hors du runtime async)
     // ------------------------------------------------------------------
     let template = output.template_typ.clone();
     let example = example_for_rendering(&output.example_data, example_data_json, context)?;
-    let root = context.root.to_path_buf();
-    let fonts_dir = context.fonts_dir.to_path_buf();
-    let sparse = sparse_data(&example)?;
-    let (with_example, with_blank, with_sparse) = tokio::task::spawn_blocking(move || {
-        let with_example = compile_template(template.clone(), example, root.clone(), fonts_dir.clone());
-        let with_blank = compile_template(template.clone(), blank_json.into_bytes(), root.clone(), fonts_dir.clone());
-        let with_sparse = compile_template(template, sparse, root, fonts_dir);
-        (with_example, with_blank, with_sparse)
+    let sparse = cleared_data(&example, &SPARSE_FIELDS)?;
+    let sentinel = sentinel_data(&output.example_data, context.doc_type)?;
+    let data_sets = [example.clone(), checked.blank_json.into_bytes(), sparse, sentinel];
+    let (root, fonts_dir) = (context.root.to_path_buf(), context.fonts_dir.to_path_buf());
+    let [with_example, with_blank, with_sparse, with_sentinel] = tokio::task::spawn_blocking(move || {
+        data_sets.map(|data| compile_template(template.clone(), data, root.clone(), fonts_dir.clone()))
     })
     .await
     .map_err(|e| AppError::Validation(format!("Erreur interne de compilation Typst : {e}")))?;
 
     // ------------------------------------------------------------------
     // 3. Comparaison avec la référence, puis recherche de contenu en dur
+    //    et de séparateurs orphelins
     // ------------------------------------------------------------------
     let page_count = match with_example {
         Ok(rendered) => {
-            problems.extend(compare_with_reference(context, &rendered, &output.dropped_text));
+            problems.extend(compare_with_reference(context, &rendered));
             Some(rendered.page_count)
         }
         Err(errors) => {
@@ -208,112 +227,84 @@ async fn validate(
             None
         }
     };
-    match with_blank {
-        Ok(rendered) => {
-            let hardcoded = alphanumeric_words(&rendered.text);
-            if !hardcoded.is_empty() {
-                problems.push(format!(
-                    "Rendu avec des données vides, le template affiche encore ces mots, donc écrits en dur : {}. \
-                     Ils doivent venir de data.",
-                    quote_words(&hardcoded)
-                ));
-            }
-        }
-        Err(errors) => problems.push(format!(
-            "Le template ne compile pas quand tous les champs sont vides (chaînes vides, listes vides) : {errors}"
-        )),
-    }
-    match with_sparse {
-        Ok(rendered) => {
-            let orphans = orphan_separators(&rendered.text);
-            if !orphans.is_empty() {
-                problems.push(format!(
-                    "Rendu avec les champs secondaires vides ({}), le template laisse des séparateurs orphelins : {}. \
-                     Un champ vide doit faire disparaître sa valeur et le séparateur qui l'accompagne.",
-                    SPARSE_FIELDS.join(", "),
-                    quote_words(&orphans)
-                ));
-            }
-        }
-        Err(errors) => problems.push(format!(
-            "Le template ne compile pas quand les champs secondaires sont vides ({}) : {errors}",
-            SPARSE_FIELDS.join(", ")
-        )),
-    }
+    problems.extend(blank_problem(with_blank));
+    problems.extend(sentinel_problem(with_sentinel, &checked.values));
+    let blocking = problems.len();
+    let (root, fonts_dir) = (context.root.to_path_buf(), context.fonts_dir.to_path_buf());
+    problems.extend(sparse_problems(with_sparse, &output.template_typ, &example, root, fonts_dir).await?);
 
     Ok(match page_count {
         Some(page_count) if problems.is_empty() => Validation::Accepted { page_count },
-        _ => Validation::Rejected(problems),
+        // Seuls des séparateurs orphelins : template utilisable en dernier recours.
+        Some(page_count) if blocking == 0 => Validation::Rejected { problems, tolerable: Some(page_count) },
+        _ => Validation::Rejected { problems, tolerable: None },
     })
 }
 
-/// Refuse les textes datés déclarés supprimés d'un CV : ce sont des entrées
-/// de liste (formation, expérience, projet), qui ont un champ dans le schéma.
-fn dated_drops(dropped_text: &[String]) -> Vec<String> {
-    dropped_text
-        .iter()
-        .filter(|text| contains_year(text))
-        .map(|text| {
-            format!(
-                "dropped_text contient « {text} » : un élément daté d'un CV est une formation, une expérience \
-                 ou un projet, qui a un champ dans le schéma. Range-le dans example_data et reproduis sa mise \
-                 en page dans le template."
-            )
-        })
-        .collect()
-}
-
-/// Indique si un texte contient une année (quatre chiffres commençant par
-/// 19 ou 20, isolés).
-fn contains_year(text: &str) -> bool {
-    let chars: Vec<char> = text.chars().collect();
-    chars.windows(4).enumerate().any(|(i, w)| {
-        let is_year = w.iter().all(char::is_ascii_digit) && matches!((w[0], w[1]), ('1', '9') | ('2', '0'));
-        let isolated_before = i == 0 || !chars[i - 1].is_ascii_digit();
-        let isolated_after = chars.get(i + 4).is_none_or(|c| !c.is_ascii_digit());
-        is_year && isolated_before && isolated_after
-    })
-}
-
-/// Champs secondaires vidés pour le rendu « clairsemé » : coordonnées,
-/// organisations, lieux et niveaux, que le profil d'un utilisateur peut
-/// ne pas renseigner.
-const SPARSE_FIELDS: [&str; 12] = [
-    "email", "telephone", "adresse", "linkedin", "github", "portfolio", "entreprise", "lieu",
-    "pour_qui", "ecole", "level", "location",
-];
-
-/// Données d'exemple dont les champs secondaires (`SPARSE_FIELDS`) sont
-/// vidés, partout où ils apparaissent : un template correct n'affiche
-/// alors aucun séparateur orphelin.
+/// Ajoute `OSCILLATION_HINT` aux problèmes d'une tentative s'ils sont
+/// exactement ceux d'une tentative précédente, puis les mémorise.
 ///
 /// # Arguments
 ///
-/// * `example` - Données d'exemple sérialisées (telles que rendues).
+/// * `problems` - Problèmes de la tentative courante.
+/// * `previous` - Ensembles (triés) des problèmes des tentatives précédentes.
 ///
 /// # Returns
 ///
-/// Données clairsemées sérialisées.
-fn sparse_data(example: &[u8]) -> Result<Vec<u8>, AppError> {
-    fn clear(value: &mut serde_json::Value) {
-        match value {
-            serde_json::Value::Object(map) => {
-                for (key, field) in map.iter_mut() {
-                    if SPARSE_FIELDS.contains(&key.as_str()) && field.is_string() {
-                        *field = serde_json::Value::String(String::new());
-                    } else {
-                        clear(field);
-                    }
-                }
-            }
-            serde_json::Value::Array(items) => items.iter_mut().for_each(clear),
-            _ => {}
-        }
+/// Problèmes à renvoyer en feedback.
+fn flag_oscillation(mut problems: Vec<String>, previous: &mut Vec<Vec<String>>) -> Vec<String> {
+    let mut sorted = problems.clone();
+    sorted.sort_unstable();
+    if previous.contains(&sorted) {
+        problems.push(OSCILLATION_HINT.to_string());
     }
-    let mut data: serde_json::Value = serde_json::from_slice(example)
-        .map_err(|e| AppError::Validation(format!("Données d'exemple illisibles : {e}")))?;
-    clear(&mut data);
-    serde_json::to_vec(&data).map_err(|e| AppError::Validation(format!("Données clairsemées non sérialisables : {e}")))
+    previous.push(sorted);
+    problems
+}
+
+/// Problème du rendu avec des données vides : le template doit compiler.
+/// Le texte qu'il garde en dur est légitime (texte de la référence sans
+/// champ).
+fn blank_problem(rendered: Result<CompiledDocument, String>) -> Option<String> {
+    rendered.err().map(|errors| {
+        format!("Le template ne compile pas quand tous les champs sont vides (chaînes vides, listes vides) : {errors}")
+    })
+}
+
+/// Problème du rendu sentinelle : une valeur qui a un champ dans le schéma
+/// (`values`) est restée écrite en dur, même dans une branche conditionnée
+/// à un champ rempli.
+fn sentinel_problem(rendered: Result<CompiledDocument, String>, values: &[String]) -> Option<String> {
+    let rendered = match rendered {
+        Ok(rendered) => rendered,
+        Err(errors) => {
+            return Some(format!(
+                "Le template ne compile pas quand chaque champ contient une valeur et chaque liste un seul élément : \
+                 {errors}"
+            ))
+        }
+    };
+    let hardcoded = hardcoded_values(&rendered.text, values);
+    (!hardcoded.is_empty()).then(|| {
+        format!(
+            "Rendu avec un marqueur unique dans chaque champ de data, le template affiche encore ces valeurs de \
+             example_data, donc écrites en dur : {}. Une valeur qui a un champ dans le schéma vient toujours de \
+             data, même au milieu d'un texte recopié, sinon elle ne serait jamais remplacée par celle du profil.",
+            quote_words(&hardcoded)
+        )
+    })
+}
+
+/// Données sentinelles du type de document, dans la langue des données
+/// d'exemple (déjà vérifiée par `blank_data_json`).
+fn sentinel_data(example_data: &serde_json::Value, doc_type: &str) -> Result<Vec<u8>, AppError> {
+    let lang = example_data.get("lang").and_then(|v| v.as_str()).unwrap_or("fr");
+    let data = match doc_type {
+        "cv" => sentinel_cv_data(lang),
+        _ => sentinel_lm_data(lang),
+    };
+    data.and_then(|value| serde_json::to_vec(&value))
+        .map_err(|e| AppError::Validation(format!("Données sentinelles non sérialisables : {e}")))
 }
 
 /// Contrôles statiques : chargement de `data.json` et constructions interdites.
@@ -330,14 +321,31 @@ fn static_problems(template: &str) -> Vec<String> {
     problems
 }
 
-/// Vérifie que les données d'exemple respectent le schéma canonique typé,
-/// puis construit les données vides (mêmes langue, listes vides, chaînes
-/// vides) servant à détecter le contenu écrit en dur.
+/// Données d'exemple vérifiées, et ce que la validation en tire.
+///
+/// # Attributes
+///
+/// * `blank_json` - Données vides (même langue, listes et chaînes vides).
+/// * `values` - Valeurs qui ont un champ (informations et prose), qu'aucun
+///   texte en dur du template ne doit reproduire.
+/// * `guidance_problems` - Incohérences des consignes avec la prose.
+struct CheckedExample {
+    blank_json: String,
+    values: Vec<String>,
+    guidance_problems: Vec<String>,
+}
+
+/// Vérifie que les données d'exemple respectent le schéma canonique typé
+/// et que leurs consignes redonnent leur prose, puis prépare les données
+/// vides et les valeurs à ne pas trouver en dur.
 ///
 /// # Returns
 ///
-/// Données vides sérialisées, ou un problème à renvoyer en feedback.
-fn blank_data_json(example_data: &serde_json::Value, doc_type: &str) -> Result<String, String> {
+/// `CheckedExample`, ou un problème à renvoyer en feedback.
+fn check_example(example_data: &serde_json::Value, doc_type: &str) -> Result<CheckedExample, String> {
+    if let Some(raw) = example_data.get("guidance").and_then(|g| g.as_str()) {
+        return Err(format!("guidance n'est pas un objet JSON valide : {raw}"));
+    }
     let to_json = |value: Result<String, serde_json::Error>| value.map_err(|e| format!("Données vides non sérialisables : {e}"));
     match doc_type {
         "cv" => {
@@ -350,18 +358,36 @@ fn blank_data_json(example_data: &serde_json::Value, doc_type: &str) -> Result<S
                     example.data.labels.months_short.len()
                 ));
             }
-            let mut blank = findmyjob_core::models::CvData { lang: example.data.lang, ..Default::default() };
+            let mut blank = CvData { lang: example.data.lang.clone(), ..Default::default() };
             blank.labels.months_short = vec![String::new(); 12];
-            to_json(serde_json::to_string(&blank))
+            let prose = [("identity.title", &example.data.identity.title), ("summary", &example.data.summary)];
+            Ok(CheckedExample {
+                blank_json: to_json(serde_json::to_string(&blank))?,
+                values: [cv_information_values(&example.data), cv_prose_values(&example.data)].concat(),
+                guidance_problems: guidance_problems(&example.guidance, &prose_fields(&prose)),
+            })
         }
         _ => {
             let example: LmExampleData = serde_json::from_value(example_data.clone())
                 .map_err(|e| format!("example_data ne respecte pas le schéma de la lettre : {e}"))?;
             check_langs(&example.data.lang, &example.detected_lang)?;
-            let blank = findmyjob_core::models::LmData { lang: example.data.lang, ..Default::default() };
-            to_json(serde_json::to_string(&blank))
+            let blank = LmData { lang: example.data.lang.clone(), ..Default::default() };
+            let paragraphs: Vec<(String, &String)> =
+                example.data.paragraphs.iter().enumerate().map(|(i, p)| (format!("paragraphs[{i}]"), p)).collect();
+            let mut fields = prose_fields(&[("subject", &example.data.subject)]);
+            fields.extend(prose_fields(&paragraphs.iter().map(|(path, p)| (path.as_str(), *p)).collect::<Vec<_>>()));
+            Ok(CheckedExample {
+                blank_json: to_json(serde_json::to_string(&blank))?,
+                values: [lm_information_values(&example.data), lm_prose_values(&example.data)].concat(),
+                guidance_problems: guidance_problems(&example.guidance, &fields),
+            })
         }
     }
+}
+
+/// Champs de prose des données d'exemple, aux chemins de `guidance`.
+fn prose_fields(fields: &[(&str, &String)]) -> Vec<ProseField> {
+    fields.iter().map(|(path, text)| ProseField { path: path.to_string(), text: text.to_string() }).collect()
 }
 
 /// Vérifie que `lang` et `detected_lang` sont des langues prises en charge
@@ -376,13 +402,9 @@ fn check_langs(lang: &str, detected_lang: &str) -> Result<(), String> {
 }
 
 /// Compare le rendu du template avec celui de la référence : pas plus de
-/// pages, aucun mot en trop, et chaque mot manquant couvert par le texte
-/// déclaré supprimé (ou par la date calculée de la référence).
-fn compare_with_reference(
-    context: &ValidationContext<'_>,
-    rendered: &CompiledDocument,
-    dropped_text: &[String],
-) -> Vec<String> {
+/// pages, et exactement les mêmes mots (seule une date calculée par la
+/// référence peut différer). Rien n'est retiré de la référence.
+fn compare_with_reference(context: &ValidationContext<'_>, rendered: &CompiledDocument) -> Vec<String> {
     let mut problems = Vec::new();
     if rendered.page_count > context.reference.page_count {
         problems.push(format!(
@@ -398,15 +420,11 @@ fn compare_with_reference(
             return problems;
         }
     };
-    let uncovered: Vec<String> = diff
-        .uncovered_missing(dropped_text)
-        .into_iter()
-        .filter(|word| !(context.computes_date && is_date_word(word)))
-        .collect();
-    let extra: Vec<String> =
-        diff.extra.iter().filter(|word| !(context.computes_date && is_date_word(word))).cloned().collect();
-    if !uncovered.is_empty() || !extra.is_empty() {
-        problems.push(describe_text_diff(&uncovered, &extra));
+    let tolerated = |word: &&String| !(context.computes_date && is_date_word(word));
+    let missing: Vec<String> = diff.missing.iter().filter(tolerated).cloned().collect();
+    let extra: Vec<String> = diff.extra.iter().filter(tolerated).cloned().collect();
+    if !missing.is_empty() || !extra.is_empty() {
+        problems.push(describe_text_diff(&missing, &extra));
     }
     problems
 }
@@ -434,20 +452,21 @@ fn example_for_rendering(
 /// Indique si un mot peut appartenir à une date calculée à la compilation :
 /// nombre (jour, année) ou nom de mois, entier ou abrégé.
 fn is_date_word(word: &str) -> bool {
-    let cleaned = word.trim_matches(|c: char| c == '.' || c == ',').to_lowercase();
+    let cleaned = word.trim_matches(|c: char| c == '.' || c == ',');
     if !cleaned.is_empty() && cleaned.chars().all(|c| c.is_ascii_digit()) {
         return true;
     }
-    cleaned.chars().count() >= 3 && MONTH_NAMES.iter().any(|month| month.starts_with(&cleaned))
+    is_month_word(word)
 }
 
 /// Formule un écart de texte pour le feedback.
-fn describe_text_diff(uncovered: &[String], extra: &[String]) -> String {
+fn describe_text_diff(missing: &[String], extra: &[String]) -> String {
     format!(
-        "Rendu avec example_data, le texte diffère de la référence. \
-         Mots de la référence absents du rendu et non déclarés dans dropped_text : {}. \
+        "Rendu avec example_data, le texte diffère de la référence. Rien de la référence n'est retiré : un texte \
+         sans champ dans le schéma reste écrit en dur dans le template. \
+         Mots de la référence absents du rendu : {}. \
          Mots du rendu absents de la référence : {}.",
-        quote_words(uncovered),
+        quote_words(missing),
         quote_words(extra)
     )
 }
@@ -514,3 +533,7 @@ pub fn write_template_files(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "templatize_tests.rs"]
+mod tests;

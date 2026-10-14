@@ -1,6 +1,6 @@
 // ============================================
 // FindMyJob - Schéma de base de données (SQLite)
-// Mis à jour le 2026-10-11 (migrations db/migrations/sqlite/0001_init.sql à 0003_adresse_seul_lieu.sql).
+// Mis à jour le 2026-10-13 (migrations db/migrations/sqlite/0001_init.sql à 0005_ville_code_postal.sql).
 //
 // Base locale de l'application desktop : <dossier de données>/findmyjob.db.
 // Toutes les tables sont STRICT ; PRAGMA foreign_keys = ON à chaque connexion.
@@ -29,7 +29,8 @@ Table users {
   prenom text [not null]
   email text [not null]
   telephone text
-  adresse text        // lieu du candidat, texte libre (adresse complète, ville seule…), affiché tel quel dans les documents
+  ville text          // ville du candidat ; avec zip_code, seul lieu du profil (pas d'adresse postale)
+  zip_code text       // code postal du candidat
   permis boolean [note: "NULL = non renseigné"]
   description text
   linkedin text

@@ -15,6 +15,7 @@ pub mod lm_writing;
 pub mod matching;
 pub mod offer;
 pub mod profile_facts;
+pub mod prose_checks;
 pub mod scraping_extract;
 pub mod target;
 pub mod templatize;

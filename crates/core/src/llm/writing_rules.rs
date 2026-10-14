@@ -6,6 +6,7 @@
 
 // Importation des modules internes
 use crate::llm::writing_loop::WritingFeedback;
+use crate::models::ProseGuidance;
 
 /// Consignes de style et d'honnêteté communes aux deux documents.
 pub const COMMON_RULES: &str = "Consignes de rédaction.
@@ -17,7 +18,14 @@ Un bullet énonce un fait. Il ne commente jamais son adéquation au poste, par e
 Les mots-clés de l'offre ne sont repris que là où ils décrivent un fait réel du profil.
 Les éléments « à mettre en avant » t'indiquent quoi dire : exprime-les avec tes propres mots à partir des faits du profil, ne les recopie pas.
 Respecte les budgets comme des limites dures.
-N'utilise ni tiret cadratin, ni tiret demi-cadratin, ni gras Markdown, ni backticks.";
+N'utilise ni tiret cadratin, ni tiret demi-cadratin, ni gras Markdown, ni backticks, sauf dans un texte que tu dois recopier.";
+
+/// Règles des zones balisées de la référence.
+const ZONE_RULES: &str = "Règles des zones.
+[FIXE] : recopie le texte de la zone mot pour mot. Seules les informations qui diffèrent du profil (ville, école, entreprise, intitulé, chiffre) y sont remplacées par celles du profil.
+[VARIABLE] : remplace le texte de la zone par les informations tirées de l'offre, en suivant sa consigne.
+[ADAPTABLE] : rédige la zone à partir du profil selon l'offre, en suivant sa consigne, sans rien inventer.
+Les zones d'un champ s'enchaînent dans le même ordre, sans rien ajouter entre elles. Un champ sans zone est rédigé à partir du profil, comme une zone [ADAPTABLE].";
 
 /// Nom lisible d'une langue de document, pour les prompts.
 fn language_name(lang: &str) -> &'static str {
@@ -63,6 +71,44 @@ pub fn style_model_block(body: &str) -> String {
     format!(
         "MODÈLE DE STYLE. Ce texte vient d'un autre document de la même personne. Imite sa forme, ne reprends rien de son contenu.\n<<<MODÈLE\n{body}\nMODÈLE>>>"
     )
+}
+
+/// Bloc des consignes de la référence : consignes générales, puis zones
+/// balisées de chaque champ de prose, avec les règles des zones. Elles
+/// priment sur les consignes de style, y compris sur l'interdiction de
+/// reprendre les phrases du modèle.
+///
+/// # Arguments
+///
+/// * `guidance` - Consignes de la référence, champs aux chemins du schéma de
+///   sortie.
+///
+/// # Returns
+///
+/// Bloc à insérer dans le message, `None` si la référence n'a aucune consigne.
+pub fn guidance_block(guidance: &ProseGuidance) -> Option<String> {
+    if guidance.general.trim().is_empty() && guidance.zones.is_empty() {
+        return None;
+    }
+    let mut lines = vec![
+        "CONSIGNES DE LA RÉFÉRENCE. Elles priment sur les consignes de rédaction et sur le modèle de style :          une zone [FIXE] est recopiée même si le modèle de style demande de ne pas reprendre ses phrases."
+            .to_string(),
+    ];
+    if !guidance.general.trim().is_empty() {
+        lines.push(format!("Consignes générales :
+{}", guidance.general.trim()));
+    }
+    if !guidance.zones.is_empty() {
+        lines.push("Zones des champs de prose :".to_string());
+        for zone in &guidance.zones {
+            let instruction =
+                if zone.instruction.trim().is_empty() { String::new() } else { format!(" Consigne : {}", zone.instruction.trim()) };
+            lines.push(format!("{} {} « {} »{instruction}", zone.field, zone.mode.tag(), zone.text));
+        }
+    }
+    lines.push(ZONE_RULES.to_string());
+    Some(lines.join("
+"))
 }
 
 /// Ajoute au message utilisateur le retour de l'essai précédent.

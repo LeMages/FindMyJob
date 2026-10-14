@@ -1,8 +1,11 @@
 //! Assemblage déterministe des données d'un CV (`CvData`) : fusion du
 //! profil (via les identifiants de la sélection), du contenu rédigé, des
-//! libellés et des périodes formatées. Aucun appel LLM.
+//! libellés et des périodes formatées. Une information que le profil n'a
+//! pas (identité, liste vide) est reprise du document de référence. Aucun
+//! appel LLM.
 
 // Importation des modules internes
+use crate::docgen::document_fallback::list_or_document;
 use crate::docgen::identity::{build_identity, lines, text};
 use findmyjob_core::docgen::period_format::{format_period, PeriodStyleText};
 use findmyjob_core::docgen::selection::Selection;
@@ -18,7 +21,10 @@ use findmyjob_core::models::{
 /// * `period_style` - Granularité des périodes par section.
 /// * `separator` - Séparateur de période de la référence.
 /// * `lang` - Langue du CV.
+/// * `document` - Données d'exemple de la référence, reprises quand le
+///   profil est vide sur une information.
 pub struct CvLayout<'a> {
+    pub document: &'a CvData,
     pub labels: &'a CvLabels,
     pub period_style: &'a PeriodStyle,
     pub separator: &'a str,
@@ -34,7 +40,7 @@ fn bullets_for(items: &[ItemBullets], id: i64) -> Vec<String> {
 ///
 /// # Arguments
 ///
-/// * `profile` - Profil complet du candidat (seule source des faits).
+/// * `profile` - Profil complet du candidat (source des faits qu'il connaît).
 /// * `selection` - Entrées retenues, dans l'ordre d'affichage.
 /// * `content` - Contenu rédigé (prose).
 /// * `layout` - Libellés, style des périodes et langue.
@@ -90,17 +96,17 @@ pub fn build_cv_data(profile: &ProfileDto, selection: &Selection, content: &CvCo
         .map(|l| CvLangue { nom: text(l.nom.as_ref()), level: text(l.level.as_ref()) })
         .collect();
 
+    let document = layout.document;
     CvData {
-        identity: build_identity(&profile.user),
+        identity: build_identity(&profile.user, &content.title, &document.identity),
         lang: layout.lang.to_string(),
-        title: content.title.clone(),
         summary: content.summary.clone(),
-        skills_groups: content.skills_groups.clone(),
-        experiences,
-        projects,
-        formations,
-        langues,
-        interets: lines(profile.user.interets.as_ref()),
+        skills_groups: list_or_document(content.skills_groups.clone(), &document.skills_groups),
+        experiences: list_or_document(experiences, &document.experiences),
+        projects: list_or_document(projects, &document.projects),
+        formations: list_or_document(formations, &document.formations),
+        langues: list_or_document(langues, &document.langues),
+        interets: list_or_document(lines(profile.user.interets.as_ref()), &document.interets),
         labels: layout.labels.clone(),
     }
 }

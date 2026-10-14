@@ -1,21 +1,25 @@
 //! Rédaction des champs de prose du CV (titre, résumé, bullets, groupes de
 //! compétences) via l'API Claude, avec revue et retry
-//! (`llm::writing_loop`). Tout le reste du CV est rempli par Rust.
+//! (`llm::writing_loop`). Tout le reste du CV est rempli par Rust. Les
+//! consignes de la référence (zones `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`
+//! du titre et du résumé) sont transmises au LLM et vérifiées.
 
 // Importation des crates externes
 use serde_json::{json, Value};
 
 // Importation des modules internes
 use crate::docgen::budgets::CvBudget;
-use crate::docgen::lint::{lint_cv_budget, lint_prose, strip_dashes, Violation};
+use crate::docgen::example_facts::cv_information_values;
+use crate::docgen::lint::{lint_cv_budget, Violation};
 use crate::docgen::selection::Selection;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
 use crate::llm::doc_data_schema::object;
 use crate::llm::profile_facts::profile_facts_block;
+use crate::llm::prose_checks::ProseChecks;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
-use crate::llm::writing_rules::{language_rule, style_model_block, with_feedback, COMMON_RULES};
-use crate::models::{CvContent, CvData, ItemBullets, MatchingResult, ProfileDto};
+use crate::llm::writing_rules::{guidance_block, language_rule, style_model_block, with_feedback, COMMON_RULES};
+use crate::models::{CvContent, CvData, ItemBullets, MatchingResult, ProfileDto, ProseGuidance};
 use crate::llm::target::ClaudeTarget;
 
 /// Entrées de la rédaction du CV.
@@ -27,6 +31,8 @@ use crate::llm::target::ClaudeTarget;
 /// * `selection` - Entrées du profil retenues.
 /// * `profile` - Profil complet du candidat.
 /// * `example` - Contenu de la référence (modèle de style).
+/// * `guidance` - Consignes de la référence (champs aux chemins de
+///   `CvData` : `identity.title`, `summary`).
 /// * `budget` - Budget de longueur.
 /// * `target_lang` - Langue du CV (celle de l'offre).
 /// * `example_lang` - Langue de la référence.
@@ -36,6 +42,7 @@ pub struct CvWritingInput<'a> {
     pub selection: &'a Selection,
     pub profile: &'a ProfileDto,
     pub example: &'a CvData,
+    pub guidance: &'a ProseGuidance,
     pub budget: CvBudget,
     pub target_lang: &'a str,
     pub example_lang: &'a str,
@@ -67,6 +74,16 @@ fn cv_content_schema(input: &CvWritingInput<'_>) -> Value {
     ])
 }
 
+/// Consignes de la référence ramenées aux chemins du contenu rédigé : le
+/// titre est `identity.title` dans les données, `title` dans la rédaction.
+fn content_guidance(guidance: &ProseGuidance) -> ProseGuidance {
+    let mut mapped = guidance.clone();
+    for zone in mapped.zones.iter_mut().filter(|zone| zone.field == "identity.title") {
+        zone.field = "title".to_string();
+    }
+    mapped
+}
+
 /// Prose de la référence : modèle de style et base des formules autorisées.
 pub fn example_prose(example: &CvData) -> String {
     let bullets = |items: Vec<&Vec<String>>| {
@@ -75,7 +92,7 @@ pub fn example_prose(example: &CvData) -> String {
     let categories = example.skills_groups.iter().map(|g| g.category.as_str()).collect::<Vec<_>>().join(" ; ");
     format!(
         "Titre : {}\nRésumé : {}\nBullets d'expérience :\n{}\nBullets de projet :\n{}\nCatégories de compétences : {categories}",
-        example.title,
+        example.identity.title,
         example.summary,
         bullets(example.experiences.iter().map(|e| &e.bullets).collect()),
         bullets(example.projects.iter().map(|p| &p.bullets).collect()),
@@ -124,13 +141,14 @@ fn system_prompt(input: &CvWritingInput<'_>) -> String {
 
 /// Message utilisateur de la rédaction du CV.
 fn user_message(input: &CvWritingInput<'_>) -> String {
-    format!(
-        "ANALYSE DE L'OFFRE :\n{}\n\n{}\n\n{}\n\n{}",
-        input.offer_analysis,
+    let mut blocks = vec![
+        format!("ANALYSE DE L'OFFRE :\n{}", input.offer_analysis),
         profile_facts_block(input.profile, input.selection, input.matching),
         style_model_block(&example_prose(input.example)),
-        budget_block(input)
-    )
+    ];
+    blocks.extend(guidance_block(&content_guidance(input.guidance)));
+    blocks.push(budget_block(input));
+    blocks.join("\n\n")
 }
 
 /// Remet les entrées du contenu dans l'ordre de la sélection (ordre
@@ -234,9 +252,9 @@ fn drop_empty_skills(content: &mut CvContent) {
 }
 
 /// Revue complète d'un contenu de CV.
-fn review(content: &CvContent, input: &CvWritingInput<'_>, example_prose: &str) -> Review {
+fn review(content: &CvContent, input: &CvWritingInput<'_>, checks: &ProseChecks) -> Review {
     let ordered = order_by_selection(content, input.selection);
-    let mut violations = lint_prose(&ordered.prose_fields(), example_prose);
+    let mut violations = checks.violations(&ordered.prose_fields());
     violations.extend(lint_cv_budget(&ordered, &input.budget));
     violations.extend(skill_violations(content, input.profile));
     Review { blocking: blocking_problems(content, input), violations }
@@ -268,13 +286,17 @@ async fn call_once(
 ///
 /// `WritingOutcome<CvContent>`, entrées dans l'ordre d'affichage.
 pub async fn write_cv(input: &CvWritingInput<'_>, target: &ClaudeTarget) -> Result<WritingOutcome<CvContent>, AppError> {
-    let prose = example_prose(input.example);
+    let checks = ProseChecks {
+        example_prose: example_prose(input.example),
+        guidance: content_guidance(input.guidance),
+        information: cv_information_values(input.example),
+    };
     let mut outcome = write_with_retries(
         "CV",
         |feedback| call_once(input, feedback, target),
-        |content| review(content, input, &prose),
+        |content| review(content, input, &checks),
         |content| {
-            content.map_prose(strip_dashes);
+            content.map_prose(|path, text| checks.clean(path, text));
             retain_profile_skills(content, input.profile);
         },
     )
@@ -310,7 +332,8 @@ mod tests {
                 prenom: None,
                 email: None,
                 telephone: None,
-                adresse: None,
+                ville: None,
+                zip_code: None,
                 permis: None,
                 description: None,
                 linkedin: None,
@@ -364,6 +387,7 @@ mod tests {
             selection: &selection,
             profile: &profile,
             example: &example,
+            guidance: &ProseGuidance::default(),
             budget: cv_budget(&example, 1),
             target_lang: "fr",
             example_lang: "fr",
