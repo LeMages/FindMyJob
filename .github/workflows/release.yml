@@ -73,12 +73,12 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: crates/desktop/package-lock.json
+          cache-dependency-path: package-lock.json
 
+      # Version, composants et cibles (dont les deux cibles macOS) lus dans
+      # rust-toolchain.toml.
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+        run: rustup toolchain install
 
       - name: Cache Cargo
         uses: swatinem/rust-cache@v2
@@ -93,21 +93,19 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: crates/desktop
 
       - name: Inject version
         shell: bash
         run: |
           VERSION=${{ needs.version.outputs.version }}
-          jq --arg v "$VERSION" '.version = $v' crates/desktop/src-tauri/tauri.conf.json > tmp.json && mv tmp.json crates/desktop/src-tauri/tauri.conf.json
-          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" crates/desktop/src-tauri/Cargo.toml && rm -f crates/desktop/src-tauri/Cargo.toml.bak
+          jq --arg v "$VERSION" '.version = $v' src-tauri/tauri.conf.json > tmp.json && mv tmp.json src-tauri/tauri.conf.json
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
 
       - name: Build Tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: crates/desktop
           tagName: v${{ needs.version.outputs.version }}
           releaseName: FindMyJob v${{ needs.version.outputs.version }}
           releaseBody: Télécharge le fichier correspondant à ton OS ci-dessous.

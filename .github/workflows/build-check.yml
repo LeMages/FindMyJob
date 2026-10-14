@@ -39,7 +39,7 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: crates/desktop/package-lock.json
+          cache-dependency-path: package-lock.json
 
       # Version, composants et cibles (dont les deux cibles macOS) lus dans
       # rust-toolchain.toml.
@@ -60,8 +60,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: crates/desktop
 
       - name: Build Tauri
         run: npm run tauri build -- ${{ matrix.args }}
-        working-directory: crates/desktop
