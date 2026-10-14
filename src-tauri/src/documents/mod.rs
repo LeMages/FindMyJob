@@ -4,12 +4,14 @@
 
 pub mod doc_type;
 pub mod fonts;
+pub mod paragraph_check;
 pub mod reference_versions;
 pub mod sparse_check;
 pub mod storage;
 pub mod templatize;
 pub mod typst;
 pub mod typst_diagnostics;
+pub mod typst_lines;
 pub mod typst_text;
 
 pub use doc_type::parse_doc_type;

@@ -169,6 +169,7 @@ async fn build_state(location: RunLocation, api_key: ApiKeyAccess) -> Result<App
         progress: ProgressStore::new(),
         api_key,
         llm: Arc::new(AnthropicCaller),
+        run_mode: location.mode,
     })
 }
 

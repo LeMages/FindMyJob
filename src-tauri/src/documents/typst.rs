@@ -10,6 +10,7 @@ use typst_layout::PagedDocument;
 
 // Importation des modules internes
 use crate::documents::typst_diagnostics::describe_compile_error;
+use crate::documents::typst_lines::{extract_lines, TextLine};
 use crate::documents::typst_text::extract_text;
 
 /// Nom sous lequel les données d'un template sont exposées au compilateur.
@@ -17,17 +18,19 @@ use crate::documents::typst_text::extract_text;
 pub const TEMPLATE_DATA_FILE: &str = "data.json";
 
 /// Résultat d'une compilation : le PDF, et ce qu'il faut pour le comparer à
-/// une référence (nombre de pages, texte rendu).
+/// une référence (nombre de pages, texte rendu, lignes positionnées).
 ///
 /// # Attributes
 ///
 /// * `pdf` - Octets du PDF généré.
 /// * `page_count` - Nombre de pages du document.
 /// * `text` - Texte rendu, dans l'ordre de mise en page.
+/// * `lines` - Lignes de texte positionnées, de haut en bas.
 pub struct CompiledDocument {
     pub pdf: Vec<u8>,
     pub page_count: usize,
     pub text: String,
+    pub lines: Vec<TextLine>,
 }
 
 /// Compile une source Typst en PDF.
@@ -119,7 +122,7 @@ fn compile(
         .map_err(|e| format!("Erreur de compilation Typst :\n{}", describe_compile_error(&e, &content)))?;
 
     let pdf = typst_pdf::pdf(&doc, &Default::default()).map_err(|e| format!("Erreur de génération PDF : {:?}", e))?;
-    Ok(CompiledDocument { pdf, page_count: doc.pages().len(), text: extract_text(&doc) })
+    Ok(CompiledDocument { pdf, page_count: doc.pages().len(), text: extract_text(&doc), lines: extract_lines(&doc) })
 }
 
 #[cfg(test)]

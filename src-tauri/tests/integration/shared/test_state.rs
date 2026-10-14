@@ -63,6 +63,7 @@ pub async fn app(name: &str) -> TestApp {
         progress: ProgressStore::new(),
         api_key: ApiKeyAccess::new(RunMode::Prod, Arc::new(FakeSecretStore::with(FAKE_API_KEY)), || None),
         llm: llm.clone(),
+        run_mode: RunMode::Prod,
     };
     TestApp { state, llm }
 }
