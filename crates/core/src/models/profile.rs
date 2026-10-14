@@ -1,0 +1,19 @@
+//! DTO agrégeant l'ensemble des informations du profil utilisateur.
+
+// Importation des modules internes
+use crate::models::experience::ExperienceView;
+use crate::models::formation::FormationView;
+use crate::models::lang::LangView;
+use crate::models::projet::ProjetView;
+use crate::models::skill::SkillView;
+use crate::models::user::UserView;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct ProfileDto {
+    pub user: UserView,
+    pub experiences: Vec<ExperienceView>,
+    pub formations: Vec<FormationView>,
+    pub projets: Vec<ProjetView>,
+    pub skills: Vec<SkillView>,
+    pub langues: Vec<LangView>,
+}

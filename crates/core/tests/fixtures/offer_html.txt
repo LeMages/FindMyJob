@@ -1,0 +1,13 @@
+<h2>Descriptif du poste</h2>
+<p>Au sein de l&#39;équipe Data de Société Exemple, vous participerez à la construction de nos tableaux de bord.</p>
+<ul>
+<li><p>Participer au cadrage des cas d&rsquo;usage : qualification et priorisation des besoins.</p></li>
+<li><p>Analyser et structurer la donnée : modélisation, nettoyage.</p></li>
+<li><p>Documenter les traitements&nbsp;pour l&#x27;équipe.</p></li>
+</ul>
+<h2>Profil recherché</h2>
+<p>Étudiant(e) en école de commerce avec une majeure Data &amp; Analytics, vous êtes curieux(se) et autonome.</p>
+<p><strong>Vos atouts :</strong></p>
+<ul><li>Curiosité, esprit d&rsquo;analyse et capacité à vulgariser.</li><li>Attrait pour l'entreprenariat et l'innovation.</li></ul>
+<h3>Additional Information</h3>
+<p>Stage de 6 mois, à partir de janvier 2027.<br>Basé à Lyon.</p>
