@@ -4,17 +4,14 @@ node_modules/
 # Données du mode DEV (MODE=DEV dans le .env)
 dev-data/
 
-# Legacy data directory (former agent DATA_DIR)
-data/
-
 # Build output
-crates/desktop/dist/
+dist/
 
 # Rust / Tauri build (target unique à la racine du workspace)
 /target/
 
 # Generated Tauri schemas (recreated on build)
-crates/desktop/src-tauri/gen/
+src-tauri/gen/
 
 # Environment
 .env
@@ -23,6 +20,7 @@ crates/desktop/src-tauri/gen/
 
 # Editor
 .vscode/
+.idea/
 *.suo
 *.ntvs*
 *.njsproj

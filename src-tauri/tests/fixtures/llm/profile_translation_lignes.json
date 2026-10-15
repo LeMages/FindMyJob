@@ -1,0 +1,11 @@
+{
+  "experiences": [
+    { "id": 1, "lines": ["SQL pipelines", "for reporting."] }
+  ],
+  "projects": [
+    { "id": 1, "pour_qui": "Escalade Lyon club", "lines": ["Membership tracking in Python."] }
+  ],
+  "formations": [
+    { "id": 1, "lines": ["Data major"] }
+  ]
+}

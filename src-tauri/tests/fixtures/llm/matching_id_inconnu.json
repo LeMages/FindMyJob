@@ -1,0 +1,8 @@
+{
+  "project_ids": [99],
+  "relevant_skills": [
+    { "skill": "SQL", "match_type": "exact" }
+  ],
+  "summary_strategy": "Mettre en avant l'expérience de pipelines.",
+  "gaps": []
+}
