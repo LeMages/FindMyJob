@@ -6,8 +6,7 @@ use chrono::{NaiveDate, TimeZone, Utc};
 
 // Importation des modules internes
 use findmyjob_lib::models::{
-    CvData, CvExperience, CvProject, ExperienceView, LmData, MatchedItem, MatchingResult, ProfileDto, ProjetView,
-    SkillView, SkillsGroup, UserView,
+    CvData, CvExperience, CvProject, ExperienceView, LmData, ProfileDto, ProjetView, SkillView, SkillsGroup, UserView,
 };
 
 /// Date au format court, pour les fixtures.
@@ -80,22 +79,6 @@ pub fn profile() -> ProfileDto {
             SkillView { id: 3, domaine: "Data".to_string(), nom: "SQL".to_string() },
         ],
         langues: Vec::new(),
-    }
-}
-
-/// Entrée de matching.
-pub fn matched(id: i64) -> MatchedItem {
-    MatchedItem { id, relevance: "high".to_string(), highlights: vec!["fait".to_string()], keywords_covered: Vec::new() }
-}
-
-/// Matching fictif : désigne les projets 22 puis 20.
-pub fn matching() -> MatchingResult {
-    MatchingResult {
-        relevant_experiences: vec![matched(10), matched(11)],
-        relevant_projects: vec![matched(22), matched(20)],
-        relevant_skills: Vec::new(),
-        summary_strategy: "Angle data.".to_string(),
-        gaps: Vec::new(),
     }
 }
 

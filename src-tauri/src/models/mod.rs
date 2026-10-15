@@ -31,7 +31,7 @@ pub use candidature::{
 };
 pub use connection_test::TestConnectionResult;
 pub use contact::{CandidatureContactInput, ContactInput, ContactView};
-pub use doc_content::{CvContent, ItemBullets, LmContent, ProseField};
+pub use doc_content::{CvContent, LmContent, ProseField};
 pub use doc_data::{
     CvData, CvExampleData, CvExperience, CvFormation, CvLabels, CvLangue, CvProject, Identity, LmData,
     LmExampleData, LmLabels, PeriodGranularity, PeriodStyle, Recipient, SkillsGroup,
@@ -47,7 +47,7 @@ pub use formation::{CreateFormationInput, FormationView};
 pub use generation_progress::{GenerationProgress, GenerationStatus};
 pub use interview::{InterviewContactView, InterviewView, PlanningInterviewView};
 pub use lang::{CreateLangInput, LangView};
-pub use matching::{MatchedItem, MatchedSkill, MatchingResult};
+pub use matching::{MatchedSkill, MatchingResult};
 pub use offer_extraction::{ExtractionStage, OfferExtraction};
 pub use profile::ProfileDto;
 pub use projet::{CreateProjetInput, ProjetView};

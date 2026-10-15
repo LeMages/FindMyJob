@@ -4,7 +4,7 @@
 use crate::common;
 use findmyjob_lib::docgen::budgets::{cv_budget, lm_budget};
 use findmyjob_lib::docgen::lint::{lint_cv_budget, lint_lm_budget, lint_prose, strip_dashes};
-use findmyjob_lib::models::{CvContent, ItemBullets, LmContent, ProseField, SkillsGroup};
+use findmyjob_lib::models::{CvContent, LmContent, ProseField, SkillsGroup};
 
 /// Champ de prose de test.
 fn field(path: &str, text: &str) -> ProseField {
@@ -48,11 +48,6 @@ fn budget_cv_respecte_sans_violation() {
     let content = CvContent {
         title: "Titre".to_string(),
         summary: words(10),
-        experiences: vec![ItemBullets { id: 1, bullets: vec![words(12), words(12), words(12)] }],
-        projects: vec![
-            ItemBullets { id: 2, bullets: vec![words(12), words(12)] },
-            ItemBullets { id: 3, bullets: vec![words(12)] },
-        ],
         skills_groups: vec![
             SkillsGroup { category: "A".to_string(), skills: vec!["Rust".to_string()] },
             SkillsGroup { category: "B".to_string(), skills: vec!["SQL".to_string()] },
@@ -64,19 +59,9 @@ fn budget_cv_respecte_sans_violation() {
 #[test]
 fn budget_cv_depasse_releve_chaque_ecart() {
     let budget = cv_budget(&common::cv_example(), 1);
-    let content = CvContent {
-        title: "Titre".to_string(),
-        summary: words(30),
-        experiences: vec![ItemBullets { id: 1, bullets: vec![words(50)] }],
-        projects: vec![ItemBullets { id: 2, bullets: vec![words(5), words(5)] }],
-        skills_groups: Vec::new(),
-    };
+    let content = CvContent { title: "Titre".to_string(), summary: words(30), skills_groups: Vec::new() };
     let fields: Vec<String> = lint_cv_budget(&content, &budget).into_iter().map(|v| v.field).collect();
-    assert!(fields.contains(&"summary".to_string()));
-    assert!(fields.contains(&"projects".to_string()));
-    assert!(fields.contains(&"skills_groups".to_string()));
-    assert!(fields.contains(&"experiences[0].bullets".to_string()));
-    assert!(fields.contains(&"experiences[0].bullets[0]".to_string()));
+    assert_eq!(fields, vec!["summary".to_string(), "skills_groups".to_string()]);
 }
 
 #[test]

@@ -1,9 +1,14 @@
 //! Budgets de longueur des documents générés, calculés depuis le contenu
 //! de la référence (`example_data.json`).
 //!
+//! Seule la prose rédigée a un budget : titre et résumé du CV, groupes de
+//! compétences, objet et paragraphes de la lettre. Les expériences, projets
+//! et formations viennent du profil tels quels : aucun budget ne les
+//! réduit, même quand le document dépasse son nombre de pages.
+//!
 //! Règles :
-//! - les nombres d'éléments (paragraphes, projets, groupes de compétences,
-//!   bullets par entrée) sont repris tels quels, sans tolérance ;
+//! - les nombres d'éléments (paragraphes, groupes de compétences) sont
+//!   repris tels quels, sans tolérance ;
 //! - les nombres de mots acceptent 10 % d'écart autour de la valeur de
 //!   l'exemple ;
 //! - le nombre de pages est celui du template rendu avec ses données
@@ -32,10 +37,6 @@ fn lower_bound(n: usize) -> usize {
 fn upper_bound(n: usize) -> usize {
     (n * (100 + WORD_TOLERANCE_PERCENT)).div_ceil(100)
 }
-
-/// Nombre de bullets par entrée utilisé quand l'exemple n'a aucune entrée
-/// de ce type (aucune valeur de rang à reprendre).
-const FALLBACK_BULLETS: usize = 2;
 
 /// Plage de mots autorisée pour un champ.
 ///
@@ -94,34 +95,15 @@ impl WordRange {
 ///
 /// * `page_count` - Nombre de pages maximal.
 /// * `summary_words` - Plage de mots du résumé.
-/// * `experience_bullets` - Bullets de chaque expérience de l'exemple, par rang.
-/// * `project_bullets` - Bullets de chaque projet de l'exemple, par rang.
-/// * `bullet_words` - Plage de mots d'un bullet (bornes = plus court et plus
-///   long bullet de l'exemple, ±10 % ; cible = moyenne).
-/// * `project_count` - Nombre de projets.
 /// * `skills_group_count` - Nombre de groupes de compétences.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct CvBudget {
     pub page_count: usize,
     pub summary_words: WordRange,
-    pub experience_bullets: Vec<usize>,
-    pub project_bullets: Vec<usize>,
-    pub bullet_words: WordRange,
-    pub project_count: usize,
     pub skills_group_count: usize,
 }
 
 impl CvBudget {
-    /// Nombre de bullets attendu pour l'expérience de rang `rank` (0-based).
-    pub fn experience_bullets_at(&self, rank: usize) -> usize {
-        per_rank(&self.experience_bullets, rank)
-    }
-
-    /// Nombre de bullets attendu pour le projet de rang `rank` (0-based).
-    pub fn project_bullets_at(&self, rank: usize) -> usize {
-        per_rank(&self.project_bullets, rank)
-    }
-
     /// Même budget, avec les mots des zones fixes du résumé (voir
     /// `WordRange::with_fixed`).
     ///
@@ -138,17 +120,12 @@ impl CvBudget {
     }
 
     /// Budget réduit d'un facteur (ex. `0.85`) quand le document dépasse son
-    /// nombre de pages : mots et bullets par entrée diminuent (au moins un
-    /// bullet), la structure (nombre de projets, de groupes) ne change pas.
+    /// nombre de pages : seul le résumé raccourcit, le nombre de groupes de
+    /// compétences ne change pas.
     pub fn scaled(&self, factor: f64) -> Self {
-        let scale_count = |n: &usize| (((*n as f64) * factor).round() as usize).max(1);
         Self {
             page_count: self.page_count,
             summary_words: self.summary_words.scaled(factor),
-            experience_bullets: self.experience_bullets.iter().map(scale_count).collect(),
-            project_bullets: self.project_bullets.iter().map(scale_count).collect(),
-            bullet_words: self.bullet_words.scaled(factor),
-            project_count: self.project_count,
             skills_group_count: self.skills_group_count,
         }
     }
@@ -209,11 +186,6 @@ fn fixed_words(guidance: &ProseGuidance, field: &str) -> usize {
     guidance.fixed_texts(field).map(count_words).sum()
 }
 
-/// Valeur de rang `rank`, ou la dernière valeur si la liste est plus courte.
-fn per_rank(values: &[usize], rank: usize) -> usize {
-    values.get(rank).or(values.last()).copied().unwrap_or(FALLBACK_BULLETS)
-}
-
 /// Calcule le budget d'un CV depuis le contenu de sa référence.
 ///
 /// # Arguments
@@ -225,28 +197,9 @@ fn per_rank(values: &[usize], rank: usize) -> usize {
 ///
 /// `CvBudget`.
 pub fn cv_budget(example: &CvData, page_count: usize) -> CvBudget {
-    let bullets: Vec<usize> = example
-        .experiences
-        .iter()
-        .flat_map(|e| e.bullets.iter())
-        .chain(example.projects.iter().flat_map(|p| p.bullets.iter()))
-        .map(|b| count_words(b))
-        .collect();
-    let bullet_words = match (bullets.iter().min(), bullets.iter().max()) {
-        (Some(&low), Some(&high)) => {
-            let mean = (bullets.iter().sum::<usize>() as f64 / bullets.len() as f64).round() as usize;
-            WordRange::spanning(low, mean, high)
-        }
-        _ => WordRange::around(0),
-    };
-
     CvBudget {
         page_count,
         summary_words: WordRange::around(count_words(&example.summary)),
-        experience_bullets: example.experiences.iter().map(|e| e.bullets.len()).collect(),
-        project_bullets: example.projects.iter().map(|p| p.bullets.len()).collect(),
-        bullet_words,
-        project_count: example.projects.len(),
         skills_group_count: example.skills_groups.len(),
     }
 }

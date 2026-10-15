@@ -71,11 +71,25 @@ pub struct CvExperience {
 }
 
 /// Entrée de la section « Projets » du CV.
+///
+/// # Attributes
+///
+/// * `titre`, `pour_qui`, `period` - Intitulé, organisation et période.
+/// * `stack` - Technologies du projet, telles que saisies dans le profil.
+/// * `url` - Lien du projet, sous sa forme affichable.
+/// * `bullets` - Lignes de la description du profil.
+///
+/// `stack` et `url` ne s'affichent que si le template les lit : une
+/// référence convertie avant leur ajout n'en a pas, d'où `default`.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvProject {
     pub titre: String,
     pub pour_qui: String,
     pub period: String,
+    #[serde(default)]
+    pub stack: String,
+    #[serde(default)]
+    pub url: String,
     pub bullets: Vec<String>,
 }
 

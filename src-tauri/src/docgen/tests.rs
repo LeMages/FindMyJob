@@ -12,14 +12,15 @@ use chrono::{NaiveDate, Utc};
 // Importation des modules internes
 use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
 use crate::docgen::build_lm_data::{build_lm_data, LmLayout};
+use crate::docgen::entry_texts::source_texts;
 use crate::docgen::identity::{display_url, lines};
 use crate::docgen::recipient::build_recipient;
 use crate::documents::typst::compile_template;
-use crate::docgen::selection::select;
+use crate::docgen::selection::{select, Selection};
 use crate::models::{
-    CandidatureDetail, CvContent, CvData, CvLabels, CvProject, ExperienceView, FormationView, Identity, ItemBullets,
-    LmContent, LmData, LmLabels, MatchingResult, PeriodGranularity, PeriodStyle, ProfileDto, ProjetView, Recipient,
-    SkillsGroup, UserView,
+    CandidatureDetail, CvContent, CvData, CvExperience, CvFormation, CvLabels, CvProject, ExperienceView,
+    FormationView, Identity, LmContent, LmData, LmLabels, PeriodGranularity, PeriodStyle, ProfileDto, ProjetView,
+    Recipient, SkillsGroup, UserView,
 };
 
 /// Template de CV de test.
@@ -61,7 +62,8 @@ fn profile() -> ProfileDto {
             poste: "Stage data".to_string(),
             entreprise: Some("Société Exemple".to_string()),
             lieu: None,
-            description: None,
+            description: Some("A conçu un pipeline.
+- Mis en production chez le client".to_string()),
             date_debut: Some(date(2025, 11, 1)),
             date_fin: Some(date(2026, 4, 30)),
             type_contrat: None,
@@ -78,9 +80,9 @@ fn profile() -> ProfileDto {
             ProjetView {
                 id: 20,
                 titre: "Projet A".to_string(),
-                description: None,
-                stack: None,
-                url: None,
+                description: Some("• Fait 20.".to_string()),
+                stack: Some("Rust, Typst".to_string()),
+                url: Some("https://github.com/camille/projet-a/".to_string()),
                 pour_qui: Some("École".to_string()),
                 date_debut: Some(date(2025, 1, 1)),
                 date_fin: Some(date(2025, 6, 1)),
@@ -101,14 +103,11 @@ fn profile() -> ProfileDto {
     }
 }
 
-fn empty_matching() -> MatchingResult {
-    MatchingResult {
-        relevant_experiences: Vec::new(),
-        relevant_projects: Vec::new(),
-        relevant_skills: Vec::new(),
-        summary_strategy: String::new(),
-        gaps: Vec::new(),
-    }
+/// Assemble le CV d'un profil, textes des entrées tirés du profil.
+fn cv_data(profile: &ProfileDto, selection: &Selection, document: &CvData) -> CvData {
+    let (labels, style) = (cv_labels(), period_style());
+    let layout = CvLayout { document, labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
+    build_cv_data(profile, selection, &source_texts(profile, selection), &cv_content(), &layout)
 }
 
 fn cv_labels() -> CvLabels {
@@ -135,12 +134,10 @@ fn period_style() -> PeriodStyle {
     }
 }
 
-fn cv_content(project_ids: &[i64]) -> CvContent {
+fn cv_content() -> CvContent {
     CvContent {
         title: "Ingénieure data".to_string(),
         summary: "Résumé avec un @ et un # et des *étoiles*.".to_string(),
-        experiences: vec![ItemBullets { id: 10, bullets: vec!["A conçu un pipeline.".to_string()] }],
-        projects: project_ids.iter().map(|id| ItemBullets { id: *id, bullets: vec![format!("Fait {id}.")] }).collect(),
         skills_groups: vec![SkillsGroup { category: "Langages".to_string(), skills: vec!["Rust".to_string()] }],
     }
 }
@@ -191,20 +188,25 @@ fn destinataire_depuis_la_candidature_sans_contact() {
 #[test]
 fn cv_data_fusionne_profil_contenu_et_libelles() {
     let profile = profile();
-    let selection = select(&profile, &empty_matching(), 1);
-    let (labels, style) = (cv_labels(), period_style());
-    let layout = CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
+    let selection = select(&profile, &[20]);
 
-    let data = build_cv_data(&profile, &selection, &cv_content(&[20]), &layout);
+    let data = cv_data(&profile, &selection, &CvData::default());
 
     assert_eq!(data.identity.linkedin, "linkedin.com/in/camille-martin");
     assert_eq!(data.experiences[0].poste, "Stage data");
     assert_eq!(data.experiences[0].entreprise, "Société Exemple");
     assert_eq!(data.experiences[0].period, "Nov. 2025 – Avr. 2026");
-    assert_eq!(data.experiences[0].bullets, vec!["A conçu un pipeline.".to_string()]);
+    assert_eq!(
+        data.experiences[0].bullets,
+        vec!["A conçu un pipeline.".to_string(), "Mis en production chez le client".to_string()],
+        "bullets = lignes exactes de la description"
+    );
     assert_eq!(data.projects.len(), 1);
     assert_eq!(data.projects[0].titre, "Projet A");
     assert_eq!(data.projects[0].period, "2025");
+    assert_eq!(data.projects[0].bullets, vec!["Fait 20.".to_string()]);
+    assert_eq!(data.projects[0].stack, "Rust, Typst");
+    assert_eq!(data.projects[0].url, "github.com/camille/projet-a");
     assert_eq!(data.formations[0].period, "2022 – 2027");
     assert_eq!(data.formations[0].details, vec!["Spécialité data".to_string(), "Échange à l'étranger".to_string()]);
     assert_eq!(data.interets, vec!["Escalade".to_string(), "Photographie".to_string()]);
@@ -238,11 +240,10 @@ fn lm_layout<'a>(document: &'a LmData, labels: &'a LmLabels) -> LmLayout<'a> {
 // ======================================================================
 
 #[test]
-fn le_document_complete_ce_que_le_profil_n_a_pas() {
+fn le_document_complete_l_identite_que_le_profil_n_a_pas() {
     let mut profile = profile();
     profile.user.telephone = None;
     profile.user.ville = Some("Thyez".to_string());
-    profile.projets.clear();
     let document = CvData {
         identity: Identity {
             telephone: "+41 00 000 00 00".to_string(),
@@ -250,21 +251,76 @@ fn le_document_complete_ce_que_le_profil_n_a_pas() {
             portfolio: "exemple.invalid".to_string(),
             ..Default::default()
         },
-        projects: vec![CvProject { titre: "Projet du document".to_string(), ..Default::default() }],
         ..Default::default()
     };
-    let selection = select(&profile, &empty_matching(), 2);
-    let (labels, style) = (cv_labels(), period_style());
-    let layout = CvLayout { document: &document, labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
 
-    let data = build_cv_data(&profile, &selection, &cv_content(&[]), &layout);
+    let data = cv_data(&profile, &select(&profile, &[]), &document);
 
     assert_eq!(data.identity.ville, "Thyez", "le profil prime sur le document");
     assert_eq!(data.identity.telephone, "+41 00 000 00 00", "profil vide : valeur du document");
     assert_eq!(data.identity.portfolio, "exemple.invalid");
-    assert_eq!(data.projects.len(), 1);
-    assert_eq!(data.projects[0].titre, "Projet du document", "profil sans projet : projets du document");
-    assert_eq!(data.experiences[0].poste, "Stage data", "profil avec expériences : celles du profil");
+}
+
+#[test]
+fn sections_vides_sans_contenu_de_la_reference() {
+    let mut profile = profile();
+    profile.experiences.clear();
+    profile.projets.clear();
+    profile.formations.clear();
+    let document = CvData {
+        experiences: vec![CvExperience {
+            poste: "Poste du document".to_string(),
+            bullets: vec!["Bullet du document".to_string()],
+            ..Default::default()
+        }],
+        projects: vec![CvProject { titre: "Projet du document".to_string(), ..Default::default() }],
+        formations: vec![CvFormation { titre: "Formation du document".to_string(), ..Default::default() }],
+        ..Default::default()
+    };
+
+    let data = cv_data(&profile, &select(&profile, &[]), &document);
+
+    assert!(data.experiences.is_empty(), "profil sans expérience : section vide");
+    assert!(data.projects.is_empty(), "profil sans projet : section vide");
+    assert!(data.formations.is_empty(), "profil sans formation : section vide");
+    let json = serde_json::to_string(&data).expect("données sérialisables");
+    assert!(!json.contains("du document"), "aucun contenu d'entrée de la référence : {json}");
+}
+
+#[test]
+fn entree_sans_description_reste_sans_bullet() {
+    let profile = profile();
+    let data = cv_data(&profile, &select(&profile, &[21]), &CvData::default());
+    assert_eq!(data.projects[0].titre, "Projet B");
+    assert!(data.projects[0].bullets.is_empty(), "rien de rédigé à la place d'une description vide");
+    assert_eq!((data.projects[0].stack.as_str(), data.projects[0].url.as_str()), ("", ""));
+}
+
+#[test]
+fn textes_traduits_injectes_sans_toucher_aux_noms() {
+    let profile = profile();
+    let selection = select(&profile, &[20]);
+    let mut texts = source_texts(&profile, &selection);
+    texts.experiences[0].lines = vec!["Built a pipeline.".to_string(), "Deployed it for the client".to_string()];
+    texts.projects[0].lines = vec!["Did 20.".to_string()];
+    texts.projects[0].pour_qui = "School".to_string();
+    texts.formations[0].lines = vec!["Data major".to_string(), "Exchange abroad".to_string()];
+    let (labels, style) = (cv_labels(), period_style());
+    let layout =
+        CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " – ", lang: "en" };
+
+    let data = build_cv_data(&profile, &selection, &texts, &cv_content(), &layout);
+
+    assert_eq!(data.experiences[0].bullets, texts.experiences[0].lines);
+    assert_eq!(data.projects[0].bullets, vec!["Did 20.".to_string()]);
+    assert_eq!(data.projects[0].pour_qui, "School");
+    assert_eq!(data.formations[0].details, texts.formations[0].lines);
+    assert_eq!(data.experiences[0].poste, "Stage data", "poste jamais traduit");
+    assert_eq!(data.experiences[0].entreprise, "Société Exemple");
+    assert_eq!(data.projects[0].titre, "Projet A", "titre de projet jamais traduit");
+    assert_eq!(data.projects[0].stack, "Rust, Typst");
+    assert_eq!(data.formations[0].titre, "Diplôme d'ingénieur");
+    assert_eq!(data.formations[0].ecole, "École Exemple");
 }
 
 // ======================================================================
@@ -274,10 +330,7 @@ fn le_document_complete_ce_que_le_profil_n_a_pas() {
 #[test]
 fn template_compile_avec_donnees_completes() {
     let profile = profile();
-    let selection = select(&profile, &empty_matching(), 2);
-    let (labels, style) = (cv_labels(), period_style());
-    let layout = CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
-    let data = build_cv_data(&profile, &selection, &cv_content(&[20, 21]), &layout);
+    let data = cv_data(&profile, &select(&profile, &[20, 21]), &CvData::default());
 
     let doc = compile_cv(&data);
 
@@ -286,6 +339,26 @@ fn template_compile_avec_donnees_completes() {
     assert!(doc.text.contains("Permis B"), "{}", doc.text);
     assert!(doc.text.contains("@"), "le @ du résumé reste du texte : {}", doc.text);
     assert!(doc.text.contains("Projet B"), "{}", doc.text);
+    assert!(doc.text.contains("Fait 20."), "{}", doc.text);
+}
+
+#[test]
+fn stack_et_url_affiches_seulement_si_le_template_les_lit() {
+    let profile = profile();
+    let data = cv_data(&profile, &select(&profile, &[20]), &CvData::default());
+
+    // Le template de fixture ne lit ni stack ni url : rien n'est ajouté.
+    let without = compile_cv(&data);
+    assert!(!without.text.contains("Typst"), "{}", without.text);
+    assert!(!without.text.contains("github.com"), "{}", without.text);
+
+    // Un template dont la référence affichait ces informations les lit.
+    let template = "#let data = json(\"data.json\")\n#for p in data.projects [#p.titre (#p.stack) #p.url]";
+    let json = serde_json::to_vec(&data).expect("données sérialisables");
+    let with = compile_template(template.to_string(), json, std::env::temp_dir(), PathBuf::from("introuvable"))
+        .expect("le template de test compile");
+    assert!(with.text.contains("Rust, Typst"), "{}", with.text);
+    assert!(with.text.contains("github.com/camille/projet-a"), "{}", with.text);
 }
 
 #[test]
@@ -295,10 +368,7 @@ fn template_compile_sans_champs_optionnels() {
     profile.user.linkedin = None;
     profile.user.permis = Some(false);
     profile.user.interets = None;
-    let selection = select(&profile, &empty_matching(), 0);
-    let (labels, style) = (cv_labels(), period_style());
-    let layout = CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
-    let data = build_cv_data(&profile, &selection, &cv_content(&[]), &layout);
+    let data = cv_data(&profile, &select(&profile, &[]), &CvData::default());
 
     let doc = compile_cv(&data);
 

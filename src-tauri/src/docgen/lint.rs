@@ -102,7 +102,7 @@ fn check_count(field: &str, actual: usize, expected: usize, unit: &str) -> Optio
 ///
 /// # Arguments
 ///
-/// * `content` - Contenu rédigé ; les entrées sont dans l'ordre d'affichage.
+/// * `content` - Contenu rédigé.
 /// * `budget` - Budget du CV.
 ///
 /// # Returns
@@ -111,37 +111,12 @@ fn check_count(field: &str, actual: usize, expected: usize, unit: &str) -> Optio
 pub fn lint_cv_budget(content: &CvContent, budget: &CvBudget) -> Vec<Violation> {
     let mut violations = Vec::new();
     violations.extend(check_words("summary", &content.summary, &budget.summary_words));
-    violations.extend(check_count("projects", content.projects.len(), budget.project_count, "projets"));
     violations.extend(check_count(
         "skills_groups",
         content.skills_groups.len(),
         budget.skills_group_count,
         "groupes",
     ));
-
-    let entries = [("experiences", &content.experiences), ("projects", &content.projects)];
-    for (kind, items) in entries {
-        for (rank, item) in items.iter().enumerate() {
-            let expected = match kind {
-                "experiences" => budget.experience_bullets_at(rank),
-                _ => budget.project_bullets_at(rank),
-            };
-            let path = format!("{kind}[{rank}].bullets");
-            violations.extend(check_count(&path, item.bullets.len(), expected, "bullets"));
-            for (j, bullet) in item.bullets.iter().enumerate() {
-                let bullet_path = format!("{path}[{j}]");
-                // Seul le maximum compte pour un bullet : un fait court est
-                // préférable à un bullet rallongé pour atteindre une moyenne.
-                let words = count_words(bullet);
-                if words > budget.bullet_words.max {
-                    violations.push(Violation::new(
-                        bullet_path,
-                        format!("fait {words} mots, maximum {} mots", budget.bullet_words.max),
-                    ));
-                }
-            }
-        }
-    }
     violations
 }
 

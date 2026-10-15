@@ -100,6 +100,7 @@ const CV_FIELDS: &str = "Champs du CV :
 - identity.title : sous-titre professionnel affiché sous le nom (par exemple \"Étudiant ingénieur data\"), chaîne vide si l'original n'en a pas. summary : texte de la section profil.
 - skills_groups : une ligne par groupe, la catégorie puis les compétences jointes par \", \".
 - experiences, projects : une entrée par expérience ou projet, avec ses bullets. `pour_qui` est l'organisation affichée pour un projet.
+- projects.stack et projects.url : les technologies et le lien affichés pour un projet. Si l'original les affiche, ils sont lus depuis ces champs, jamais écrits en dur. S'il ne les affiche pas, ils valent une chaîne vide dans example_data et le template ne les lit pas : n'ajoute jamais un affichage absent de l'original.
 - formations : une entrée par formation, y compris celles que l'original affiche sur une seule ligne ; `details` reçoit les lignes de détail de la formation (spécialité, cours, échange).
 - Si l'original affiche des éléments d'une même liste avec des mises en page différentes, reproduis chacune telle quelle : dans la boucle, le template choisit la mise en page d'un élément d'après ses données (par exemple selon qu'un champ est vide).
 - langues : nom et niveau de chaque langue. Un séparateur entre le nom et le niveau (par exemple « : ») ne s'affiche que si le niveau n'est pas vide. interets : un centre d'intérêt par élément, affichés joints par \", \" après `labels.interets_label`.

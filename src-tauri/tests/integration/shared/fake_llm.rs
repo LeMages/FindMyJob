@@ -24,6 +24,7 @@ pub enum Step {
     LmLabels,
     CvContent,
     LmContent,
+    ProfileTranslation,
     ScrapedOffer,
     TemplatizeCv,
     TemplatizeLm,
@@ -34,6 +35,9 @@ pub enum Step {
 pub enum Reply {
     /// Contenu d'un fichier de `tests/fixtures/llm/`.
     Fixture(&'static str),
+    /// Fichiers de `tests/fixtures/llm/` renvoyés dans l'ordre des appels
+    /// de l'étape ; le dernier est répété au-delà.
+    Sequence(&'static [&'static str]),
     /// Erreur de l'API simulée (`AppError::Llm`).
     Error(&'static str),
 }
@@ -84,10 +88,15 @@ impl FakeLlm {
     }
 
     /// Réponse à renvoyer pour une étape : surcharge, sinon fixture par défaut.
-    fn reply_for(&self, step: Step) -> Result<String, AppError> {
+    /// `call_index` est le rang (0-based) de l'appel parmi ceux de l'étape.
+    fn reply_for(&self, step: Step, call_index: usize) -> Result<String, AppError> {
         let reply = self.overrides.lock().unwrap().get(&step).cloned();
         match reply {
             Some(Reply::Fixture(name)) => Ok(read_fixture(name)),
+            Some(Reply::Sequence(names)) => {
+                let name = names.get(call_index).or(names.last()).expect("séquence de fixtures non vide");
+                Ok(read_fixture(name))
+            }
             Some(Reply::Error(message)) => Err(AppError::Llm(message.to_string())),
             None => Ok(default_reply(step)),
         }
@@ -97,8 +106,13 @@ impl FakeLlm {
 impl LlmCaller for FakeLlm {
     fn call<'a>(&'a self, request: LlmRequest<'a>) -> LlmFuture<'a> {
         let step = step_of(request.output_schema.as_ref());
-        self.calls.lock().unwrap().push(RecordedCall { step, user_message: request.user_message.to_string() });
-        let reply = self.reply_for(step);
+        let call_index = {
+            let mut calls = self.calls.lock().unwrap();
+            let index = calls.iter().filter(|c| c.step == step).count();
+            calls.push(RecordedCall { step, user_message: request.user_message.to_string() });
+            index
+        };
+        let reply = self.reply_for(step, call_index);
         Box::pin(async move { reply.map(|text| LlmResponse { text, stop_reason: Some("end_turn".to_string()) }) })
     }
 }
@@ -116,11 +130,12 @@ fn step_of(schema: Option<&Value>) -> Step {
     }
     let candidates = [
         ("job_title", Step::OfferAnalysis),
-        ("relevant_experiences", Step::Matching),
+        ("summary_strategy", Step::Matching),
         ("months_short", Step::CvLabels),
         ("subject_prefix", Step::LmLabels),
         ("skills_groups", Step::CvContent),
         ("paragraphs", Step::LmContent),
+        ("formations", Step::ProfileTranslation),
         ("poste", Step::ScrapedOffer),
     ];
     candidates
@@ -139,6 +154,7 @@ fn default_reply(step: Step) -> String {
         Step::LmLabels => read_fixture("lm_labels.json"),
         Step::CvContent => read_fixture("cv_content.json"),
         Step::LmContent => read_fixture("lm_content.json"),
+        Step::ProfileTranslation => read_fixture("profile_translation.json"),
         Step::ScrapedOffer => read_fixture("scraped_offer.json"),
         Step::TemplatizeCv => templatize_reply("cv_template.typ", "cv_example_data.json"),
         Step::TemplatizeLm => templatize_reply("lm_template.typ", "lm_example_data.json"),
