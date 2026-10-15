@@ -1,0 +1,32 @@
+{
+  "job_title": "Data engineering intern",
+  "company_context": "Fast-growing healthcare software company.",
+  "required_skills": {
+    "technical": [
+      "SQL",
+      "Python"
+    ],
+    "soft": [
+      "rigour"
+    ]
+  },
+  "preferred_skills": {
+    "technical": [
+      "Airflow"
+    ],
+    "soft": [
+      "curiosity"
+    ]
+  },
+  "experience_level": "junior",
+  "key_responsibilities": [
+    "Build data pipelines",
+    "Make dashboards reliable"
+  ],
+  "keywords": [
+    "SQL",
+    "Python",
+    "pipelines"
+  ],
+  "language": "en"
+}

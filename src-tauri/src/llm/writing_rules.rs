@@ -16,7 +16,6 @@ Ne reprends du modèle ni ses faits, ni ses chiffres, ni ses phrases entières. 
 Tous les faits viennent du profil. Un chiffre n'apparaît que s'il figure dans le profil.
 Un bullet énonce un fait. Il ne commente jamais son adéquation au poste, par exemple avec « directement transférable à » ou « ce qui correspond à ».
 Les mots-clés de l'offre ne sont repris que là où ils décrivent un fait réel du profil.
-Les éléments « à mettre en avant » t'indiquent quoi dire : exprime-les avec tes propres mots à partir des faits du profil, ne les recopie pas.
 Respecte les budgets comme des limites dures.
 N'utilise ni tiret cadratin, ni tiret demi-cadratin, ni gras Markdown, ni backticks, sauf dans un texte que tu dois recopier.";
 
@@ -28,7 +27,15 @@ const ZONE_RULES: &str = "Règles des zones.
 Les zones d'un champ s'enchaînent dans le même ordre, sans rien ajouter entre elles. Un champ sans zone est rédigé à partir du profil, comme une zone [ADAPTABLE].";
 
 /// Nom lisible d'une langue de document, pour les prompts.
-fn language_name(lang: &str) -> &'static str {
+///
+/// # Arguments
+///
+/// * `lang` - Code de langue (`"fr"` ou `"en"`).
+///
+/// # Returns
+///
+/// « anglais » ou « français ».
+pub fn language_name(lang: &str) -> &'static str {
     match lang {
         "en" => "anglais",
         _ => "français",

@@ -1,11 +1,11 @@
 //! Mise en forme des faits du profil retenus par la sélection, pour les
-//! prompts de rédaction (CV et lettre). Les jugements du matching y sont
-//! présentés comme des indications de quoi dire, jamais comme du texte à
-//! reprendre.
+//! prompts de rédaction (CV et lettre). Les descriptions sont données
+//! brutes : elles servent de matière au résumé et à la lettre, le CV les
+//! affiche telles quelles (sans les faire réécrire).
 
 // Importation des modules internes
-use crate::docgen::selection::{Selected, Selection};
-use crate::models::{ExperienceView, MatchedItem, MatchingResult, ProfileDto, ProjetView};
+use crate::docgen::selection::Selection;
+use crate::models::{ExperienceView, MatchingResult, ProfileDto, ProjetView};
 
 /// Valeur d'un champ optionnel, ou « non renseigné ».
 fn or_unknown(value: Option<&str>) -> &str {
@@ -18,29 +18,10 @@ fn dates(start: Option<chrono::NaiveDate>, end: Option<chrono::NaiveDate>) -> St
     format!("du {} au {}", fmt(start, "?"), fmt(end, "aujourd'hui"))
 }
 
-/// Indications du matching pour une entrée.
-fn notes_lines(notes: Option<&MatchedItem>) -> String {
-    let Some(notes) = notes else {
-        return String::new();
-    };
-    let mut lines = format!("  Pertinence pour l'offre : {}\n", notes.relevance);
-    if !notes.highlights.is_empty() {
-        lines.push_str(&format!("  À mettre en avant : {}\n", notes.highlights.join(" ; ")));
-    }
-    if !notes.keywords_covered.is_empty() {
-        lines.push_str(&format!(
-            "  Mots-clés de l'offre auxquels ces faits répondent : {}\n",
-            notes.keywords_covered.join(", ")
-        ));
-    }
-    lines
-}
-
 /// Fiche d'une expérience retenue.
-fn experience_facts(selected: &Selected<ExperienceView>) -> String {
-    let e = &selected.item;
+fn experience_facts(e: &ExperienceView) -> String {
     format!(
-        "Expérience id {} : {} chez {} ({}), {}, contrat {}\n  Description (source des faits) : {}\n{}",
+        "Expérience id {} : {} chez {} ({}), {}, contrat {}\n  Description (source des faits) : {}\n",
         e.id,
         e.poste,
         or_unknown(e.entreprise.as_deref()),
@@ -48,22 +29,19 @@ fn experience_facts(selected: &Selected<ExperienceView>) -> String {
         dates(e.date_debut, e.date_fin),
         or_unknown(e.type_contrat.as_deref()),
         or_unknown(e.description.as_deref()),
-        notes_lines(selected.notes.as_ref())
     )
 }
 
 /// Fiche d'un projet retenu.
-fn project_facts(selected: &Selected<ProjetView>) -> String {
-    let p = &selected.item;
+fn project_facts(p: &ProjetView) -> String {
     format!(
-        "Projet id {} : {} (pour {}), {}\n  Description (source des faits) : {}\n  Technologies : {}\n{}",
+        "Projet id {} : {} (pour {}), {}\n  Description (source des faits) : {}\n  Technologies : {}\n",
         p.id,
         p.titre,
         or_unknown(p.pour_qui.as_deref()),
         dates(p.date_debut, p.date_fin),
         or_unknown(p.description.as_deref()),
         or_unknown(p.stack.as_deref()),
-        notes_lines(selected.notes.as_ref())
     )
 }
 

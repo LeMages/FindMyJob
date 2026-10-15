@@ -1,10 +1,5 @@
 {
-  "relevant_experiences": [
-    { "id": 1, "relevance": "high", "highlights": ["Pipelines SQL en production"], "keywords_covered": ["SQL"] }
-  ],
-  "relevant_projects": [
-    { "id": 1, "relevance": "high", "highlights": ["Tableau de bord Python"] }
-  ],
+  "project_ids": [1],
   "relevant_skills": [
     { "skill": "SQL", "match_type": "exact" },
     { "skill": "Python", "match_type": "exact" }

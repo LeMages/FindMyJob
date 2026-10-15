@@ -16,9 +16,9 @@ use crate::docgen::text_diff::orphan_separators;
 use crate::error::AppError;
 
 /// Champs secondaires vidés pour le rendu clairsemé.
-pub const SPARSE_FIELDS: [&str; 14] = [
+pub const SPARSE_FIELDS: [&str; 16] = [
     "title", "email", "telephone", "ville", "zip_code", "linkedin", "github", "portfolio", "entreprise", "lieu",
-    "pour_qui", "ecole", "level", "location",
+    "pour_qui", "stack", "url", "ecole", "level", "location",
 ];
 
 /// Données d'exemple dont les champs nommés sont vidés, partout où ils

@@ -26,6 +26,7 @@ mod docgen_prose_guidance;
 mod docgen_selection;
 mod docgen_sentinel;
 mod docgen_text_diff;
+mod docgen_translation;
 mod end_to_end;
 mod generation;
 mod offer_import;

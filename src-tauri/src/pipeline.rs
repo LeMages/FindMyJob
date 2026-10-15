@@ -2,9 +2,12 @@
 //! motivation) pour une candidature :
 //!
 //! 1. analyse de l'offre (LLM) ;
-//! 2. matching du profil (LLM), puis sélection des entrées (Rust) ;
-//! 3. rédaction de la prose du CV et de la lettre en parallèle (LLM, avec
-//!    linter et retry), dans le style de la référence et sous budgets ;
+//! 2. matching du profil (LLM, choix des projets validé en Rust), puis
+//!    sélection des entrées (Rust) et, si la langue du CV diffère de celle
+//!    du profil, traduction fidèle de leurs descriptions (LLM, validée) ;
+//! 3. rédaction de la prose du CV (titre, résumé, compétences) et de la
+//!    lettre en parallèle (LLM, avec linter et retry), dans le style de la
+//!    référence et sous budgets ;
 //! 4. assemblage déterministe des données (Rust) et compilation du template
 //!    de chaque référence, avec ajustement au nombre de pages.
 //!
@@ -30,13 +33,15 @@ use crate::docgen::recipient::build_recipient;
 use crate::docgen::reference_template::{load_reference, ReferenceTemplate};
 use crate::docgen::trace::{DocumentTrace, GenerationTrace};
 use crate::docgen::budgets::{cv_budget, lm_budget, CvBudget, LmBudget};
+use crate::docgen::entry_texts::{source_texts, CvEntryTexts};
 use crate::docgen::period_format::detect_separator;
-use crate::docgen::selection::{select, Selection};
+use crate::docgen::selection::{expected_project_count, select, Selection};
 use crate::error::AppError;
 use crate::llm::cv_writing::{write_cv, CvWritingInput};
 use crate::llm::lm_writing::{write_lm, LmWritingInput};
 use crate::llm::matching::match_profile;
 use crate::llm::offer::analyze_offer;
+use crate::llm::profile_translation::translate_entry_texts;
 use crate::llm::writing_loop::WritingOutcome;
 use crate::llm::{ClaudeTarget, LlmCaller};
 use crate::models::{
@@ -137,6 +142,7 @@ fn finish<C>(
 /// * `offer_analysis` - Analyse de l'offre (JSON).
 /// * `lang` - Langue des documents.
 /// * `matching`, `selection` - Matching et entrées retenues.
+/// * `entry_texts` - Descriptions des entrées du CV, dans la langue du CV.
 /// * `cv_budget`, `lm_budget` - Budgets initiaux.
 /// * `cv_labels`, `lm_labels` - Libellés dans la langue des documents.
 struct GenerationContext {
@@ -149,6 +155,7 @@ struct GenerationContext {
     lang: String,
     matching: MatchingResult,
     selection: Selection,
+    entry_texts: CvEntryTexts,
     cv_budget: CvBudget,
     lm_budget: LmBudget,
     cv_labels: ResolvedLabels<CvLabels>,
@@ -189,7 +196,7 @@ impl GenerationContext {
 }
 
 /// Étapes 1 et 2 : profil, références, destinataire, analyse de l'offre,
-/// matching, sélection, budgets et libellés.
+/// matching, sélection, budgets, libellés et textes des entrées.
 async fn prepare(
     pool: &SqlitePool,
     request: &GenerationRequest<'_>,
@@ -214,15 +221,12 @@ async fn prepare(
     let lang = target_language(&offer_analysis, &cv_ref.example.detected_lang);
 
     on_progress(2, "Matching profil / offre…");
-    let project_count = cv_ref.example.data.projects.len();
+    let project_count = expected_project_count(&profile, cv_ref.example.data.projects.len());
     let matching = match_profile(&offer_analysis, &profile, project_count, &target).await?;
-    let selection = select(&profile, &matching, project_count);
+    let selection = select(&profile, &matching.project_ids);
     let mut cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count).with_fixed_words(&cv_ref.example.guidance);
-    // Un profil peut avoir moins de projets que la référence : on en attend
-    // autant que la sélection en contient, jamais plus.
-    cv_budget.project_count = selection.projects.len();
-    // Même logique pour les groupes de compétences : pas plus de groupes que
-    // de domaines dans le profil, sinon le modèle doit en inventer un.
+    // Pas plus de groupes de compétences que de domaines dans le profil,
+    // sinon le modèle doit en inventer un.
     let mut domains: Vec<&str> = profile.skills.iter().map(|s| s.domaine.trim()).collect();
     domains.sort_unstable();
     domains.dedup();
@@ -230,11 +234,16 @@ async fn prepare(
     let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count).with_fixed_words(&lm_ref.example.guidance);
 
     // ------------------------------------------------------------------
-    // 3. Libellés dans la langue de l'offre (traduits et mis en cache si besoin)
+    // 3. Libellés et textes des entrées dans la langue de l'offre. Le profil
+    //    n'a pas de langue déclarée : il est supposé rédigé dans la langue
+    //    du CV de référence (`detected_lang`), la même que pour les libellés.
     // ------------------------------------------------------------------
-    let (cv_labels, lm_labels) = tokio::try_join!(
+    let source = source_texts(&profile, &selection);
+    let profile_lang = cv_ref.example.detected_lang.as_str();
+    let (cv_labels, lm_labels, entry_texts) = tokio::try_join!(
         resolve_cv_labels(&cv_ref.example.data.labels, &cv_ref.example.detected_lang, &lang, &cv_ref.dir, &target),
         resolve_lm_labels(&lm_ref.example.data.labels, &lm_ref.example.detected_lang, &lang, &lm_ref.dir, &target),
+        translate_entry_texts(&source, profile_lang, &lang, &target),
     )?;
 
     Ok(GenerationContext {
@@ -247,6 +256,7 @@ async fn prepare(
         lang,
         matching,
         selection,
+        entry_texts,
         cv_budget,
         lm_budget,
         cv_labels,
@@ -278,7 +288,7 @@ async fn produce_cv(
     fit_to_pages(
         &target,
         writing,
-        |content| build_cv_data(&ctx.profile, &ctx.selection, content, &layout),
+        |content| build_cv_data(&ctx.profile, &ctx.selection, &ctx.entry_texts, content, &layout),
         |factor| {
             let input = ctx.cv_input(ctx.cv_budget.scaled(factor));
             async move { write_cv(&input, &ctx.target).await }

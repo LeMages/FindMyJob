@@ -2,8 +2,9 @@
 //! schéma, rangées en deux familles :
 //! - les informations (identité, lieu, entrées du profil, destinataire),
 //!   que le profil ou l'offre remplacent à la génération ;
-//! - la prose (titre, résumé, bullets, objet, paragraphes), rédigée pour
-//!   chaque offre.
+//! - la prose (titre, résumé, objet, paragraphes), rédigée pour chaque
+//!   offre, et les bullets des expériences et projets, remplacés par les
+//!   descriptions du profil.
 //!
 //! Elles servent à vérifier qu'aucune n'est restée écrite en dur dans un
 //! template, et à repérer les mots d'information qu'une zone `[FIXE]` peut
@@ -51,7 +52,7 @@ pub fn cv_information_values(data: &CvData) -> Vec<String> {
         values.extend([experience.poste.as_str(), &experience.entreprise, &experience.lieu]);
     }
     for project in &data.projects {
-        values.extend([project.titre.as_str(), &project.pour_qui]);
+        values.extend([project.titre.as_str(), &project.pour_qui, &project.stack, &project.url]);
     }
     for formation in &data.formations {
         values.extend([formation.titre.as_str(), &formation.ecole]);

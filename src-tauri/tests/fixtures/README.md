@@ -30,14 +30,18 @@ La référence déposée par les tests (`test_state::reference_source`) est le t
 
 ## `llm/` : réponses figées du modèle
 
-Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l'étape est reconnue d'après le schéma de sortie demandé) :
+Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l'étape est reconnue d'après le schéma de sortie demandé ; `Reply::Sequence` enchaîne plusieurs fichiers pour une relance réussie) :
 
 | Fichier | Étape | Particularité |
 |---|---|---|
-| `offer_analysis.json` | Analyse de l'offre | Langue `fr` (pas de traduction des libellés) |
-| `matching.json` | Matching | Expérience 1 et projet 1, ceux de `test_state::seed_profile` |
-| `cv_content.json` | Rédaction du CV | Un tiret cadratin volontaire, que `strip_dashes` doit retirer |
+| `offer_analysis.json` | Analyse de l'offre | Langue `fr` (pas de traduction des libellés ni du profil) |
+| `offer_analysis_en.json` | Analyse de l'offre | Langue `en` : déclenche la traduction des libellés et du profil |
+| `matching.json` | Matching | Projet 1, celui de `test_state::seed_profile` |
+| `matching_id_inconnu.json` | Matching | Projet 99, absent du profil, pour déclencher les relances puis l'échec |
+| `cv_content.json` | Rédaction du CV | Titre, résumé et compétences seulement ; un tiret cadratin volontaire, que `strip_dashes` doit retirer |
 | `cv_content_vide.json` | Rédaction du CV | Champs de prose vides, pour déclencher les relances puis l'échec |
+| `profile_translation.json` | Traduction du profil | Expérience 1, projet 1 et formation 1 de `test_state::seed_profile`, une ligne chacun |
+| `profile_translation_lignes.json` | Traduction du profil | Deux lignes pour une description d'une ligne, pour déclencher les relances puis l'échec |
 | `lm_content.json` | Rédaction de la lettre | Un tiret cadratin volontaire |
 | `cv_labels.json`, `lm_labels.json` | Traduction des libellés | Utilisées seulement si la langue de l'offre diffère de celle de la référence |
 | `scraped_offer.json` | Extraction d'offre (étape LLM) | Balises HTML, emojis, contrat en majuscules et `mailto:`, que `finalize_fields` doit nettoyer |

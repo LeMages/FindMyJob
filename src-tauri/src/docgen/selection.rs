@@ -1,24 +1,13 @@
-//! Sélection des entrées du profil à faire figurer dans les documents, à
-//! partir du matching : toutes les expériences, et les N projets les plus
-//! pertinents (N = nombre de projets de la référence).
+//! Sélection des entrées du profil à faire figurer dans les documents :
+//! toutes les expériences, et les projets choisis par le matching (autant
+//! que la référence en affiche, dans la limite de ceux du profil). Le
+//! choix du matching est validé ici avant d'être utilisé.
 
 // Importation des crates externes
 use serde::Serialize;
 
 // Importation des modules internes
-use crate::models::{ExperienceView, MatchedItem, MatchingResult, ProfileDto, ProjetView};
-
-/// Entrée retenue, avec ce que le matching en dit.
-///
-/// # Attributes
-///
-/// * `item` - Entrée du profil.
-/// * `notes` - Jugement du matching, `None` si le matching l'a omise.
-#[derive(Serialize, Clone, Debug)]
-pub struct Selected<T> {
-    pub item: T,
-    pub notes: Option<MatchedItem>,
-}
+use crate::models::{ExperienceView, ProfileDto, ProjetView};
 
 /// Entrées retenues, dans l'ordre d'affichage du profil (le plus récent en
 /// premier).
@@ -29,71 +18,77 @@ pub struct Selected<T> {
 /// * `projects` - Les projets retenus.
 #[derive(Serialize, Clone, Debug)]
 pub struct Selection {
-    pub experiences: Vec<Selected<ExperienceView>>,
-    pub projects: Vec<Selected<ProjetView>>,
+    pub experiences: Vec<ExperienceView>,
+    pub projects: Vec<ProjetView>,
 }
 
 impl Selection {
     /// Identifiants des expériences retenues, dans l'ordre d'affichage.
     pub fn experience_ids(&self) -> Vec<i64> {
-        self.experiences.iter().map(|s| s.item.id).collect()
+        self.experiences.iter().map(|e| e.id).collect()
     }
 
     /// Identifiants des projets retenus, dans l'ordre d'affichage.
     pub fn project_ids(&self) -> Vec<i64> {
-        self.projects.iter().map(|s| s.item.id).collect()
+        self.projects.iter().map(|p| p.id).collect()
     }
 }
 
-/// Construit la sélection.
-///
-/// Les projets retenus sont les `project_count` premiers du matching dont
-/// l'identifiant existe dans le profil ; s'il en manque, la sélection est
-/// complétée par les projets les plus récents du profil non encore retenus.
-/// Les entrées retenues gardent l'ordre du profil.
+/// Nombre de projets que le matching doit choisir : celui de la référence,
+/// sans dépasser le nombre de projets du profil.
 ///
 /// # Arguments
 ///
 /// * `profile` - Profil complet du candidat.
-/// * `matching` - Résultat du matching.
-/// * `project_count` - Nombre de projets à retenir.
+/// * `reference_count` - Nombre de projets affichés par la référence.
 ///
 /// # Returns
 ///
-/// `Selection`.
-pub fn select(profile: &ProfileDto, matching: &MatchingResult, project_count: usize) -> Selection {
-    let notes_for = |notes: &[MatchedItem], id: i64| notes.iter().find(|n| n.id == id).cloned();
+/// `min(reference_count, nombre de projets du profil)`.
+pub fn expected_project_count(profile: &ProfileDto, reference_count: usize) -> usize {
+    reference_count.min(profile.projets.len())
+}
 
-    let experiences = profile
-        .experiences
-        .iter()
-        .map(|e| Selected { item: e.clone(), notes: notes_for(&matching.relevant_experiences, e.id) })
-        .collect();
-
-    // 1. Projets désignés par le matching, dans son ordre de pertinence
-    let mut chosen: Vec<i64> = Vec::new();
-    for matched in &matching.relevant_projects {
-        let known = profile.projets.iter().any(|p| p.id == matched.id);
-        if known && !chosen.contains(&matched.id) && chosen.len() < project_count {
-            chosen.push(matched.id);
+/// Vérifie les projets choisis par le matching : identifiants du profil,
+/// sans doublon, en nombre exact.
+///
+/// # Arguments
+///
+/// * `ids` - Identifiants rendus par le matching.
+/// * `profile` - Profil complet du candidat.
+/// * `expected` - Nombre de projets attendu (`expected_project_count`).
+///
+/// # Returns
+///
+/// Problèmes relevés, formulés pour être renvoyés au LLM ; vide si le choix
+/// est valide.
+pub fn project_id_problems(ids: &[i64], profile: &ProfileDto, expected: usize) -> Vec<String> {
+    let known: Vec<i64> = profile.projets.iter().map(|p| p.id).collect();
+    let mut problems = Vec::new();
+    for (rank, id) in ids.iter().enumerate() {
+        if !known.contains(id) {
+            problems.push(format!("project_ids : l'id {id} n'est pas un projet du profil (ids possibles : {known:?})."));
+        } else if ids[..rank].contains(id) {
+            problems.push(format!("project_ids : l'id {id} apparaît plusieurs fois."));
         }
     }
-    // 2. Complément par les projets les plus récents du profil
-    for projet in &profile.projets {
-        if chosen.len() >= project_count {
-            break;
-        }
-        if !chosen.contains(&projet.id) {
-            chosen.push(projet.id);
-        }
+    if ids.len() != expected {
+        problems.push(format!("project_ids contient {} projets, attendu exactement {expected}.", ids.len()));
     }
+    problems
+}
 
-    let projects = profile
-        .projets
-        .iter()
-        .filter(|p| chosen.contains(&p.id))
-        .map(|p| Selected { item: p.clone(), notes: notes_for(&matching.relevant_projects, p.id) })
-        .collect();
-
-    Selection { experiences, projects }
+/// Construit la sélection.
+///
+/// # Arguments
+///
+/// * `profile` - Profil complet du candidat.
+/// * `project_ids` - Projets retenus, déjà validés (`project_id_problems`).
+///
+/// # Returns
+///
+/// `Selection`, entrées dans l'ordre du profil.
+pub fn select(profile: &ProfileDto, project_ids: &[i64]) -> Selection {
+    let projects = profile.projets.iter().filter(|p| project_ids.contains(&p.id)).cloned().collect();
+    Selection { experiences: profile.experiences.clone(), projects }
 }

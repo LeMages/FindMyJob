@@ -130,6 +130,8 @@ pub fn cv_example_data_schema() -> Value {
                 ("titre", string()),
                 ("pour_qui", string()),
                 ("period", string()),
+                ("stack", string()),
+                ("url", string()),
                 ("bullets", string_list()),
             ])),
         ),

@@ -11,7 +11,7 @@ use crate::shared::{fake_llm, seed, test_state};
 use fake_llm::{Reply, Step};
 use findmyjob_lib::docgen::lint::lint_prose;
 use findmyjob_lib::error::AppError;
-use findmyjob_lib::models::{GenerationStatus, ProseField};
+use findmyjob_lib::models::{GenerationProgress, GenerationStatus, ProseField};
 use findmyjob_lib::app_state::AppState;
 use findmyjob_lib::db;
 use findmyjob_lib::documents::typst::compile_template;
@@ -38,7 +38,7 @@ fn read_data(state: &AppState, sid: i64, doc_type: &str, cid: i64) -> (String, V
     (raw, value)
 }
 
-/// Champs de prose d'un `data.json` (titre, résumé, bullets, objet, paragraphes).
+/// Champs de prose d'un `data.json` (titre, résumé, objet, paragraphes).
 fn prose_fields(data: &Value) -> Vec<ProseField> {
     let mut fields = Vec::new();
     let mut push = |path: String, value: &Value| {
@@ -52,13 +52,6 @@ fn prose_fields(data: &Value) -> Vec<ProseField> {
     }
     for (i, p) in data["paragraphs"].as_array().into_iter().flatten().enumerate() {
         push(format!("paragraphs[{i}]"), p);
-    }
-    for section in ["experiences", "projects"] {
-        for (i, entry) in data[section].as_array().into_iter().flatten().enumerate() {
-            for (j, b) in entry["bullets"].as_array().into_iter().flatten().enumerate() {
-                push(format!("{section}[{i}].bullets[{j}]"), b);
-            }
-        }
     }
     fields
 }
@@ -102,6 +95,14 @@ async fn generation_remplit_data_json_depuis_le_profil() {
     assert_eq!(cv["experiences"][0]["poste"], "Alternant data engineer");
     assert_eq!(cv["experiences"][0]["entreprise"], "Lumen Data");
     assert_eq!(cv["formations"][0]["titre"], "Master informatique");
+    // Entrées : lignes exactes des descriptions du profil, jamais réécrites.
+    assert_eq!(cv["experiences"][0]["bullets"], serde_json::json!(["Pipelines SQL pour le reporting."]));
+    assert_eq!(cv["projects"][0]["titre"], "Tableau de bord associatif");
+    assert_eq!(cv["projects"][0]["bullets"], serde_json::json!(["Suivi des adhésions en Python."]));
+    assert_eq!(cv["projects"][0]["pour_qui"], "Association Escalade Lyon");
+    assert_eq!(cv["projects"][0]["stack"], "Python");
+    assert_eq!(cv["projects"][0]["url"], "");
+    assert_eq!(cv["formations"][0]["details"], serde_json::json!(["Spécialité données"]));
     assert_eq!(cv["langues"][0]["nom"], "Anglais");
     assert_eq!(cv["skills_groups"][0]["skills"], serde_json::json!(["SQL", "Python"]));
     assert_eq!(lm["identity"]["nom"], "Martin");
@@ -109,6 +110,9 @@ async fn generation_remplit_data_json_depuis_le_profil() {
     assert_ne!(cv["identity"]["title"], "", "sous-titre rédigé pour l'offre");
     assert_eq!(lm["recipient"]["company"], "Lumen Santé");
     assert_eq!(lm["paragraphs"].as_array().map(Vec::len), Some(3));
+    assert!(!cv_raw.contains("Exemple de"), "aucune entrée de la référence : {cv_raw}");
+    assert_eq!(app.llm.calls_for(Step::ProfileTranslation), 0, "même langue : pas de traduction");
+    assert_eq!(app.llm.calls_for(Step::Matching), 1);
 
     // ------------------------------------------------------------------
     // 2. Prose : ni caractère ni formule interdits (le tiret cadratin de
@@ -188,4 +192,114 @@ async fn creation_refusee_sans_references() {
     }
     assert_eq!(count(&app.state.pool, "candidatures").await, 0);
     assert_eq!(app.llm.total_calls(), 0);
+}
+
+/// Lance une génération et attend sa fin.
+async fn generate(app: &TestApp, sid: i64) -> (i64, GenerationProgress) {
+    let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+    (view.id, progress)
+}
+
+#[tokio::test]
+async fn matching_invalide_relance_puis_echoue() {
+    let (app, sid) = ready_app("generation-matching-invalide").await;
+    app.llm.respond_with(Step::Matching, Reply::Fixture("matching_id_inconnu.json"));
+
+    let (cid, progress) = generate(&app, sid).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Failed));
+    let error = progress.error.expect("message d'échec");
+    assert!(error.contains("Le matching reste invalide après 3 essais"), "erreur : {error}");
+    assert!(error.contains("l'id 99 n'est pas un projet du profil"), "erreur : {error}");
+    assert_eq!(app.llm.calls_for(Step::Matching), 3);
+    assert_eq!(app.llm.calls_for(Step::CvContent), 0, "aucune rédaction sans projets valides");
+    assert_eq!(count(&app.state.pool, "candidatures").await, 0);
+    assert_no_generated_files(&app.state, sid, cid);
+}
+
+#[tokio::test]
+async fn matching_invalide_puis_corrige() {
+    let (app, sid) = ready_app("generation-matching-corrige").await;
+    app.llm.respond_with(Step::Matching, Reply::Sequence(&["matching_id_inconnu.json", "matching.json"]));
+
+    let (cid, progress) = generate(&app, sid).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+    assert_eq!(app.llm.calls_for(Step::Matching), 2);
+    let retry = &app.llm.messages_for(Step::Matching)[1];
+    assert!(retry.contains("PROBLÈMES") && retry.contains("l'id 99"), "retour de l'essai précédent : {retry}");
+    let (_, cv) = read_data(&app.state, sid, "cv", cid);
+    assert_eq!(cv["projects"][0]["titre"], "Tableau de bord associatif");
+}
+
+/// Application dont l'offre est analysée en anglais (référence en français).
+async fn english_app(name: &str) -> (TestApp, i64) {
+    let (app, sid) = ready_app(name).await;
+    app.llm.respond_with(Step::OfferAnalysis, Reply::Fixture("offer_analysis_en.json"));
+    (app, sid)
+}
+
+#[tokio::test]
+async fn offre_dans_une_autre_langue_traduit_les_entrees() {
+    let (app, sid) = english_app("generation-traduction").await;
+
+    let (cid, progress) = generate(&app, sid).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+    assert_eq!(app.llm.calls_for(Step::ProfileTranslation), 1, "un seul appel pour toutes les entrées");
+    let sent = &app.llm.messages_for(Step::ProfileTranslation)[0];
+    assert!(sent.contains("Pipelines SQL pour le reporting."), "{sent}");
+    for official in ["Alternant data engineer", "Lumen Data", "Tableau de bord associatif", "Master informatique", "Université Lyon 1"] {
+        assert!(!sent.contains(official), "{official} n'est jamais envoyé à la traduction : {sent}");
+    }
+
+    let (_, cv) = read_data(&app.state, sid, "cv", cid);
+    assert_eq!(cv["lang"], "en");
+    assert_eq!(cv["experiences"][0]["bullets"], serde_json::json!(["SQL pipelines for reporting."]));
+    assert_eq!(cv["projects"][0]["bullets"], serde_json::json!(["Membership tracking in Python."]));
+    assert_eq!(cv["projects"][0]["pour_qui"], "Escalade Lyon club");
+    assert_eq!(cv["formations"][0]["details"], serde_json::json!(["Data major"]));
+    // Noms officiels : ceux du profil, tels quels.
+    assert_eq!(cv["experiences"][0]["poste"], "Alternant data engineer");
+    assert_eq!(cv["experiences"][0]["entreprise"], "Lumen Data");
+    assert_eq!(cv["experiences"][0]["lieu"], "Lyon");
+    assert_eq!(cv["projects"][0]["titre"], "Tableau de bord associatif");
+    assert_eq!(cv["projects"][0]["stack"], "Python");
+    assert_eq!(cv["formations"][0]["titre"], "Master informatique");
+    assert_eq!(cv["formations"][0]["ecole"], "Université Lyon 1");
+}
+
+#[tokio::test]
+async fn traduction_invalide_relance_puis_echoue() {
+    let (app, sid) = english_app("generation-traduction-invalide").await;
+    app.llm.respond_with(Step::ProfileTranslation, Reply::Fixture("profile_translation_lignes.json"));
+
+    let (cid, progress) = generate(&app, sid).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Failed));
+    let error = progress.error.expect("message d'échec");
+    assert!(error.contains("La traduction du profil reste invalide après 3 essais"), "erreur : {error}");
+    assert!(error.contains("attendu exactement 1"), "erreur : {error}");
+    assert_eq!(app.llm.calls_for(Step::ProfileTranslation), 3);
+    assert_eq!(count(&app.state.pool, "candidatures").await, 0);
+    assert_no_generated_files(&app.state, sid, cid);
+}
+
+#[tokio::test]
+async fn traduction_invalide_puis_corrigee() {
+    let (app, sid) = english_app("generation-traduction-corrigee").await;
+    app.llm.respond_with(
+        Step::ProfileTranslation,
+        Reply::Sequence(&["profile_translation_lignes.json", "profile_translation.json"]),
+    );
+
+    let (cid, progress) = generate(&app, sid).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+    assert_eq!(app.llm.calls_for(Step::ProfileTranslation), 2);
+    let retry = &app.llm.messages_for(Step::ProfileTranslation)[1];
+    assert!(retry.contains("PROBLÈMES") && retry.contains("attendu exactement 1"), "{retry}");
+    let (_, cv) = read_data(&app.state, sid, "cv", cid);
+    assert_eq!(cv["experiences"][0]["bullets"], serde_json::json!(["SQL pipelines for reporting."]));
 }

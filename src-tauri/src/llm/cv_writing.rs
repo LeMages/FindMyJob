@@ -1,6 +1,7 @@
-//! Rédaction des champs de prose du CV (titre, résumé, bullets, groupes de
+//! Rédaction des champs de prose du CV (titre, résumé, groupes de
 //! compétences) via l'API Claude, avec revue et retry
-//! (`llm::writing_loop`). Tout le reste du CV est rempli par Rust. Les
+//! (`llm::writing_loop`). Tout le reste du CV est rempli par Rust, dont les
+//! expériences, projets et formations, repris du profil sans reformulation. Les
 //! consignes de la référence (zones `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`
 //! du titre et du résumé) sont transmises au LLM et vérifiées.
 
@@ -19,7 +20,7 @@ use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::prose_checks::ProseChecks;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
 use crate::llm::writing_rules::{guidance_block, language_rule, style_model_block, with_feedback, COMMON_RULES};
-use crate::models::{CvContent, CvData, ItemBullets, MatchingResult, ProfileDto, ProseGuidance};
+use crate::models::{CvContent, CvData, MatchingResult, ProfileDto, ProseGuidance};
 use crate::llm::target::ClaudeTarget;
 
 /// Entrées de la rédaction du CV.
@@ -53,24 +54,17 @@ fn text() -> Value {
     json!({ "type": "string", "minLength": 1 })
 }
 
-/// Schéma d'une liste, non vide si `non_empty`.
-fn list(items: Value, non_empty: bool) -> Value {
-    if non_empty {
-        json!({ "type": "array", "items": items, "minItems": 1 })
-    } else {
-        json!({ "type": "array", "items": items })
-    }
+/// Schéma d'une liste non vide.
+fn list(items: Value) -> Value {
+    json!({ "type": "array", "items": items, "minItems": 1 })
 }
 
 /// Schéma de sortie de la rédaction du CV.
-fn cv_content_schema(input: &CvWritingInput<'_>) -> Value {
-    let entry = object(&[("id", json!({ "type": "integer" })), ("bullets", list(text(), true))]);
+fn cv_content_schema() -> Value {
     object(&[
         ("title", text()),
         ("summary", text()),
-        ("experiences", list(entry.clone(), !input.selection.experiences.is_empty())),
-        ("projects", list(entry, !input.selection.projects.is_empty())),
-        ("skills_groups", list(object(&[("category", text()), ("skills", list(text(), true))]), true)),
+        ("skills_groups", list(object(&[("category", text()), ("skills", list(text()))]))),
     ])
 }
 
@@ -86,36 +80,20 @@ fn content_guidance(guidance: &ProseGuidance) -> ProseGuidance {
 
 /// Prose de la référence : modèle de style et base des formules autorisées.
 pub fn example_prose(example: &CvData) -> String {
-    let bullets = |items: Vec<&Vec<String>>| {
-        items.into_iter().flatten().map(|b| format!("- {b}")).collect::<Vec<_>>().join("\n")
-    };
     let categories = example.skills_groups.iter().map(|g| g.category.as_str()).collect::<Vec<_>>().join(" ; ");
     format!(
-        "Titre : {}\nRésumé : {}\nBullets d'expérience :\n{}\nBullets de projet :\n{}\nCatégories de compétences : {categories}",
-        example.identity.title,
-        example.summary,
-        bullets(example.experiences.iter().map(|e| &e.bullets).collect()),
-        bullets(example.projects.iter().map(|p| &p.bullets).collect()),
+        "Titre : {}\nRésumé : {}\nCatégories de compétences : {categories}",
+        example.identity.title, example.summary,
     )
 }
 
-/// Bloc des budgets du CV, entrée par entrée.
+/// Bloc des budgets du CV.
 fn budget_block(input: &CvWritingInput<'_>) -> String {
     let b = &input.budget;
     let mut lines = vec![
         "BUDGETS (limites dures)".to_string(),
         format!("summary : entre {} et {} mots.", b.summary_words.min, b.summary_words.max),
     ];
-    for (rank, selected) in input.selection.experiences.iter().enumerate() {
-        lines.push(format!("Expérience id {} : exactement {} bullets.", selected.item.id, b.experience_bullets_at(rank)));
-    }
-    for (rank, selected) in input.selection.projects.iter().enumerate() {
-        lines.push(format!("Projet id {} : exactement {} bullets.", selected.item.id, b.project_bullets_at(rank)));
-    }
-    lines.push(format!(
-        "Chaque bullet : au plus {} mots, environ {} en moyenne.",
-        b.bullet_words.max, b.bullet_words.target
-    ));
     lines.push(format!(
         "skills_groups : exactement {} groupes. Chaque compétence est recopiée telle qu'elle est écrite dans la liste des compétences du profil, sans en ajouter.",
         b.skills_group_count
@@ -126,14 +104,12 @@ fn budget_block(input: &CvWritingInput<'_>) -> String {
 /// Prompt système de la rédaction du CV.
 fn system_prompt(input: &CvWritingInput<'_>) -> String {
     format!(
-        "Tu rédiges les champs de prose d'un CV adapté à une offre : le titre, le résumé, les bullets de chaque expérience et de chaque projet retenus, et le regroupement des compétences. Les intitulés, entreprises, dates, formations et langues sont ajoutés à part : ne les rédige pas.\n\n\
+        "Tu rédiges les champs de prose d'un CV adapté à une offre : le titre, le résumé et le regroupement des compétences. Les expériences, projets, formations et langues sont ajoutés à part, tels qu'ils sont écrits dans le profil : ne les rédige pas.\n\n\
          {COMMON_RULES}\n\
          {}\n\n\
          Description des champs.\n\
          title : le titre professionnel affiché sous le nom, adapté à l'offre.\n\
          summary : le résumé de la section profil.\n\
-         experiences : pour chaque expérience retenue, son id et ses bullets.\n\
-         projects : pour chaque projet retenu, son id et ses bullets.\n\
          skills_groups : les compétences du profil regroupées en catégories pertinentes pour l'offre.",
         language_rule(input.target_lang, input.example_lang)
     )
@@ -151,48 +127,11 @@ fn user_message(input: &CvWritingInput<'_>) -> String {
     blocks.join("\n\n")
 }
 
-/// Remet les entrées du contenu dans l'ordre de la sélection (ordre
-/// d'affichage), pour que les budgets par rang s'appliquent aux bonnes
-/// entrées. Les identifiants inconnus sont placés à la fin.
-pub fn order_by_selection(content: &CvContent, selection: &Selection) -> CvContent {
-    let order = |items: &[ItemBullets], ids: &[i64]| {
-        let mut sorted = items.to_vec();
-        sorted.sort_by_key(|item| ids.iter().position(|id| *id == item.id).unwrap_or(usize::MAX));
-        sorted
-    };
-    CvContent {
-        experiences: order(&content.experiences, &selection.experience_ids()),
-        projects: order(&content.projects, &selection.project_ids()),
-        ..content.clone()
-    }
-}
-
-/// Vérifie qu'une liste d'entrées couvre exactement les identifiants attendus.
-fn check_ids(kind: &str, items: &[ItemBullets], expected: &[i64]) -> Vec<String> {
-    let mut problems = Vec::new();
-    for item in items {
-        if !expected.contains(&item.id) {
-            problems.push(format!("{kind} : l'id {} n'est pas une entrée retenue (ids attendus : {expected:?}).", item.id));
-        }
-    }
-    for id in expected {
-        match items.iter().filter(|item| item.id == *id).count() {
-            0 => problems.push(format!("{kind} : l'id {id} manque.")),
-            1 => {}
-            n => problems.push(format!("{kind} : l'id {id} apparaît {n} fois.")),
-        }
-    }
-    problems
-}
-
-/// Validation bloquante : identifiants et champs de prose vides. Un
-/// document ne peut pas être assemblé sans eux.
-fn blocking_problems(content: &CvContent, input: &CvWritingInput<'_>) -> Vec<String> {
-    let mut problems = check_ids("experiences", &content.experiences, &input.selection.experience_ids());
-    problems.extend(check_ids("projects", &content.projects, &input.selection.project_ids()));
+/// Validation bloquante : champs de prose vides. Un document ne peut pas
+/// être assemblé sans eux.
+fn blocking_problems(content: &CvContent) -> Vec<String> {
     let empty = content.prose_fields().into_iter().filter(|f| f.text.trim().is_empty());
-    problems.extend(empty.map(|f| format!("{} est vide.", f.path)));
-    problems
+    empty.map(|f| format!("{} est vide.", f.path)).collect()
 }
 
 /// Compétences du profil, normalisées pour la comparaison.
@@ -253,11 +192,10 @@ fn drop_empty_skills(content: &mut CvContent) {
 
 /// Revue complète d'un contenu de CV.
 fn review(content: &CvContent, input: &CvWritingInput<'_>, checks: &ProseChecks) -> Review {
-    let ordered = order_by_selection(content, input.selection);
-    let mut violations = checks.violations(&ordered.prose_fields());
-    violations.extend(lint_cv_budget(&ordered, &input.budget));
+    let mut violations = checks.violations(&content.prose_fields());
+    violations.extend(lint_cv_budget(content, &input.budget));
     violations.extend(skill_violations(content, input.profile));
-    Review { blocking: blocking_problems(content, input), violations }
+    Review { blocking: blocking_problems(content), violations }
 }
 
 /// Appelle le LLM une fois.
@@ -267,7 +205,7 @@ async fn call_once(
     target: &ClaudeTarget,
 ) -> Result<CvContent, AppError> {
     let message = with_feedback(user_message(input), feedback.as_ref());
-    let raw = call_claude(&system_prompt(input), &message, Some(cv_content_schema(input)), target).await?;
+    let raw = call_claude(&system_prompt(input), &message, Some(cv_content_schema()), target).await?;
     let mut content: CvContent = serde_json::from_str(raw.trim()).map_err(|e| {
         AppError::Llm(format!("La rédaction du CV n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}"))
     })?;
@@ -284,14 +222,14 @@ async fn call_once(
 ///
 /// # Returns
 ///
-/// `WritingOutcome<CvContent>`, entrées dans l'ordre d'affichage.
+/// `WritingOutcome<CvContent>`.
 pub async fn write_cv(input: &CvWritingInput<'_>, target: &ClaudeTarget) -> Result<WritingOutcome<CvContent>, AppError> {
     let checks = ProseChecks {
         example_prose: example_prose(input.example),
         guidance: content_guidance(input.guidance),
         information: cv_information_values(input.example),
     };
-    let mut outcome = write_with_retries(
+    write_with_retries(
         "CV",
         |feedback| call_once(input, feedback, target),
         |content| review(content, input, &checks),
@@ -300,17 +238,13 @@ pub async fn write_cv(input: &CvWritingInput<'_>, target: &ClaudeTarget) -> Resu
             retain_profile_skills(content, input.profile);
         },
     )
-    .await?;
-    outcome.content = order_by_selection(&outcome.content, input.selection);
-    Ok(outcome)
+    .await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::docgen::budgets::cv_budget;
-    use crate::docgen::selection::select;
-    use crate::models::{ProjetView, SkillView, SkillsGroup, UserView};
+    use crate::models::{CvExperience, CvProject, ProjetView, SkillView, SkillsGroup, UserView};
 
     /// Profil fictif minimal : 2 projets, 2 compétences, aucune expérience.
     fn profile() -> ProfileDto {
@@ -353,22 +287,10 @@ mod tests {
         }
     }
 
-    fn matching() -> MatchingResult {
-        MatchingResult {
-            relevant_experiences: Vec::new(),
-            relevant_projects: Vec::new(),
-            relevant_skills: Vec::new(),
-            summary_strategy: String::new(),
-            gaps: Vec::new(),
-        }
-    }
-
-    fn content(project_ids: &[i64], skills: &[&str]) -> CvContent {
+    fn content(skills: &[&str]) -> CvContent {
         CvContent {
             title: "Titre".to_string(),
             summary: "Résumé".to_string(),
-            experiences: Vec::new(),
-            projects: project_ids.iter().map(|id| ItemBullets { id: *id, bullets: vec!["Fait".to_string()] }).collect(),
             skills_groups: vec![SkillsGroup {
                 category: "Cat".to_string(),
                 skills: skills.iter().map(|s| s.to_string()).collect(),
@@ -377,52 +299,48 @@ mod tests {
     }
 
     #[test]
-    fn identifiants_et_competences_valides() {
-        let (profile, matching) = (profile(), matching());
-        let selection = select(&profile, &matching, 2);
-        let example = CvData::default();
-        let input = CvWritingInput {
-            offer_analysis: "{}",
-            matching: &matching,
-            selection: &selection,
-            profile: &profile,
-            example: &example,
-            guidance: &ProseGuidance::default(),
-            budget: cv_budget(&example, 1),
-            target_lang: "fr",
-            example_lang: "fr",
-        };
-        assert!(blocking_problems(&content(&[2, 1], &["rust", "SQL"]), &input).is_empty());
-        assert!(skill_violations(&content(&[2, 1], &["rust", "SQL"]), &profile).is_empty());
+    fn schema_sans_experiences_ni_projets() {
+        let schema = cv_content_schema();
+        let mut keys: Vec<&String> = schema["properties"].as_object().expect("propriétés").keys().collect();
+        keys.sort();
+        assert_eq!(keys, vec!["skills_groups", "summary", "title"]);
+    }
 
-        let problems = blocking_problems(&content(&[1, 1, 9], &["Kubernetes"]), &input);
-        assert!(problems.iter().any(|p| p.contains("id 9 n'est pas")), "{problems:?}");
-        assert!(problems.iter().any(|p| p.contains("id 2 manque")), "{problems:?}");
-        assert!(problems.iter().any(|p| p.contains("id 1 apparaît 2 fois")), "{problems:?}");
+    #[test]
+    fn champs_vides_et_competences_valides() {
+        assert!(blocking_problems(&content(&["rust", "SQL"])).is_empty());
+        assert!(skill_violations(&content(&["rust", "SQL"]), &profile()).is_empty());
 
-        let skills = skill_violations(&content(&[1, 2], &["Kubernetes", "Rust", "rust"]), &profile);
+        let empty = CvContent { title: " ".to_string(), summary: String::new(), ..content(&[]) };
+        assert_eq!(blocking_problems(&empty), vec!["title est vide.".to_string(), "summary est vide.".to_string()]);
+
+        let skills = skill_violations(&content(&["Kubernetes", "Rust", "rust"]), &profile());
         assert!(skills.iter().any(|v| v.message.contains("Kubernetes")), "{skills:?}");
         assert!(skills.iter().any(|v| v.message.contains("plusieurs groupes")), "{skills:?}");
     }
 
     #[test]
     fn competences_hors_profil_retirees_mecaniquement() {
-        let mut cleaned = content(&[1], &["Kubernetes", "Rust", "rust", " "]);
+        let mut cleaned = content(&["Kubernetes", "Rust", "rust", " "]);
         drop_empty_skills(&mut cleaned);
         retain_profile_skills(&mut cleaned, &profile());
         assert_eq!(cleaned.skills_groups[0].skills, vec!["Rust".to_string()]);
 
-        let mut emptied = content(&[1], &["Kubernetes"]);
+        let mut emptied = content(&["Kubernetes"]);
         retain_profile_skills(&mut emptied, &profile());
         assert!(emptied.skills_groups.is_empty(), "un groupe vidé disparaît");
     }
 
     #[test]
-    fn ordre_d_affichage_de_la_selection() {
-        let (profile, matching) = (profile(), matching());
-        let selection = select(&profile, &matching, 2);
-        let ordered = order_by_selection(&content(&[2, 1], &[]), &selection);
-        let ids: Vec<i64> = ordered.projects.iter().map(|p| p.id).collect();
-        assert_eq!(ids, vec![1, 2]);
+    fn modele_de_style_sans_bullets_de_la_reference() {
+        let example = CvData {
+            summary: "Résumé exemple".to_string(),
+            experiences: vec![CvExperience { bullets: vec!["Bullet d'expérience".to_string()], ..Default::default() }],
+            projects: vec![CvProject { bullets: vec!["Bullet de projet".to_string()], ..Default::default() }],
+            ..Default::default()
+        };
+        let prose = example_prose(&example);
+        assert!(prose.contains("Résumé exemple"), "{prose}");
+        assert!(!prose.contains("Bullet"), "aucun contenu d'entrée de la référence : {prose}");
     }
 }
