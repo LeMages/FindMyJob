@@ -1,12 +1,13 @@
 //! Ré-exports publics des commandes Tauri, groupées par entité métier.
-//! Chaque commande délègue sa logique à la couche `db::` ou `documents::` —
-//! aucune requête SQL directe ici.
+//! Chaque commande reste fine : elle appelle un service (`crate::services`)
+//! ou un accès base (`crate::db`) et renvoie son résultat tel quel.
 
 pub mod candidatures;
+pub mod capture;
 pub mod contacts;
+pub mod document_versions;
 pub mod documents;
 pub mod experiences;
-pub mod export;
 pub mod fonts;
 pub mod formations;
 pub mod interviews;
@@ -25,10 +26,11 @@ pub mod users;
 // la macro #[tauri::command] génère des items cachés (__cmd__xxx) à côté de
 // chaque fonction, que seul un ré-export glob propage jusqu'à `generate_handler!`.
 pub use candidatures::*;
+pub use capture::*;
 pub use contacts::*;
+pub use document_versions::*;
 pub use documents::*;
 pub use experiences::*;
-pub use export::*;
 pub use fonts::*;
 pub use formations::*;
 pub use interviews::*;

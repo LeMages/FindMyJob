@@ -4,20 +4,24 @@
 //! de l'entretien concerné, et de `status_history`).
 
 // Importation des crates externes
-use sqlx::{Row, SqlitePool};
+use sqlx::{SqliteConnection, SqlitePool};
 
 // Importation des modules internes
-use crate::db::common::normalize;
-use crate::db::{interviews, status_history};
+use crate::clock::format_timestamp;
+use crate::db::candidatures;
+use crate::db::common::{map_db_err, normalize};
+use crate::db::contacts;
+use crate::db::interviews::{self, NewInterview};
+use crate::db::status_history::{self, NewHistoryEntry};
+use crate::db::transaction::begin_write;
 use crate::error::AppError;
-use crate::models::{AvailableEvent, EventType, NewTimelineEvent};
+use crate::models::{AvailableEvent, EventType, NewInterviewData, NewTimelineEvent};
 
 /// Statuts non terminaux d'une candidature — un événement de timeline ne peut
 /// être ajouté que tant que la candidature est dans l'un de ces statuts.
 /// `offre` y figure : recevoir une offre ne verrouille pas la candidature,
 /// il reste possible de l'accepter, la décliner, ou se désister.
-const STATUTS_NON_TERMINAUX: [&str; 6] =
-    ["a_postuler", "postule", "relance", "entretien", "entretien_passe", "offre"];
+const STATUTS_NON_TERMINAUX: [&str; 6] = ["a_postuler", "postule", "relance", "entretien", "entretien_passe", "offre"];
 
 /// Construit la liste des événements que l'utilisateur peut ajouter à la
 /// timeline pour le statut courant d'une candidature.
@@ -90,17 +94,173 @@ fn push_event(events: &mut Vec<AvailableEvent>, event_type: EventType, label: &s
     });
 }
 
-/// Ajoute un événement à la timeline d'une candidature : valide qu'il est
-/// autorisé pour le statut courant, applique ses effets (création ou mise à
-/// jour d'un entretien, changement de statut) et écrit la ligne
-/// `status_history`, le tout dans une seule transaction.
+/// Liste les événements proposables pour une candidature, d'après son
+/// statut courant et ses entretiens en attente.
 ///
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions SQLite.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
+/// * `candidature_id` - Identifiant de la candidature.
+///
+/// # Returns
+///
+/// Événements disponibles, ou `AppError::NotFound` si la candidature n'existe pas.
+pub async fn available_for_candidature(pool: &SqlitePool, candidature_id: i64) -> Result<Vec<AvailableEvent>, AppError> {
+    let status = candidatures::fetch_status(pool, candidature_id).await?;
+    let has_pending = interviews::count_pending(pool, candidature_id).await? > 0;
+    Ok(available_events(&status, has_pending))
+}
+
+/// Vérifie qu'un événement est autorisé pour le statut courant —
+/// `available_events` reste la seule source de vérité, jamais de confiance
+/// dans ce qu'envoie le frontend.
+///
+/// # Arguments
+///
+/// * `conn` - Connexion de la transaction d'écriture en cours.
+/// * `candidature_id` - Identifiant de la candidature.
+/// * `event_type` - Événement demandé.
+///
+/// # Returns
+///
+/// Statut courant, `AppError::NotFound` si la candidature n'existe pas, ou
+/// `AppError::Conflict` si l'événement n'est pas autorisé.
+async fn ensure_allowed(
+    conn: &mut SqliteConnection,
+    candidature_id: i64,
+    event_type: EventType,
+) -> Result<String, AppError> {
+    let ancien_status = candidatures::fetch_status(&mut *conn, candidature_id).await?;
+    let has_pending = interviews::count_pending(&mut *conn, candidature_id).await? > 0;
+    let allowed = available_events(&ancien_status, has_pending);
+    if !allowed.iter().any(|a| a.event_type == event_type.as_str()) {
+        return Err(AppError::Conflict(
+            "Cet événement n'est pas disponible pour le statut courant.".to_string(),
+        ));
+    }
+    Ok(ancien_status)
+}
+
+/// Crée l'entretien d'un événement `entretien_planifie`.
+///
+/// # Arguments
+///
+/// * `conn` - Connexion de la transaction d'écriture en cours.
+/// * `candidature_id` - Identifiant de la candidature.
+/// * `data` - Données de l'entretien soumises par le frontend.
+/// * `now` - Horodatage de la transaction.
+///
+/// # Returns
+///
+/// Identifiant de l'entretien créé, ou `AppError::Validation`.
+async fn plan_interview(
+    conn: &mut SqliteConnection,
+    candidature_id: i64,
+    data: Option<NewInterviewData>,
+    now: &str,
+) -> Result<i64, AppError> {
+    let data = data.ok_or_else(|| AppError::Validation("Les données de l'entretien sont requises.".to_string()))?;
+    let type_entretien = data.type_entretien.to_lowercase();
+    if !interviews::TYPES_ENTRETIEN_VALIDES.contains(&type_entretien.as_str()) {
+        return Err(AppError::Validation("Type d'entretien invalide.".to_string()));
+    }
+    let modalite = normalize(data.modalite).map(|m| m.to_lowercase());
+    if let Some(m) = &modalite {
+        if !interviews::MODALITES_VALIDES.contains(&m.as_str()) {
+            return Err(AppError::Validation("Modalité d'entretien invalide.".to_string()));
+        }
+    }
+    let contact_ids = linked_contact_ids(conn, candidature_id, &data.contact_ids).await?;
+    let date_entretien = data.date_entretien.map(format_timestamp);
+    let lieu = normalize(data.lieu);
+    let new = NewInterview {
+        candidature_id,
+        type_entretien: &type_entretien,
+        date_entretien: date_entretien.as_deref(),
+        lieu: lieu.as_deref(),
+        modalite: modalite.as_deref(),
+        contact_ids: &contact_ids,
+    };
+    interviews::insert(conn, &new, now).await
+}
+
+/// Vérifie les interlocuteurs choisis pour un entretien : chacun doit être
+/// un contact lié à la candidature (sinon le frontend pourrait rattacher le
+/// contact d'une autre candidature, ou un id inexistant qui remonterait en
+/// erreur SQLite brute).
+///
+/// # Arguments
+///
+/// * `conn` - Connexion de la transaction d'écriture en cours.
+/// * `candidature_id` - Identifiant de la candidature de l'entretien.
+/// * `contact_ids` - Interlocuteurs soumis par le frontend.
+///
+/// # Returns
+///
+/// Identifiants dédoublonnés, dans l'ordre reçu, ou `AppError::Validation`.
+async fn linked_contact_ids(
+    conn: &mut SqliteConnection,
+    candidature_id: i64,
+    contact_ids: &[i64],
+) -> Result<Vec<i64>, AppError> {
+    let mut unique: Vec<i64> = Vec::with_capacity(contact_ids.len());
+    for &contact_id in contact_ids {
+        if unique.contains(&contact_id) {
+            continue;
+        }
+        if !contacts::is_linked_to_candidature(&mut *conn, contact_id, candidature_id).await? {
+            return Err(AppError::Validation(
+                "Un interlocuteur choisi n'est pas un contact de cette candidature.".to_string(),
+            ));
+        }
+        unique.push(contact_id);
+    }
+    Ok(unique)
+}
+
+/// Marque passé l'entretien d'un événement `entretien_passe`.
+///
+/// # Arguments
+///
+/// * `conn` - Connexion de la transaction d'écriture en cours.
+/// * `candidature_id` - Identifiant de la candidature.
+/// * `interview_id` - Entretien concerné, soumis par le frontend.
+/// * `interview_issue` - Issue de l'entretien, soumise par le frontend.
+/// * `content` - Contenu normalisé de l'événement, enregistré comme notes.
+///
+/// # Returns
+///
+/// Identifiant de l'entretien, `AppError::Validation` ou `AppError::NotFound`.
+async fn close_interview(
+    conn: &mut SqliteConnection,
+    candidature_id: i64,
+    interview_id: Option<i64>,
+    interview_issue: Option<String>,
+    content: Option<&str>,
+) -> Result<i64, AppError> {
+    let interview_id =
+        interview_id.ok_or_else(|| AppError::Validation("L'entretien concerné est requis.".to_string()))?;
+    let issue = normalize(interview_issue)
+        .ok_or_else(|| AppError::Validation("L'issue de l'entretien est requise.".to_string()))?
+        .to_lowercase();
+    if !interviews::ISSUES_VALIDES.contains(&issue.as_str()) {
+        return Err(AppError::Validation("Issue d'entretien invalide.".to_string()));
+    }
+    interviews::mark_passed(conn, interview_id, candidature_id, &issue, content).await?;
+    Ok(interview_id)
+}
+
+/// Ajoute un événement à la timeline d'une candidature : valide qu'il est
+/// autorisé pour le statut courant, applique ses effets (création ou mise à
+/// jour d'un entretien, changement de statut) et écrit la ligne
+/// `status_history`, le tout dans une seule transaction et au même horodatage.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
 /// * `candidature_id` - Identifiant de la candidature concernée.
 /// * `event` - Événement soumis par le frontend.
+/// * `now` - Horodatage de la transaction.
 ///
 /// # Returns
 ///
@@ -110,40 +270,24 @@ fn push_event(events: &mut Vec<AvailableEvent>, event_type: EventType, label: &s
 /// statut courant.
 pub async fn add_event(
     pool: &SqlitePool,
-    user_id: i64,
     candidature_id: i64,
     event: NewTimelineEvent,
+    now: &str,
 ) -> Result<(), AppError> {
-    let event_type = EventType::try_from(event.event_type.as_str())?;
+    let NewTimelineEvent { event_type, content, interview_data, interview_id, interview_issue } = event;
+    let event_type = EventType::try_from(event_type.as_str())?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = begin_write(pool).await?;
 
     // ------------------------------------------------------------------
-    // 1. La candidature doit exister, et l'événement doit être autorisé pour
-    //    son statut courant — `available_events` reste la seule source de
-    //    vérité, jamais de confiance dans ce qu'envoie le frontend.
+    // 1. Candidature existante et événement autorisé pour son statut
     // ------------------------------------------------------------------
-    let ancien_status: String = sqlx::query("SELECT status FROM candidatures WHERE id = ? AND user_id = ?")
-        .bind(candidature_id)
-        .bind(user_id)
-        .fetch_optional(&mut *tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?
-        .try_get("status")
-        .map_err(AppError::from)?;
-
-    let has_pending = interviews::count_pending(&mut *tx, candidature_id).await? > 0;
-    let allowed = available_events(&ancien_status, has_pending);
-    if !allowed.iter().any(|a| a.event_type == event_type.as_str()) {
-        return Err(AppError::Conflict(
-            "Cet événement n'est pas disponible pour le statut courant.".to_string(),
-        ));
-    }
+    let ancien_status = ensure_allowed(&mut tx, candidature_id, event_type).await?;
 
     // ------------------------------------------------------------------
     // 2. Validation des champs requis selon le type d'événement
     // ------------------------------------------------------------------
-    let content = normalize(event.content);
+    let content = normalize(content);
     if matches!(
         event_type,
         EventType::Relance | EventType::MessageEnvoye | EventType::MessageRecu | EventType::Note
@@ -156,45 +300,9 @@ pub async fn add_event(
     // 3. Effets spécifiques : création ou mise à jour d'un entretien
     // ------------------------------------------------------------------
     let interview_id = match event_type {
-        EventType::EntretienPlanifie => {
-            let data = event
-                .interview_data
-                .ok_or_else(|| AppError::Validation("Les données de l'entretien sont requises.".to_string()))?;
-            let type_entretien = data.type_entretien.to_lowercase();
-            if !interviews::TYPES_ENTRETIEN_VALIDES.contains(&type_entretien.as_str()) {
-                return Err(AppError::Validation("Type d'entretien invalide.".to_string()));
-            }
-            let modalite = normalize(data.modalite).map(|m| m.to_lowercase());
-            if let Some(m) = &modalite {
-                if !interviews::MODALITES_VALIDES.contains(&m.as_str()) {
-                    return Err(AppError::Validation("Modalité d'entretien invalide.".to_string()));
-                }
-            }
-            let id = interviews::insert(
-                &mut tx,
-                candidature_id,
-                &type_entretien,
-                normalize(data.date_entretien).as_deref(),
-                normalize(data.lieu).as_deref(),
-                modalite.as_deref(),
-                data.contact_id,
-            )
-            .await?;
-            Some(id)
-        }
+        EventType::EntretienPlanifie => Some(plan_interview(&mut tx, candidature_id, interview_data, now).await?),
         EventType::EntretienPasse => {
-            let interview_id = event
-                .interview_id
-                .ok_or_else(|| AppError::Validation("L'entretien concerné est requis.".to_string()))?;
-            let issue = normalize(event.interview_issue)
-                .ok_or_else(|| AppError::Validation("L'issue de l'entretien est requise.".to_string()))?;
-            let issue_lower = issue.to_lowercase();
-            if !interviews::ISSUES_VALIDES.contains(&issue_lower.as_str()) {
-                return Err(AppError::Validation("Issue d'entretien invalide.".to_string()));
-            }
-            interviews::mark_passed(&mut tx, interview_id, candidature_id, &issue_lower, content.as_deref())
-                .await?;
-            Some(interview_id)
+            Some(close_interview(&mut tx, candidature_id, interview_id, interview_issue, content.as_deref()).await?)
         }
         _ => None,
     };
@@ -204,29 +312,27 @@ pub async fn add_event(
     // ------------------------------------------------------------------
     let nouveau_status = event_type.changes_status();
     if let Some(target) = nouveau_status {
-        sqlx::query("UPDATE candidatures SET status = ? WHERE id = ? AND user_id = ?")
+        sqlx::query("UPDATE candidatures SET status = $1 WHERE id = $2")
             .bind(target)
             .bind(candidature_id)
-            .bind(user_id)
             .execute(&mut *tx)
-            .await?;
+            .await
+            .map_err(map_db_err)?;
     }
 
     // ------------------------------------------------------------------
     // 5. Trace de l'événement dans la timeline
     // ------------------------------------------------------------------
-    status_history::record(
-        &mut tx,
+    let entry = NewHistoryEntry {
         candidature_id,
         event_type,
-        Some(&ancien_status),
+        ancien_status: Some(&ancien_status),
         nouveau_status,
-        content.as_deref(),
+        content: content.as_deref(),
         interview_id,
-    )
-    .await?;
+    };
+    status_history::record(&mut tx, &entry, now).await?;
 
-    tx.commit().await?;
-
+    tx.commit().await.map_err(map_db_err)?;
     Ok(())
 }

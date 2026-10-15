@@ -1,41 +1,51 @@
 //! Point d'entrée de la bibliothèque Tauri : déclaration des modules et
-//! configuration de l'application (état partagé, commandes exposées à l'IPC).
+//! configuration de l'application (initialisation au démarrage, état
+//! partagé, commandes exposées à l'IPC).
+//!
+//! Les modules `llm`, `scraping`, `text`, `trace_log` et les fichiers purs de
+//! `docgen` sont de la logique pure (appels LLM, import d'offre, texte, traces) :
+//! ils n'accèdent ni à la base de données ni à Tauri.
 
 // Importation des modules internes
+pub mod app_state;
+pub mod clock;
 pub mod commands;
 pub mod db;
+pub mod docgen;
 pub mod documents;
 pub mod error;
 pub mod llm;
 pub mod models;
+pub mod offer_extraction;
+pub mod pipeline;
+pub mod progress;
 pub mod scraping;
-pub mod security;
+pub mod secrets;
+pub mod services;
+pub mod startup;
+pub mod storage_paths;
+pub mod text;
+pub mod trace_log;
+pub mod url_normalize;
 
 // Importation des crates externes
 use tauri::Manager;
 
-// Importation des modules internes (usage local à run())
-use db::init::{init_db, resolve_db_path, DbState};
-
-/// Configure et lance l'application Tauri : initialise la base de données,
-/// l'injecte comme état partagé, puis enregistre toutes les commandes IPC .
+/// Configure et lance l'application Tauri : initialise l'état (`.env`, mode
+/// d'exécution, traces, dossiers, base SQLite), l'injecte comme état
+/// partagé, crée la fenêtre principale, puis enregistre toutes les
+/// commandes IPC.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Charge le .env à la racine du projet (ANTHROPIC_API_KEY, etc.) — no-op
-    // silencieux si le fichier est absent (ex. build de production packagée).
-    dotenvy::dotenv().ok();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let db_path = resolve_db_path(app.handle());
-            let pool = tauri::async_runtime::block_on(init_db(&db_path))
-                .map_err(|e| e.to_string())?;
-            app.manage(DbState { pool, db_path });
+            let startup = startup::initialize(app.handle());
+            app.manage(startup.context);
+            startup::main_window::create(app.handle(), startup.main_webview_dir.as_deref())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::db_status,
             commands::user_exists,
             commands::create_user,
             commands::get_user,
@@ -56,6 +66,10 @@ pub fn run() {
             commands::save_lettre_motivation,
             commands::compile_cv,
             commands::compile_lettre_motivation,
+            commands::get_documents_status,
+            commands::get_document_versions,
+            commands::get_document_version_pdf,
+            commands::restore_document_version,
             commands::open_url,
             commands::update_user_info,
             commands::add_projet,
@@ -65,16 +79,27 @@ pub fn run() {
             commands::delete_skill,
             commands::update_skill,
             commands::create_candidature,
+            commands::find_candidatures_by_url,
             commands::scrape_offer,
             commands::extract_offer_from_text,
+            commands::open_capture_window,
+            commands::capture_offer_page,
+            commands::close_capture_window,
             commands::get_candidatures,
             commands::get_candidature,
+            commands::get_generation_progress,
             commands::update_candidature,
-            commands::abandon_candidature,
+            commands::delete_candidature,
             commands::postuler_sans_message,
             commands::postuler_par_mail,
             commands::postuler_par_message,
+            commands::list_contacts,
             commands::get_contacts,
+            commands::create_contact,
+            commands::update_contact,
+            commands::delete_contact,
+            commands::link_contact,
+            commands::unlink_contact,
             commands::get_status_history,
             commands::get_available_events,
             commands::add_timeline_event,
@@ -82,21 +107,21 @@ pub fn run() {
             commands::get_all_interviews_for_session,
             commands::get_document_info,
             commands::get_document_pdf,
+            commands::download_document,
+            commands::get_downloads_dir,
+            commands::save_text_file,
             commands::create_session,
             commands::get_sessions,
             commands::update_session,
             commands::delete_session,
-            commands::get_api_key_status,
-            commands::set_api_key,
-            commands::delete_api_key,
             commands::get_llm_model,
             commands::set_llm_model,
             commands::get_theme,
             commands::set_theme,
-            commands::get_documents_path,
-            commands::open_folder,
             commands::test_api_connection,
-            commands::export_data_json,
+            commands::get_api_key_status,
+            commands::save_api_key,
+            commands::delete_api_key,
             commands::list_fonts,
             commands::import_font_folder,
             commands::delete_font,

@@ -1,0 +1,8 @@
+# Toolchain Rust épinglée, utilisée en local comme en CI (`rustup toolchain
+# install` sans argument lit ce fichier). Les cibles macOS sont celles des
+# builds de `release.yml` et `build-check.yml`.
+[toolchain]
+channel = "1.96.0"
+components = ["clippy", "rustfmt"]
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+profile = "minimal"

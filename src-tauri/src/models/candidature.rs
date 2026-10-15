@@ -1,6 +1,10 @@
 //! DTOs liés aux candidatures.
 
-#[derive(serde::Serialize)]
+use chrono::{DateTime, Utc};
+
+use crate::models::contact::CandidatureContactInput;
+
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CandidatureView {
     pub id: i64,
     pub session_id: Option<i64>,
@@ -10,20 +14,18 @@ pub struct CandidatureView {
     pub status: String,
     pub source: Option<String>,
     pub type_contrat: Option<String>,
-    pub date_candidature: Option<String>,
-    pub next_relance: Option<String>,
     /// Horodatage du dernier changement de statut (issu de `status_history`),
     /// utilisé pour calculer l'inactivité affichée dans la vue pipeline.
-    pub derniere_maj_statut: String,
+    pub derniere_maj_statut: DateTime<Utc>,
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Vue complète d'une candidature, utilisée par la page de détail (contient
 /// les champs additionnels absents de `CandidatureView`, qui reste léger pour
 /// l'affichage en liste/kanban).
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CandidatureDetail {
     pub id: i64,
     pub session_id: Option<i64>,
@@ -37,14 +39,17 @@ pub struct CandidatureDetail {
     pub url_offre: Option<String>,
     pub description_offre: Option<String>,
     pub notes: Option<String>,
-    pub date_candidature: Option<String>,
-    pub next_relance: Option<String>,
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
-    pub created_at: String,
+    /// Numéro de la version du CV de référence utilisée pour la génération,
+    /// `None` si générée avant le versioning ou version supprimée.
+    pub cv_reference_version: Option<i32>,
+    /// Numéro de la version de la lettre de référence utilisée pour la génération.
+    pub lm_reference_version: Option<i32>,
+    pub created_at: DateTime<Utc>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CreateCandidatureInput {
     pub poste: String,
     pub entreprise: Option<String>,
@@ -58,11 +63,15 @@ pub struct CreateCandidatureInput {
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
     pub session_id: Option<i64>,
+    /// Contacts à lier à la candidature, créés ou repris du carnet dans la
+    /// même transaction.
+    #[serde(default)]
+    pub contacts: Vec<CandidatureContactInput>,
 }
 
 /// Champs modifiables depuis la page de détail, uniquement au statut
 /// « à_postuler » (voir `db::candidatures::update`).
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct UpdateCandidatureInput {
     pub poste: String,
     pub entreprise: Option<String>,
@@ -72,4 +81,17 @@ pub struct UpdateCandidatureInput {
     pub remuneration: Option<String>,
     pub url_offre: Option<String>,
     pub notes: Option<String>,
+}
+
+/// Candidature existante dont l'URL d'offre correspond (après
+/// normalisation) à une URL donnée : sert à l'avertissement non bloquant de
+/// doublon à la création, toutes sessions confondues.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DuplicateCandidatureView {
+    pub id: i64,
+    pub session_id: i64,
+    pub session_nom: String,
+    pub poste: String,
+    pub entreprise: Option<String>,
+    pub status: String,
 }

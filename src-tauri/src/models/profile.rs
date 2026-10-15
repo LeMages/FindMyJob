@@ -8,7 +8,7 @@ use crate::models::projet::ProjetView;
 use crate::models::skill::SkillView;
 use crate::models::user::UserView;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ProfileDto {
     pub user: UserView,
     pub experiences: Vec<ExperienceView>,

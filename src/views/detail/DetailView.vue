@@ -12,17 +12,34 @@ import {
   state,
   navigate,
   openDetailPopup,
+  openContactPopup,
+  openDeleteContactPopup,
+  unlinkContact,
   updateDetailCandidature,
 } from '@/stores/app'
 import { TYPE_CONTRAT_OPTIONS, SOURCE_OPTIONS, TRASHED_STATUSES, statusLabel } from '@/composables/candidature_display'
 import { formatFileSize } from '@/composables/format_file_size'
+import { useDocumentDownload } from '@/composables/useDocumentDownload'
 import DetailPopup from '@/views/detail/components/DetailPopup.vue'
 import DocumentPreviewModal from '@/views/detail/components/DocumentPreviewModal.vue'
 import StatusTimelineCard from '@/views/detail/components/StatusTimelineCard.vue'
 import EditableField from '@/components/EditableField.vue'
+import type { DownloadDocType } from '@/composables/document_file_name'
 
-const initials = (nom: string | null) =>
-  (nom ?? '').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+const initials = (nom: string) =>
+  nom.split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+
+/** Erreur du dernier retrait de contact (affichée dans le bloc des contacts). */
+const contactActionError = ref<string | null>(null)
+
+/**
+ * Retire un contact de la candidature (il reste dans le carnet).
+ *
+ * @param contactId - Contact à retirer.
+ */
+async function removeContactFromCandidature(contactId: number) {
+  contactActionError.value = await unlinkContact(contactId)
+}
 
 // Les détails du poste et les notes ne sont modifiables que tant que la
 // candidature n'a pas encore été engagée (statut "à postuler").
@@ -34,17 +51,21 @@ const cvSize = computed(() => state.detailCvInfo?.size ?? 0)
 const lettrePath = computed(() => state.detailCandidature?.lettre_motivation_path ?? null)
 const lettreExists = computed(() => !!lettrePath.value && !!state.detailLettreInfo?.exists)
 const lettreSize = computed(() => state.detailLettreInfo?.size ?? 0)
+const cvReferenceVersion = computed(() => state.detailCandidature?.cv_reference_version ?? null)
+const lettreReferenceVersion = computed(() => state.detailCandidature?.lm_reference_version ?? null)
 
 const previewModal = ref<InstanceType<typeof DocumentPreviewModal> | null>(null)
+const { downloading, download } = useDocumentDownload()
 
 /**
  * Ouvre l'aperçu PDF d'un document joint à la candidature.
  *
- * @param path - Chemin absolu du document.
+ * @param path - Chemin du document, relatif au dossier de données.
  * @param label - Titre affiché dans la modale d'aperçu.
+ * @param docType - Type du document, pour nommer un éventuel téléchargement.
  */
-function previewDocument(path: string, label: string) {
-  previewModal.value?.open(path, label)
+function previewDocument(path: string, label: string, docType: DownloadDocType) {
+  previewModal.value?.open(path, label, docType)
 }
 </script>
 
@@ -174,16 +195,30 @@ function previewDocument(path: string, label: string) {
             <div class="flex-1 min-w-0">
               <div class="text-[13.5px] font-semibold leading-[1.25]">CV</div>
               <div class="font-mono text-[11px] text-neutral-500">{{ cvExists ? `Joint · ${formatFileSize(cvSize)}` : 'Non existant' }}</div>
+              <div v-if="cvReferenceVersion != null" class="font-mono text-[11px] text-neutral-400">Généré avec la référence v{{ cvReferenceVersion }}</div>
             </div>
             <button
               v-if="cvExists"
               class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-surface-2"
               title="Visualiser"
-              @click="previewDocument(cvPath!, 'Aperçu du CV')"
+              @click="previewDocument(cvPath!, 'Aperçu du CV', 'cv')"
             >
               <svg width="17" height="13" viewBox="0 0 17 13" fill="none">
                 <ellipse cx="8.5" cy="6.5" rx="7.5" ry="5.5" stroke="currentColor" stroke-width="1.4" />
                 <circle cx="8.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.4" />
+              </svg>
+            </button>
+            <button
+              v-if="cvExists"
+              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none hover:text-neutral-950 hover:bg-surface-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Télécharger"
+              :disabled="downloading !== null"
+              @click="download('cv', cvPath!)"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
             </button>
           </div>
@@ -194,16 +229,30 @@ function previewDocument(path: string, label: string) {
             <div class="flex-1 min-w-0">
               <div class="text-[13.5px] font-semibold leading-[1.25]">Lettre de motivation</div>
               <div class="font-mono text-[11px] text-neutral-500">{{ lettreExists ? `Joint · ${formatFileSize(lettreSize)}` : 'Non existant' }}</div>
+              <div v-if="lettreReferenceVersion != null" class="font-mono text-[11px] text-neutral-400">Générée avec la référence v{{ lettreReferenceVersion }}</div>
             </div>
             <button
               v-if="lettreExists"
               class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none ml-auto hover:text-neutral-950 hover:bg-surface-2"
               title="Visualiser"
-              @click="previewDocument(lettrePath!, 'Aperçu de la lettre de motivation')"
+              @click="previewDocument(lettrePath!, 'Aperçu de la lettre de motivation', 'lm')"
             >
               <svg width="17" height="13" viewBox="0 0 17 13" fill="none">
                 <ellipse cx="8.5" cy="6.5" rx="7.5" ry="5.5" stroke="currentColor" stroke-width="1.4" />
                 <circle cx="8.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.4" />
+              </svg>
+            </button>
+            <button
+              v-if="lettreExists"
+              class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none hover:text-neutral-950 hover:bg-surface-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Télécharger"
+              :disabled="downloading !== null"
+              @click="download('lm', lettrePath!)"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
             </button>
           </div>
@@ -216,18 +265,26 @@ function previewDocument(path: string, label: string) {
             <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500">CONTACTS RECRUTEUR</div>
             <button
               class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-              @click="openDetailPopup('addRecruiter')"
+              @click="openContactPopup(null)"
             >+ Ajouter</button>
           </div>
-          <div v-for="rec in state.detailContacts" :key="rec.id" class="flex items-center gap-3 py-[10px] border-b border-neutral-100">
-            <div class="w-[34px] h-[34px] rounded-full flex-none bg-neutral-200 flex items-center justify-center font-semibold text-[12px] text-neutral-700">{{ initials(rec.nom) }}</div>
+          <div v-for="contact in state.detailContacts" :key="contact.id" class="flex items-start gap-3 py-[10px] border-b border-neutral-100">
+            <div class="w-[34px] h-[34px] rounded-full flex-none bg-neutral-200 flex items-center justify-center font-semibold text-[12px] text-neutral-700">{{ initials(contact.nom) }}</div>
             <div class="flex-1 min-w-0">
-              <div class="text-[13.5px] font-semibold leading-[1.25]">{{ rec.nom ?? '—' }}</div>
-              <div class="text-[12px] text-neutral-500 mt-0.5">{{ rec.role ?? '—' }}</div>
-              <div class="font-mono text-[11px] text-neutral-500">{{ rec.email ?? '—' }}</div>
+              <div class="text-[13.5px] font-semibold leading-[1.25]">{{ contact.nom }}</div>
+              <div v-if="contact.role" class="text-[12px] text-neutral-500 mt-0.5">{{ contact.role }}</div>
+              <div v-if="contact.email" class="font-mono text-[11px] text-neutral-500">{{ contact.email }}</div>
+              <div v-if="contact.telephone" class="font-mono text-[11px] text-neutral-500">{{ contact.telephone }}</div>
+              <div v-if="contact.notes" class="text-[12px] text-neutral-600 mt-1 whitespace-pre-wrap">{{ contact.notes }}</div>
+              <div class="flex flex-wrap gap-x-3 mt-1">
+                <button class="bg-transparent border-none p-0 text-[11.5px] text-neutral-500 cursor-pointer font-sans hover:text-neutral-950" @click="openContactPopup(contact)">Modifier</button>
+                <button class="bg-transparent border-none p-0 text-[11.5px] text-neutral-500 cursor-pointer font-sans hover:text-neutral-950" @click="removeContactFromCandidature(contact.id)">Retirer de la candidature</button>
+                <button class="bg-transparent border-none p-0 text-[11.5px] text-neutral-500 cursor-pointer font-sans hover:text-red-600" @click="openDeleteContactPopup(contact)">Supprimer définitivement</button>
+              </div>
             </div>
           </div>
-          <div v-if="state.detailContacts.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">Aucun recruteur renseigné.</div>
+          <div v-if="state.detailContacts.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">Aucun contact renseigné.</div>
+          <div v-if="contactActionError" class="text-[12.5px] text-red-600 mt-2">{{ contactActionError }}</div>
         </div>
       </div>
     </div>

@@ -1,257 +1,186 @@
 //! Commandes Tauri pour les candidatures.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{candidatures, profile, settings, users};
-use crate::documents::{export_for_apply, export_for_apply_with_message, save_generated_document};
+use crate::app_state::AppContext;
+use crate::db;
 use crate::error::AppError;
-use crate::llm::{generate_application_email, generate_application_message, generate_documents};
-use crate::models::{CandidatureDetail, CandidatureView, CreateCandidatureInput, UpdateCandidatureInput};
+use crate::models::{
+    CandidatureDetail, CandidatureView, CreateCandidatureInput, DuplicateCandidatureView, GenerationProgress,
+    UpdateCandidatureInput,
+};
+use crate::services;
+use crate::services::candidature_validation::validate_update;
+use crate::services::candidatures::ApplicationMessage;
 
-/// Crée une candidature en générant d'abord, via le pipeline IA, un CV et
-/// une lettre de motivation adaptés à l'offre (à partir des documents de
-/// référence de la session et du profil candidat).
-///
-/// La génération a lieu avant l'insertion en base : si le pipeline échoue
-/// (documents de référence manquants, API indisponible, compilation Typst
-/// impossible même après correction), la candidature n'est pas créée et
-/// l'erreur remonte telle quelle au frontend.
+/// Crée une candidature et lance la génération de ses documents en tâche de fond.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri (résolution des chemins de documents).
-/// * `state` - État partagé (pool de connexions).
-/// * `input` - Données de la candidature à créer.
+/// * `ctx` - Contexte de l'application.
+/// * `input` - Données saisies.
 ///
 /// # Returns
 ///
-/// `CandidatureView` créée, avec les chemins des documents générés.
+/// `CandidatureView` créée (documents en cours de génération).
 #[tauri::command]
 pub async fn create_candidature(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, DbState>,
+    ctx: tauri::State<'_, AppContext>,
     input: CreateCandidatureInput,
 ) -> Result<CandidatureView, AppError> {
-    // ------------------------------------------------------------------
-    // 1. Validation des prérequis à la génération — une session (donc des
-    //    documents de référence) et une offre sont indispensables.
-    // ------------------------------------------------------------------
-    let description_offre = input
-        .description_offre
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| AppError::Validation("La description de l'offre est requise.".to_string()))?;
-    let session_id = input.session_id.ok_or_else(|| {
-        AppError::Validation("Une session est requise pour générer les documents.".to_string())
-    })?;
+    services::candidatures::create(ctx.state()?, &input).await
+}
 
-    // ------------------------------------------------------------------
-    // 2. Génération du CV et de la lettre de motivation — avant toute
-    //    persistance : en cas d'échec, rien n'est créé.
-    // ------------------------------------------------------------------
-    let generated = generate_documents(&app, &state.pool, session_id, description_offre).await?;
+/// Cherche les candidatures existantes pour le même lien d'offre.
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+/// * `url` - Lien saisi.
+///
+/// # Returns
+///
+/// Candidatures existantes, toutes sessions confondues.
+#[tauri::command]
+pub async fn find_candidatures_by_url(
+    ctx: tauri::State<'_, AppContext>,
+    url: String,
+) -> Result<Vec<DuplicateCandidatureView>, AppError> {
+    services::candidatures::find_by_offer_url(&ctx.state()?.pool, &url).await
+}
 
-    // ------------------------------------------------------------------
-    // 3. Insertion de la candidature, puis sauvegarde des documents générés
-    //    sous leur emplacement définitif (artefact/<candidature_id>.*)
-    // ------------------------------------------------------------------
-    let user = users::fetch_first_user(&state.pool).await?;
-    let mut view = candidatures::insert(&state.pool, user.id, &input).await?;
-
-    let cv_path = save_generated_document(
-        &app,
-        session_id,
-        "cv",
-        view.id,
-        &generated.cv_typst,
-        &generated.cv_pdf,
-    )?;
-    let lettre_motivation_path = save_generated_document(
-        &app,
-        session_id,
-        "lettre_motivation",
-        view.id,
-        &generated.lm_typst,
-        &generated.lm_pdf,
-    )?;
-
-    candidatures::set_documents(
-        &state.pool,
-        view.id,
-        &Some(cv_path.clone()),
-        &Some(lettre_motivation_path.clone()),
-    )
-    .await?;
-
-    view.cv_path = Some(cv_path);
-    view.lettre_motivation_path = Some(lettre_motivation_path);
-
-    Ok(view)
+/// Renvoie la progression de la génération des documents d'une candidature.
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+/// * `candidature_id` - Candidature suivie.
+///
+/// # Returns
+///
+/// `GenerationProgress`, ou `AppError::NotFound` si aucune génération n'est
+/// en cours ni récemment terminée.
+#[tauri::command]
+pub async fn get_generation_progress(
+    ctx: tauri::State<'_, AppContext>,
+    candidature_id: i64,
+) -> Result<GenerationProgress, AppError> {
+    ctx.state()?
+        .progress
+        .get(candidature_id)
+        .ok_or_else(|| AppError::NotFound("Aucune génération en cours pour cette candidature.".to_string()))
 }
 
 /// Liste les candidatures d'une session.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `session_id` - Identifiant de la session.
+/// * `ctx` - Contexte de l'application.
+/// * `session_id` - Session affichée.
 ///
 /// # Returns
 ///
-/// Candidatures de la session, les plus récentes en premier.
+/// Candidatures, de la plus récente à la plus ancienne.
 #[tauri::command]
 pub async fn get_candidatures(
-    state: tauri::State<'_, DbState>,
+    ctx: tauri::State<'_, AppContext>,
     session_id: i64,
 ) -> Result<Vec<CandidatureView>, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    candidatures::list_for_session(&state.pool, user.id, session_id).await
+    db::candidatures::list_for_session(&ctx.state()?.pool, session_id).await
 }
 
-/// Récupère le détail complet d'une candidature, pour la page de détail.
+/// Récupère le détail d'une candidature.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `ctx` - Contexte de l'application.
 /// * `id` - Identifiant de la candidature.
 ///
 /// # Returns
 ///
-/// `CandidatureDetail` correspondante, ou `AppError::NotFound` si elle n'existe pas.
+/// `CandidatureDetail`.
 #[tauri::command]
-pub async fn get_candidature(
-    state: tauri::State<'_, DbState>,
-    id: i64,
-) -> Result<CandidatureDetail, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    candidatures::fetch_detail(&state.pool, user.id, id).await
+pub async fn get_candidature(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<CandidatureDetail, AppError> {
+    db::candidatures::fetch_detail(&ctx.state()?.pool, id).await
 }
 
-/// Met à jour les champs éditables d'une candidature (détails du poste et
-/// notes), refusé si son statut n'est plus « à postuler ».
+/// Modifie une candidature encore « à postuler ».
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `id` - Identifiant de la candidature à modifier.
-/// * `input` - Nouvelles valeurs des champs éditables.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de la candidature.
+/// * `input` - Nouvelles valeurs.
 ///
 /// # Returns
 ///
 /// `CandidatureDetail` mise à jour.
 #[tauri::command]
 pub async fn update_candidature(
-    state: tauri::State<'_, DbState>,
+    ctx: tauri::State<'_, AppContext>,
     id: i64,
     input: UpdateCandidatureInput,
 ) -> Result<CandidatureDetail, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    candidatures::update(&state.pool, user.id, id, &input).await
+    let fields = validate_update(&input)?;
+    db::candidatures::update(&ctx.state()?.pool, id, &fields).await
 }
 
-/// Marque une candidature comme abandonnée (statut `abandon`) — utilisé par
-/// le bouton « Supprimer » de la page de détail, tant que la candidature est
-/// encore au statut « à postuler ».
+/// Supprime une candidature « à postuler » et ses documents.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `id` - Identifiant de la candidature à abandonner.
-///
-/// # Returns
-///
-/// `Ok(())` une fois le statut mis à jour.
-#[tauri::command]
-pub async fn abandon_candidature(
-    state: tauri::State<'_, DbState>,
-    id: i64,
-) -> Result<(), AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    candidatures::abandon(&state.pool, user.id, id).await
-}
-
-/// Traite le bouton « Postuler sans message » : exporte le CV et la lettre de
-/// motivation vers le dossier de téléchargements de l'utilisateur, puis passe
-/// la candidature au statut `postule`.
-///
-/// # Arguments
-///
-/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
-/// * `state` - État partagé (pool de connexions).
+/// * `ctx` - Contexte de l'application.
 /// * `id` - Identifiant de la candidature.
 ///
 /// # Returns
 ///
-/// `Ok(())` une fois les documents exportés et le statut mis à jour.
+/// `Ok(())` si supprimée.
 #[tauri::command]
-pub async fn postuler_sans_message(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, DbState>,
-    id: i64,
-) -> Result<(), AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    let detail = candidatures::fetch_detail(&state.pool, user.id, id).await?;
-    export_for_apply(&app, &detail)?;
-    candidatures::mark_postule(&state.pool, user.id, id, None).await
+pub async fn delete_candidature(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<(), AppError> {
+    services::candidatures::delete(ctx.state()?, id).await
 }
 
-/// Traite le bouton « Postuler par mail » : fait rédiger un mail de
-/// candidature par l'IA, exporte CV, lettre de motivation et mail (`.txt`)
-/// vers le dossier de téléchargements, puis passe la candidature au statut
-/// `postule`.
+/// Marque une candidature comme postulée, sans message.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
-/// * `state` - État partagé (pool de connexions).
+/// * `ctx` - Contexte de l'application.
 /// * `id` - Identifiant de la candidature.
 ///
 /// # Returns
 ///
-/// `Ok(())` une fois le mail rédigé, les documents exportés et le statut mis à jour.
+/// `Ok(())` une fois le statut changé.
 #[tauri::command]
-pub async fn postuler_par_mail(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, DbState>,
-    id: i64,
-) -> Result<(), AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    let detail = candidatures::fetch_detail(&state.pool, user.id, id).await?;
-    let candidate_profile = profile::build_profile(&state.pool).await?;
-    let model = settings::resolve_llm_model(&state.pool, crate::llm::client::DEFAULT_MODEL).await?;
-
-    let email = generate_application_email(&candidate_profile, &detail, &model).await?;
-    export_for_apply_with_message(&app, &detail, &email, "Mail_de_candidature.txt")?;
-    candidatures::mark_postule(&state.pool, user.id, id, Some(&email)).await
+pub async fn postuler_sans_message(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<(), AppError> {
+    services::candidatures::postuler_sans_message(&ctx.state()?.pool, id).await
 }
 
-/// Traite le bouton « Postuler par message » : fait rédiger un message court
-/// (LinkedIn ou équivalent) par l'IA, exporte CV, lettre de motivation et
-/// message (`.txt`) vers le dossier de téléchargements, puis passe la
-/// candidature au statut `postule`.
+/// Fait rédiger le mail de candidature par l'IA et marque la candidature postulée.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri (résolution du dossier de téléchargements).
-/// * `state` - État partagé (pool de connexions).
+/// * `ctx` - Contexte de l'application.
 /// * `id` - Identifiant de la candidature.
 ///
 /// # Returns
 ///
-/// `Ok(())` une fois le message rédigé, les documents exportés et le statut mis à jour.
+/// Le mail rédigé.
 #[tauri::command]
-pub async fn postuler_par_message(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, DbState>,
-    id: i64,
-) -> Result<(), AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    let detail = candidatures::fetch_detail(&state.pool, user.id, id).await?;
-    let candidate_profile = profile::build_profile(&state.pool).await?;
-    let model = settings::resolve_llm_model(&state.pool, crate::llm::client::DEFAULT_MODEL).await?;
+pub async fn postuler_par_mail(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<String, AppError> {
+    services::candidatures::postuler_avec_message(ctx.state()?, id, ApplicationMessage::Mail).await
+}
 
-    let message = generate_application_message(&candidate_profile, &detail, &model).await?;
-    export_for_apply_with_message(&app, &detail, &message, "Message_candidature.txt")?;
-    candidatures::mark_postule(&state.pool, user.id, id, Some(&message)).await
+/// Fait rédiger le message court de candidature par l'IA et marque la
+/// candidature postulée.
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de la candidature.
+///
+/// # Returns
+///
+/// Le message rédigé.
+#[tauri::command]
+pub async fn postuler_par_message(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<String, AppError> {
+    services::candidatures::postuler_avec_message(ctx.state()?, id, ApplicationMessage::Message).await
 }

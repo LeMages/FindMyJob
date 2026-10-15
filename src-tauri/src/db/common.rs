@@ -1,12 +1,28 @@
-//! Helpers partagés par les modules `db::*` : normalisation des chaînes
-//! utilisateur et suppression générique d'une ligne appartenant à
-//! l'utilisateur unique de l'application.
+//! Fonctions partagées par les modules `db::*` : conversion des erreurs
+//! sqlx, normalisation des saisies et suppression d'une ligne par identifiant.
 
 // Importation des crates externes
 use sqlx::SqlitePool;
 
 // Importation des modules internes
 use crate::error::AppError;
+
+/// Convertit une erreur sqlx en `AppError::Database`.
+///
+/// `AppError` (défini dans `error.rs`, partagé avec la logique pure) ne
+/// dépend pas de `sqlx` et n'implémente pas `From<sqlx::Error>` : chaque
+/// appel sqlx passe donc explicitement par cette fonction.
+///
+/// # Arguments
+///
+/// * `e` - Erreur sqlx à convertir.
+///
+/// # Returns
+///
+/// `AppError::Database` portant le message de l'erreur d'origine.
+pub fn map_db_err(e: sqlx::Error) -> AppError {
+    AppError::Database(e.to_string())
+}
 
 /// Normalise une entrée utilisateur optionnelle : trim, puis `None` si vide.
 ///
@@ -24,68 +40,29 @@ pub fn normalize(s: Option<String>) -> Option<String> {
     })
 }
 
-/// Vérifie qu'une ligne appartient à l'utilisateur unique de l'application.
-///
-/// Toutes les tables enfants du profil (experiences, formations, projets,
-/// skills, lang, sessions) partagent le même schéma de propriété : une
-/// colonne `user_id` sur la table elle-même.
+/// Supprime une ligne par identifiant (tables enfants du profil).
 ///
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions SQLite.
 /// * `table` - Nom de la table cible. Doit être un littéral interne au code,
-///   jamais une valeur fournie par l'utilisateur (construit par `format!` dans la requête).
-/// * `id` - Identifiant de la ligne à vérifier.
-/// * `not_found_message` - Message d'erreur renvoyé si la ligne n'existe pas.
-///
-/// # Returns
-///
-/// `Ok(())` si la ligne appartient à l'utilisateur, `AppError::NotFound` sinon.
-pub async fn assert_owned_by_user(
-    pool: &SqlitePool,
-    table: &str,
-    id: i64,
-    not_found_message: &str,
-) -> Result<(), AppError> {
-    let sql = format!(
-        "SELECT COUNT(*) FROM {table} WHERE id = ? AND user_id = (SELECT id FROM users LIMIT 1)"
-    );
-    let n: i64 = sqlx::query_scalar::<_, i64>(&sql)
-        .bind(id)
-        .fetch_one(pool)
-        .await?;
-
-    if n == 0 {
-        return Err(AppError::NotFound(not_found_message.to_string()));
-    }
-    Ok(())
-}
-
-/// Supprime une ligne après avoir vérifié qu'elle appartient à l'utilisateur.
-///
-/// Factorise le triptyque « vérifier la propriété → erreur si absente → supprimer »
-/// répété à l'identique pour experiences, formations, projets, skills et lang.
-///
-/// # Arguments
-///
-/// * `pool` - Pool de connexions SQLite.
-/// * `table` - Nom de la table cible (littéral interne, voir `assert_owned_by_user`).
+///   jamais une valeur fournie par l'utilisateur (interpolé dans la requête).
 /// * `id` - Identifiant de la ligne à supprimer.
 /// * `not_found_message` - Message d'erreur renvoyé si la ligne n'existe pas.
 ///
 /// # Returns
 ///
-/// `Ok(())` si la suppression a réussi, `AppError::NotFound` si la ligne n'existe pas.
-pub async fn delete_owned_row(
+/// `Ok(())` si la ligne a été supprimée, `AppError::NotFound` sinon.
+pub async fn delete_by_id(
     pool: &SqlitePool,
-    table: &str,
+    table: &'static str,
     id: i64,
     not_found_message: &str,
 ) -> Result<(), AppError> {
-    assert_owned_by_user(pool, table, id, not_found_message).await?;
-
-    let sql = format!("DELETE FROM {table} WHERE id = ?");
-    sqlx::query(&sql).bind(id).execute(pool).await?;
-
+    let sql = format!("DELETE FROM {table} WHERE id = $1");
+    let result = sqlx::query(&sql).bind(id).execute(pool).await.map_err(map_db_err)?;
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound(not_found_message.to_string()));
+    }
     Ok(())
 }

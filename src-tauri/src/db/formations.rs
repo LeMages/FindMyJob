@@ -1,92 +1,108 @@
 //! Accès et logique de persistance pour les formations du profil.
 
 // Importation des crates externes
+use sqlx::sqlite::SqliteRow;
 use sqlx::{Row, SqlitePool};
 
 // Importation des modules internes
-use crate::db::common::{delete_owned_row, normalize};
+use crate::clock::format_date;
+use crate::db::common::{delete_by_id, map_db_err, normalize};
 use crate::error::AppError;
 use crate::models::{CreateFormationInput, FormationView};
 
-/// Liste les formations d'un utilisateur, les plus récentes en premier.
+/// Colonnes lues pour reconstruire un `FormationView`.
+const COLUMNS: &str = "id, titre, ecole, description, date_debut, date_fin";
+
+/// Valide le titre d'une formation.
 ///
 /// # Arguments
 ///
-/// * `pool` - Pool de connexions SQLite.
-/// * `user_id` - Identifiant de l'utilisateur.
+/// * `input` - Données saisies.
 ///
 /// # Returns
 ///
-/// Formations triées par date de fin puis de début décroissantes.
-pub async fn list_for_user(pool: &SqlitePool, user_id: i64) -> Result<Vec<FormationView>, AppError> {
-    let rows = sqlx::query(
-        "SELECT id, titre, ecole, \
-                CAST(date_debut AS TEXT) as date_debut, \
-                CAST(date_fin   AS TEXT) as date_fin \
-         FROM formations WHERE user_id = ? \
-         ORDER BY COALESCE(date_fin, '9999-12-31') DESC, date_debut DESC",
-    )
-    .bind(user_id)
-    .fetch_all(pool)
-    .await?;
-
-    rows.iter()
-        .map(|r| -> Result<FormationView, sqlx::Error> {
-            Ok(FormationView {
-                id: r.try_get("id")?,
-                titre: r.try_get("titre")?,
-                ecole: r.try_get("ecole")?,
-                date_debut: r.try_get("date_debut")?,
-                date_fin: r.try_get("date_fin")?,
-            })
-        })
-        .collect::<Result<_, _>>()
-        .map_err(AppError::from)
-}
-
-/// Ajoute une formation au profil d'un utilisateur.
-///
-/// # Arguments
-///
-/// * `pool` - Pool de connexions SQLite.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
-/// * `input` - Données de la formation à créer.
-///
-/// # Returns
-///
-/// `FormationView` fraîchement créée.
-pub async fn insert(
-    pool: &SqlitePool,
-    user_id: i64,
-    input: CreateFormationInput,
-) -> Result<FormationView, AppError> {
+/// Titre trimé, ou `AppError::Validation` s'il est vide.
+fn validate_titre(input: &CreateFormationInput) -> Result<String, AppError> {
     let titre = input.titre.trim().to_string();
     if titre.is_empty() {
         return Err(AppError::Validation("Le titre est requis.".to_string()));
     }
+    Ok(titre)
+}
 
-    let row = sqlx::query(
-        "INSERT INTO formations (user_id, titre, ecole, date_debut, date_fin) \
-         VALUES (?, ?, ?, ?, ?) \
-         RETURNING id, titre, ecole, \
-                   CAST(date_debut AS TEXT) as date_debut, \
-                   CAST(date_fin   AS TEXT) as date_fin",
-    )
-    .bind(user_id)
+/// Construit un `FormationView` à partir d'une ligne SQL brute.
+///
+/// # Arguments
+///
+/// * `row` - Ligne sélectionnant `COLUMNS`.
+///
+/// # Returns
+///
+/// `FormationView` reconstruite, ou erreur si une colonne attendue est absente.
+fn row_to_view(row: &SqliteRow) -> Result<FormationView, sqlx::Error> {
+    Ok(FormationView {
+        id: row.try_get("id")?,
+        titre: row.try_get("titre")?,
+        ecole: row.try_get("ecole")?,
+        description: row.try_get("description")?,
+        date_debut: row.try_get("date_debut")?,
+        date_fin: row.try_get("date_fin")?,
+    })
+}
+
+/// Liste les formations du profil, les plus récentes en premier.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+///
+/// # Returns
+///
+/// Formations triées par date de fin (en cours d'abord) puis de début
+/// décroissantes ; une date de début absente passe en tête, comme sous
+/// PostgreSQL.
+pub async fn list_all(pool: &SqlitePool) -> Result<Vec<FormationView>, AppError> {
+    let rows = sqlx::query(&format!(
+        "SELECT {COLUMNS} FROM formations \
+         ORDER BY COALESCE(date_fin, '9999-12-31') DESC, date_debut DESC NULLS FIRST, id"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(map_db_err)?;
+
+    rows.iter().map(row_to_view).collect::<Result<_, _>>().map_err(map_db_err)
+}
+
+/// Ajoute une formation au profil.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+/// * `input` - Données de la formation à créer.
+/// * `now` - Horodatage de création.
+///
+/// # Returns
+///
+/// `FormationView` fraîchement créée.
+pub async fn insert(pool: &SqlitePool, input: CreateFormationInput, now: &str) -> Result<FormationView, AppError> {
+    let titre = validate_titre(&input)?;
+
+    let row = sqlx::query(&format!(
+        "INSERT INTO formations (titre, ecole, description, date_debut, date_fin, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         RETURNING {COLUMNS}"
+    ))
     .bind(&titre)
     .bind(normalize(input.ecole))
-    .bind(normalize(input.date_debut))
-    .bind(normalize(input.date_fin))
+    .bind(normalize(input.description))
+    .bind(input.date_debut.map(format_date))
+    .bind(input.date_fin.map(format_date))
+    .bind(now)
     .fetch_one(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
-    Ok(FormationView {
-        id: row.try_get("id").map_err(AppError::from)?,
-        titre: row.try_get("titre").map_err(AppError::from)?,
-        ecole: row.try_get("ecole").map_err(AppError::from)?,
-        date_debut: row.try_get("date_debut").map_err(AppError::from)?,
-        date_fin: row.try_get("date_fin").map_err(AppError::from)?,
-    })
+    row_to_view(&row).map_err(map_db_err)
 }
 
 /// Met à jour une formation existante.
@@ -100,45 +116,30 @@ pub async fn insert(
 /// # Returns
 ///
 /// `FormationView` mise à jour, ou `AppError::NotFound` si absente.
-pub async fn update(
-    pool: &SqlitePool,
-    id: i64,
-    input: CreateFormationInput,
-) -> Result<FormationView, AppError> {
-    let titre = input.titre.trim().to_string();
-    if titre.is_empty() {
-        return Err(AppError::Validation("Le titre est requis.".to_string()));
-    }
+pub async fn update(pool: &SqlitePool, id: i64, input: CreateFormationInput) -> Result<FormationView, AppError> {
+    let titre = validate_titre(&input)?;
 
-    let row = sqlx::query(
+    let row = sqlx::query(&format!(
         "UPDATE formations \
-         SET titre = ?, ecole = ?, date_debut = ?, date_fin = ?, \
-             updated_at = CURRENT_TIMESTAMP \
-         WHERE id = ? AND user_id = (SELECT id FROM users LIMIT 1) \
-         RETURNING id, titre, ecole, \
-                   CAST(date_debut AS TEXT) as date_debut, \
-                   CAST(date_fin   AS TEXT) as date_fin",
-    )
+         SET titre = $1, ecole = $2, description = $3, date_debut = $4, date_fin = $5 \
+         WHERE id = $6 \
+         RETURNING {COLUMNS}"
+    ))
     .bind(&titre)
     .bind(normalize(input.ecole))
-    .bind(normalize(input.date_debut))
-    .bind(normalize(input.date_fin))
+    .bind(normalize(input.description))
+    .bind(input.date_debut.map(format_date))
+    .bind(input.date_fin.map(format_date))
     .bind(id)
     .fetch_optional(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     let row = row.ok_or_else(|| AppError::NotFound("Formation introuvable.".to_string()))?;
-
-    Ok(FormationView {
-        id: row.try_get("id").map_err(AppError::from)?,
-        titre: row.try_get("titre").map_err(AppError::from)?,
-        ecole: row.try_get("ecole").map_err(AppError::from)?,
-        date_debut: row.try_get("date_debut").map_err(AppError::from)?,
-        date_fin: row.try_get("date_fin").map_err(AppError::from)?,
-    })
+    row_to_view(&row).map_err(map_db_err)
 }
 
-/// Supprime une formation appartenant à l'utilisateur.
+/// Supprime une formation.
 ///
 /// # Arguments
 ///
@@ -149,5 +150,5 @@ pub async fn update(
 ///
 /// `Ok(())` si supprimée, `AppError::NotFound` si absente.
 pub async fn delete(pool: &SqlitePool, id: i64) -> Result<(), AppError> {
-    delete_owned_row(pool, "formations", id, "Formation introuvable.").await
+    delete_by_id(pool, "formations", id, "Formation introuvable.").await
 }

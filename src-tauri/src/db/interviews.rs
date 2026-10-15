@@ -1,16 +1,19 @@
 //! Accès et logique de persistance pour les entretiens rattachés à une
-//! candidature. `interviews` n'a pas de colonne `user_id` : la propriété se
-//! vérifie via `candidature_id` (comme `db::contacts`), jamais via
-//! `db::common::assert_owned_by_user`.
+//! candidature.
+
+// Importation des modules standard
+use std::collections::HashMap;
 
 // Importation des crates externes
-use sqlx::{Row, SqlitePool};
+use sqlx::{Row, SqliteConnection, SqliteExecutor, SqlitePool};
 
 // Importation des modules internes
+use crate::db::common::map_db_err;
+use crate::db::joins;
 use crate::error::AppError;
-use crate::models::{InterviewView, PlanningInterviewView};
+use crate::models::{InterviewContactView, InterviewView, PlanningInterviewView};
 
-/// Types d'entretien acceptés (voir `interviews.type` en base).
+/// Types d'entretien acceptés (voir `interviews.type_entretien` en base).
 pub const TYPES_ENTRETIEN_VALIDES: [&str; 5] = ["rh", "technique", "manager", "final", "autre"];
 
 /// Issues possibles pour un entretien passé (voir `interviews.issue` en base).
@@ -18,6 +21,25 @@ pub const ISSUES_VALIDES: [&str; 2] = ["positif", "negatif"];
 
 /// Modalités d'entretien acceptées (voir `interviews.modalite` en base).
 pub const MODALITES_VALIDES: [&str; 3] = ["visio", "presentiel", "telephone"];
+
+/// Entretien à créer.
+///
+/// # Attributes
+///
+/// * `candidature_id` - Identifiant de la candidature.
+/// * `type_entretien` - Type d'entretien (voir `TYPES_ENTRETIEN_VALIDES`).
+/// * `date_entretien` - Date/heure de l'entretien au format de stockage, si renseignée.
+/// * `lieu` - Lieu de l'entretien, si renseigné.
+/// * `modalite` - Modalité (voir `MODALITES_VALIDES`), si renseignée.
+/// * `contact_ids` - Interlocuteurs, déjà vérifiés comme liés à la candidature.
+pub struct NewInterview<'a> {
+    pub candidature_id: i64,
+    pub type_entretien: &'a str,
+    pub date_entretien: Option<&'a str>,
+    pub lieu: Option<&'a str>,
+    pub modalite: Option<&'a str>,
+    pub contact_ids: &'a [i64],
+}
 
 /// Liste les entretiens encore en attente d'une candidature — utilisé pour
 /// proposer à l'utilisateur lequel marquer comme passé.
@@ -29,21 +51,22 @@ pub const MODALITES_VALIDES: [&str; 3] = ["visio", "presentiel", "telephone"];
 ///
 /// # Returns
 ///
-/// Entretiens au statut `en_attente`, triés par date d'entretien croissante.
+/// Entretiens au statut `en_attente`, triés par date d'entretien croissante
+/// (sans date en dernier, comme sous PostgreSQL).
 pub async fn list_pending_for_candidature(
     pool: &SqlitePool,
     candidature_id: i64,
 ) -> Result<Vec<InterviewView>, AppError> {
     let rows = sqlx::query(
-        "SELECT id, candidature_id, type AS type_entretien, \
-                CAST(date_entretien AS TEXT) AS date_entretien, lieu, issue, notes, contact_id \
+        "SELECT id, candidature_id, type_entretien, date_entretien, lieu, issue, notes \
          FROM interviews \
-         WHERE candidature_id = ? AND issue = 'en_attente' \
-         ORDER BY date_entretien",
+         WHERE candidature_id = $1 AND issue = 'en_attente' \
+         ORDER BY date_entretien NULLS LAST, id",
     )
     .bind(candidature_id)
     .fetch_all(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
 
     rows.iter()
         .map(|r| -> Result<InterviewView, sqlx::Error> {
@@ -55,11 +78,10 @@ pub async fn list_pending_for_candidature(
                 lieu: r.try_get("lieu")?,
                 issue: r.try_get("issue")?,
                 notes: r.try_get("notes")?,
-                contact_id: r.try_get("contact_id")?,
             })
         })
         .collect::<Result<_, _>>()
-        .map_err(AppError::from)
+        .map_err(map_db_err)
 }
 
 /// Liste les entretiens planifiés d'une session, avec entreprise et poste de
@@ -68,36 +90,36 @@ pub async fn list_pending_for_candidature(
 /// # Arguments
 ///
 /// * `pool` - Pool de connexions SQLite.
-/// * `user_id` - Identifiant de l'utilisateur propriétaire.
 /// * `session_id` - Identifiant de la session.
 ///
 /// # Returns
 ///
-/// Entretiens dont la date est renseignée, triés par date croissante.
-pub async fn list_for_session(
-    pool: &SqlitePool,
-    user_id: i64,
-    session_id: i64,
-) -> Result<Vec<PlanningInterviewView>, AppError> {
+/// Entretiens dont la date est renseignée, triés par date croissante, avec
+/// leurs interlocuteurs.
+pub async fn list_for_session(pool: &SqlitePool, session_id: i64) -> Result<Vec<PlanningInterviewView>, AppError> {
     let rows = sqlx::query(
-        "SELECT i.id, i.candidature_id, c.entreprise, c.poste, \
-                i.type AS type_entretien, \
-                CAST(i.date_entretien AS TEXT) AS date_entretien, \
-                i.lieu, i.modalite, i.issue, i.notes \
+        "SELECT i.id, i.candidature_id, c.entreprise, c.poste, i.type_entretien, \
+                i.date_entretien, i.lieu, i.modalite, i.issue, i.notes \
          FROM interviews i \
          JOIN candidatures c ON c.id = i.candidature_id \
-         WHERE c.user_id = ? AND c.session_id = ? AND i.date_entretien IS NOT NULL \
-         ORDER BY i.date_entretien",
+         WHERE c.session_id = $1 AND i.date_entretien IS NOT NULL \
+         ORDER BY i.date_entretien, i.id",
     )
-    .bind(user_id)
     .bind(session_id)
     .fetch_all(pool)
-    .await?;
+    .await
+    .map_err(map_db_err)?;
+
+    let mut contacts_by_interview: HashMap<i64, Vec<InterviewContactView>> = HashMap::new();
+    for (interview_id, contact) in joins::list_interview_contacts_for_session(pool, session_id).await? {
+        contacts_by_interview.entry(interview_id).or_default().push(contact);
+    }
 
     rows.iter()
         .map(|r| -> Result<PlanningInterviewView, sqlx::Error> {
+            let id: i64 = r.try_get("id")?;
             Ok(PlanningInterviewView {
-                id: r.try_get("id")?,
+                id,
                 candidature_id: r.try_get("candidature_id")?,
                 entreprise: r.try_get("entreprise")?,
                 poste: r.try_get("poste")?,
@@ -107,18 +129,17 @@ pub async fn list_for_session(
                 modalite: r.try_get("modalite")?,
                 issue: r.try_get("issue")?,
                 notes: r.try_get("notes")?,
+                contacts: contacts_by_interview.remove(&id).unwrap_or_default(),
             })
         })
         .collect::<Result<_, _>>()
-        .map_err(AppError::from)
+        .map_err(map_db_err)
 }
 
 /// Compte les entretiens en attente d'une candidature.
 ///
-/// Générique sur l'exécuteur SQLite (pool ou transaction active) pour être
-/// appelable à la fois par la commande `get_available_events` (lecture seule,
-/// hors transaction) et par `db::timeline_events::add_event` (dans sa
-/// transaction), sans dupliquer la requête.
+/// Générique sur l'exécuteur (pool ou transaction active) pour servir à la
+/// fois la lecture des événements disponibles et `timeline_events::add_event`.
 ///
 /// # Arguments
 ///
@@ -128,20 +149,15 @@ pub async fn list_for_session(
 /// # Returns
 ///
 /// Nombre d'entretiens au statut `en_attente`.
-pub async fn count_pending<'e, E>(executor: E, candidature_id: i64) -> Result<i64, AppError>
-where
-    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
-{
-    let n: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM interviews WHERE candidature_id = ? AND issue = 'en_attente'",
-    )
-    .bind(candidature_id)
-    .fetch_one(executor)
-    .await?;
-    Ok(n)
+pub async fn count_pending<'e, E: SqliteExecutor<'e>>(executor: E, candidature_id: i64) -> Result<i64, AppError> {
+    sqlx::query_scalar("SELECT COUNT(*) FROM interviews WHERE candidature_id = $1 AND issue = 'en_attente'")
+        .bind(candidature_id)
+        .fetch_one(executor)
+        .await
+        .map_err(map_db_err)
 }
 
-/// Crée un entretien planifié pour une candidature.
+/// Crée un entretien planifié pour une candidature, avec ses interlocuteurs.
 ///
 /// Appelé uniquement depuis `db::timeline_events::add_event` (l'événement
 /// `entretien_planifie` est le seul point d'entrée pour créer un entretien),
@@ -149,39 +165,69 @@ where
 ///
 /// # Arguments
 ///
-/// * `tx` - Transaction SQLite active.
-/// * `candidature_id` - Identifiant de la candidature.
-/// * `type_entretien` - Type d'entretien (voir `TYPES_ENTRETIEN_VALIDES`).
-/// * `date_entretien` - Date/heure de l'entretien, si renseignée.
-/// * `lieu` - Lieu de l'entretien, si renseigné.
-/// * `modalite` - Modalité de l'entretien (voir `MODALITES_VALIDES`), si renseignée.
-/// * `contact_id` - Contact recruteur rencontré, si renseigné.
+/// * `conn` - Connexion de la transaction d'écriture en cours.
+/// * `new` - Entretien à créer.
+/// * `now` - Horodatage de la transaction.
 ///
 /// # Returns
 ///
 /// Identifiant de l'entretien créé.
-pub(crate) async fn insert(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    candidature_id: i64,
-    type_entretien: &str,
-    date_entretien: Option<&str>,
-    lieu: Option<&str>,
-    modalite: Option<&str>,
-    contact_id: Option<i64>,
-) -> Result<i64, AppError> {
-    let row = sqlx::query(
-        "INSERT INTO interviews (candidature_id, type, date_entretien, lieu, modalite, contact_id) \
-         VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+pub(crate) async fn insert(conn: &mut SqliteConnection, new: &NewInterview<'_>, now: &str) -> Result<i64, AppError> {
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO interviews \
+           (candidature_id, type_entretien, date_entretien, lieu, modalite, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
     )
-    .bind(candidature_id)
-    .bind(type_entretien)
-    .bind(date_entretien)
-    .bind(lieu)
-    .bind(modalite)
+    .bind(new.candidature_id)
+    .bind(new.type_entretien)
+    .bind(new.date_entretien)
+    .bind(new.lieu)
+    .bind(new.modalite)
+    .bind(now)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(map_db_err)?;
+
+    for contact_id in new.contact_ids {
+        sqlx::query("INSERT INTO interview_contacts (interview_id, contact_id) VALUES ($1, $2)")
+            .bind(id)
+            .bind(contact_id)
+            .execute(&mut *conn)
+            .await
+            .map_err(map_db_err)?;
+    }
+    Ok(id)
+}
+
+/// Retire un contact des entretiens d'une candidature — appelé quand le
+/// contact est retiré de la candidature (`contacts::unlink`).
+///
+/// # Arguments
+///
+/// * `conn` - Connexion de la transaction d'écriture en cours.
+/// * `contact_id` - Identifiant du contact.
+/// * `candidature_id` - Identifiant de la candidature.
+///
+/// # Returns
+///
+/// `Ok(())` une fois les liaisons supprimées (n'en trouver aucune n'est pas
+/// une erreur).
+pub(crate) async fn remove_contact_for_candidature(
+    conn: &mut SqliteConnection,
+    contact_id: i64,
+    candidature_id: i64,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "DELETE FROM interview_contacts \
+         WHERE contact_id = $1 \
+           AND interview_id IN (SELECT id FROM interviews WHERE candidature_id = $2)",
+    )
     .bind(contact_id)
-    .fetch_one(&mut **tx)
-    .await?;
-    row.try_get("id").map_err(AppError::from)
+    .bind(candidature_id)
+    .execute(conn)
+    .await
+    .map_err(map_db_err)?;
+    Ok(())
 }
 
 /// Marque un entretien en attente comme passé.
@@ -191,7 +237,7 @@ pub(crate) async fn insert(
 ///
 /// # Arguments
 ///
-/// * `tx` - Transaction SQLite active.
+/// * `conn` - Connexion de la transaction d'écriture en cours.
 /// * `interview_id` - Identifiant de l'entretien.
 /// * `candidature_id` - Identifiant de la candidature propriétaire (vérifié
 ///   pour ne pas marquer l'entretien d'une autre candidature).
@@ -204,27 +250,26 @@ pub(crate) async fn insert(
 /// l'entretien n'existe pas, n'appartient pas à la candidature, ou n'est
 /// plus `en_attente`.
 pub(crate) async fn mark_passed(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    conn: &mut SqliteConnection,
     interview_id: i64,
     candidature_id: i64,
     issue: &str,
     notes: Option<&str>,
 ) -> Result<(), AppError> {
     let result = sqlx::query(
-        "UPDATE interviews SET issue = ?, notes = ? \
-         WHERE id = ? AND candidature_id = ? AND issue = 'en_attente'",
+        "UPDATE interviews SET issue = $1, notes = $2 \
+         WHERE id = $3 AND candidature_id = $4 AND issue = 'en_attente'",
     )
     .bind(issue)
     .bind(notes)
     .bind(interview_id)
     .bind(candidature_id)
-    .execute(&mut **tx)
-    .await?;
+    .execute(conn)
+    .await
+    .map_err(map_db_err)?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound(
-            "Entretien introuvable ou déjà passé.".to_string(),
-        ));
+        return Err(AppError::NotFound("Entretien introuvable ou déjà passé.".to_string()));
     }
     Ok(())
 }

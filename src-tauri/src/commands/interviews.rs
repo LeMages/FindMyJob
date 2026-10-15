@@ -1,46 +1,43 @@
 //! Commandes Tauri pour les entretiens rattachés à une candidature.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{interviews, users};
+use crate::app_state::AppContext;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{InterviewView, PlanningInterviewView};
 
-/// Liste les entretiens encore en attente d'une candidature — utilisé pour
-/// proposer à l'utilisateur lequel marquer comme passé.
+/// Liste les entretiens en attente d'une candidature.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `candidature_id` - Identifiant de la candidature.
+/// * `ctx` - Contexte de l'application.
+/// * `candidature_id` - Candidature concernée.
 ///
 /// # Returns
 ///
-/// Entretiens au statut `en_attente`, triés par date d'entretien croissante.
+/// Entretiens `en_attente`, par date croissante.
 #[tauri::command]
 pub async fn get_pending_interviews(
-    state: tauri::State<'_, DbState>,
+    ctx: tauri::State<'_, AppContext>,
     candidature_id: i64,
 ) -> Result<Vec<InterviewView>, AppError> {
-    interviews::list_pending_for_candidature(&state.pool, candidature_id).await
+    db::interviews::list_pending_for_candidature(&ctx.state()?.pool, candidature_id).await
 }
 
-/// Liste tous les entretiens planifiés d'une session, enrichis de leur
-/// candidature — utilisé par la vue planning.
+/// Liste les entretiens datés d'une session (onglet Planning).
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `session_id` - Identifiant de la session.
+/// * `ctx` - Contexte de l'application.
+/// * `session_id` - Session affichée.
 ///
 /// # Returns
 ///
-/// Entretiens dont la date est renseignée, triés par date croissante.
+/// Entretiens par date croissante.
 #[tauri::command]
 pub async fn get_all_interviews_for_session(
-    state: tauri::State<'_, DbState>,
+    ctx: tauri::State<'_, AppContext>,
     session_id: i64,
 ) -> Result<Vec<PlanningInterviewView>, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    interviews::list_for_session(&state.pool, user.id, session_id).await
+    db::interviews::list_for_session(&ctx.state()?.pool, session_id).await
 }

@@ -1,61 +1,58 @@
 //! Commandes Tauri pour les compétences du profil.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{skills, users};
+use crate::app_state::AppContext;
+use crate::clock;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{CreateSkillInput, SkillView};
 
-/// Ajoute une compétence au profil de l'utilisateur.
+/// Ajoute une compétence au profil.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `input` - Données de la compétence à créer.
+/// * `ctx` - Contexte de l'application.
+/// * `input` - Données à créer.
 ///
 /// # Returns
 ///
-/// `SkillView` fraîchement créée.
+/// `SkillView` fraîchement créé(e).
 #[tauri::command]
-pub async fn add_skill(
-    state: tauri::State<'_, DbState>,
-    input: CreateSkillInput,
-) -> Result<SkillView, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    skills::insert(&state.pool, user.id, input).await
+pub async fn add_skill(ctx: tauri::State<'_, AppContext>, input: CreateSkillInput) -> Result<SkillView, AppError> {
+    db::skills::insert(&ctx.state()?.pool, input, &clock::now_utc()).await
 }
 
-/// Met à jour une compétence existante.
+/// Met à jour une compétence existant(e).
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `id` - Identifiant de la compétence à modifier.
-/// * `input` - Nouvelles données de la compétence.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à modifier.
+/// * `input` - Nouvelles données.
 ///
 /// # Returns
 ///
-/// `SkillView` mise à jour.
+/// `SkillView` mis(e) à jour.
 #[tauri::command]
 pub async fn update_skill(
-    state: tauri::State<'_, DbState>,
+    ctx: tauri::State<'_, AppContext>,
     id: i64,
     input: CreateSkillInput,
 ) -> Result<SkillView, AppError> {
-    skills::update(&state.pool, id, input).await
+    db::skills::update(&ctx.state()?.pool, id, input).await
 }
 
 /// Supprime une compétence du profil.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `id` - Identifiant de la compétence à supprimer.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à supprimer.
 ///
 /// # Returns
 ///
-/// `Ok(())` si supprimée.
+/// `Ok(())` si supprimé(e).
 #[tauri::command]
-pub async fn delete_skill(state: tauri::State<'_, DbState>, id: i64) -> Result<(), AppError> {
-    skills::delete(&state.pool, id).await
+pub async fn delete_skill(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<(), AppError> {
+    db::skills::delete(&ctx.state()?.pool, id).await
 }

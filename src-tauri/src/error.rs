@@ -4,7 +4,10 @@
 //! conflit, ressource introuvable, erreur base de données) et implémente
 //! `serde::Serialize` afin de traverser le pont IPC de Tauri.
 
-#[derive(Debug, serde::Serialize)]
+// Importation des modules internes
+use crate::scraping::failure::ScrapingFailure;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {
     Database(String),
@@ -13,7 +16,13 @@ pub enum AppError {
     NotFound(String),
     Config(String),
     Llm(String),
-    Scraping(String),
+    /// Échec typé de la récupération ou de l'extraction d'une offre, sérialisé
+    /// en code (`{"kind":"Scraping","message":"access_denied"}`).
+    Scraping(ScrapingFailure),
+    /// Référence templatisée par une version précédente, dont le template ne
+    /// compile plus avec le schéma actuel : elle doit être réimportée. Le
+    /// message est la phrase française affichée à l'utilisateur.
+    OutdatedReference(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -25,15 +34,10 @@ impl std::fmt::Display for AppError {
             | AppError::NotFound(m)
             | AppError::Config(m)
             | AppError::Llm(m)
-            | AppError::Scraping(m) => write!(f, "{}", m),
+            | AppError::OutdatedReference(m) => write!(f, "{}", m),
+            AppError::Scraping(failure) => write!(f, "Échec de l'extraction de l'offre ({failure})"),
         }
     }
 }
 
 impl std::error::Error for AppError {}
-
-impl From<sqlx::Error> for AppError {
-    fn from(e: sqlx::Error) -> Self {
-        AppError::Database(e.to_string())
-    }
-}

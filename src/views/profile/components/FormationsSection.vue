@@ -22,6 +22,7 @@ const props = defineProps<{
 interface FormDraft {
   titre: string
   ecole: string
+  description: string
   debut_annee: number
   fin_annee: number
   en_cours: boolean
@@ -39,6 +40,7 @@ function defaultFormDraft(): FormDraft {
   return {
     titre: '',
     ecole: '',
+    description: '',
     debut_annee: new Date().getFullYear(),
     fin_annee: new Date().getFullYear(),
     en_cours: false,
@@ -51,6 +53,7 @@ function draftFromView(f: FormationView): FormDraft {
   return {
     titre: f.titre,
     ecole: f.ecole ?? '',
+    description: f.description ?? '',
     debut_annee: parseYear(f.date_debut),
     fin_annee: parseYear(f.date_fin),
     en_cours: f.date_fin === null,
@@ -62,6 +65,7 @@ function displayFromDraft(d: FormDraft, id: number, pendingKind: 'new' | 'edited
     id,
     titre: d.titre,
     ecole: d.ecole || null,
+    description: d.description || null,
     date_debut: toDateStr(d.debut_annee),
     date_fin: d.en_cours ? null : toDateStr(d.fin_annee),
     isPending: true,
@@ -73,6 +77,7 @@ function draftToInput(d: FormDraft): CreateFormationInput {
   return {
     titre: d.titre.trim(),
     ecole: d.ecole.trim() || null,
+    description: d.description.trim() || null,
     date_debut: toDateStr(d.debut_annee),
     date_fin: d.en_cours ? null : toDateStr(d.fin_annee),
   }
@@ -163,6 +168,7 @@ defineExpose({ hasChanges, reset, save })
             </span>
           </div>
           <div v-if="form.ecole" class="text-[13px] text-neutral-500 mt-px">{{ form.ecole }}</div>
+          <div v-if="form.description" class="text-[13px] text-neutral-700 mt-[5px] leading-[1.55] whitespace-pre-line">{{ form.description }}</div>
           <div class="font-mono text-[11.5px] text-neutral-400 mt-[3px]">{{ fmtYearRange(form.date_debut, form.date_fin) }}</div>
         </div>
         <div v-if="editMode" class="flex flex-row gap-[5px] flex-none self-center ml-[6px]">
@@ -214,6 +220,11 @@ defineExpose({ hasChanges, reset, save })
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">École / Établissement</label>
         <input v-model="draft.ecole" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="EFREI Paris" />
+      </div>
+
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Détails (un par ligne)</label>
+        <textarea v-model="draft.description" rows="3" class="w-full border border-neutral-300 rounded-lg px-3 py-2 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 resize-y" placeholder="Spécialité, cours clés, échange universitaire..."></textarea>
       </div>
 
       <div class="flex gap-[14px]">

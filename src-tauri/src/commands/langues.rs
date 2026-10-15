@@ -1,61 +1,58 @@
 //! Commandes Tauri pour les langues du profil.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{langues, users};
+use crate::app_state::AppContext;
+use crate::clock;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{CreateLangInput, LangView};
 
-/// Ajoute une langue au profil de l'utilisateur.
+/// Ajoute une langue au profil.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `input` - Données de la langue à créer.
+/// * `ctx` - Contexte de l'application.
+/// * `input` - Données à créer.
 ///
 /// # Returns
 ///
-/// `LangView` fraîchement créée.
+/// `LangView` fraîchement créé(e).
 #[tauri::command]
-pub async fn add_lang(
-    state: tauri::State<'_, DbState>,
-    input: CreateLangInput,
-) -> Result<LangView, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    langues::insert(&state.pool, user.id, input).await
+pub async fn add_lang(ctx: tauri::State<'_, AppContext>, input: CreateLangInput) -> Result<LangView, AppError> {
+    db::langues::insert(&ctx.state()?.pool, input, &clock::now_utc()).await
 }
 
-/// Met à jour une langue existante.
+/// Met à jour une langue existant(e).
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `id` - Identifiant de la langue à modifier.
-/// * `input` - Nouvelles données de la langue.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à modifier.
+/// * `input` - Nouvelles données.
 ///
 /// # Returns
 ///
-/// `LangView` mise à jour.
+/// `LangView` mis(e) à jour.
 #[tauri::command]
 pub async fn update_lang(
-    state: tauri::State<'_, DbState>,
+    ctx: tauri::State<'_, AppContext>,
     id: i64,
     input: CreateLangInput,
 ) -> Result<LangView, AppError> {
-    langues::update(&state.pool, id, input).await
+    db::langues::update(&ctx.state()?.pool, id, input).await
 }
 
 /// Supprime une langue du profil.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `id` - Identifiant de la langue à supprimer.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à supprimer.
 ///
 /// # Returns
 ///
-/// `Ok(())` si supprimée.
+/// `Ok(())` si supprimé(e).
 #[tauri::command]
-pub async fn delete_lang(state: tauri::State<'_, DbState>, id: i64) -> Result<(), AppError> {
-    langues::delete(&state.pool, id).await
+pub async fn delete_lang(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<(), AppError> {
+    db::langues::delete(&ctx.state()?.pool, id).await
 }

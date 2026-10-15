@@ -1,61 +1,58 @@
 //! Commandes Tauri pour les formations du profil.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{formations, users};
+use crate::app_state::AppContext;
+use crate::clock;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{CreateFormationInput, FormationView};
 
-/// Ajoute une formation au profil de l'utilisateur.
+/// Ajoute une formation au profil.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `input` - Données de la formation à créer.
+/// * `ctx` - Contexte de l'application.
+/// * `input` - Données à créer.
 ///
 /// # Returns
 ///
-/// `FormationView` fraîchement créée.
+/// `FormationView` fraîchement créé(e).
 #[tauri::command]
-pub async fn add_formation(
-    state: tauri::State<'_, DbState>,
-    input: CreateFormationInput,
-) -> Result<FormationView, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    formations::insert(&state.pool, user.id, input).await
+pub async fn add_formation(ctx: tauri::State<'_, AppContext>, input: CreateFormationInput) -> Result<FormationView, AppError> {
+    db::formations::insert(&ctx.state()?.pool, input, &clock::now_utc()).await
 }
 
-/// Met à jour une formation existante.
+/// Met à jour une formation existant(e).
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `id` - Identifiant de la formation à modifier.
-/// * `input` - Nouvelles données de la formation.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à modifier.
+/// * `input` - Nouvelles données.
 ///
 /// # Returns
 ///
-/// `FormationView` mise à jour.
+/// `FormationView` mis(e) à jour.
 #[tauri::command]
 pub async fn update_formation(
-    state: tauri::State<'_, DbState>,
+    ctx: tauri::State<'_, AppContext>,
     id: i64,
     input: CreateFormationInput,
 ) -> Result<FormationView, AppError> {
-    formations::update(&state.pool, id, input).await
+    db::formations::update(&ctx.state()?.pool, id, input).await
 }
 
 /// Supprime une formation du profil.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `id` - Identifiant de la formation à supprimer.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de l'entrée à supprimer.
 ///
 /// # Returns
 ///
-/// `Ok(())` si supprimée.
+/// `Ok(())` si supprimé(e).
 #[tauri::command]
-pub async fn delete_formation(state: tauri::State<'_, DbState>, id: i64) -> Result<(), AppError> {
-    formations::delete(&state.pool, id).await
+pub async fn delete_formation(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<(), AppError> {
+    db::formations::delete(&ctx.state()?.pool, id).await
 }

@@ -1,0 +1,7 @@
+{
+  "title": "Étudiant en data engineering",
+  "summary": "Étudiant en master informatique — passionné par la donnée, je construis des pipelines fiables et des tableaux de bord utiles aux équipes métier.",
+  "skills_groups": [
+    { "category": "Données", "skills": ["SQL", "Python"] }
+  ]
+}

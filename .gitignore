@@ -1,14 +1,14 @@
 # Dependencies
 node_modules/
 
-# Dev database (debug builds only)
+# Données du mode DEV (MODE=DEV dans le .env)
 dev-data/
 
 # Build output
 dist/
 
-# Rust / Tauri build
-src-tauri/target/
+# Rust / Tauri build (target unique à la racine du workspace)
+/target/
 
 # Generated Tauri schemas (recreated on build)
 src-tauri/gen/
@@ -20,6 +20,7 @@ src-tauri/gen/
 
 # Editor
 .vscode/
+.idea/
 *.suo
 *.ntvs*
 *.njsproj

@@ -1,76 +1,76 @@
 //! Commandes Tauri pour les sessions de candidature.
 
 // Importation des modules internes
-use crate::db::init::DbState;
-use crate::db::{sessions, users};
+use crate::app_state::AppContext;
+use crate::clock;
+use crate::db;
 use crate::error::AppError;
 use crate::models::{CreateSessionInput, SessionView, UpdateSessionInput};
+use crate::services;
 
-/// Crée une nouvelle session de candidature.
+/// Crée une session de candidature.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `input` - Nom de la session à créer.
+/// * `ctx` - Contexte de l'application.
+/// * `input` - Nom de la session.
 ///
 /// # Returns
 ///
 /// `SessionView` fraîchement créée.
 #[tauri::command]
 pub async fn create_session(
-    state: tauri::State<'_, DbState>,
+    ctx: tauri::State<'_, AppContext>,
     input: CreateSessionInput,
 ) -> Result<SessionView, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    sessions::insert(&state.pool, user.id, &input.nom).await
+    db::sessions::insert(&ctx.state()?.pool, &input.nom, &clock::now_utc()).await
 }
 
-/// Liste les sessions de l'utilisateur avec leurs statistiques.
+/// Liste les sessions avec leurs statistiques.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
+/// * `ctx` - Contexte de l'application.
 ///
 /// # Returns
 ///
-/// Sessions triées par date de création décroissante.
+/// Sessions, de la plus récente à la plus ancienne.
 #[tauri::command]
-pub async fn get_sessions(state: tauri::State<'_, DbState>) -> Result<Vec<SessionView>, AppError> {
-    let user = users::fetch_first_user(&state.pool).await?;
-    sessions::list_for_user(&state.pool, user.id).await
+pub async fn get_sessions(ctx: tauri::State<'_, AppContext>) -> Result<Vec<SessionView>, AppError> {
+    db::sessions::list_all(&ctx.state()?.pool).await
 }
 
-/// Met à jour le nom, le contexte, le statut et la zone cible d'une session existante.
+/// Renomme une session ou change son statut.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `id` - Identifiant de la session à modifier.
-/// * `input` - Nouvelles valeurs des champs éditables de la session.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de la session.
+/// * `input` - Nouveau nom et nouveau statut.
 ///
 /// # Returns
 ///
 /// `SessionView` mise à jour.
 #[tauri::command]
 pub async fn update_session(
-    state: tauri::State<'_, DbState>,
+    ctx: tauri::State<'_, AppContext>,
     id: i64,
     input: UpdateSessionInput,
 ) -> Result<SessionView, AppError> {
-    sessions::update(&state.pool, id, &input).await
+    db::sessions::update(&ctx.state()?.pool, id, &input).await
 }
 
-/// Supprime une session et toutes les candidatures qui en dépendent.
+/// Supprime une session, ses données et son dossier de documents.
 ///
 /// # Arguments
 ///
-/// * `state` - État partagé (pool de connexions).
-/// * `id` - Identifiant de la session à supprimer.
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de la session.
 ///
 /// # Returns
 ///
 /// `Ok(())` si supprimée.
 #[tauri::command]
-pub async fn delete_session(state: tauri::State<'_, DbState>, id: i64) -> Result<(), AppError> {
-    sessions::delete(&state.pool, id).await
+pub async fn delete_session(ctx: tauri::State<'_, AppContext>, id: i64) -> Result<(), AppError> {
+    services::sessions::delete(ctx.state()?, id).await
 }

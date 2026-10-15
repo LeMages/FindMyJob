@@ -9,32 +9,42 @@ edition = "2021"
 name = "findmyjob_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Exceptions réservées aux tests (ex. récupération sur un serveur local de
+# bouclage). Activée seulement par la dev-dependency sur ce paquet lui-même :
+# jamais présente dans un build de l'application.
+test-support = []
+
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { workspace = true }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls", "migrate"] }
-open = "5"
-typst-as-lib = { version = "0.16", features = ["typst-kit-fonts", "typst-kit-embed-fonts"] }
-typst-pdf = "0.15"
-base64 = "0.22"
-tauri-plugin-dialog = "2"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip", "brotli", "cookies"] }
-scraper = "0.22"
-dotenvy = "0.15"
-tokio = { version = "1", features = ["macros"] }
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
-chrono = "0.4"
+tauri = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+open = { workspace = true }
+dotenvy = { workspace = true }
+keyring = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+# Déjà présent via Tauri : `rt` pour spawn_blocking (compilations Typst),
+# `time` pour la purge différée du suivi de génération, `net` pour le
+# résolveur DNS filtrant de l'import d'offre.
+tokio = { workspace = true, features = ["rt", "time", "net"] }
+reqwest = { workspace = true }
+scraper = { workspace = true }
+url = { workspace = true }
+typst-as-lib = { workspace = true }
+typst-pdf = { workspace = true }
+typst-layout = { workspace = true }
+typst-library = { workspace = true }
+typst-syntax = { workspace = true }
+base64 = { workspace = true }
 
-[profile.dev]
-incremental = true
-
-[profile.release]
-codegen-units = 1
-lto = true
-opt-level = "s"
-panic = "abort"
-strip = true
+[dev-dependencies]
+# `test-support` : exceptions compilées pour les tests seulement (ex.
+# récupération sur un serveur local) ; jamais activée par `[dependencies]`.
+findmyjob = { path = ".", features = ["test-support"] }
+tokio = { workspace = true, features = ["rt"] }
+wiremock = { workspace = true }

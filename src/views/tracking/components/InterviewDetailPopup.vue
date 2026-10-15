@@ -86,6 +86,13 @@ defineExpose({ open })
         <div class="text-[13.5px] text-neutral-950">{{ interview.lieu }}</div>
       </div>
 
+      <div v-if="interview.contacts.length > 0" class="mb-[14px]">
+        <div class="text-[12px] text-neutral-600 mb-[5px]">Interlocuteurs</div>
+        <div v-for="contact in interview.contacts" :key="contact.id" class="text-[13.5px] text-neutral-950">
+          {{ contact.nom }}<span v-if="contact.role" class="text-neutral-500"> — {{ contact.role }}</span>
+        </div>
+      </div>
+
       <div v-if="interview.notes" class="mb-[14px]">
         <div class="text-[12px] text-neutral-600 mb-[5px]">Notes</div>
         <div class="text-[13.5px] text-neutral-950 whitespace-pre-wrap leading-[1.5]">{{ interview.notes }}</div>

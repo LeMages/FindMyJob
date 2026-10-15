@@ -1,31 +1,17 @@
 //! Gestion des polices utilisateur importées pour la compilation Typst :
 //! liste, import depuis un dossier source (ex. archive Google Fonts
-//! décompressée), suppression. Le filesystem fait foi — pas de table SQLite
+//! décompressée), suppression. Le filesystem fait foi — pas de table SQL
 //! associée.
 
 // Importation des modules standard
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // Importation des modules internes
-use crate::db::resolve_data_dir;
 use crate::error::AppError;
 use crate::models::FontFamilyView;
 
 /// Extensions de fichiers de police acceptées, comparées en minuscule.
 const FONT_EXTENSIONS: [&str; 2] = ["ttf", "otf"];
-
-/// Résout le dossier racine des polices importées par l'utilisateur.
-///
-/// # Arguments
-///
-/// * `app` - Handle de l'application Tauri.
-///
-/// # Returns
-///
-/// Chemin absolu vers `<app_data_dir>/polices/`.
-pub fn resolve_fonts_dir(app: &tauri::AppHandle) -> PathBuf {
-    resolve_data_dir(app).join("polices")
-}
 
 /// Indique si un fichier a une extension de police acceptée (`.ttf`/`.otf`,
 /// insensible à la casse).
@@ -46,19 +32,18 @@ fn count_font_files(dir: &Path) -> usize {
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `fonts_dir` - Dossier racine des polices importées, déjà résolu par l'appelant.
 ///
 /// # Returns
 ///
 /// Une entrée par sous-dossier de `polices/`, triée par nom. Liste vide si
 /// aucune police n'a encore été importée (dossier absent).
-pub fn list_fonts(app: &tauri::AppHandle) -> Result<Vec<FontFamilyView>, AppError> {
-    let fonts_dir = resolve_fonts_dir(app);
+pub fn list_fonts(fonts_dir: &Path) -> Result<Vec<FontFamilyView>, AppError> {
     if !fonts_dir.is_dir() {
         return Ok(Vec::new());
     }
 
-    let entries = std::fs::read_dir(&fonts_dir)
+    let entries = std::fs::read_dir(fonts_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de lire le dossier des polices : {}", e)))?;
 
     let mut fonts: Vec<FontFamilyView> = entries
@@ -83,13 +68,13 @@ pub fn list_fonts(app: &tauri::AppHandle) -> Result<Vec<FontFamilyView>, AppErro
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `fonts_dir` - Dossier racine des polices importées, déjà résolu par l'appelant.
 /// * `source_path` - Chemin du dossier source sélectionné par l'utilisateur.
 ///
 /// # Returns
 ///
 /// La famille de polices importée (nom, nombre de fichiers copiés).
-pub fn import_font_folder(app: &tauri::AppHandle, source_path: &str) -> Result<FontFamilyView, AppError> {
+pub fn import_font_folder(fonts_dir: &Path, source_path: &str) -> Result<FontFamilyView, AppError> {
     let source = Path::new(source_path);
     if !source.is_dir() {
         return Err(AppError::Validation("Le dossier sélectionné est introuvable.".to_string()));
@@ -100,7 +85,7 @@ pub fn import_font_folder(app: &tauri::AppHandle, source_path: &str) -> Result<F
         .map(|n| n.to_string_lossy().to_string())
         .ok_or_else(|| AppError::Validation("Nom de dossier invalide.".to_string()))?;
 
-    let dest_dir = resolve_fonts_dir(app).join(&name);
+    let dest_dir = fonts_dir.join(&name);
     std::fs::create_dir_all(&dest_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier : {}", e)))?;
 
@@ -133,18 +118,18 @@ pub fn import_font_folder(app: &tauri::AppHandle, source_path: &str) -> Result<F
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri.
+/// * `fonts_dir` - Dossier racine des polices importées, déjà résolu par l'appelant.
 /// * `name` - Nom de la famille à supprimer (nom du sous-dossier dans `polices/`).
 ///
 /// # Returns
 ///
 /// `Ok(())` si le dossier a été supprimé.
-pub fn delete_font(app: &tauri::AppHandle, name: &str) -> Result<(), AppError> {
+pub fn delete_font(fonts_dir: &Path, name: &str) -> Result<(), AppError> {
     if name.is_empty() || name.contains(['/', '\\']) || name.contains("..") {
         return Err(AppError::Validation("Nom de police invalide.".to_string()));
     }
 
-    let target = resolve_fonts_dir(app).join(name);
+    let target = fonts_dir.join(name);
     if !target.is_dir() {
         return Err(AppError::NotFound("Cette police est introuvable.".to_string()));
     }

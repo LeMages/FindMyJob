@@ -1,158 +1,105 @@
-//! Initialisation de la base de données SQLite et résolution des chemins
-//! de données de l'application (base + dossiers de documents).
+//! Ouverture du pool SQLite et application des migrations embarquées.
 
 // Importation des modules standard
-use std::path::PathBuf;
+use std::path::Path;
+use std::str::FromStr;
+use std::time::Duration;
 
 // Importation des crates externes
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::SqlitePool;
-// N'est utilisé qu'en release, où resolve_db_path/resolve_data_dir appellent app.path().
-#[cfg(not(debug_assertions))]
-use tauri::Manager;
 
-/// État partagé injecté dans toutes les commandes Tauri via `tauri::State`.
-///
-/// # Attributes
-///
-/// * `pool` - Pool de connexions SQLite partagé par toute l'application.
-/// * `db_path` - Chemin absolu du fichier SQLite, exposé pour diagnostic (`db_status`).
-pub struct DbState {
-    pub pool: SqlitePool,
-    pub db_path: PathBuf,
-}
+// Importation des modules internes
+use crate::db::common::map_db_err;
+use crate::error::AppError;
 
-/// Résout le chemin du fichier SQLite.
-///
-/// En debug, la base vit dans `dev-data/` à la racine du projet pour rester
-/// visible et versionnable facilement pendant le développement. En release,
-/// elle vit dans le dossier de données de l'application (jamais dans l'arbre projet).
+/// Délai d'attente d'un verrou d'écriture avant `SQLITE_BUSY` : la tâche de
+/// génération et l'interface peuvent écrire en même temps.
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Nombre maximal de connexions du pool (lectures concurrentes en WAL ; un
+/// seul écrivain à la fois de toute façon).
+const MAX_CONNECTIONS: u32 = 5;
+
+/// Applique les réglages communs à toute connexion : clés étrangères
+/// (désactivées par défaut dans SQLite) et attente sur verrou.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri (utilisé uniquement en release).
+/// * `options` - Options de connexion de départ (fichier ou mémoire).
 ///
 /// # Returns
 ///
-/// Chemin absolu vers `findmyjob.db`.
-#[cfg_attr(debug_assertions, allow(unused_variables))]
-pub fn resolve_db_path(app: &tauri::AppHandle) -> PathBuf {
-    #[cfg(debug_assertions)]
-    {
-        // Le CARGO_MANIFEST_DIR d'un crate Tauri a toujours un parent (le dossier projet) :
-        // ce unwrap ne peut échouer que si le crate est placé à la racine du disque.
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join("dev-data")
-            .join("findmyjob.db")
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        app.path()
-            .app_data_dir()
-            .expect("failed to resolve app data dir")
-            .join("findmyjob.db")
-    }
+/// Options complétées.
+fn with_common_pragmas(options: SqliteConnectOptions) -> SqliteConnectOptions {
+    options.foreign_keys(true).busy_timeout(BUSY_TIMEOUT)
 }
 
-/// Résout le dossier de données de l'application (contient la base et les documents).
+/// Applique les migrations embarquées dans le binaire.
 ///
 /// # Arguments
 ///
-/// * `app` - Handle de l'application Tauri (utilisé uniquement en release).
+/// * `pool` - Pool fraîchement ouvert.
 ///
 /// # Returns
 ///
-/// Chemin absolu vers le dossier de données.
-#[cfg_attr(debug_assertions, allow(unused_variables))]
-pub fn resolve_data_dir(app: &tauri::AppHandle) -> PathBuf {
-    #[cfg(debug_assertions)]
-    {
-        // Voir resolve_db_path : même garantie sur le parent.
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join("dev-data")
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        app.path()
-            .app_data_dir()
-            .expect("failed to resolve app data dir")
-    }
+/// `Ok(())` une fois le schéma à jour, `AppError::Database` sinon.
+async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {
+    // src-tauri -> racine du dépôt : un niveau au-dessus du
+    // CARGO_MANIFEST_DIR de ce crate.
+    sqlx::migrate!("../db/migrations/sqlite")
+        .run(pool)
+        .await
+        .map_err(|e| AppError::Database(format!("Migration de la base locale impossible : {e}")))
 }
 
-/// Initialise le pool SQLite et applique les migrations.
-///
-/// Les dossiers de documents (`documents/sessions/<session_id>/{cv,lettre_motivation}/...`)
-/// sont propres à chaque session et créés à la volée par `documents::storage`,
-/// puisque les sessions n'existent pas encore à ce stade de l'initialisation.
+/// Ouvre (en la créant au besoin) la base de l'application et applique les
+/// migrations en attente.
 ///
 /// # Arguments
 ///
-/// * `db_path` - Chemin absolu du fichier SQLite à ouvrir (ou créer).
+/// * `db_path` - Chemin du fichier `findmyjob.db`.
 ///
 /// # Returns
 ///
-/// Pool de connexions prêt à l'emploi, migrations appliquées.
-pub async fn init_db(
-    db_path: &PathBuf,
-) -> Result<SqlitePool, Box<dyn std::error::Error + Send + Sync>> {
-    if let Some(data_dir) = db_path.parent() {
-        std::fs::create_dir_all(data_dir)?;
-    }
-
-    // Les migrations tournent avec les clés étrangères désactivées : plusieurs
-    // d'entre elles recréent une table parente pour changer un CHECK ou une
-    // contrainte NOT NULL (seule façon de faire en SQLite — voir
-    // 0005_candidatures_add_interim.sql et 0014_status_history_timeline.sql).
-    // Avec les clés étrangères actives, le DROP TABLE de la table parente
-    // échoue dès que des tables enfants contiennent des lignes qui la
-    // référencent ("FOREIGN KEY constraint failed").
-    let migration_options = SqliteConnectOptions::new()
-        .filename(db_path)
-        .create_if_missing(true)
-        // sqlx active les clés étrangères par défaut (contrairement à SQLite
-        // lui-même) : il faut les désactiver explicitement pour ce pool.
-        .foreign_keys(false)
-        .journal_mode(SqliteJournalMode::Wal);
-    let migration_pool = SqlitePool::connect_with(migration_options).await?;
-    sqlx::migrate!("../db/migrations").run(&migration_pool).await?;
-    migration_pool.close().await;
-
-    // Le pool applicatif, lui, doit appliquer les clés étrangères pour toute
-    // la durée de vie normale de l'application.
-    let options = SqliteConnectOptions::new()
-        .filename(db_path)
-        .create_if_missing(true)
-        .foreign_keys(true)
-        .journal_mode(SqliteJournalMode::Wal);
-
-    let pool = SqlitePool::connect_with(options).await?;
-
+/// Pool prêt à l'emploi (WAL, clés étrangères, `busy_timeout` de 5 s).
+pub async fn open_pool(db_path: &Path) -> Result<SqlitePool, AppError> {
+    let options = with_common_pragmas(
+        SqliteConnectOptions::new()
+            .filename(db_path)
+            .create_if_missing(true)
+            .journal_mode(SqliteJournalMode::Wal)
+            .synchronous(SqliteSynchronous::Normal),
+    );
+    let pool = SqlitePoolOptions::new()
+        .max_connections(MAX_CONNECTIONS)
+        .connect_with(options)
+        .await
+        .map_err(|e| {
+            AppError::Database(format!("Ouverture de la base {} impossible : {e}", db_path.display()))
+        })?;
+    run_migrations(&pool).await?;
     Ok(pool)
 }
 
-/// Liste les tables applicatives de la base (hors tables système et table de migrations).
+/// Ouvre une base en mémoire, migrée, pour les tests.
 ///
-/// Utilisé uniquement par la commande de diagnostic `db_status`.
-///
-/// # Arguments
-///
-/// * `pool` - Pool de connexions SQLite.
+/// Une base `:memory:` est propre à chaque connexion : le pool est limité à
+/// une connexion, jamais recyclée, pour que toutes les requêtes voient la
+/// même base.
 ///
 /// # Returns
 ///
-/// Noms de tables triés alphabétiquement.
-pub async fn list_tables(pool: &SqlitePool) -> Result<Vec<String>, sqlx::Error> {
-    sqlx::query_scalar::<_, String>(
-        "SELECT name FROM sqlite_master \
-         WHERE type = 'table' \
-           AND name NOT LIKE 'sqlite_%' \
-           AND name != '_sqlx_migrations' \
-         ORDER BY name",
-    )
-    .fetch_all(pool)
-    .await
+/// Pool à connexion unique sur une base vide migrée.
+pub async fn open_memory_pool() -> Result<SqlitePool, AppError> {
+    let options = with_common_pragmas(SqliteConnectOptions::from_str("sqlite::memory:").map_err(map_db_err)?);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .idle_timeout(None)
+        .max_lifetime(None)
+        .connect_with(options)
+        .await
+        .map_err(map_db_err)?;
+    run_migrations(&pool).await?;
+    Ok(pool)
 }

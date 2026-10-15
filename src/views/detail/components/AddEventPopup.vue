@@ -53,7 +53,8 @@ const interviewType = ref('rh')
 const interviewDate = ref('')
 const interviewLieu = ref('')
 const interviewModalite = ref('')
-const interviewContactId = ref<number | ''>('')
+// Interlocuteurs : uniquement des contacts liés à la candidature.
+const interviewContactIds = ref<number[]>([])
 
 // Champs propres à `entretien_passe`.
 const loadingInterviews = ref(false)
@@ -68,7 +69,7 @@ function resetFormFields() {
   interviewDate.value = ''
   interviewLieu.value = ''
   interviewModalite.value = ''
-  interviewContactId.value = ''
+  interviewContactIds.value = []
   pendingInterviews.value = []
   selectedInterviewId.value = ''
   interviewIssue.value = 'positif'
@@ -196,10 +197,12 @@ async function save() {
   if (selected.value.event_type === 'entretien_planifie') {
     event.interview_data = {
       type: interviewType.value,
-      date_entretien: interviewDate.value || null,
+      // `datetime-local` donne « YYYY-MM-DDTHH:mm » sans fuseau, que le
+      // backend (`DateTime<Utc>`) refuse : conversion en RFC 3339 UTC.
+      date_entretien: interviewDate.value ? new Date(interviewDate.value).toISOString() : null,
       lieu: interviewLieu.value.trim() || null,
       modalite: interviewModalite.value || null,
-      contact_id: interviewContactId.value === '' ? null : Number(interviewContactId.value),
+      contact_ids: interviewContactIds.value,
     }
   } else if (selected.value.event_type === 'entretien_passe') {
     event.interview_id = selectedInterviewId.value === '' ? null : Number(selectedInterviewId.value)
@@ -286,11 +289,18 @@ defineExpose({ open })
             </select>
           </div>
           <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">Contact (optionnel)</label>
-            <select v-model="interviewContactId" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
-              <option value="">Aucun</option>
-              <option v-for="rec in state.detailContacts" :key="rec.id" :value="rec.id">{{ rec.nom ?? '—' }}</option>
-            </select>
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">Interlocuteurs (optionnel)</label>
+            <div v-if="state.detailContacts.length === 0" class="text-[12px] text-neutral-400 font-mono">
+              Aucun contact lié à cette candidature.
+            </div>
+            <label
+              v-for="contact in state.detailContacts"
+              :key="contact.id"
+              class="flex items-center gap-2 py-1 text-[13px] text-neutral-900 cursor-pointer"
+            >
+              <input v-model="interviewContactIds" type="checkbox" :value="contact.id" />
+              <span>{{ contact.nom }}<span v-if="contact.role" class="text-neutral-500"> — {{ contact.role }}</span></span>
+            </label>
           </div>
         </template>
 

@@ -1,0 +1,4 @@
+# Les migrations sqlx sont vérifiées par empreinte du fichier : une conversion
+# CRLF (core.autocrlf sous Windows) changerait l'empreinte et bloquerait le
+# démarrage de l'application (VersionMismatch). On force donc LF.
+db/migrations/**/*.sql text eol=lf
