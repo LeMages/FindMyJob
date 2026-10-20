@@ -13,6 +13,10 @@ use crate::llm::doc_data_schema::{cv_labels_schema, lm_labels_schema};
 use crate::models::{CvLabels, LmLabels};
 use crate::llm::target::ClaudeTarget;
 
+/// Version du prompt de traduction des libellés : un cache écrit avec une
+/// autre version est retraduit. À incrémenter à chaque modification du prompt.
+pub const LABELS_PROMPT_VERSION: u32 = 2;
+
 /// Nom lisible d'une langue, pour le prompt.
 fn language_name(lang: &str) -> &'static str {
     match lang {
@@ -56,16 +60,9 @@ async fn translate<T: Serialize + DeserializeOwned>(
 ///
 /// # Returns
 ///
-/// Libellés traduits (dont les 12 abréviations de mois de la langue cible).
+/// Libellés traduits, à valider par l'appelant (`docgen::labels_cache`).
 pub async fn translate_cv_labels(labels: &CvLabels, from: &str, to: &str, target: &ClaudeTarget) -> Result<CvLabels, AppError> {
-    let translated: CvLabels = translate(labels, "CV", cv_labels_schema(), from, to, target).await?;
-    if translated.months_short.len() != 12 {
-        return Err(AppError::Llm(format!(
-            "La traduction des libellés du CV a produit {} abréviations de mois au lieu de 12.",
-            translated.months_short.len()
-        )));
-    }
-    Ok(translated)
+    translate(labels, "CV", cv_labels_schema(), from, to, target).await
 }
 
 /// Traduit les libellés d'une lettre de motivation.

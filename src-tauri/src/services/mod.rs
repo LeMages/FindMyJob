@@ -9,3 +9,4 @@ pub mod generation;
 pub mod scraping;
 pub mod sessions;
 pub mod settings;
+pub mod user_errors;

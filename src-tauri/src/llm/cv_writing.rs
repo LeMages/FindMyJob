@@ -19,7 +19,9 @@ use crate::llm::doc_data_schema::object;
 use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::prose_checks::ProseChecks;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
-use crate::llm::writing_rules::{guidance_block, language_rule, style_model_block, with_feedback, COMMON_RULES};
+use crate::llm::writing_rules::{
+    guidance_block, language_reminder, language_rule, style_model_block, with_feedback, COMMON_RULES,
+};
 use crate::models::{CvContent, CvData, MatchingResult, ProfileDto, ProseGuidance};
 use crate::llm::target::ClaudeTarget;
 
@@ -91,8 +93,8 @@ pub fn example_prose(example: &CvData) -> String {
 fn budget_block(input: &CvWritingInput<'_>) -> String {
     let b = &input.budget;
     let mut lines = vec![
-        "BUDGETS (limites dures)".to_string(),
-        format!("summary : entre {} et {} mots.", b.summary_words.min, b.summary_words.max),
+        "BUDGETS".to_string(),
+        format!("summary : environ {} mots, au plus {} mots.", b.summary_words.target, b.summary_words.max),
     ];
     lines.push(format!(
         "skills_groups : exactement {} groupes. Chaque compétence est recopiée telle qu'elle est écrite dans la liste des compétences du profil, sans en ajouter.",
@@ -104,14 +106,16 @@ fn budget_block(input: &CvWritingInput<'_>) -> String {
 /// Prompt système de la rédaction du CV.
 fn system_prompt(input: &CvWritingInput<'_>) -> String {
     format!(
-        "Tu rédiges les champs de prose d'un CV adapté à une offre : le titre, le résumé et le regroupement des compétences. Les expériences, projets, formations et langues sont ajoutés à part, tels qu'ils sont écrits dans le profil : ne les rédige pas.\n\n\
-         {COMMON_RULES}\n\
-         {}\n\n\
+        "{}\n\n\
+         Tu rédiges les champs de prose d'un CV adapté à une offre : le titre, le résumé et le regroupement des compétences. Les expériences, projets, formations et langues sont ajoutés à part, tels qu'ils sont écrits dans le profil : ne les rédige pas.\n\n\
+         {COMMON_RULES}\n\n\
          Description des champs.\n\
          title : le titre professionnel affiché sous le nom, adapté à l'offre.\n\
          summary : le résumé de la section profil.\n\
-         skills_groups : les compétences du profil regroupées en catégories pertinentes pour l'offre.",
-        language_rule(input.target_lang, input.example_lang)
+         skills_groups : les compétences du profil regroupées en catégories pertinentes pour l'offre ; chaque catégorie est nommée dans la langue du document.\n\n\
+         {}",
+        language_rule(input.target_lang, input.example_lang),
+        language_reminder(input.target_lang)
     )
 }
 
@@ -151,11 +155,13 @@ fn skill_violations(content: &CvContent, profile: &ProfileDto) -> Vec<Violation>
             let normalized = skill.trim().to_lowercase();
             if !known.contains(&normalized) {
                 violations.push(Violation {
+                    advisory: false,
                     field: "skills_groups".to_string(),
                     message: format!("« {skill} » n'est pas une compétence du profil. N'utilise que les compétences listées, écrites à l'identique."),
                 });
             } else if seen.contains(&normalized) {
                 violations.push(Violation {
+                    advisory: false,
                     field: "skills_groups".to_string(),
                     message: format!("« {skill} » apparaît dans plusieurs groupes. Chaque compétence n'apparaît qu'une fois."),
                 });
@@ -231,6 +237,7 @@ pub async fn write_cv(input: &CvWritingInput<'_>, target: &ClaudeTarget) -> Resu
     };
     write_with_retries(
         "CV",
+        &language_reminder(input.target_lang),
         |feedback| call_once(input, feedback, target),
         |content| review(content, input, &checks),
         |content| {

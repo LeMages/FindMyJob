@@ -332,6 +332,8 @@ export interface CandidatureDetail {
   cv_reference_version: number | null
   /** Numéro de la version de la lettre de référence utilisée pour la génération. */
   lm_reference_version: number | null
+  /** Avertissements de la génération (document qui dépasse son nombre de pages…). */
+  generation_warnings: string[]
   created_at: string
 }
 

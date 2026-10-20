@@ -154,7 +154,8 @@ async fn prose_vide_relance_puis_echoue() {
 
     assert!(matches!(progress.status, GenerationStatus::Failed));
     let error = progress.error.expect("message d'échec");
-    assert!(error.contains("reste invalide après 3 essais"), "erreur : {error}");
+    // Message lisible pour l'utilisateur ; le détail technique est tracé.
+    assert!(error.starts_with("La génération des documents a échoué"), "erreur : {error}");
     // Un essai puis deux relances avec le retour de la revue.
     assert_eq!(app.llm.calls_for(Step::CvContent), 3);
     assert_eq!(count(&app.state.pool, "candidatures").await, 0);
@@ -170,7 +171,7 @@ async fn echec_de_generation_supprime_candidature_et_fichiers() {
     let progress = wait_generation(&app.state, view.id).await;
 
     assert!(matches!(progress.status, GenerationStatus::Failed));
-    assert!(progress.error.is_some_and(|e| e.contains("529")));
+    assert!(progress.error.is_some_and(|e| e.contains("indisponible ou surchargée")));
     assert!(matches!(
         db::candidatures::fetch_detail(&app.state.pool, view.id).await,
         Err(AppError::NotFound(_))
@@ -213,8 +214,7 @@ async fn matching_invalide_relance_puis_echoue() {
 
     assert!(matches!(progress.status, GenerationStatus::Failed));
     let error = progress.error.expect("message d'échec");
-    assert!(error.contains("Le matching reste invalide après 3 essais"), "erreur : {error}");
-    assert!(error.contains("l'id 99 n'est pas un projet du profil"), "erreur : {error}");
+    assert!(error.starts_with("La génération des documents a échoué"), "erreur : {error}");
     assert_eq!(app.llm.calls_for(Step::Matching), 3);
     assert_eq!(app.llm.calls_for(Step::CvContent), 0, "aucune rédaction sans projets valides");
     assert_eq!(count(&app.state.pool, "candidatures").await, 0);
@@ -282,8 +282,7 @@ async fn traduction_invalide_relance_puis_echoue() {
 
     assert!(matches!(progress.status, GenerationStatus::Failed));
     let error = progress.error.expect("message d'échec");
-    assert!(error.contains("La traduction du profil reste invalide après 3 essais"), "erreur : {error}");
-    assert!(error.contains("attendu exactement 1"), "erreur : {error}");
+    assert!(error.starts_with("La génération des documents a échoué"), "erreur : {error}");
     assert_eq!(app.llm.calls_for(Step::ProfileTranslation), 3);
     assert_eq!(count(&app.state.pool, "candidatures").await, 0);
     assert_no_generated_files(&app.state, sid, cid);

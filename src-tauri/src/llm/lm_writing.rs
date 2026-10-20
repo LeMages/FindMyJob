@@ -19,7 +19,9 @@ use crate::llm::doc_data_schema::object;
 use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::prose_checks::ProseChecks;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
-use crate::llm::writing_rules::{guidance_block, language_rule, style_model_block, with_feedback, COMMON_RULES};
+use crate::llm::writing_rules::{
+    guidance_block, language_reminder, language_rule, style_model_block, with_feedback, COMMON_RULES,
+};
 use crate::models::{LmContent, LmData, MatchingResult, ProfileDto, ProseGuidance};
 use crate::llm::target::ClaudeTarget;
 
@@ -78,12 +80,12 @@ pub fn example_prose(example: &LmData) -> String {
 /// Bloc des budgets de la lettre, paragraphe par paragraphe.
 fn budget_block(budget: &LmBudget) -> String {
     let mut lines = vec![
-        "BUDGETS (limites dures)".to_string(),
-        format!("subject : entre {} et {} mots.", budget.subject_words.min, budget.subject_words.max),
+        "BUDGETS".to_string(),
+        format!("subject : environ {} mots, au plus {} mots.", budget.subject_words.target, budget.subject_words.max),
         format!("paragraphs : exactement {} paragraphes.", budget.paragraph_count()),
     ];
     for (i, range) in budget.paragraph_words.iter().enumerate() {
-        lines.push(format!("Paragraphe {} : entre {} et {} mots.", i + 1, range.min, range.max));
+        lines.push(format!("Paragraphe {} : environ {} mots, au plus {} mots.", i + 1, range.target, range.max));
     }
     lines.join("\n")
 }
@@ -91,12 +93,15 @@ fn budget_block(budget: &LmBudget) -> String {
 /// Prompt système de la rédaction de la lettre.
 fn system_prompt(input: &LmWritingInput<'_>) -> String {
     format!(
-        "Tu rédiges l'objet et les paragraphes du corps d'une lettre de motivation adaptée à une offre.\n\n\
-         {COMMON_RULES}\n{LM_RULES}\n{}\n\n\
+        "{}\n\n\
+         Tu rédiges l'objet et les paragraphes du corps d'une lettre de motivation adaptée à une offre.\n\n\
+         {COMMON_RULES}\n{LM_RULES}\n\n\
          Description des champs.\n\
          subject : l'objet de la lettre, sans son préfixe (« Objet : » est ajouté à part).\n\
-         paragraphs : les paragraphes du corps, dans l'ordre. Chacun joue le même rôle que le paragraphe de même rang du modèle.",
-        language_rule(input.target_lang, input.example_lang)
+         paragraphs : les paragraphes du corps, dans l'ordre. Chacun joue le même rôle que le paragraphe de même rang du modèle.\n\n\
+         {}",
+        language_rule(input.target_lang, input.example_lang),
+        language_reminder(input.target_lang)
     )
 }
 
@@ -155,6 +160,7 @@ pub async fn write_lm(input: &LmWritingInput<'_>, target: &ClaudeTarget) -> Resu
     };
     write_with_retries(
         "lettre",
+        &language_reminder(input.target_lang),
         |feedback| call_once(input, feedback, target),
         |content| review(content, &input.budget, &checks),
         |content| content.map_prose(|path, text| checks.clean(path, text)),

@@ -29,6 +29,7 @@ mod docgen_text_diff;
 mod docgen_translation;
 mod end_to_end;
 mod generation;
+mod generation_budgets;
 mod llm_schema_size;
 mod offer_import;
 mod profile_lifecycle;

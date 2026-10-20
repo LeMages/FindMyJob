@@ -173,6 +173,7 @@ fn destinataire_depuis_la_candidature_sans_contact() {
         "status": "a_postuler", "source": null, "type_contrat": null, "remuneration": null, "url_offre": null,
         "description_offre": null, "notes": null, "date_candidature": null, "cv_path": null,
         "lettre_motivation_path": null, "cv_reference_version": null, "lm_reference_version": null,
+        "generation_warnings": [],
         "created_at": "2026-01-01T00:00:00Z"
     }))
     .expect("candidature de fixture");

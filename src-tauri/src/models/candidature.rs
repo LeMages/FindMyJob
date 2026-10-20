@@ -46,6 +46,9 @@ pub struct CandidatureDetail {
     pub cv_reference_version: Option<i32>,
     /// Numéro de la version de la lettre de référence utilisée pour la génération.
     pub lm_reference_version: Option<i32>,
+    /// Avertissements de la génération (document qui dépasse son nombre de
+    /// pages…), vide si aucun.
+    pub generation_warnings: Vec<String>,
     pub created_at: DateTime<Utc>,
 }
 

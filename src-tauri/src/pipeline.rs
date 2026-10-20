@@ -73,9 +73,16 @@ pub struct GeneratedDocument {
 }
 
 /// Documents générés pour une candidature, avec leur trace.
+///
+/// # Attributes
+///
+/// * `cv`, `lm` - Documents à sauvegarder.
+/// * `warnings` - Avertissements pour l'utilisateur (pages dépassées…).
+/// * `trace` - Trace de la génération (dossier de debug).
 pub struct GeneratedDocuments {
     pub cv: GeneratedDocument,
     pub lm: GeneratedDocument,
+    pub warnings: Vec<String>,
     pub trace: GenerationTrace,
 }
 
@@ -359,7 +366,8 @@ fn into_result(
         lm: lm_trace,
         llm_calls: ctx.target.recorder.as_ref().map(|r| r.snapshot()).unwrap_or_default(),
     };
-    GeneratedDocuments { cv, lm, trace }
+    let warnings = [&trace.cv.warning, &trace.lm.warning].into_iter().flatten().cloned().collect();
+    GeneratedDocuments { cv, lm, warnings, trace }
 }
 
 /// Génère le CV et la lettre de motivation adaptés à une offre.

@@ -27,6 +27,7 @@ use crate::documents::typst::{compile_document, compile_to_pdf};
 use crate::startup::run_mode::RunMode;
 use crate::storage_paths;
 use crate::error::AppError;
+use crate::services::user_errors;
 use crate::models::{DocumentFileInfo, DocumentReferenceView};
 use crate::trace_log;
 
@@ -273,7 +274,9 @@ pub async fn save_reference(
         )
     });
     let input = TemplatizeInput { source: &content, rendered: &reference, doc_type, root: &doc_dir, fonts_dir };
-    let validated = templatize(&input, &target, debug_dir.as_deref()).await?;
+    let validated = templatize(&input, &target, debug_dir.as_deref())
+        .await
+        .map_err(|e| user_errors::readable(e, "L'import de la référence"))?;
 
     // ------------------------------------------------------------------
     // 4. Version en base, fichiers et référence courante, atomiquement

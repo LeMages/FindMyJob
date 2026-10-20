@@ -52,6 +52,7 @@ const lettrePath = computed(() => state.detailCandidature?.lettre_motivation_pat
 const lettreExists = computed(() => !!lettrePath.value && !!state.detailLettreInfo?.exists)
 const lettreSize = computed(() => state.detailLettreInfo?.size ?? 0)
 const cvReferenceVersion = computed(() => state.detailCandidature?.cv_reference_version ?? null)
+const generationWarnings = computed(() => state.detailCandidature?.generation_warnings ?? [])
 const lettreReferenceVersion = computed(() => state.detailCandidature?.lm_reference_version ?? null)
 
 const previewModal = ref<InstanceType<typeof DocumentPreviewModal> | null>(null)
@@ -257,6 +258,14 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
             </button>
           </div>
 
+          <!-- Avertissements de la génération -->
+          <div
+            v-for="warning in generationWarnings"
+            :key="warning"
+            class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-[10px] py-2 text-[12px] leading-[1.4] text-amber-800"
+          >
+            {{ warning }}
+          </div>
         </div>
 
         <!-- Contacts recruteur -->
