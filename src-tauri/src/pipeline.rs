@@ -22,16 +22,18 @@ use std::sync::Arc;
 use sqlx::SqlitePool;
 
 // Importation des modules internes
+use crate::clock;
 use crate::db;
 use crate::services::api_key::ApiKeyAccess;
 use crate::services::claude_target::ClaudeTargetSource;
 use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
 use crate::docgen::build_lm_data::{build_lm_data, LmLayout};
-use crate::docgen::labels_cache::{resolve_cv_labels, resolve_lm_labels, ResolvedLabels};
-use crate::docgen::page_fit::{fit_to_pages, CompileTarget, FittedDocument};
+use crate::documents::labels_cache::{resolve_cv_labels, resolve_lm_labels};
+use crate::documents::reference_texts_cache::{resolve_reference_texts, ResolvedTexts};
+use crate::documents::page_fit::{fit_to_pages, CompileTarget, FittedDocument};
 use crate::docgen::recipient::build_recipient;
-use crate::docgen::reference_template::{load_reference, ReferenceTemplate};
-use crate::docgen::trace::{DocumentTrace, GenerationTrace};
+use crate::documents::reference_template::{load_reference, ReferenceTemplate};
+use crate::documents::generation_trace::{DocumentTrace, GenerationTrace};
 use crate::docgen::budgets::{cv_budget, lm_budget, CvBudget, LmBudget};
 use crate::docgen::entry_texts::{source_texts, CvEntryTexts};
 use crate::docgen::period_format::detect_separator;
@@ -43,7 +45,8 @@ use crate::llm::matching::match_profile;
 use crate::llm::offer::analyze_offer;
 use crate::llm::profile_translation::translate_entry_texts;
 use crate::llm::writing_loop::WritingOutcome;
-use crate::llm::{ClaudeTarget, LlmCaller};
+use crate::llm::{CallRecorder, ClaudeTarget, LlmCaller};
+use crate::models::doc_lang::is_supported;
 use crate::models::{
     CvContent, CvExampleData, CvLabels, LmContent, LmExampleData, LmLabels, MatchingResult, ProfileDto,
     Recipient,
@@ -53,10 +56,6 @@ use crate::models::{
 /// pour calculer une progression (`current_step`/`total_steps`). Les
 /// relances (linter, pages) restent sur leur étape.
 pub const GENERATION_STEPS_TOTAL: u8 = 5;
-
-/// Langues de document prises en charge ; une autre valeur d'analyse
-/// d'offre retombe sur la langue de la référence.
-const SUPPORTED_LANGS: [&str; 2] = ["fr", "en"];
 
 /// Document généré, prêt à être sauvegardé.
 ///
@@ -72,9 +71,16 @@ pub struct GeneratedDocument {
 }
 
 /// Documents générés pour une candidature, avec leur trace.
+///
+/// # Attributes
+///
+/// * `cv`, `lm` - Documents à sauvegarder.
+/// * `warnings` - Avertissements pour l'utilisateur (pages dépassées…).
+/// * `trace` - Trace de la génération (dossier de debug).
 pub struct GeneratedDocuments {
     pub cv: GeneratedDocument,
     pub lm: GeneratedDocument,
+    pub warnings: Vec<String>,
     pub trace: GenerationTrace,
 }
 
@@ -103,21 +109,21 @@ async fn load_recipient(pool: &SqlitePool, candidature_id: i64) -> Result<Recipi
     Ok(build_recipient(&candidature))
 }
 
-/// Langue du document : celle de l'offre si elle est prise en charge,
-/// sinon celle de la référence.
-fn target_language(offer_analysis: &str, fallback: &str) -> String {
+/// Langue d'un document : celle du corps de l'offre si elle est prise en
+/// charge, sinon (offre « inconnue » ou illisible) celle de sa référence.
+fn target_language(offer_analysis: &str, reference_lang: &str) -> String {
     serde_json::from_str::<serde_json::Value>(offer_analysis)
         .ok()
         .and_then(|v| v.get("language").and_then(|l| l.as_str()).map(str::to_string))
-        .filter(|lang| SUPPORTED_LANGS.contains(&lang.as_str()))
-        .unwrap_or_else(|| fallback.to_string())
+        .filter(|lang| is_supported(lang))
+        .unwrap_or_else(|| reference_lang.to_string())
 }
 
 /// Convertit un document ajusté en trace et en document à sauvegarder.
 fn finish<C>(
     fitted: FittedDocument<C>,
     reference_version_id: i64,
-    labels_translated: bool,
+    translated: (bool, bool),
 ) -> (GeneratedDocument, DocumentTrace<C>) {
     let trace = DocumentTrace {
         content: fitted.writing.content,
@@ -126,9 +132,28 @@ fn finish<C>(
         page_count: fitted.page_count,
         page_retries: fitted.page_retries,
         warning: fitted.warning,
-        labels_translated,
+        labels_translated: translated.0,
+        reference_texts_translated: translated.1,
     };
     (GeneratedDocument { pdf: fitted.pdf, data_json: fitted.data_json, reference_version_id }, trace)
+}
+
+/// Ce qui dépend de la langue d'un document : libellés, textes de la
+/// référence (textes en dur, zones [FIXE], consignes) et textes du profil.
+///
+/// # Attributes
+///
+/// * `lang` - Langue du document.
+/// * `labels` - Libellés dans cette langue.
+/// * `labels_translated` - Vrai si les libellés ont été traduits.
+/// * `texts` - Textes de la référence dans cette langue.
+/// * `entry_texts` - Textes du profil dans cette langue.
+struct DocumentLanguage<L> {
+    lang: String,
+    labels: L,
+    labels_translated: bool,
+    texts: ResolvedTexts,
+    entry_texts: CvEntryTexts,
 }
 
 /// Tout ce que la rédaction et l'assemblage partagent, préparé une fois.
@@ -140,11 +165,9 @@ fn finish<C>(
 /// * `cv_ref`, `lm_ref` - Références templatisées.
 /// * `recipient` - Destinataire de la lettre.
 /// * `offer_analysis` - Analyse de l'offre (JSON).
-/// * `lang` - Langue des documents.
 /// * `matching`, `selection` - Matching et entrées retenues.
-/// * `entry_texts` - Descriptions des entrées du CV, dans la langue du CV.
 /// * `cv_budget`, `lm_budget` - Budgets initiaux.
-/// * `cv_labels`, `lm_labels` - Libellés dans la langue des documents.
+/// * `cv`, `lm` - Langue de chaque document et textes dans cette langue.
 struct GenerationContext {
     profile: ProfileDto,
     target: ClaudeTarget,
@@ -152,14 +175,12 @@ struct GenerationContext {
     lm_ref: ReferenceTemplate<LmExampleData>,
     recipient: Recipient,
     offer_analysis: String,
-    lang: String,
     matching: MatchingResult,
     selection: Selection,
-    entry_texts: CvEntryTexts,
     cv_budget: CvBudget,
     lm_budget: LmBudget,
-    cv_labels: ResolvedLabels<CvLabels>,
-    lm_labels: ResolvedLabels<LmLabels>,
+    cv: DocumentLanguage<CvLabels>,
+    lm: DocumentLanguage<LmLabels>,
 }
 
 impl GenerationContext {
@@ -170,11 +191,12 @@ impl GenerationContext {
             matching: &self.matching,
             selection: &self.selection,
             profile: &self.profile,
+            entry_texts: &self.cv.entry_texts,
             example: &self.cv_ref.example.data,
-            guidance: &self.cv_ref.example.guidance,
+            guidance: &self.cv.texts.texts.guidance,
             budget,
-            target_lang: &self.lang,
-            example_lang: &self.cv_ref.example.detected_lang,
+            target_lang: &self.cv.lang,
+            example_lang: &self.cv_ref.example.data.lang,
         }
     }
 
@@ -185,18 +207,19 @@ impl GenerationContext {
             matching: &self.matching,
             selection: &self.selection,
             profile: &self.profile,
+            entry_texts: &self.lm.entry_texts,
             example: &self.lm_ref.example.data,
-            guidance: &self.lm_ref.example.guidance,
+            guidance: &self.lm.texts.texts.guidance,
             budget,
             company: &self.recipient.company,
-            target_lang: &self.lang,
-            example_lang: &self.lm_ref.example.detected_lang,
+            target_lang: &self.lm.lang,
+            example_lang: &self.lm_ref.example.data.lang,
         }
     }
 }
 
 /// Étapes 1 et 2 : profil, références, destinataire, analyse de l'offre,
-/// matching, sélection, budgets, libellés et textes des entrées.
+/// matching, sélection, langues, traductions et budgets.
 async fn prepare(
     pool: &SqlitePool,
     request: &GenerationRequest<'_>,
@@ -206,7 +229,11 @@ async fn prepare(
     // 1. Profil, modèle, références templatisées, destinataire
     // ------------------------------------------------------------------
     let profile = db::profile::build_profile(pool).await?;
-    let target = ClaudeTargetSource { pool, api_key: request.api_key, llm: request.llm }.resolve().await?;
+    // Tous les appels de la génération sont journalisés pour `llm_calls.json`.
+    let target = ClaudeTargetSource { pool, api_key: request.api_key, llm: request.llm }
+        .resolve()
+        .await?
+        .with_recorder(Arc::new(CallRecorder::default()));
     let cv_ref: ReferenceTemplate<CvExampleData> =
         load_reference(pool, request.data_dir, request.session_id, "cv", "CV").await?;
     let lm_ref: ReferenceTemplate<LmExampleData> =
@@ -214,38 +241,70 @@ async fn prepare(
     let recipient = load_recipient(pool, request.candidature_id).await?;
 
     // ------------------------------------------------------------------
-    // 2. Analyse de l'offre, matching, sélection et budgets
+    // 2. Analyse de l'offre, matching et sélection
     // ------------------------------------------------------------------
     on_progress(1, "Analyse de l'offre…");
     let offer_analysis = analyze_offer(request.description_offre, &target).await?;
-    let lang = target_language(&offer_analysis, &cv_ref.example.detected_lang);
 
     on_progress(2, "Matching profil / offre…");
     let project_count = expected_project_count(&profile, cv_ref.example.data.projects.len());
     let matching = match_profile(&offer_analysis, &profile, project_count, &target).await?;
     let selection = select(&profile, &matching.project_ids);
-    let mut cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count).with_fixed_words(&cv_ref.example.guidance);
+
+    // ------------------------------------------------------------------
+    // 3. Langue de chaque document, puis libellés, textes de la référence
+    //    et textes du profil dans cette langue (aucun appel quand les
+    //    langues coïncident)
+    // ------------------------------------------------------------------
+    let cv_lang = target_language(&offer_analysis, &cv_ref.example.data.lang);
+    let lm_lang = target_language(&offer_analysis, &lm_ref.example.data.lang);
+    let source = source_texts(&profile, &selection);
+    let profile_lang = profile.user.langue_profil.as_str();
+    let (cv_labels, lm_labels, cv_texts, lm_texts, cv_entries, lm_entries) = tokio::try_join!(
+        resolve_cv_labels(&cv_ref.example.data.labels, &cv_ref.example.data.lang, &cv_lang, &cv_ref.dir, &target),
+        resolve_lm_labels(&lm_ref.example.data.labels, &lm_ref.example.data.lang, &lm_lang, &lm_ref.dir, &target),
+        resolve_reference_texts(&cv_ref.texts, &cv_lang, &cv_ref.dir, &target),
+        resolve_reference_texts(&lm_ref.texts, &lm_lang, &lm_ref.dir, &target),
+        translate_entry_texts(&source, profile_lang, &cv_lang, &target),
+        // Une seule traduction du profil quand les deux documents partagent
+        // leur langue (le cas courant).
+        async {
+            if lm_lang == cv_lang {
+                Ok(None)
+            } else {
+                translate_entry_texts(&source, profile_lang, &lm_lang, &target).await.map(Some)
+            }
+        },
+    )?;
+    let lm_entries = lm_entries.unwrap_or_else(|| cv_entries.clone());
+
+    // ------------------------------------------------------------------
+    // 4. Budgets : les mots des zones [FIXE] sont comptés dans la langue
+    //    du document
+    // ------------------------------------------------------------------
+    let mut cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count).with_fixed_words(&cv_texts.texts.guidance);
     // Pas plus de groupes de compétences que de domaines dans le profil,
     // sinon le modèle doit en inventer un.
     let mut domains: Vec<&str> = profile.skills.iter().map(|s| s.domaine.trim()).collect();
     domains.sort_unstable();
     domains.dedup();
     cv_budget.skills_group_count = cv_budget.skills_group_count.min(domains.len());
-    let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count).with_fixed_words(&lm_ref.example.guidance);
+    let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count).with_fixed_words(&lm_texts.texts.guidance);
 
-    // ------------------------------------------------------------------
-    // 3. Libellés et textes des entrées dans la langue de l'offre. Le profil
-    //    n'a pas de langue déclarée : il est supposé rédigé dans la langue
-    //    du CV de référence (`detected_lang`), la même que pour les libellés.
-    // ------------------------------------------------------------------
-    let source = source_texts(&profile, &selection);
-    let profile_lang = cv_ref.example.detected_lang.as_str();
-    let (cv_labels, lm_labels, entry_texts) = tokio::try_join!(
-        resolve_cv_labels(&cv_ref.example.data.labels, &cv_ref.example.detected_lang, &lang, &cv_ref.dir, &target),
-        resolve_lm_labels(&lm_ref.example.data.labels, &lm_ref.example.detected_lang, &lang, &lm_ref.dir, &target),
-        translate_entry_texts(&source, profile_lang, &lang, &target),
-    )?;
-
+    let cv = DocumentLanguage {
+        lang: cv_lang,
+        labels: cv_labels.labels,
+        labels_translated: cv_labels.translated,
+        texts: cv_texts,
+        entry_texts: cv_entries,
+    };
+    let lm = DocumentLanguage {
+        lang: lm_lang,
+        labels: lm_labels.labels,
+        labels_translated: lm_labels.translated,
+        texts: lm_texts,
+        entry_texts: lm_entries,
+    };
     Ok(GenerationContext {
         profile,
         target,
@@ -253,14 +312,12 @@ async fn prepare(
         lm_ref,
         recipient,
         offer_analysis,
-        lang,
         matching,
         selection,
-        entry_texts,
         cv_budget,
         lm_budget,
-        cv_labels,
-        lm_labels,
+        cv,
+        lm,
     })
 }
 
@@ -273,10 +330,11 @@ async fn produce_cv(
     let separator = detect_separator(ctx.cv_ref.example.data.experiences.iter().map(|e| e.period.as_str()));
     let layout = CvLayout {
         document: &ctx.cv_ref.example.data,
-        labels: &ctx.cv_labels.labels,
+        labels: &ctx.cv.labels,
         period_style: &ctx.cv_ref.example.period_style,
         separator: &separator,
-        lang: &ctx.lang,
+        lang: &ctx.cv.lang,
+        texts: &ctx.cv.texts.texts.texts,
     };
     let target = CompileTarget {
         label: "CV",
@@ -288,7 +346,7 @@ async fn produce_cv(
     fit_to_pages(
         &target,
         writing,
-        |content| build_cv_data(&ctx.profile, &ctx.selection, &ctx.entry_texts, content, &layout),
+        |content| build_cv_data(&ctx.profile, &ctx.selection, &ctx.cv.entry_texts, content, &layout),
         |factor| {
             let input = ctx.cv_input(ctx.cv_budget.scaled(factor));
             async move { write_cv(&input, &ctx.target).await }
@@ -307,10 +365,11 @@ async fn produce_lm(
 ) -> Result<FittedDocument<LmContent>, AppError> {
     let layout = LmLayout {
         document: &ctx.lm_ref.example.data,
-        labels: &ctx.lm_labels.labels,
+        labels: &ctx.lm.labels,
         title,
-        date: chrono::Local::now().date_naive(),
-        lang: &ctx.lang,
+        date: clock::today_local(),
+        lang: &ctx.lm.lang,
+        texts: &ctx.lm.texts.texts.texts,
     };
     let target = CompileTarget {
         label: "lettre",
@@ -337,8 +396,8 @@ fn into_result(
     cv_fitted: FittedDocument<CvContent>,
     lm_fitted: FittedDocument<LmContent>,
 ) -> GeneratedDocuments {
-    let (cv, cv_trace) = finish(cv_fitted, ctx.cv_ref.version_id, ctx.cv_labels.translated);
-    let (lm, lm_trace) = finish(lm_fitted, ctx.lm_ref.version_id, ctx.lm_labels.translated);
+    let (cv, cv_trace) = finish(cv_fitted, ctx.cv_ref.version_id, (ctx.cv.labels_translated, ctx.cv.texts.translated));
+    let (lm, lm_trace) = finish(lm_fitted, ctx.lm_ref.version_id, (ctx.lm.labels_translated, ctx.lm.texts.translated));
     let offer_analysis = serde_json::from_str(&ctx.offer_analysis)
         .unwrap_or_else(|_| serde_json::Value::String(ctx.offer_analysis.clone()));
     let trace = GenerationTrace {
@@ -350,8 +409,10 @@ fn into_result(
         lm_budget: ctx.lm_budget,
         cv: cv_trace,
         lm: lm_trace,
+        llm_calls: ctx.target.recorder.as_ref().map(|r| r.snapshot()).unwrap_or_default(),
     };
-    GeneratedDocuments { cv, lm, trace }
+    let warnings = [&trace.cv.warning, &trace.lm.warning].into_iter().flatten().cloned().collect();
+    GeneratedDocuments { cv, lm, warnings, trace }
 }
 
 /// Génère le CV et la lettre de motivation adaptés à une offre.

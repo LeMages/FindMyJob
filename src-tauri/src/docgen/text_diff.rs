@@ -91,6 +91,43 @@ pub fn normalize_quotes(text: &str) -> String {
 ///
 /// `TextDiff`, ou une erreur si un texte dépasse `MAX_WORDS` mots.
 pub fn diff_words(expected: &str, actual: &str) -> Result<TextDiff, String> {
+    let hunks = diff_hunks(expected, actual)?;
+    Ok(TextDiff {
+        expected_words: words(&normalize_quotes(expected)).len(),
+        missing: hunks.iter().flat_map(|h| h.missing.iter().cloned()).collect(),
+        extra: hunks.iter().flat_map(|h| h.extra.iter().cloned()).collect(),
+    })
+}
+
+/// Écart localisé : mots consécutifs non alignés, à une position du texte
+/// attendu.
+///
+/// # Attributes
+///
+/// * `expected_start` - Indice (0-based) du premier mot attendu concerné
+///   (ou du mot attendu qui suit des mots en trop).
+/// * `missing` - Mots attendus absents, dans l'ordre.
+/// * `extra` - Mots obtenus en trop, dans l'ordre.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffHunk {
+    pub expected_start: usize,
+    pub missing: Vec<String>,
+    pub extra: Vec<String>,
+}
+
+/// Calcule les écarts localisés entre deux textes (même alignement que
+/// [`diff_words`]).
+///
+/// # Arguments
+///
+/// * `expected` - Texte de référence.
+/// * `actual` - Texte obtenu.
+///
+/// # Returns
+///
+/// Les écarts dans l'ordre du texte attendu, ou une erreur si un texte
+/// dépasse `MAX_WORDS` mots.
+pub fn diff_hunks(expected: &str, actual: &str) -> Result<Vec<DiffHunk>, String> {
     let (expected, actual) = (normalize_quotes(expected), normalize_quotes(actual));
     let a = words(&expected);
     let b = words(&actual);
@@ -121,27 +158,32 @@ pub fn diff_words(expected: &str, actual: &str) -> Result<TextDiff, String> {
     }
 
     // ------------------------------------------------------------------
-    // 2. Parcours de l'alignement : tout mot non apparié est un écart
+    // 2. Parcours de l'alignement : les mots non appariés consécutifs
+    //    forment un écart
     // ------------------------------------------------------------------
     let (mut i, mut j) = (0, 0);
-    let mut missing = Vec::new();
-    let mut extra = Vec::new();
-    while i < a.len() && j < b.len() {
-        if key_a[i] == key_b[j] {
+    let mut hunks: Vec<DiffHunk> = Vec::new();
+    let mut open: Option<DiffHunk> = None;
+    while i < a.len() || j < b.len() {
+        let aligned = i < a.len() && j < b.len() && key_a[i] == key_b[j];
+        if aligned {
+            hunks.extend(open.take());
             i += 1;
             j += 1;
-        } else if lcs[(i + 1) * width + j] >= lcs[i * width + j + 1] {
-            missing.push(a[i].to_string());
+            continue;
+        }
+        let hunk = open.get_or_insert_with(|| DiffHunk { expected_start: i, missing: Vec::new(), extra: Vec::new() });
+        let take_missing = j >= b.len() || (i < a.len() && lcs[(i + 1) * width + j] >= lcs[i * width + j + 1]);
+        if take_missing {
+            hunk.missing.push(a[i].to_string());
             i += 1;
         } else {
-            extra.push(b[j].to_string());
+            hunk.extra.push(b[j].to_string());
             j += 1;
         }
     }
-    missing.extend(a[i..].iter().map(|w| w.to_string()));
-    extra.extend(b[j..].iter().map(|w| w.to_string()));
-
-    Ok(TextDiff { expected_words: a.len(), missing, extra })
+    hunks.extend(open);
+    Ok(hunks)
 }
 
 /// Repère les séparateurs orphelins d'un texte rendu : deux séparateurs

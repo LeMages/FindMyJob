@@ -37,6 +37,8 @@ pub struct UserView {
     pub portfolio: Option<String>,
     /// Centres d'intérêt, une ligne = un item.
     pub interets: Option<String>,
+    /// Langue dans laquelle le profil est rédigé (`"fr"` ou `"en"`).
+    pub langue_profil: String,
     pub created_at: DateTime<Utc>,
 }
 

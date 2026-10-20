@@ -6,6 +6,7 @@ pub mod connection_test;
 pub mod contact;
 pub mod doc_content;
 pub mod doc_data;
+pub mod doc_lang;
 pub mod document;
 pub mod event_type;
 pub mod experience;
@@ -19,6 +20,7 @@ pub mod offer_extraction;
 pub mod profile;
 pub mod projet;
 pub mod prose_guidance;
+pub mod reference_texts;
 pub mod session;
 pub mod skill;
 pub mod status_history;
@@ -37,6 +39,7 @@ pub use doc_data::{
     LmExampleData, LmLabels, PeriodGranularity, PeriodStyle, Recipient, SkillsGroup,
 };
 pub use prose_guidance::{ProseGuidance, ProseZone, ZoneMode};
+pub use reference_texts::{ReferenceTexts, REFERENCE_FORMAT_VERSION, REFERENCE_TEXTS_FILE};
 pub use document::{
     Document, DocumentFileInfo, DocumentReferenceView, DocumentVersionView, DocumentsStatus, TemplateArtifacts,
 };

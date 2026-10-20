@@ -16,7 +16,7 @@ const USER_ID: i64 = 1;
 
 /// Colonnes lues pour reconstruire un `UserView`.
 const USER_COLUMNS: &str = "id, nom, prenom, email, telephone, ville, zip_code, permis, \
-     description, linkedin, github, portfolio, interets, created_at";
+     description, linkedin, github, portfolio, interets, langue_profil, created_at";
 
 /// Construit un `UserView` à partir d'une ligne SQL brute.
 ///
@@ -42,6 +42,7 @@ fn row_to_user(row: &SqliteRow) -> Result<UserView, sqlx::Error> {
         github: row.try_get("github")?,
         portfolio: row.try_get("portfolio")?,
         interets: row.try_get("interets")?,
+        langue_profil: row.try_get("langue_profil")?,
         created_at: row.try_get("created_at")?,
     })
 }
@@ -175,6 +176,29 @@ pub async fn update_description(pool: &SqlitePool, description: Option<String>) 
     let mut tx = begin_write(pool).await?;
     sqlx::query("UPDATE users SET description = $1 WHERE id = $2")
         .bind(normalize(description))
+        .bind(USER_ID)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_db_err)?;
+    let user = fetch_user(&mut *tx).await?;
+    tx.commit().await.map_err(map_db_err)?;
+    Ok(user)
+}
+
+/// Met à jour la langue dans laquelle le profil est rédigé.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+/// * `lang` - Code de langue, déjà validé par l'appelant.
+///
+/// # Returns
+///
+/// `UserView` mis à jour, ou `AppError::NotFound` si le profil n'existe pas.
+pub async fn update_profile_language(pool: &SqlitePool, lang: &str) -> Result<UserView, AppError> {
+    let mut tx = begin_write(pool).await?;
+    sqlx::query("UPDATE users SET langue_profil = $1 WHERE id = $2")
+        .bind(lang)
         .bind(USER_ID)
         .execute(&mut *tx)
         .await

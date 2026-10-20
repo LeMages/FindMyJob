@@ -5,10 +5,12 @@
 //! formations viennent uniquement du profil : une section vide dans le
 //! profil reste vide. Aucun appel LLM.
 
+// Importation des modules standard
+use std::collections::BTreeMap;
+
 // Importation des modules internes
-use crate::docgen::document_fallback::list_or_document;
 use crate::docgen::entry_texts::CvEntryTexts;
-use crate::docgen::identity::{build_identity, display_url, lines, text};
+use crate::docgen::identity::{build_identity, display_url, text};
 use crate::docgen::period_format::{format_period, PeriodStyleText};
 use crate::docgen::selection::Selection;
 use crate::models::{
@@ -23,16 +25,18 @@ use crate::models::{
 /// * `period_style` - Granularité des périodes par section.
 /// * `separator` - Séparateur de période de la référence.
 /// * `lang` - Langue du CV.
-/// * `document` - Données d'exemple de la référence, reprises quand le
-///   profil est vide sur une information d'identité, les compétences, les
-///   langues ou les centres d'intérêt (jamais pour les expériences, projets
-///   et formations).
+/// * `texts` - Textes en dur de la référence, dans la langue du CV.
+/// * `document` - Données d'exemple de la référence, reprises seulement
+///   quand le profil est vide sur une information d'identité. Compétences,
+///   langues, centres d'intérêt, expériences, projets et formations ne
+///   viennent que du profil : vide dans le profil, la section est vide.
 pub struct CvLayout<'a> {
     pub document: &'a CvData,
     pub labels: &'a CvLabels,
     pub period_style: &'a PeriodStyle,
     pub separator: &'a str,
     pub lang: &'a str,
+    pub texts: &'a BTreeMap<String, String>,
 }
 
 /// Assemble les données du CV.
@@ -106,24 +110,20 @@ pub fn build_cv_data(
         })
         .collect();
 
-    let langues = profile
-        .langues
-        .iter()
-        .filter(|l| !text(l.nom.as_ref()).is_empty())
-        .map(|l| CvLangue { nom: text(l.nom.as_ref()), level: text(l.level.as_ref()) })
-        .collect();
+    let langues = texts.langues.iter().map(|l| CvLangue { nom: l.nom.clone(), level: l.level.clone() }).collect();
 
     let document = layout.document;
     CvData {
         identity: build_identity(&profile.user, &content.title, &document.identity),
         lang: layout.lang.to_string(),
         summary: content.summary.clone(),
-        skills_groups: list_or_document(content.skills_groups.clone(), &document.skills_groups),
+        skills_groups: content.skills_groups.clone(),
         experiences,
         projects,
         formations,
-        langues: list_or_document(langues, &document.langues),
-        interets: list_or_document(lines(profile.user.interets.as_ref()), &document.interets),
+        langues,
+        interets: texts.interets.clone(),
         labels: layout.labels.clone(),
+        texts: layout.texts.clone(),
     }
 }

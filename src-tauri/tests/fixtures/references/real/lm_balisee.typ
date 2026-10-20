@@ -23,24 +23,15 @@
 
 // === Document ===
 
-// ============================================================
-// CONSIGNES POUR LA GÉNÉRATION (lues par le LLM, invisibles dans le PDF)
-// - Chaque zone de texte est précédée d'une balise :
-//     [FIXE]       : recopier mot pour mot, ne rien changer.
-//     [VARIABLE]   : remplacer par les informations tirées de l'offre.
-//     [ADAPTABLE]  : réorganiser à partir du profil selon l'offre, sans rien inventer.
+// [CONSIGNES]
 // - Toutes les valeurs « Exemple » (Exemple SA, Rue de l'Exemple…) sont fictives
 //   et doivent être remplacées.
 // - Les faits (expériences, chiffres, technologies, dates) viennent UNIQUEMENT
 //   du profil. Ne jamais inventer un fait, un chiffre ou une compétence.
-// - Garder la même longueur, le même nombre de paragraphes et la même structure.
-//   La lettre doit tenir sur une page.
-// - Le contact recruteur n'est jamais nommé dans la lettre ; la formule
-//   « Madame, Monsieur, » reste inchangée.
-// - Ne pas recopier ces commentaires dans la lettre générée.
-// ============================================================
+// - La lettre doit tenir sur une page.
+// - Le contact recruteur n'est jamais nommé dans la lettre.
 
-// --- Expéditeur (gauche) --- [FIXE]
+// --- Expéditeur (gauche) ---
 #block({
   set par(justify: false, leading: 0.35em)
   text(size: 14pt, weight: "bold", fill: dark, "Camille Exemple")
@@ -57,8 +48,6 @@
 #v(10pt)
 
 // --- Destinataire (droite, fenêtre d'enveloppe suisse) ---
-// [VARIABLE] Nom de l'entreprise et adresse tirés de l'offre. Si le service
-// ou l'adresse sont inconnus, garder seulement le nom de l'entreprise et la ville.
 #align(right, block(width: 7cm, {
   set align(left)
   set par(justify: false, leading: 0.35em)
@@ -73,7 +62,7 @@
 
 #v(24pt)
 
-// --- Lieu et date --- [VARIABLE] Date du jour de la génération, lieu inchangé.
+// --- Lieu et date ---
 Thyez, le 13 octobre 2026
 
 #v(8pt)
@@ -117,3 +106,6 @@ Avec mes meilleures salutations,
 #v(16pt)
 
 Camille Exemple
+
+#v(12pt)
+#text(size: 9pt, fill: gray)[P.J. : Curriculum vitae]

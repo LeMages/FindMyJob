@@ -23,6 +23,9 @@ use crate::models::{
     Recipient, SkillsGroup, UserView,
 };
 
+/// Aucun texte en dur de la référence.
+static NO_TEXTS: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+
 /// Template de CV de test.
 const CV_TEMPLATE: &str = include_str!("../../tests/fixtures/cv_template.typ");
 
@@ -50,6 +53,7 @@ fn user() -> UserView {
         github: None,
         portfolio: None,
         interets: Some("• Escalade\n\nPhotographie".to_string()),
+        langue_profil: "fr".to_string(),
         created_at: now,
     }
 }
@@ -106,7 +110,7 @@ fn profile() -> ProfileDto {
 /// Assemble le CV d'un profil, textes des entrées tirés du profil.
 fn cv_data(profile: &ProfileDto, selection: &Selection, document: &CvData) -> CvData {
     let (labels, style) = (cv_labels(), period_style());
-    let layout = CvLayout { document, labels: &labels, period_style: &style, separator: " – ", lang: "fr" };
+    let layout = CvLayout { document, labels: &labels, period_style: &style, separator: " – ", lang: "fr", texts: &NO_TEXTS };
     build_cv_data(profile, selection, &source_texts(profile, selection), &cv_content(), &layout)
 }
 
@@ -170,6 +174,7 @@ fn destinataire_depuis_la_candidature_sans_contact() {
         "status": "a_postuler", "source": null, "type_contrat": null, "remuneration": null, "url_offre": null,
         "description_offre": null, "notes": null, "date_candidature": null, "cv_path": null,
         "lettre_motivation_path": null, "cv_reference_version": null, "lm_reference_version": null,
+        "generation_warnings": [],
         "created_at": "2026-01-01T00:00:00Z"
     }))
     .expect("candidature de fixture");
@@ -232,7 +237,7 @@ fn lm_data_date_et_destinataire() {
 
 /// Mise en page de la lettre de test : sous-titre du CV, 9 octobre 2026.
 fn lm_layout<'a>(document: &'a LmData, labels: &'a LmLabels) -> LmLayout<'a> {
-    LmLayout { document, labels, title: "Ingénieure data", date: date(2026, 10, 9), lang: "fr" }
+    LmLayout { document, labels, title: "Ingénieure data", date: date(2026, 10, 9), lang: "fr", texts: &NO_TEXTS }
 }
 
 // ======================================================================
@@ -307,7 +312,7 @@ fn textes_traduits_injectes_sans_toucher_aux_noms() {
     texts.formations[0].lines = vec!["Data major".to_string(), "Exchange abroad".to_string()];
     let (labels, style) = (cv_labels(), period_style());
     let layout =
-        CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " – ", lang: "en" };
+        CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " – ", lang: "en", texts: &NO_TEXTS };
 
     let data = build_cv_data(&profile, &selection, &texts, &cv_content(), &layout);
 
@@ -421,15 +426,22 @@ fn lettre_sans_ville_ni_separateur_orphelin() {
 
 #[test]
 fn reference_d_une_version_precedente_a_reimporter() {
-    use crate::docgen::reference_template::check_current_schema;
+    use crate::documents::reference_template::load_texts;
     use crate::error::AppError;
 
-    let current_example = r#"{"lang": "fr", "guidance": {"general": "", "zones": []}}"#;
-    let old = "#let data = json(\"data.json\")\n#text(data.identity.adresse)";
-    assert!(matches!(check_current_schema(old, current_example, "CV"), Err(AppError::OutdatedReference(_))));
-    assert!(
-        matches!(check_current_schema(LM_TEMPLATE, r#"{"lang": "fr"}"#, "CV"), Err(AppError::OutdatedReference(_))),
-        "données d'exemple sans consignes : référence à réimporter"
-    );
-    assert!(check_current_schema(LM_TEMPLATE, current_example, "lettre de motivation").is_ok());
+    let dir = std::env::temp_dir().join(format!("findmyjob-reference-texts-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("dossier temporaire");
+    let missing = dir.join("absent.json");
+    assert!(matches!(load_texts(&missing, "CV"), Err(AppError::OutdatedReference(_))), "fichier absent : à réimporter");
+
+    let old = dir.join("ancien.json");
+    std::fs::write(&old, r#"{"format_version": 1, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
+        .expect("écriture");
+    assert!(matches!(load_texts(&old, "CV"), Err(AppError::OutdatedReference(_))), "autre format : à réimporter");
+
+    let current = dir.join("courant.json");
+    std::fs::write(&current, r#"{"format_version": 2, "lang": "fr", "texts": {"t1": "P.J."}, "guidance": {"general": "", "zones": []}}"#)
+        .expect("écriture");
+    assert_eq!(load_texts(&current, "CV").expect("format courant").texts["t1"], "P.J.");
+    std::fs::remove_dir_all(&dir).expect("nettoyage");
 }

@@ -90,7 +90,7 @@
     text(size: 10.5pt, fill: accent, data.identity.title)
   }
   v(2pt)
-  text(size: 9.5pt, weight: "bold", fill: dark, "Stage de fin d'études de 6 mois, disponible dès mars 2027")
+  text(size: 9.5pt, weight: "bold", fill: dark, data.texts.t1)
   let permis = if data.identity.permis { data.labels.permis } else { "" }
   let first = (joined((data.identity.ville, data.identity.zip_code), ", "), data.identity.email, data.identity.telephone, permis)
   if first.filter(v => v != "").len() > 0 {
@@ -153,7 +153,7 @@
   section-header(data.labels.section_langues)
   if data.langues.len() > 0 {
     block(below: space-line, data.langues.map(l => {
-      text(weight: "bold", fill: dark, if l.level != "" { l.nom + " : " } else { l.nom })
+      text(weight: "bold", fill: dark, l.nom + " : ")
       text(fill: dark, l.level)
     }).join(text(fill: light-gray, "  |  ")))
   }
@@ -166,4 +166,4 @@
 }
 
 #v(8pt)
-#text(size: 9pt, fill: gray, style: "italic", "Références disponibles sur demande")
+#text(size: 9pt, fill: gray, style: "italic", data.texts.t2)

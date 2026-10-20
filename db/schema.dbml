@@ -1,6 +1,6 @@
 // ============================================
 // FindMyJob - Schéma de base de données (SQLite)
-// Mis à jour le 2026-10-13 (migrations db/migrations/sqlite/0001_init.sql à 0005_ville_code_postal.sql).
+// Mis à jour le 2026-10-20 (migrations db/migrations/sqlite/0001_init.sql à 0007_langue_profil.sql).
 //
 // Base locale de l'application desktop : <dossier de données>/findmyjob.db.
 // Toutes les tables sont STRICT ; PRAGMA foreign_keys = ON à chaque connexion.
@@ -37,6 +37,7 @@ Table users {
   github text
   portfolio text
   interets text       // une ligne = un centre d'intérêt
+  langue_profil text [not null, default: 'fr', note: "CHECK IN ('fr', 'en') ; langue dans laquelle le profil est rédigé"]
   created_at timestamp [not null]
 }
 
@@ -161,6 +162,7 @@ Table candidatures {
   lettre_motivation_path text
   cv_reference_version_id integer [ref: > document_versions.id, note: "ON DELETE SET NULL"]
   lm_reference_version_id integer [ref: > document_versions.id, note: "ON DELETE SET NULL"]
+  generation_warnings text [not null, default: '[]', note: "liste JSON des avertissements de la génération (pages dépassées…)"]
   created_at timestamp [not null]
 
   indexes {

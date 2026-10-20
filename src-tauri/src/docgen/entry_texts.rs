@@ -1,8 +1,9 @@
-//! Textes des entrées du CV tirés du profil, tels qu'affichés : lignes de
-//! la description des expériences, projets et formations, et organisation
-//! d'un projet (`pour_qui`). Ce sont les seuls textes d'entrée qu'une
-//! traduction peut modifier ; intitulés, entreprises, écoles, lieux, stack
-//! et liens sont toujours lus tels quels dans le profil.
+//! Textes du profil tels qu'affichés par le CV : lignes de la description
+//! des expériences, projets et formations, organisation d'un projet
+//! (`pour_qui`), nom et niveau des langues, centres d'intérêt. Ce sont les
+//! seuls textes du profil qu'une traduction peut modifier ; intitulés,
+//! entreprises, écoles, lieux, stack et liens (noms officiels) sont
+//! toujours lus tels quels dans le profil.
 
 // Importation des crates externes
 use serde::{Deserialize, Serialize};
@@ -38,18 +39,36 @@ pub struct ProjectTexts {
     pub lines: Vec<String>,
 }
 
-/// Textes des entrées affichées par le CV.
+/// Textes d'une langue parlée.
+///
+/// # Attributes
+///
+/// * `id` - Identifiant de la langue dans le profil.
+/// * `nom` - Nom de la langue (« Anglais »).
+/// * `level` - Niveau (chaîne vide si absent).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct LanguageTexts {
+    pub id: i64,
+    pub nom: String,
+    pub level: String,
+}
+
+/// Textes du profil affichés par le CV.
 ///
 /// # Attributes
 ///
 /// * `experiences` - Toutes les expériences retenues.
 /// * `projects` - Les projets retenus.
 /// * `formations` - Toutes les formations du profil.
+/// * `langues` - Les langues parlées du profil (nom non vide).
+/// * `interets` - Les centres d'intérêt du profil, un par élément.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct CvEntryTexts {
     pub experiences: Vec<EntryLines>,
     pub projects: Vec<ProjectTexts>,
     pub formations: Vec<EntryLines>,
+    pub langues: Vec<LanguageTexts>,
+    pub interets: Vec<String>,
 }
 
 impl CvEntryTexts {
@@ -68,10 +87,12 @@ impl CvEntryTexts {
         self.projects.iter().find(|p| p.id == id)
     }
 
-    /// Indique si aucune entrée n'a de texte : rien à traduire.
+    /// Indique si aucun texte n'est présent : rien à traduire.
     pub fn is_blank(&self) -> bool {
         self.experiences.iter().chain(&self.formations).all(|e| e.lines.is_empty())
             && self.projects.iter().all(|p| p.lines.is_empty() && p.pour_qui.is_empty())
+            && self.langues.is_empty()
+            && self.interets.is_empty()
     }
 }
 
@@ -103,5 +124,12 @@ pub fn source_texts(profile: &ProfileDto, selection: &Selection) -> CvEntryTexts
             .iter()
             .map(|f| EntryLines { id: f.id, lines: lines(f.description.as_ref()) })
             .collect(),
+        langues: profile
+            .langues
+            .iter()
+            .filter(|l| !text(l.nom.as_ref()).is_empty())
+            .map(|l| LanguageTexts { id: l.id, nom: text(l.nom.as_ref()), level: text(l.level.as_ref()) })
+            .collect(),
+        interets: lines(profile.user.interets.as_ref()),
     }
 }

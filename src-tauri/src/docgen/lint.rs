@@ -30,15 +30,29 @@ const FORBIDDEN_MARKS: [(&str, &str); 4] = [
 ///
 /// * `field` - Chemin du champ concerné (ex. `paragraphs[2]`).
 /// * `message` - Description de la violation, formulée comme une consigne.
+/// * `advisory` - Vrai pour un écart signalé sans relance (texte un peu
+///   court) : il ne justifie pas un nouvel appel au LLM.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Violation {
     pub field: String,
     pub message: String,
+    pub advisory: bool,
 }
 
 impl Violation {
-    fn new(field: impl Into<String>, message: impl Into<String>) -> Self {
-        Self { field: field.into(), message: message.into() }
+    /// Violation qui justifie une relance.
+    ///
+    /// # Arguments
+    ///
+    /// * `field` - Chemin du champ concerné.
+    /// * `message` - Description, formulée comme une consigne.
+    pub fn new(field: impl Into<String>, message: impl Into<String>) -> Self {
+        Self { field: field.into(), message: message.into(), advisory: false }
+    }
+
+    /// Écart signalé sans relance.
+    fn advisory(field: impl Into<String>, message: impl Into<String>) -> Self {
+        Self { field: field.into(), message: message.into(), advisory: true }
     }
 }
 
@@ -85,11 +99,18 @@ pub fn lint_prose(fields: &[ProseField], example_prose: &str) -> Vec<Violation> 
     violations
 }
 
-/// Vérifie une plage de mots.
+/// Vérifie une plage de mots : trop long est une violation qui relance,
+/// trop court un écart signalé sans relance.
 fn check_words(field: &str, text: &str, range: &WordRange) -> Option<Violation> {
     let words = count_words(text);
-    (!range.contains(words)).then(|| {
-        Violation::new(field, format!("fait {words} mots, attendu entre {} et {} mots", range.min, range.max))
+    if words > range.max {
+        return Some(Violation::new(
+            field,
+            format!("fait {words} mots, au-delà du maximum de {} mots : raccourcis-le", range.max),
+        ));
+    }
+    (words < range.min).then(|| {
+        Violation::advisory(field, format!("fait {words} mots, sous les {} mots visés (toléré)", range.target))
     })
 }
 

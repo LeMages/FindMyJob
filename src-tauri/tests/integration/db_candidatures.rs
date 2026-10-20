@@ -80,14 +80,14 @@ async fn generations_interrompues_et_suppression() {
     let lm = seed::reference(&pool, sid, "lettre_motivation").await;
     let interrompue = seed::candidature(&pool, sid, seed::NOW).await;
     let terminee = seed::candidature(&pool, sid, seed::NOW).await;
-    candidatures::set_documents(&pool, terminee, ("a/cv.pdf", "a/lm.pdf"), (cv, lm)).await.unwrap();
+    candidatures::set_documents(&pool, terminee, ("a/cv.pdf", "a/lm.pdf"), (cv, lm), &[]).await.unwrap();
 
     assert_eq!(candidatures::list_interrupted_generations(&pool).await.unwrap(), [(interrompue, sid)]);
     assert_eq!(candidatures::delete(&pool, interrompue).await.unwrap(), Some(sid));
     assert_eq!(candidatures::delete(&pool, interrompue).await.unwrap(), None);
     assert!(status_history::list_for_candidature(&pool, interrompue).await.unwrap().is_empty());
     assert!(matches!(
-        candidatures::set_documents(&pool, interrompue, ("a", "b"), (cv, lm)).await,
+        candidatures::set_documents(&pool, interrompue, ("a", "b"), (cv, lm), &[]).await,
         Err(AppError::NotFound(_))
     ));
 }

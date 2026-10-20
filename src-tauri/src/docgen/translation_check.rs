@@ -1,11 +1,11 @@
-//! Validation d'une traduction des textes d'entrées du CV
+//! Validation d'une traduction des textes du profil affichés par le CV
 //! (`CvEntryTexts`) : mêmes entrées, même nombre de lignes, chaque texte
 //! traduit non vide et pas plus long qu'environ 110 % de l'original. Une
 //! traduction fidèle ne rallonge pas : un texte plus court est accepté.
 //! Fonctions pures, sans LLM.
 
 // Importation des modules internes
-use crate::docgen::entry_texts::{CvEntryTexts, EntryLines};
+use crate::docgen::entry_texts::{CvEntryTexts, EntryLines, LanguageTexts};
 
 /// Allongement toléré d'un texte traduit, en pourcentage de l'original.
 pub const LENGTH_TOLERANCE_PERCENT: usize = 10;
@@ -113,6 +113,32 @@ pub fn translation_problems(original: &CvEntryTexts, translated: &CvEntryTexts) 
         let path = format!("projects id {}", source.id);
         problems.extend(text_problem(&format!("{path}.pour_qui"), &source.pour_qui, &project.pour_qui));
         problems.extend(lines_problems(&path, &source.lines, &project.lines));
+    }
+    problems.extend(language_problems(&original.langues, &translated.langues));
+    if original.interets.len() == translated.interets.len() {
+        for (i, (o, t)) in original.interets.iter().zip(&translated.interets).enumerate() {
+            problems.extend(text_problem(&format!("interets[{i}]"), o, t));
+        }
+    } else {
+        problems.push(format!(
+            "interets contient {} éléments, attendu exactement {}.",
+            translated.interets.len(),
+            original.interets.len()
+        ));
+    }
+    problems
+}
+
+/// Vérifie les langues parlées traduites.
+fn language_problems(original: &[LanguageTexts], translated: &[LanguageTexts]) -> Vec<String> {
+    let ids = |langues: &[LanguageTexts]| langues.iter().map(|l| l.id).collect::<Vec<_>>();
+    let mut problems = ids_problems("langues", &ids(original), &ids(translated));
+    for source in original {
+        if let Some(langue) = translated.iter().find(|l| l.id == source.id) {
+            let path = format!("langues id {}", source.id);
+            problems.extend(text_problem(&format!("{path}.nom"), &source.nom, &langue.nom));
+            problems.extend(text_problem(&format!("{path}.level"), &source.level, &langue.level));
+        }
     }
     problems
 }

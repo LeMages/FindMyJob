@@ -41,7 +41,7 @@ pub struct CandidatureFields {
 /// Colonnes de `CandidatureDetail`, versions de référence résolues en numéro
 /// d'affichage par sous-requête.
 const DETAIL_COLUMNS: &str = "id, session_id, poste, entreprise, localisation, status, source, type_contrat, \
-     remuneration, url_offre, description_offre, notes, cv_path, lettre_motivation_path, created_at, \
+     remuneration, url_offre, description_offre, notes, cv_path, lettre_motivation_path, created_at, generation_warnings, \
      (SELECT version FROM document_versions WHERE id = cv_reference_version_id) AS cv_reference_version, \
      (SELECT version FROM document_versions WHERE id = lm_reference_version_id) AS lm_reference_version";
 
@@ -72,8 +72,15 @@ fn row_to_detail(row: &SqliteRow) -> Result<CandidatureDetail, sqlx::Error> {
         lettre_motivation_path: row.try_get("lettre_motivation_path")?,
         cv_reference_version: row.try_get("cv_reference_version")?,
         lm_reference_version: row.try_get("lm_reference_version")?,
+        generation_warnings: warnings_from_json(&row.try_get::<String, _>("generation_warnings")?),
         created_at: row.try_get("created_at")?,
     })
+}
+
+/// Lit la liste JSON des avertissements ; une valeur illisible (écrite à la
+/// main) est rendue telle quelle plutôt que perdue.
+fn warnings_from_json(raw: &str) -> Vec<String> {
+    serde_json::from_str(raw).unwrap_or_else(|_| vec![raw.to_string()])
 }
 
 /// Construit un `CandidatureView` à partir d'une ligne de liste.
@@ -263,6 +270,7 @@ pub async fn update(pool: &SqlitePool, id: i64, fields: &CandidatureFields) -> R
 /// * `paths` - Chemins (CV, lettre), relatifs au dossier de données.
 /// * `reference_versions` - Ids des versions de référence (CV, lettre) ayant
 ///   servi à la génération.
+/// * `warnings` - Avertissements de la génération, pour l'utilisateur.
 ///
 /// # Returns
 ///
@@ -272,15 +280,19 @@ pub async fn set_documents(
     id: i64,
     paths: (&str, &str),
     reference_versions: (i64, i64),
+    warnings: &[String],
 ) -> Result<(), AppError> {
+    let warnings = serde_json::to_string(warnings)
+        .map_err(|e| AppError::Validation(format!("Avertissements non sérialisables : {e}")))?;
     let result = sqlx::query(
         "UPDATE candidatures SET cv_path = $1, lettre_motivation_path = $2, \
-         cv_reference_version_id = $3, lm_reference_version_id = $4 WHERE id = $5",
+         cv_reference_version_id = $3, lm_reference_version_id = $4, generation_warnings = $5 WHERE id = $6",
     )
     .bind(paths.0)
     .bind(paths.1)
     .bind(reference_versions.0)
     .bind(reference_versions.1)
+    .bind(warnings)
     .bind(id)
     .execute(pool)
     .await

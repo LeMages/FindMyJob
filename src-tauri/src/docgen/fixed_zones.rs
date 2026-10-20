@@ -52,6 +52,7 @@ pub fn fixed_zone_violations(
             }
             let shown: Vec<String> = missing.iter().take(MAX_WORDS_REPORTED).map(|w| format!("\"{w}\"")).collect();
             violations.push(Violation {
+                advisory: false,
                 field: field.path.clone(),
                 message: format!(
                     "doit reprendre mot pour mot la zone [FIXE] « {zone} » (seules les informations du profil \

@@ -70,7 +70,7 @@ pub async fn test_connection(state: &AppState) -> Result<TestConnectionResult, A
     };
 
     let started = Instant::now();
-    let result = call_claude_with_tokens("Réponds uniquement par le mot OK.", "Test de connexion.", None, 10, &target).await;
+    let result = call_claude_with_tokens("test de connexion", "Réponds uniquement par le mot OK.", "Test de connexion.", None, 10, &target).await;
     let latency_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
 
     let (success, message) = match result {

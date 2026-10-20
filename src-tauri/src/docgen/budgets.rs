@@ -9,8 +9,10 @@
 //! Règles :
 //! - les nombres d'éléments (paragraphes, groupes de compétences) sont
 //!   repris tels quels, sans tolérance ;
-//! - les nombres de mots acceptent 10 % d'écart autour de la valeur de
-//!   l'exemple ;
+//! - les nombres de mots sont asymétriques : 10 % au-dessus de la valeur
+//!   de l'exemple au plus (limite stricte, qui relance la rédaction : le
+//!   document doit tenir dans ses pages), 30 % en dessous au plus (limite
+//!   souple, signalée sans relance : un texte un peu court ne casse rien) ;
 //! - le nombre de pages est celui du template rendu avec ses données
 //!   d'exemple (plafond, jamais dépassé) ;
 //! - les mots des zones `[FIXE]` d'un champ ne sont jamais réduits quand
@@ -24,18 +26,22 @@ use serde::Serialize;
 use crate::docgen::words::count_words;
 use crate::models::{CvData, LmData, ProseGuidance};
 
-/// Écart toléré sur un nombre de mots, en pourcentage de la valeur cible.
-/// Calculs en entiers : en flottant, 100 × 1,1 s'arrondit au-dessus à 111.
-pub const WORD_TOLERANCE_PERCENT: usize = 10;
+/// Dépassement toléré sur un nombre de mots, en pourcentage de la valeur
+/// cible (limite stricte). Calculs en entiers : en flottant, 100 × 1,1
+/// s'arrondit au-dessus à 111.
+pub const LONGER_TOLERANCE_PERCENT: usize = 10;
+/// Manque toléré sur un nombre de mots, en pourcentage de la valeur cible
+/// (limite souple, sans relance).
+pub const SHORTER_TOLERANCE_PERCENT: usize = 30;
 
-/// `n` diminué de la tolérance, arrondi à l'entier inférieur.
+/// `n` diminué de la tolérance basse, arrondi à l'entier inférieur.
 fn lower_bound(n: usize) -> usize {
-    n * (100 - WORD_TOLERANCE_PERCENT) / 100
+    n * (100 - SHORTER_TOLERANCE_PERCENT) / 100
 }
 
-/// `n` augmenté de la tolérance, arrondi à l'entier supérieur.
+/// `n` augmenté de la tolérance haute, arrondi à l'entier supérieur.
 fn upper_bound(n: usize) -> usize {
-    (n * (100 + WORD_TOLERANCE_PERCENT)).div_ceil(100)
+    (n * (100 + LONGER_TOLERANCE_PERCENT)).div_ceil(100)
 }
 
 /// Plage de mots autorisée pour un champ.
@@ -43,8 +49,8 @@ fn upper_bound(n: usize) -> usize {
 /// # Attributes
 ///
 /// * `target` - Nombre de mots visé (valeur de l'exemple).
-/// * `min` - Minimum accepté.
-/// * `max` - Maximum accepté.
+/// * `min` - Minimum souple : en dessous, le texte est signalé sans relance.
+/// * `max` - Maximum strict : au-dessus, la rédaction est relancée.
 /// * `fixed` - Mots recopiés de zones `[FIXE]`, jamais réduits.
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WordRange {
@@ -55,15 +61,9 @@ pub struct WordRange {
 }
 
 impl WordRange {
-    /// Plage centrée sur `target`, à ±10 %.
+    /// Plage autour de `target` : de 30 % en dessous à 10 % au-dessus.
     pub fn around(target: usize) -> Self {
         Self { target, min: lower_bound(target), max: upper_bound(target), fixed: 0 }
-    }
-
-    /// Plage entre deux bornes d'exemple : de 10 % sous `low` à 10 % au-dessus
-    /// de `high`, avec `target` comme valeur visée.
-    pub fn spanning(low: usize, target: usize, high: usize) -> Self {
-        Self { target, min: lower_bound(low), max: upper_bound(high), fixed: 0 }
     }
 
     /// Indique si un nombre de mots est dans la plage.

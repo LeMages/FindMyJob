@@ -3,6 +3,9 @@
 //! champ), destinataire, date formatée, contenu rédigé et libellés. Aucun
 //! appel LLM.
 
+// Importation des modules standard
+use std::collections::BTreeMap;
+
 // Importation des crates externes
 use chrono::NaiveDate;
 
@@ -22,12 +25,14 @@ use crate::models::{LmContent, LmData, LmLabels, ProfileDto, Recipient};
 ///   documents affichent le même.
 /// * `date` - Date de la lettre.
 /// * `lang` - Langue de la lettre.
+/// * `texts` - Textes en dur de la référence, dans la langue de la lettre.
 pub struct LmLayout<'a> {
     pub document: &'a LmData,
     pub labels: &'a LmLabels,
     pub title: &'a str,
     pub date: NaiveDate,
     pub lang: &'a str,
+    pub texts: &'a BTreeMap<String, String>,
 }
 
 /// Assemble les données de la lettre.
@@ -51,5 +56,6 @@ pub fn build_lm_data(profile: &ProfileDto, recipient: &Recipient, content: &LmCo
         subject: content.subject.clone(),
         paragraphs: content.paragraphs.clone(),
         labels: layout.labels.clone(),
+        texts: layout.texts.clone(),
     }
 }

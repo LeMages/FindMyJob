@@ -31,6 +31,7 @@ pub fn user() -> UserView {
         github: None,
         portfolio: None,
         interets: Some("• Escalade\n\nPhotographie\n- Échecs".to_string()),
+        langue_profil: "fr".to_string(),
         created_at: now,
     }
 }

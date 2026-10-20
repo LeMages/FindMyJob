@@ -101,7 +101,8 @@ pub fn lm_labels_schema() -> Value {
     ])
 }
 
-/// Schéma de `CvExampleData` (contenu d'un CV de référence + métadonnées).
+/// Schéma de `CvExampleData` (contenu d'un CV de référence et granularité
+/// des périodes) ; `texts` est rempli par Rust, hors schéma.
 pub fn cv_example_data_schema() -> Value {
     // Chaîne libre plutôt qu'`enum` (voir `lang_schema`) : `"month"` ou
     // `"year"`, vérifié à la désérialisation en `PeriodGranularity`.
@@ -147,7 +148,6 @@ pub fn cv_example_data_schema() -> Value {
         ("langues", list_of(object(&[("nom", string()), ("level", string())]))),
         ("interets", string_list()),
         ("labels", cv_labels_schema()),
-        ("detected_lang", lang_schema()),
         (
             "period_style",
             object(&[
@@ -159,7 +159,8 @@ pub fn cv_example_data_schema() -> Value {
     ])
 }
 
-/// Schéma de `LmExampleData` (contenu d'une lettre de référence + langue détectée).
+/// Schéma de `LmExampleData` (contenu d'une lettre de référence) ; `texts`
+/// est rempli par Rust, hors schéma.
 pub fn lm_example_data_schema() -> Value {
     object(&[
         ("identity", identity_schema()),
@@ -176,6 +177,5 @@ pub fn lm_example_data_schema() -> Value {
         ("subject", string()),
         ("paragraphs", string_list()),
         ("labels", lm_labels_schema()),
-        ("detected_lang", lang_schema()),
     ])
 }

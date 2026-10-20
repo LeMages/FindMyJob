@@ -4,16 +4,17 @@
 //! Un template Typst (`template.typ`, produit à l'upload d'une référence) lit
 //! depuis un fichier `data.json` qui suit l'un de ces schémas (`CvData` pour
 //! un CV, `LmData` pour une lettre) tout ce que le profil, l'offre ou la
-//! rédaction fournissent ; le reste de son texte est celui de la référence,
-//! écrit en dur et jamais retiré. Un champ
+//! rédaction fournissent, et dans `texts` les textes en dur de la référence
+//! (`models::reference_texts`), traduisibles ; rien de la référence n'est
+//! jamais retiré. Un champ
 //! optionnel absent vaut la chaîne vide (ou une liste vide), jamais `null` :
 //! le template teste `!= ""` pour faire disparaître la ligne correspondante.
 
+// Importation des modules standard
+use std::collections::BTreeMap;
+
 // Importation des crates externes
 use serde::{Deserialize, Serialize};
-
-// Importation des modules internes
-use crate::models::prose_guidance::ProseGuidance;
 
 // ============================================================================
 // Partie commune
@@ -133,7 +134,9 @@ pub struct CvLabels {
     pub months_short: Vec<String>,
 }
 
-/// Données complètes d'un CV, lues par son template.
+/// Données complètes d'un CV, lues par son template. `texts` contient les
+/// textes en dur de la référence, par identifiant ; absent des données
+/// produites par le LLM, il est rempli par Rust.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvData {
     pub identity: Identity,
@@ -146,6 +149,8 @@ pub struct CvData {
     pub langues: Vec<CvLangue>,
     pub interets: Vec<String>,
     pub labels: CvLabels,
+    #[serde(default)]
+    pub texts: BTreeMap<String, String>,
 }
 
 /// Granularité d'affichage d'une période (mois + année, ou année seule).
@@ -166,15 +171,14 @@ pub struct PeriodStyle {
 }
 
 /// Contenu d'un CV de référence rangé dans le schéma canonique
-/// (`example_data.json`), avec les métadonnées détectées à l'upload et les
-/// consignes de rédaction de la référence.
+/// (`example_data.json`), avec la granularité des périodes détectée à
+/// l'upload. Sa langue est `data.lang` ; ses textes en dur et consignes
+/// sont dans `reference_texts.json`.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvExampleData {
     #[serde(flatten)]
     pub data: CvData,
-    pub detected_lang: String,
     pub period_style: PeriodStyle,
-    pub guidance: ProseGuidance,
 }
 
 // ============================================================================
@@ -228,6 +232,7 @@ pub struct LmLabels {
 }
 
 /// Données complètes d'une lettre de motivation, lues par son template.
+/// `texts` : voir `CvData`.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct LmData {
     pub identity: Identity,
@@ -237,15 +242,15 @@ pub struct LmData {
     pub subject: String,
     pub paragraphs: Vec<String>,
     pub labels: LmLabels,
+    #[serde(default)]
+    pub texts: BTreeMap<String, String>,
 }
 
 /// Contenu d'une lettre de référence rangé dans le schéma canonique
-/// (`example_data.json`), avec la langue détectée à l'upload et les
-/// consignes de rédaction de la référence.
+/// (`example_data.json`). Sa langue est `data.lang` ; ses textes en dur et
+/// consignes sont dans `reference_texts.json`.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct LmExampleData {
     #[serde(flatten)]
     pub data: LmData,
-    pub detected_lang: String,
-    pub guidance: ProseGuidance,
 }

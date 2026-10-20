@@ -53,6 +53,8 @@ export interface UserView {
   portfolio: string | null
   /** Centres d'intérêt, une ligne = un item. */
   interets: string | null
+  /** Langue dans laquelle le profil est rédigé (`fr` ou `en`). */
+  langue_profil: string
   created_at: string
 }
 // ── Suivi de candidatures (kanban) ───────────────────────────────────────────
@@ -332,6 +334,8 @@ export interface CandidatureDetail {
   cv_reference_version: number | null
   /** Numéro de la version de la lettre de référence utilisée pour la génération. */
   lm_reference_version: number | null
+  /** Avertissements de la génération (document qui dépasse son nombre de pages…). */
+  generation_warnings: string[]
   created_at: string
 }
 

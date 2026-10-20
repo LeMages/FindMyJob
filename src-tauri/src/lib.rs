@@ -72,6 +72,7 @@ pub fn run() {
             commands::restore_document_version,
             commands::open_url,
             commands::update_user_info,
+            commands::update_profile_language,
             commands::add_projet,
             commands::delete_projet,
             commands::update_projet,

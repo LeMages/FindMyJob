@@ -1,9 +1,12 @@
 //! Mise en forme des faits du profil retenus par la sélection, pour les
-//! prompts de rédaction (CV et lettre). Les descriptions sont données
-//! brutes : elles servent de matière au résumé et à la lettre, le CV les
-//! affiche telles quelles (sans les faire réécrire).
+//! prompts de rédaction (CV et lettre). Les descriptions sont données dans
+//! la langue du document (`CvEntryTexts`, traduits fidèlement si besoin) :
+//! elles servent de matière au résumé et à la lettre, le CV les affiche
+//! telles quelles. Les noms officiels (poste, entreprise, école, titre de
+//! projet) restent ceux du profil.
 
 // Importation des modules internes
+use crate::docgen::entry_texts::CvEntryTexts;
 use crate::docgen::selection::Selection;
 use crate::models::{ExperienceView, MatchingResult, ProfileDto, ProjetView};
 
@@ -18,8 +21,17 @@ fn dates(start: Option<chrono::NaiveDate>, end: Option<chrono::NaiveDate>) -> St
     format!("du {} au {}", fmt(start, "?"), fmt(end, "aujourd'hui"))
 }
 
+/// Lignes d'une description, jointes, ou « non renseigné ».
+fn joined(lines: &[String]) -> String {
+    if lines.is_empty() {
+        "non renseigné".to_string()
+    } else {
+        lines.join(" ")
+    }
+}
+
 /// Fiche d'une expérience retenue.
-fn experience_facts(e: &ExperienceView) -> String {
+fn experience_facts(e: &ExperienceView, texts: &CvEntryTexts) -> String {
     format!(
         "Expérience id {} : {} chez {} ({}), {}, contrat {}\n  Description (source des faits) : {}\n",
         e.id,
@@ -28,19 +40,23 @@ fn experience_facts(e: &ExperienceView) -> String {
         or_unknown(e.lieu.as_deref()),
         dates(e.date_debut, e.date_fin),
         or_unknown(e.type_contrat.as_deref()),
-        or_unknown(e.description.as_deref()),
+        joined(&texts.experience_lines(e.id)),
     )
 }
 
 /// Fiche d'un projet retenu.
-fn project_facts(p: &ProjetView) -> String {
+fn project_facts(p: &ProjetView, texts: &CvEntryTexts) -> String {
+    let (pour_qui, lines) = match texts.project(p.id) {
+        Some(t) => (t.pour_qui.clone(), joined(&t.lines)),
+        None => (or_unknown(p.pour_qui.as_deref()).to_string(), "non renseigné".to_string()),
+    };
     format!(
         "Projet id {} : {} (pour {}), {}\n  Description (source des faits) : {}\n  Technologies : {}\n",
         p.id,
         p.titre,
-        or_unknown(p.pour_qui.as_deref()),
+        or_unknown(Some(&pour_qui)),
         dates(p.date_debut, p.date_fin),
-        or_unknown(p.description.as_deref()),
+        lines,
         or_unknown(p.stack.as_deref()),
     )
 }
@@ -53,11 +69,17 @@ fn project_facts(p: &ProjetView) -> String {
 /// * `profile` - Profil complet du candidat.
 /// * `selection` - Entrées retenues.
 /// * `matching` - Résultat du matching (compétences qui répondent à l'offre, manques).
+/// * `texts` - Descriptions des entrées, dans la langue du document.
 ///
 /// # Returns
 ///
 /// Bloc de texte à insérer dans le prompt.
-pub fn profile_facts_block(profile: &ProfileDto, selection: &Selection, matching: &MatchingResult) -> String {
+pub fn profile_facts_block(
+    profile: &ProfileDto,
+    selection: &Selection,
+    matching: &MatchingResult,
+    texts: &CvEntryTexts,
+) -> String {
     let formations = profile
         .formations
         .iter()
@@ -67,13 +89,13 @@ pub fn profile_facts_block(profile: &ProfileDto, selection: &Selection, matching
                 f.titre,
                 or_unknown(f.ecole.as_deref()),
                 dates(f.date_debut, f.date_fin),
-                or_unknown(f.description.as_deref())
+                joined(&texts.formation_lines(f.id))
             )
         })
         .collect::<Vec<_>>()
         .join("\n");
-    let experiences = selection.experiences.iter().map(experience_facts).collect::<Vec<_>>().join("\n");
-    let projects = selection.projects.iter().map(project_facts).collect::<Vec<_>>().join("\n");
+    let experiences = selection.experiences.iter().map(|e| experience_facts(e, texts)).collect::<Vec<_>>().join("\n");
+    let projects = selection.projects.iter().map(|p| project_facts(p, texts)).collect::<Vec<_>>().join("\n");
     let skills = profile
         .skills
         .iter()
