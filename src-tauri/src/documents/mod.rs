@@ -4,6 +4,7 @@
 
 pub mod doc_type;
 pub mod fonts;
+pub mod markup;
 pub mod paragraph_check;
 pub mod reference_versions;
 pub mod sparse_check;

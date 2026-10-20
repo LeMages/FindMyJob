@@ -7,10 +7,8 @@
 //! fichier `data.json` au schéma canonique (`models::doc_data`) tout ce que
 //! le profil, l'offre ou la rédaction fournissent, et garde le reste du
 //! texte écrit en dur. Les commentaires de consignes de la référence
-//! (`[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) sont rangés dans
-//! `example_data.guidance` pour la rédaction. Le LLM les rend dans une
-//! chaîne JSON à part (`guidance`), pas dans le schéma de `example_data` :
-//! la grammaire compilée du schéma CV est déjà proche du plafond de l'API. La génération d'une
+//! (`[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) sont lus par Rust
+//! (`documents::markup`), jamais par le LLM. La génération d'une
 //! candidature ne fait plus appel à un LLM pour produire du Typst. La
 //! validation (compilation, nombre de pages, texte) vit chez l'appelant,
 //! qui renvoie ses erreurs ici en feedback via `TemplatizeFeedback`.
@@ -32,9 +30,7 @@ const TEMPLATIZE_MAX_TOKENS: u32 = 16384;
 ///
 /// * `template_typ` - Source Typst du template (lit `data.json`).
 /// * `example_data` - Contenu de la référence au schéma canonique, avec
-///   `detected_lang`, `guidance` (et `period_style` pour un CV). `guidance`
-///   est la chaîne JSON rendue par le LLM, parsée ; si elle n'est pas un
-///   JSON valide, la chaîne brute est gardée et la validation le signale.
+///   `detected_lang` (et `period_style` pour un CV).
 pub struct TemplatizeOutput {
     pub template_typ: String,
     pub example_data: serde_json::Value,
@@ -82,18 +78,6 @@ const ADDRESS_RULE: &str = "Lieu de l'expéditeur :
 - Si l'original affiche le lieu à plusieurs endroits sous des formes différentes (par exemple ville et code postal dans l'en-tête, ville seule dans la ligne de date d'une lettre), chaque endroit compose sa propre forme à partir des mêmes champs.
 - example_data reprend la ville et le code postal exactement tels qu'affichés dans l'original (chaîne vide si absent).";
 
-/// Règle d'extraction des consignes de rédaction, commune aux deux types
-/// de documents.
-const GUIDANCE_RULES: &str = "Consignes de rédaction (guidance) :
-- guidance est une chaîne qui contient un objet JSON de la forme {\"general\": \"...\", \"zones\": [{\"field\": \"...\", \"mode\": \"...\", \"instruction\": \"...\", \"text\": \"...\"}]}. Elle vaut {\"general\": \"\", \"zones\": []} si l'original n'a aucune consigne.
-- L'original peut contenir des commentaires de consignes : une balise [FIXE], [VARIABLE] ou [ADAPTABLE] placée avant un texte, avec ou sans consigne, et éventuellement un bloc de consignes générales. Ces commentaires restent recopiés dans le template (règle 1) et sont aussi rangés dans guidance.
-- guidance.general : le texte des consignes générales, sans les marques de commentaire, lignes jointes par un saut de ligne ; chaîne vide s'il n'y en a pas.
-- guidance.zones : pour chaque champ de prose dont le texte est précédé d'au moins une balise, son découpage en zones, dans l'ordre du document. `field` est le nom du champ de prose. `mode` vaut \"fixe\", \"variable\" ou \"adaptable\" selon la balise qui précède le texte. `instruction` est la consigne écrite avec la balise, sans la balise ni les marques de commentaire (chaîne vide s'il n'y en a pas). `text` est le texte exact de la zone, tel qu'il figure dans la valeur du champ dans example_data.
-- Les zones découpent l'intérieur d'un champ de prose (pour la lettre, d'une entrée paragraphs[i]) : elles ne créent jamais de champ ni d'entrée de liste.
-- Les zones d'un même champ, jointes par une espace, redonnent exactement la valeur du champ dans example_data : un champ découpé l'est entièrement. Un texte d'un champ découpé qui n'est précédé d'aucune balise appartient à la zone qui le précède.
-- Une balise placée avant un élément qui n'est pas un champ de prose (coordonnées, destinataire, formule d'appel ou de politesse) ne crée pas de zone.
-- Un champ de prose sans balise n'a pas de zone. guidance.zones est une liste vide si l'original n'a aucune balise.";
-
 /// Consignes propres au CV : sens des champs du schéma et rendu attendu.
 const CV_FIELDS: &str = "Champs du CV :
 - identity : coordonnées du candidat. Le template n'affiche que les coordonnées présentes dans l'original, dans le même ordre. `labels.permis` s'affiche à la place du permis, seulement si `identity.permis` est vrai.
@@ -107,8 +91,7 @@ const CV_FIELDS: &str = "Champs du CV :
 - period : la période telle qu'affichée. `period_style` indique pour chaque section si les périodes affichent le mois (\"month\") ou seulement l'année (\"year\") ; mets \"month\" pour une section absente.
 - labels.section_* : titres des sections, tels qu'écrits dans le code source de l'original.
 - labels.months_short : les 12 abréviations de mois, de janvier à décembre, dans la langue et le style de l'original (si l'original écrit \"Nov.\", écris \"Janv.\", \"Févr.\", etc.).
-- labels.present : le mot qui termine une période en cours dans la langue de l'original (par exemple \"aujourd'hui\"), même s'il n'apparaît pas.
-- Champs de prose pour guidance : `identity.title` et `summary`.";
+- labels.present : le mot qui termine une période en cours dans la langue de l'original (par exemple \"aujourd'hui\"), même s'il n'apparaît pas.";
 
 /// Consignes propres à la lettre : sens des champs du schéma et rendu attendu.
 const LM_FIELDS: &str = "Champs de la lettre :
@@ -117,9 +100,8 @@ const LM_FIELDS: &str = "Champs de la lettre :
 - date : la date affichée, déjà formatée. La ligne de date compose `identity.ville` suivi de \", \" (les deux omis si la ville est vide), `labels.date_prefix` s'il n'est pas vide, puis `data.date`. Elle n'affiche jamais le code postal. Si l'original calcule la date au lieu de l'écrire, mets une chaîne vide dans example_data.
 - subject : le texte de l'objet, sans son préfixe. `labels.subject_prefix` contient le préfixe (par exemple \"Objet :\").
 - labels.salutation : la formule d'appel. labels.closing : la formule de politesse finale, en entier.
-- paragraphs : les paragraphes du corps, entre la formule d'appel et la formule de politesse finale. Une entrée de paragraphs = un paragraphe de l'original, c'est-à-dire ce qui est séparé du texte voisin par une ligne vide, #v, parbreak(), \\ ou un saut de bloc. Des lignes séparées seulement par un commentaire forment un seul paragraphe. Une entrée n'est jamais une zone balisée : si un paragraphe contient plusieurs zones ([FIXE], [VARIABLE], [ADAPTABLE]), elles restent dans une seule entrée et leur découpage va dans guidance.zones.
-- Rendu de paragraphs : une boucle où chaque entrée devient un paragraphe distinct qui commence sur une nouvelle ligne, séparé du précédent par le même séparateur et le même espacement vertical que dans l'original (par exemple `#for p in data.paragraphs { p; parbreak() }` si l'original sépare ses paragraphes par une ligne vide). Interdits pour paragraphs : `[#p]` ou `{ p }` ou `text(p)` sans séparateur entre deux entrées, `.join()` et `.join(\" \")` : ils collent les paragraphes ou les fondent en un seul bloc.
-- Champs de prose pour guidance : `subject` et `paragraphs[i]` (i à partir de 0).";
+- paragraphs : les paragraphes du corps, entre la formule d'appel et la formule de politesse finale. Une entrée de paragraphs = un paragraphe de l'original, c'est-à-dire ce qui est séparé du texte voisin par une ligne vide, #v, parbreak(), \\ ou un saut de bloc. Des lignes séparées seulement par un commentaire forment un seul paragraphe. Une entrée n'est jamais une zone balisée : si un paragraphe contient plusieurs commentaires de balise ([FIXE], [VARIABLE], [ADAPTABLE]), ses lignes restent dans une seule entrée.
+- Rendu de paragraphs : une boucle où chaque entrée devient un paragraphe distinct qui commence sur une nouvelle ligne, séparé du précédent par le même séparateur et le même espacement vertical que dans l'original (par exemple `#for p in data.paragraphs { p; parbreak() }` si l'original sépare ses paragraphes par une ligne vide). Interdits pour paragraphs : `[#p]` ou `{ p }` ou `text(p)` sans séparateur entre deux entrées, `.join()` et `.join(\" \")` : ils collent les paragraphes ou les fondent en un seul bloc.";
 
 /// Libellé lisible du type de document, pour les prompts.
 fn doc_type_label(doc_type: &str) -> &'static str {
@@ -173,9 +155,6 @@ fn output_schema(data_schema: serde_json::Value) -> serde_json::Value {
     object(&[
         ("template_typ", serde_json::json!({ "type": "string" })),
         ("example_data", data_schema),
-        // Chaîne JSON plutôt qu'objet : avec un objet, la grammaire compilée
-        // du schéma CV dépasse le plafond de l'API.
-        ("guidance", serde_json::json!({ "type": "string" })),
     ])
 }
 
@@ -215,7 +194,7 @@ pub async fn templatize_reference(
          identique à l'original : même texte, mot pour mot, même mise en page, même nombre de pages.\n\n\
          example_data : le contenu de l'original rangé dans le schéma JSON imposé. \
          Le template lit exactement ces champs, avec `data` à la racine.\n\n\
-         {TEMPLATE_RULES}\n\n{EXAMPLE_DATA_RULES}\n\n{fields}\n\n{ADDRESS_RULE}\n\n{GUIDANCE_RULES}"
+         {TEMPLATE_RULES}\n\n{EXAMPLE_DATA_RULES}\n\n{fields}\n\n{ADDRESS_RULE}"
     );
     let user_message = build_user_message(reference_typ, feedback);
     let schema = output_schema(data_schema);
@@ -234,24 +213,11 @@ fn parse_output(raw: &str) -> Result<TemplatizeOutput, AppError> {
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .ok_or_else(|| AppError::Llm("Réponse de templatisation sans champ template_typ.".to_string()))?;
-    let mut example_data = parsed
+    let example_data = parsed
         .get_mut("example_data")
         .map(serde_json::Value::take)
         .ok_or_else(|| AppError::Llm("Réponse de templatisation sans champ example_data.".to_string()))?;
-    let guidance = parsed.get("guidance").and_then(|v| v.as_str()).unwrap_or_default();
-    if let Some(map) = example_data.as_object_mut() {
-        map.insert("guidance".to_string(), parse_guidance(guidance));
-    }
     Ok(TemplatizeOutput { template_typ, example_data })
-}
-
-/// Parse la chaîne `guidance` du LLM. Vide : aucune consigne. JSON
-/// invalide : la chaîne brute est gardée, la validation la signale.
-fn parse_guidance(raw: &str) -> serde_json::Value {
-    if raw.trim().is_empty() {
-        return serde_json::json!({ "general": "", "zones": [] });
-    }
-    serde_json::from_str(raw.trim()).unwrap_or_else(|_| serde_json::Value::String(raw.to_string()))
 }
 
 #[cfg(test)]
@@ -259,27 +225,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn guidance_chaine_json_rangee_dans_example_data() {
-        let raw = r#"{"template_typ": "x", "example_data": {"lang": "fr"},
-            "guidance": "{\"general\": \"g\", \"zones\": [{\"field\": \"subject\", \"mode\": \"fixe\", \"instruction\": \"\", \"text\": \"t\"}]}"}"#;
-        let output = parse_output(raw).expect("sortie valide");
-        assert_eq!(output.example_data["guidance"]["general"], "g");
-        assert_eq!(output.example_data["guidance"]["zones"][0]["mode"], "fixe");
+    fn sortie_sans_consignes() {
+        let output = parse_output(r#"{"template_typ": "x", "example_data": {"lang": "fr"}}"#).expect("sortie valide");
+        assert_eq!(output.template_typ, "x");
+        assert!(output.example_data.get("guidance").is_none());
     }
 
     #[test]
-    fn guidance_vide_ou_invalide() {
-        let empty = parse_output(r#"{"template_typ": "x", "example_data": {}, "guidance": ""}"#).expect("sortie");
-        assert_eq!(empty.example_data["guidance"], serde_json::json!({ "general": "", "zones": [] }));
-        let invalid = parse_output(r#"{"template_typ": "x", "example_data": {}, "guidance": "{pas du json"}"#).expect("sortie");
-        assert_eq!(invalid.example_data["guidance"], "{pas du json", "chaîne brute gardée pour la validation");
-    }
-
-    #[test]
-    fn guidance_hors_du_schema_de_example_data() {
-        // La grammaire compilée du schéma CV est proche du plafond de l'API :
-        // guidance reste une simple chaîne au niveau de la sortie.
+    fn consignes_hors_des_schemas() {
+        // Les consignes sont lues par Rust dans les commentaires : le LLM ne
+        // les produit plus.
         for schema in [cv_example_data_schema(), lm_example_data_schema()] {
+            assert!(schema["properties"].get("guidance").is_none());
+        }
+        for doc_type in ["cv", "lettre_motivation"] {
+            let schema = templatize_output_schema(doc_type).expect("type connu");
             assert!(schema["properties"].get("guidance").is_none());
         }
     }

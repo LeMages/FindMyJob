@@ -17,8 +17,9 @@
 //!   ne garde en dur aucune valeur qui a un champ (nom, ville, entreprise,
 //!   résumé…) : elle ne serait jamais remplacée par celle du profil.
 //!
-//! Les consignes extraites de la référence (`guidance`) doivent redonner
-//! exactement la prose des données d'exemple.
+//! Les consignes (`guidance`) sont lues par Rust dans le balisage de la
+//! référence (`documents::markup`) : chaque zone doit se retrouver dans un
+//! champ de prose des données d'exemple.
 
 // Importation des modules standard
 use std::path::Path;
@@ -26,6 +27,7 @@ use std::sync::Arc;
 
 // Importation des modules internes
 use crate::documents::paragraph_check::paragraph_problems;
+use crate::documents::markup::{attach_zones, describe_markup_errors, parse_markup, ReferenceMarkup};
 use crate::documents::templatize_debug::TemplatizeDebug;
 use crate::documents::sparse_check::{cleared_data, sparse_problems, SPARSE_FIELDS};
 use crate::documents::typst::{compile_template, CompiledDocument};
@@ -40,7 +42,7 @@ use crate::docgen::text_diff::{diff_words, normalize_quotes};
 use crate::error::AppError;
 use crate::llm::{templatize_reference, TemplatizeFeedback, TemplatizeOutput};
 use crate::llm::{CallRecorder, ClaudeTarget};
-use crate::models::{CvData, CvExampleData, LmData, LmExampleData, ProseField, TemplateArtifacts};
+use crate::models::{CvData, CvExampleData, LmData, LmExampleData, ProseField, ProseGuidance, TemplateArtifacts};
 use crate::trace_log;
 
 /// Nombre total d'appels LLM autorisés : un essai + 2 retries avec feedback.
@@ -118,17 +120,31 @@ pub async fn templatize(
     let mut feedback: Option<TemplatizeFeedback> = None;
     let mut previous_problems: Vec<Vec<String>> = Vec::new();
     let computes_date = reference_typ.contains("datetime.today");
+    // Le balisage est lu avant tout appel au LLM : une erreur de balisage
+    // est à corriger par l'utilisateur, inutile de payer une templatisation.
+    let markup = parse_markup(reference_typ).map_err(|errors| AppError::Validation(describe_markup_errors(&errors)))?;
     let debug = debug_dir.map(|dir| TemplatizeDebug::start(dir, reference_typ));
     let recorder = Arc::new(CallRecorder::default());
     let target = &target.with_recorder(Arc::clone(&recorder));
 
     for attempt in 1..=MAX_ATTEMPTS {
-        let output = templatize_reference(reference_typ, doc_type, feedback.as_ref(), target).await?;
+        let mut output = templatize_reference(reference_typ, doc_type, feedback.as_ref(), target).await?;
+        let markup_problems = insert_guidance(&mut output.example_data, doc_type, &markup);
         let example_data_json = serde_json::to_string_pretty(&output.example_data)
             .map_err(|e| AppError::Llm(format!("Données d'exemple non sérialisables : {e}")))?;
 
         let context = ValidationContext { reference, computes_date, doc_type, root, fonts_dir };
-        let validation = validate(&output, &example_data_json, &context).await?;
+        let validation = match validate(&output, &example_data_json, &context).await? {
+            // Une zone non rattachée bloque, même si le rendu est conforme.
+            Validation::Rejected { mut problems, .. } if !markup_problems.is_empty() => {
+                problems.extend(markup_problems);
+                Validation::Rejected { problems, tolerable: None }
+            }
+            Validation::Accepted { .. } if !markup_problems.is_empty() => {
+                Validation::Rejected { problems: markup_problems, tolerable: None }
+            }
+            validation => validation,
+        };
         let calls = recorder.drain();
         let files = [("template.typ", output.template_typ.as_str()), ("example_data.json", example_data_json.as_str())];
         let problems = match validation {
@@ -263,6 +279,54 @@ async fn validate(
     })
 }
 
+/// Range dans les données d'exemple les consignes lues dans le balisage de
+/// la référence, rattachées à leurs champs de prose.
+///
+/// # Arguments
+///
+/// * `example_data` - Données d'exemple produites par le LLM (modifiées).
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+/// * `markup` - Balisage lu dans la référence.
+///
+/// # Returns
+///
+/// Les zones qui ne se rattachent à aucun champ de prose, formulées comme
+/// des problèmes (vide si tout est rattaché).
+fn insert_guidance(example_data: &mut serde_json::Value, doc_type: &str, markup: &ReferenceMarkup) -> Vec<String> {
+    let fields = example_prose_fields(example_data, doc_type);
+    let (guidance, problems) = match attach_zones(&markup.general, &markup.zones, &fields) {
+        Ok(guidance) => (guidance, Vec::new()),
+        Err(errors) => (
+            ProseGuidance { general: markup.general.clone(), zones: Vec::new() },
+            errors.iter().map(|e| format!("Balisage de la référence, {e}")).collect(),
+        ),
+    };
+    if let (Some(map), Ok(value)) = (example_data.as_object_mut(), serde_json::to_value(&guidance)) {
+        map.insert("guidance".to_string(), value);
+    }
+    problems
+}
+
+/// Champs de prose lus dans des données d'exemple encore non typées.
+fn example_prose_fields(example_data: &serde_json::Value, doc_type: &str) -> Vec<ProseField> {
+    let text = |pointer: &str| example_data.pointer(pointer).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    match doc_type {
+        "cv" => vec![
+            ProseField { path: "identity.title".to_string(), text: text("/identity/title") },
+            ProseField { path: "summary".to_string(), text: text("/summary") },
+        ],
+        _ => {
+            let mut fields = vec![ProseField { path: "subject".to_string(), text: text("/subject") }];
+            let paragraphs = example_data.get("paragraphs").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            fields.extend(paragraphs.iter().enumerate().map(|(i, p)| ProseField {
+                path: format!("paragraphs[{i}]"),
+                text: p.as_str().unwrap_or_default().to_string(),
+            }));
+            fields
+        }
+    }
+}
+
 /// Ajoute `OSCILLATION_HINT` aux problèmes d'une tentative s'ils sont
 /// exactement ceux d'une tentative précédente, puis les mémorise.
 ///
@@ -368,9 +432,6 @@ struct CheckedExample {
 ///
 /// `CheckedExample`, ou un problème à renvoyer en feedback.
 fn check_example(example_data: &serde_json::Value, doc_type: &str) -> Result<CheckedExample, String> {
-    if let Some(raw) = example_data.get("guidance").and_then(|g| g.as_str()) {
-        return Err(format!("guidance n'est pas un objet JSON valide : {raw}"));
-    }
     let to_json = |value: Result<String, serde_json::Error>| value.map_err(|e| format!("Données vides non sérialisables : {e}"));
     match doc_type {
         "cv" => {

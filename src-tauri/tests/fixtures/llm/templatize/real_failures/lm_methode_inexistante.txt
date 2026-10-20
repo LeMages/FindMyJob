@@ -1,0 +1,8 @@
+Le template ne compile pas avec example_data : Erreur de compilation Typst :
+ligne 76 : type string has no method `filter` (« let locParts = (data.identity.ville).filter(v => v != "") »).
+Le template ne compile pas quand tous les champs sont vides (chaînes vides, listes vides) : Erreur de compilation Typst :
+ligne 76 : type string has no method `filter` (« let locParts = (data.identity.ville).filter(v => v != "") »).
+Le template ne compile pas quand chaque champ contient une valeur et chaque liste un seul élément : Erreur de compilation Typst :
+ligne 76 : type string has no method `filter` (« let locParts = (data.identity.ville).filter(v => v != "") »).
+Le template ne compile pas quand les champs secondaires sont vides (title, email, telephone, ville, zip_code, linkedin, github, portfolio, entreprise, lieu, pour_qui, stack, url, ecole, level, location) : Erreur de compilation Typst :
+ligne 76 : type string has no method `filter` (« let locParts = (data.identity.ville).filter(v => v != "") »).

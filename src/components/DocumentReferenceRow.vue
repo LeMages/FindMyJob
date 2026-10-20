@@ -16,6 +16,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { extractErrorMessage } from '@/composables/useErrorMessage'
 import { formatDateTime } from '@/composables/date_time_format'
 import DocumentVersionsPopup from '@/components/DocumentVersionsPopup.vue'
+import ReferenceMarkupHelp from '@/components/ReferenceMarkupHelp.vue'
 import type { DocumentReferenceView, DocumentVersionView } from '@/types/index'
 
 interface Props {
@@ -301,7 +302,8 @@ defineExpose({ hasChanges, reset })
       </svg>
       <span>Sauvegarde…</span>
     </div>
-    <div v-if="error" class="mt-[10px] text-[12px] text-red-600">{{ error }}</div>
+    <div v-if="error" class="mt-[10px] text-[12px] text-red-600 whitespace-pre-line">{{ error }}</div>
+    <ReferenceMarkupHelp v-if="editMode" />
   </div>
 
   <DocumentVersionsPopup

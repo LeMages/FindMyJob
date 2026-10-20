@@ -41,4 +41,5 @@ mod services_api_key;
 mod services_files;
 mod sessions_lifecycle;
 mod startup_run_mode;
+mod templatize_markup;
 mod text_conversion;
