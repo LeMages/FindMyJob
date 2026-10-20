@@ -37,7 +37,7 @@ pub struct ScrapedContact {
 /// (`output_config.format`). `type_contrat` est restreint aux valeurs du
 /// `<select>` du formulaire (`stage`/`alternance`/`interim`/`cdd`/`cdi`) —
 /// pas `freelance`, absent de ce `<select>` bien qu'autorisé en base.
-fn scraped_offer_schema() -> serde_json::Value {
+pub fn scraped_offer_schema() -> serde_json::Value {
     serde_json::json!({
         "type": "object",
         "properties": {
@@ -115,7 +115,7 @@ pub async fn extract_offer_fields(
     target: &ClaudeTarget,
 ) -> Result<ScrapedOfferFields, AppError> {
     let user_message = build_user_message(text, hints);
-    let raw_response = call_claude(SYSTEM_PROMPT, &user_message, Some(scraped_offer_schema()), target).await?;
+    let raw_response = call_claude("extraction d'offre", SYSTEM_PROMPT, &user_message, Some(scraped_offer_schema()), target).await?;
 
     // Le structured output garantit normalement un JSON conforme au schéma ;
     // ce parsing reste un filet de sécurité plutôt qu'une validation de forme.

@@ -2,12 +2,12 @@
 //! (`findmyjob_lib::docgen::sentinel_data`).
 
 // Importation des modules internes
-use findmyjob_lib::docgen::sentinel_data::{hardcoded_values, sentinel_cv_data, sentinel_lm_data};
+use findmyjob_lib::docgen::sentinel_data::{hardcoded_runs, hardcoded_values, sentinel_cv_data, sentinel_lm_data};
 use findmyjob_lib::models::{CvData, LmData};
 
 #[test]
 fn chaque_champ_du_cv_porte_un_marqueur_unique() {
-    let value = sentinel_cv_data("fr").expect("données sentinelles");
+    let value = sentinel_cv_data("fr", &["t1".to_string()]).expect("données sentinelles");
     let data: CvData = serde_json::from_value(value.clone()).expect("schéma du CV");
     assert_eq!(data.lang, "fr", "la langue n'est pas marquée");
     assert!(data.identity.permis);
@@ -15,6 +15,7 @@ fn chaque_champ_du_cv_porte_un_marqueur_unique() {
     assert_eq!(data.experiences.len(), 1);
     assert_eq!(data.experiences[0].bullets.len(), 1);
     assert_eq!(data.labels.months_short.len(), 12);
+    assert!(data.texts["t1"].starts_with("__F"), "les textes de la référence sont marqués");
 
     let text = value.to_string();
     let markers: Vec<&str> = text.split('"').filter(|s| s.starts_with("__F")).collect();
@@ -24,7 +25,7 @@ fn chaque_champ_du_cv_porte_un_marqueur_unique() {
 
 #[test]
 fn la_lettre_a_un_paragraphe_marque() {
-    let data: LmData = serde_json::from_value(sentinel_lm_data("en").expect("données")).expect("schéma");
+    let data: LmData = serde_json::from_value(sentinel_lm_data("en", &[]).expect("données")).expect("schéma");
     assert_eq!(data.lang, "en");
     assert_eq!(data.paragraphs.len(), 1);
     assert!(data.identity.ville.starts_with("__F"));
@@ -49,4 +50,11 @@ fn une_valeur_de_plusieurs_mots_doit_apparaitre_a_la_suite() {
     let values = vec!["Efrei Paris".to_string()];
     assert!(hardcoded_values("Efrei __F1__ Paris", &values).is_empty());
     assert_eq!(hardcoded_values("École : Efrei Paris.", &values), values);
+}
+
+#[test]
+fn texte_reste_en_dur_entre_les_marqueurs() {
+    let rendered = "__F1__ __F2__ | __F3__ Références disponibles sur demande __f4__ • : __F5__";
+    assert_eq!(hardcoded_runs(rendered), ["Références disponibles sur demande"]);
+    assert!(hardcoded_runs("__F1__ | __F2__ : __F3__").is_empty(), "séparateurs seuls : rien en dur");
 }

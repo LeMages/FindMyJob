@@ -6,44 +6,32 @@
 
 // Importation des modules internes
 use crate::llm::writing_loop::WritingFeedback;
+use crate::models::doc_lang::language_name;
 use crate::models::ProseGuidance;
 
-/// Consignes de style et d'honnêteté communes aux deux documents.
-pub const COMMON_RULES: &str = "Consignes de rédaction.
-Imite la voix du modèle de style : même registre, même personne grammaticale, même temps, même longueur de phrases, même façon d'ouvrir les bullets.
-Suis sa structure : même nombre d'éléments, chaque élément jouant le même rôle que celui de même rang dans le modèle.
-Ne reprends du modèle ni ses faits, ni ses chiffres, ni ses phrases entières. Il ne sert qu'au style.
-Tous les faits viennent du profil. Un chiffre n'apparaît que s'il figure dans le profil.
-Un bullet énonce un fait. Il ne commente jamais son adéquation au poste, par exemple avec « directement transférable à » ou « ce qui correspond à ».
-Les mots-clés de l'offre ne sont repris que là où ils décrivent un fait réel du profil.
-Respecte les budgets comme des limites dures.
-N'utilise ni tiret cadratin, ni tiret demi-cadratin, ni gras Markdown, ni backticks, sauf dans un texte que tu dois recopier.";
+/// Consignes communes aux deux documents, avec leur ordre de priorité. Une
+/// seule hiérarchie, écrite une fois : aucune autre consigne ne la contredit.
+pub const COMMON_RULES: &str = "Ordre de priorité des consignes, de la plus forte à la plus faible :
+1. la langue du document ;
+2. les zones [FIXE] de la référence ;
+3. le maximum de mots de chaque champ (budgets) ;
+4. les autres zones et consignes de la référence ;
+5. le style du modèle.
+Quand deux consignes s'opposent, la plus forte l'emporte.
+
+Style. Imite la voix du modèle de style : même registre, même personne grammaticale, même temps, même longueur de phrases, même façon d'ouvrir les éléments. Garde le rôle et l'ordre des éléments du modèle, sauf quand une zone [ADAPTABLE] demande de choisir ou d'ordonner autrement.
+Contenu. Hors des zones [FIXE], n'emprunte au modèle ni ses faits ni ses chiffres : il ne sert qu'au style. Tous les faits viennent du profil ; un chiffre n'apparaît que s'il figure dans le profil. Un élément énonce un fait, il ne commente jamais son adéquation au poste (par exemple « directement transférable à » ou « ce qui correspond à »). Les mots-clés de l'offre ne sont repris que là où ils décrivent un fait réel du profil.
+Forme. N'utilise ni tiret cadratin, ni tiret demi-cadratin, ni gras Markdown, ni backticks, sauf dans un texte à recopier.";
 
 /// Règles des zones balisées de la référence.
 const ZONE_RULES: &str = "Règles des zones.
-[FIXE] : recopie le texte de la zone mot pour mot. Seules les informations qui diffèrent du profil (ville, école, entreprise, intitulé, chiffre) y sont remplacées par celles du profil.
+[FIXE] : reprends le texte de la zone mot pour mot, dans la langue du document. Seules les informations qui diffèrent du profil (ville, école, entreprise, intitulé, chiffre) y sont remplacées par celles du profil.
 [VARIABLE] : remplace le texte de la zone par les informations tirées de l'offre, en suivant sa consigne.
 [ADAPTABLE] : rédige la zone à partir du profil selon l'offre, en suivant sa consigne, sans rien inventer.
-Les zones d'un champ s'enchaînent dans le même ordre, sans rien ajouter entre elles. Un champ sans zone est rédigé à partir du profil, comme une zone [ADAPTABLE].";
+Les zones d'un champ s'enchaînent dans le même ordre, sans rien ajouter entre elles. Un champ sans zone est rédigé à partir du profil et de l'offre.";
 
-/// Nom lisible d'une langue de document, pour les prompts.
-///
-/// # Arguments
-///
-/// * `lang` - Code de langue (`"fr"` ou `"en"`).
-///
-/// # Returns
-///
-/// « anglais » ou « français ».
-pub fn language_name(lang: &str) -> &'static str {
-    match lang {
-        "en" => "anglais",
-        _ => "français",
-    }
-}
-
-/// Consigne de langue : langue cible, et transposition de la voix si le
-/// modèle de style est dans une autre langue.
+/// Consigne de langue, placée en tête du prompt système : langue cible, et
+/// transposition de la voix si le modèle de style est dans une autre langue.
 ///
 /// # Arguments
 ///
@@ -56,13 +44,27 @@ pub fn language_name(lang: &str) -> &'static str {
 pub fn language_rule(target_lang: &str, example_lang: &str) -> String {
     let target = language_name(target_lang);
     if target_lang == example_lang {
-        format!("Rédige en {target}.")
+        format!("Langue du document : {target}. Tout ce que tu écris est en {target}.")
     } else {
         format!(
-            "Rédige en {target}. Le modèle de style est en {} : transpose sa voix en {target} (registre, personne, temps, longueur des phrases) au lieu de le traduire.",
+            "Langue du document : {target}. Tout ce que tu écris est en {target}, y compris les zones [FIXE], données ici dans leur traduction fidèle. Le modèle de style est en {} : transpose sa voix en {target} (registre, personne, temps, longueur des phrases) au lieu de le traduire.",
             language_name(example_lang)
         )
     }
+}
+
+/// Rappel de langue, placé en fin de prompt et en tête du feedback des
+/// relances.
+///
+/// # Arguments
+///
+/// * `target_lang` - Langue du document à rédiger.
+///
+/// # Returns
+///
+/// Rappel à insérer.
+pub fn language_reminder(target_lang: &str) -> String {
+    format!("Rappel : le document entier est rédigé en {}.", language_name(target_lang))
 }
 
 /// Encadre la prose de la référence comme modèle de style.
@@ -81,9 +83,8 @@ pub fn style_model_block(body: &str) -> String {
 }
 
 /// Bloc des consignes de la référence : consignes générales, puis zones
-/// balisées de chaque champ de prose, avec les règles des zones. Elles
-/// priment sur les consignes de style, y compris sur l'interdiction de
-/// reprendre les phrases du modèle.
+/// balisées de chaque champ de prose, avec les règles des zones. Leur rang
+/// est celui de `COMMON_RULES` (zones [FIXE] en 2, le reste en 4).
 ///
 /// # Arguments
 ///
@@ -98,8 +99,7 @@ pub fn guidance_block(guidance: &ProseGuidance) -> Option<String> {
         return None;
     }
     let mut lines = vec![
-        "CONSIGNES DE LA RÉFÉRENCE. Elles priment sur les consignes de rédaction et sur le modèle de style :          une zone [FIXE] est recopiée même si le modèle de style demande de ne pas reprendre ses phrases."
-            .to_string(),
+        "CONSIGNES DE LA RÉFÉRENCE (priorités 2 et 4 de l'ordre des consignes).".to_string(),
     ];
     if !guidance.general.trim().is_empty() {
         lines.push(format!("Consignes générales :

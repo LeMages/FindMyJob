@@ -1,14 +1,15 @@
-//! Pipeline de génération de documents.
+//! Logique pure de la génération de documents (sans LLM, sans base, sans
+//! fichier, sans Typst) : construction des données (`cv_data`, `lm_data`)
+//! depuis le profil et l'offre, budgets de longueur, sélection des entrées
+//! du profil, textes des entrées et validation de leur traduction,
+//! traduction des textes de la référence (découpage et validation),
+//! linter de la prose et zones [FIXE], données sentinelles, formatage des
+//! périodes et des dates, comparaison de textes rendus.
 //!
-//! Assemblage déterministe des documents générés : chargement des
-//! références templatisées, construction des données (`cv_data`,
-//! `lm_data`) depuis le profil et l'offre, libellés, compilation ajustée au
-//! nombre de pages, et trace de la génération.
-//!
-//! Logique pure (sans LLM, sans base, sans Typst) : budgets de longueur,
-//! sélection des entrées du profil, textes des entrées et validation de
-//! leur traduction, linter de la prose, formatage des périodes et des
-//! dates, comparaison de textes rendus.
+//! Ce qui lit la base, écrit des fichiers, appelle le LLM ou compile du
+//! Typst (références, caches de traduction, ajustement aux pages, trace)
+//! vit dans `documents`. `docgen` ne dépend pas de `llm` : la dépendance va
+//! dans un seul sens (`llm` → `docgen`).
 
 pub mod budgets;
 pub mod build_cv_data;
@@ -19,18 +20,14 @@ pub mod entry_texts;
 pub mod example_facts;
 pub mod fixed_zones;
 pub mod forbidden_phrases;
-pub mod guidance_consistency;
 pub mod identity;
-pub mod labels_cache;
 pub mod lint;
-pub mod page_fit;
 pub mod period_format;
 pub mod recipient;
-pub mod reference_template;
+pub mod reference_texts_translation;
 pub mod selection;
 pub mod sentinel_data;
 pub mod text_diff;
-pub mod trace;
 pub mod translation_check;
 pub mod words;
 

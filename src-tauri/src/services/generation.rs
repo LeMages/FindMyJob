@@ -19,6 +19,7 @@ use crate::db;
 use crate::documents;
 use crate::pipeline::{self, GeneratedDocuments, GenerationRequest, GENERATION_STEPS_TOTAL};
 use crate::error::AppError;
+use crate::services::user_errors;
 use crate::trace_log;
 
 /// Libellé publié avant la première étape du pipeline.
@@ -42,7 +43,8 @@ pub fn start(state: &AppState, candidature_id: i64, session_id: i64, description
         match run(&state, candidature_id, session_id, &description_offre).await {
             Ok(()) => state.progress.mark_completed(candidature_id),
             Err(e) => {
-                state.progress.mark_failed(candidature_id, &e.to_string());
+                let error = user_errors::readable(e, "La génération des documents");
+                state.progress.mark_failed(candidature_id, &error.to_string());
                 discard_candidature(&state.pool, &state.data_dir, candidature_id).await;
             }
         }
@@ -79,7 +81,7 @@ async fn run(state: &AppState, candidature_id: i64, session_id: i64, description
     save_trace(&state.data_dir, session_id, candidature_id, &generated);
     let paths = save_documents(&state.data_dir, session_id, candidature_id, &generated)?;
     let versions = (generated.cv.reference_version_id, generated.lm.reference_version_id);
-    db::candidatures::set_documents(&state.pool, candidature_id, (&paths.0, &paths.1), versions).await
+    db::candidatures::set_documents(&state.pool, candidature_id, (&paths.0, &paths.1), versions, &generated.warnings).await
 }
 
 /// Écrit la trace de la génération. Elle sert au diagnostic : son échec est

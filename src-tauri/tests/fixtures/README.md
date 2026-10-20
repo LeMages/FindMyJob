@@ -19,14 +19,14 @@ La référence déposée par les tests (`test_state::reference_source`) est le t
 
 `cv_template.typ` à la racine de `fixtures/` est un autre template, utilisé par les tests unitaires de `src/docgen/tests.rs`.
 
-### `references/real/` : références réelles anonymisées
+### `references/real/` : références réelles anonymisées et balisées
 
 | Fichier | Source | Réduction |
 |---|---|---|
-| `cv_suisse.typ` | CV de référence réel d'un utilisateur (2026-10-13) | **Anonymisé** : nom, e-mail, téléphone, LinkedIn, GitHub et site remplacés par des valeurs fictives de même forme (`Camille Exemple`, `camille@exemple.invalid`, `+33 6 00 00 00 00`…). Mise en page, commentaires, parcours, ville et code postal inchangés |
-| `lm_exemple.typ` | Lettre de référence réelle du même utilisateur, avec ses commentaires de consignes (`[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) | Même anonymisation |
+| `cv_balise.typ` | CV de référence réel d'un utilisateur (2026-10-13) | **Anonymisé** : nom, e-mail, téléphone, LinkedIn, GitHub et site remplacés par des valeurs fictives de même forme (`Camille Exemple`, `camille@exemple.invalid`, `+33 6 00 00 00 00`…). Mise en page, parcours, ville et code postal inchangés. Balisé au format de `docs/reference-markup.md` : `[CONSIGNES]`, `[VARIABLE]` sur le titre, `[FIXE]` puis `[ADAPTABLE]` dans le résumé |
+| `lm_balisee.typ` | Lettre de référence réelle du même utilisateur | Même anonymisation. Balisée au même format (consignes générales, zones dans l'objet et les paragraphes) ; lieu et date sur une ligne, nom en plusieurs morceaux, texte hors schéma ajouté (« P.J. : Curriculum vitae ») |
 
-`cv_suisse_template.typ`, `lm_exemple_template.typ` et leurs `*_example_data.json` sont une templatisation correcte écrite à la main : rien n'est retiré de la référence (la ligne de disponibilité et « Références disponibles sur demande » restent en dur dans le template du CV), les lignes service et rue du destinataire sont dans `recipient.extra_lines`, et les consignes de la lettre sont dans `guidance`. Les tests de `src/documents/templatize_tests.rs` les passent dans `validate` (rendus exemple, vide, clairsemé, sentinelle, comparaison avec la référence) : si l'un d'eux est refusé, la validation est devenue trop stricte. La police `Arimo` des références n'est pas embarquée : sans elle, Typst prend une police de repli, la référence passe à 2 pages et le template doit rester en dessous.
+`*_example_data.json` sont les données d'exemple correctes (sortie de l'étape A, sans `texts`), `*_template.typ` le template correct (étape B), écrits à la main : les textes en dur sont lus dans `data.texts` (`t1`, `t2`…). `lm_balisee_expected_zones.json` est le découpage attendu des zones de la lettre. Les tests de `templatize_validation.rs` les passent dans `check_example` et `check_template` : si l'un d'eux est refusé, la validation est devenue trop stricte. La police `Arimo` des références n'est pas embarquée : sans elle, Typst prend une police de repli, la référence passe à 2 pages et le template doit rester en dessous.
 
 ## `llm/` : réponses figées du modèle
 
@@ -46,4 +46,11 @@ Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l
 | `cv_labels.json`, `lm_labels.json` | Traduction des libellés | Utilisées seulement si la langue de l'offre diffère de celle de la référence |
 | `scraped_offer.json` | Extraction d'offre (étape LLM) | Balises HTML, emojis, contrat en majuscules et `mailto:`, que `finalize_fields` doit nettoyer |
 
-Les réponses de templatisation sont construites à partir de `references/`.
+Les réponses de templatisation par défaut sont construites à partir de `references/` : données d'exemple (étape A) et template entouré d'un bloc ```typst``` (étape B). `Reply::Files` renvoie des fichiers de `fixtures/` tels quels pour rejouer d'autres sorties :
+
+| Fichier | Particularité |
+|---|---|
+| `llm/templatize/real_failures/*.typ` | Templates refusés **réels**, repris de `dev-data/…/templatize_debug` (anonymisés comme les références) ; le `.txt` voisin garde les problèmes relevés à l'époque. `cv_hash_en_mode_code` : `#` en mode code ; `cv_code_rendu_en_texte` : code écrit en markup ; `lm_valeur_ajoutee` : « 74300, » ajouté à la ligne de date ; `lm_methode_inexistante` : `.filter` sur une chaîne |
+| `llm/templatize/lm_diese_en_mode_code.typ`, `lm_correction_ciblee.txt` | Un `#` en trop puis sa correction sous forme de remplacement ciblé |
+| `llm/templatize/cv_separateur_orphelin.typ` | Template dont le seul défaut est un séparateur orphelin (non bloquant) |
+| `llm/templatize/lm_exemple_ville_inventee.json` | Données d'exemple avec une ville absente de l'original |

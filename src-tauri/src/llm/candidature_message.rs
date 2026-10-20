@@ -116,7 +116,7 @@ pub async fn generate_application_email(
 
     let user_message = build_user_message(profile, candidature, contact)?;
 
-    let raw_response = call_claude(&system_prompt, &user_message, None, target).await?;
+    let raw_response = call_claude("message de candidature", &system_prompt, &user_message, None, target).await?;
     Ok(raw_response.trim().to_string())
 }
 
@@ -156,6 +156,6 @@ pub async fn generate_application_message(
 
     let user_message = build_user_message(profile, candidature, contact)?;
 
-    let raw_response = call_claude(&system_prompt, &user_message, None, target).await?;
+    let raw_response = call_claude("message de candidature", &system_prompt, &user_message, None, target).await?;
     Ok(raw_response.trim().to_string())
 }

@@ -30,10 +30,5 @@
     "salutation": "Madame, Monsieur,",
     "closing": "Je vous prie d'agréer, Madame, Monsieur, mes salutations distinguées.",
     "date_prefix": "le"
-  },
-  "detected_lang": "fr",
-  "guidance": {
-    "general": "",
-    "zones": []
   }
 }

@@ -70,10 +70,15 @@
 
 // === Document ===
 
+// [CONSIGNES]
+// - Le CV tient sur une page.
+// - Le titre et le résumé reprennent le vocabulaire de l'offre, sans rien inventer.
+
 // --- Header ---
 #align(center, {
   text(size: 18pt, weight: "bold", fill: dark, "CAMILLE EXEMPLE")
   v(2pt)
+  // [VARIABLE] Intitulé proche du poste visé, dans le vocabulaire de l'offre.
   text(size: 10.5pt, fill: accent, "Étudiant Ingénieur Data Engineering & Machine Learning")
   v(2pt)
   text(size: 9.5pt, weight: "bold", fill: dark, "Stage de fin d'études de 6 mois, disponible dès mars 2027")
@@ -101,7 +106,10 @@
 #section-header("Profil")
 #block({
   set par(leading: 0.45em, justify: false)
-  text(size: 9.5pt, fill: gray)[Étudiant ingénieur en dernière année à l'Efrei Paris (niveau Master), spécialisé en Data Engineering et Machine Learning. 6 mois d'expérience en entreprise sur le forecasting de séries temporelles à grande échelle et des systèmes RAG en production, de la donnée brute jusqu'à l'API.]
+  // [FIXE] Formation et spécialité.
+  text(size: 9.5pt, fill: gray)[Étudiant ingénieur en dernière année à l'Efrei Paris (niveau Master), spécialisé en Data Engineering et Machine Learning.
+  // [ADAPTABLE] Expérience la plus pertinente pour l'offre, chiffres du profil.
+  6 mois d'expérience en entreprise sur le forecasting de séries temporelles à grande échelle et des systèmes RAG en production, de la donnée brute jusqu'à l'API.]
 })
 
 // --- Compétences Techniques ---

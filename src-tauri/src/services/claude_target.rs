@@ -42,6 +42,6 @@ impl ClaudeTargetSource<'_> {
         let api_key = tokio::task::spawn_blocking(move || access.resolve())
             .await
             .map_err(|e| AppError::Config(format!("Lecture de la clé API interrompue : {e}")))??;
-        Ok(ClaudeTarget { api_key, model, caller: Arc::clone(self.llm) })
+        Ok(ClaudeTarget { api_key, model, caller: Arc::clone(self.llm), recorder: None })
     }
 }

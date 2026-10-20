@@ -12,6 +12,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
+// Importation des modules internes
+use crate::clock;
+
 /// Fichier de log, fixé une seule fois au démarrage.
 static LOG_FILE: OnceLock<PathBuf> = OnceLock::new();
 
@@ -44,7 +47,7 @@ pub fn log(message: &str) {
     let Some(path) = LOG_FILE.get() else {
         return;
     };
-    let line = format!("{} {message}\n", chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ"));
+    let line = format!("{} {message}\n", clock::now_utc());
     // Un verrou empoisonné ne protège qu'un `()` : l'écriture peut continuer.
     let _guard = WRITE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let written = OpenOptions::new()

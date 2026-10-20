@@ -16,7 +16,7 @@ use crate::models::doc_data::SkillsGroup;
 /// * `title` - Titre affiché sous le nom.
 /// * `summary` - Résumé (section profil).
 /// * `skills_groups` - Compétences du profil regroupées par catégorie.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvContent {
     pub title: String,
     pub summary: String,
@@ -30,7 +30,7 @@ pub struct CvContent {
 /// * `subject` - Objet de la lettre, sans son préfixe.
 /// * `paragraphs` - Paragraphes du corps, entre la formule d'appel et la
 ///   formule de politesse finale.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct LmContent {
     pub subject: String,
     pub paragraphs: Vec<String>,

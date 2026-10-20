@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use crate::docgen::budgets::LmBudget;
 use crate::docgen::example_facts::lm_information_values;
 use crate::docgen::lint::lint_lm_budget;
+use crate::docgen::entry_texts::CvEntryTexts;
 use crate::docgen::selection::Selection;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
@@ -19,7 +20,9 @@ use crate::llm::doc_data_schema::object;
 use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::prose_checks::ProseChecks;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
-use crate::llm::writing_rules::{guidance_block, language_rule, style_model_block, with_feedback, COMMON_RULES};
+use crate::llm::writing_rules::{
+    guidance_block, language_reminder, language_rule, style_model_block, with_feedback, COMMON_RULES,
+};
 use crate::models::{LmContent, LmData, MatchingResult, ProfileDto, ProseGuidance};
 use crate::llm::target::ClaudeTarget;
 
@@ -35,6 +38,7 @@ Les paragraphes ne contiennent ni la formule d'appel ni la formule de politesse 
 /// * `matching` - Résultat du matching.
 /// * `selection` - Entrées du profil retenues.
 /// * `profile` - Profil complet du candidat.
+/// * `entry_texts` - Descriptions des entrées, dans la langue du document.
 /// * `example` - Contenu de la référence (modèle de style).
 /// * `guidance` - Consignes de la référence (`subject`, `paragraphs[i]`).
 /// * `budget` - Budget de longueur.
@@ -46,6 +50,7 @@ pub struct LmWritingInput<'a> {
     pub matching: &'a MatchingResult,
     pub selection: &'a Selection,
     pub profile: &'a ProfileDto,
+    pub entry_texts: &'a CvEntryTexts,
     pub example: &'a LmData,
     pub guidance: &'a ProseGuidance,
     pub budget: LmBudget,
@@ -55,7 +60,7 @@ pub struct LmWritingInput<'a> {
 }
 
 /// Schéma de sortie de la rédaction de la lettre.
-fn lm_content_schema() -> Value {
+pub fn lm_content_schema() -> Value {
     let text = json!({ "type": "string", "minLength": 1 });
     object(&[
         ("subject", text.clone()),
@@ -78,12 +83,12 @@ pub fn example_prose(example: &LmData) -> String {
 /// Bloc des budgets de la lettre, paragraphe par paragraphe.
 fn budget_block(budget: &LmBudget) -> String {
     let mut lines = vec![
-        "BUDGETS (limites dures)".to_string(),
-        format!("subject : entre {} et {} mots.", budget.subject_words.min, budget.subject_words.max),
+        "BUDGETS".to_string(),
+        format!("subject : environ {} mots, au plus {} mots.", budget.subject_words.target, budget.subject_words.max),
         format!("paragraphs : exactement {} paragraphes.", budget.paragraph_count()),
     ];
     for (i, range) in budget.paragraph_words.iter().enumerate() {
-        lines.push(format!("Paragraphe {} : entre {} et {} mots.", i + 1, range.min, range.max));
+        lines.push(format!("Paragraphe {} : environ {} mots, au plus {} mots.", i + 1, range.target, range.max));
     }
     lines.join("\n")
 }
@@ -91,12 +96,15 @@ fn budget_block(budget: &LmBudget) -> String {
 /// Prompt système de la rédaction de la lettre.
 fn system_prompt(input: &LmWritingInput<'_>) -> String {
     format!(
-        "Tu rédiges l'objet et les paragraphes du corps d'une lettre de motivation adaptée à une offre.\n\n\
-         {COMMON_RULES}\n{LM_RULES}\n{}\n\n\
+        "{}\n\n\
+         Tu rédiges l'objet et les paragraphes du corps d'une lettre de motivation adaptée à une offre.\n\n\
+         {COMMON_RULES}\n{LM_RULES}\n\n\
          Description des champs.\n\
          subject : l'objet de la lettre, sans son préfixe (« Objet : » est ajouté à part).\n\
-         paragraphs : les paragraphes du corps, dans l'ordre. Chacun joue le même rôle que le paragraphe de même rang du modèle.",
-        language_rule(input.target_lang, input.example_lang)
+         paragraphs : les paragraphes du corps, dans l'ordre. Chacun joue le même rôle que le paragraphe de même rang du modèle.\n\n\
+         {}",
+        language_rule(input.target_lang, input.example_lang),
+        language_reminder(input.target_lang)
     )
 }
 
@@ -106,7 +114,7 @@ fn user_message(input: &LmWritingInput<'_>) -> String {
     let mut blocks = vec![
         format!("ENTREPRISE DESTINATAIRE : {company}"),
         format!("ANALYSE DE L'OFFRE :\n{}", input.offer_analysis),
-        profile_facts_block(input.profile, input.selection, input.matching),
+        profile_facts_block(input.profile, input.selection, input.matching, input.entry_texts),
         style_model_block(&example_prose(input.example)),
     ];
     blocks.extend(guidance_block(input.guidance));
@@ -130,7 +138,7 @@ async fn call_once(
     target: &ClaudeTarget,
 ) -> Result<LmContent, AppError> {
     let message = with_feedback(user_message(input), feedback.as_ref());
-    let raw = call_claude(&system_prompt(input), &message, Some(lm_content_schema()), target).await?;
+    let raw = call_claude("rédaction:lettre", &system_prompt(input), &message, Some(lm_content_schema()), target).await?;
     serde_json::from_str(raw.trim()).map_err(|e| {
         AppError::Llm(format!("La rédaction de la lettre n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}"))
     })
@@ -155,6 +163,7 @@ pub async fn write_lm(input: &LmWritingInput<'_>, target: &ClaudeTarget) -> Resu
     };
     write_with_retries(
         "lettre",
+        &language_reminder(input.target_lang),
         |feedback| call_once(input, feedback, target),
         |content| review(content, &input.budget, &checks),
         |content| content.map_prose(|path, text| checks.clean(path, text)),

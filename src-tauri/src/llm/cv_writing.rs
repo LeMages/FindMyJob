@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use crate::docgen::budgets::CvBudget;
 use crate::docgen::example_facts::cv_information_values;
 use crate::docgen::lint::{lint_cv_budget, Violation};
+use crate::docgen::entry_texts::CvEntryTexts;
 use crate::docgen::selection::Selection;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
@@ -19,7 +20,9 @@ use crate::llm::doc_data_schema::object;
 use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::prose_checks::ProseChecks;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
-use crate::llm::writing_rules::{guidance_block, language_rule, style_model_block, with_feedback, COMMON_RULES};
+use crate::llm::writing_rules::{
+    guidance_block, language_reminder, language_rule, style_model_block, with_feedback, COMMON_RULES,
+};
 use crate::models::{CvContent, CvData, MatchingResult, ProfileDto, ProseGuidance};
 use crate::llm::target::ClaudeTarget;
 
@@ -31,6 +34,7 @@ use crate::llm::target::ClaudeTarget;
 /// * `matching` - Résultat du matching.
 /// * `selection` - Entrées du profil retenues.
 /// * `profile` - Profil complet du candidat.
+/// * `entry_texts` - Descriptions des entrées, dans la langue du document.
 /// * `example` - Contenu de la référence (modèle de style).
 /// * `guidance` - Consignes de la référence (champs aux chemins de
 ///   `CvData` : `identity.title`, `summary`).
@@ -42,6 +46,7 @@ pub struct CvWritingInput<'a> {
     pub matching: &'a MatchingResult,
     pub selection: &'a Selection,
     pub profile: &'a ProfileDto,
+    pub entry_texts: &'a CvEntryTexts,
     pub example: &'a CvData,
     pub guidance: &'a ProseGuidance,
     pub budget: CvBudget,
@@ -60,7 +65,7 @@ fn list(items: Value) -> Value {
 }
 
 /// Schéma de sortie de la rédaction du CV.
-fn cv_content_schema() -> Value {
+pub fn cv_content_schema() -> Value {
     object(&[
         ("title", text()),
         ("summary", text()),
@@ -91,8 +96,8 @@ pub fn example_prose(example: &CvData) -> String {
 fn budget_block(input: &CvWritingInput<'_>) -> String {
     let b = &input.budget;
     let mut lines = vec![
-        "BUDGETS (limites dures)".to_string(),
-        format!("summary : entre {} et {} mots.", b.summary_words.min, b.summary_words.max),
+        "BUDGETS".to_string(),
+        format!("summary : environ {} mots, au plus {} mots.", b.summary_words.target, b.summary_words.max),
     ];
     lines.push(format!(
         "skills_groups : exactement {} groupes. Chaque compétence est recopiée telle qu'elle est écrite dans la liste des compétences du profil, sans en ajouter.",
@@ -104,14 +109,16 @@ fn budget_block(input: &CvWritingInput<'_>) -> String {
 /// Prompt système de la rédaction du CV.
 fn system_prompt(input: &CvWritingInput<'_>) -> String {
     format!(
-        "Tu rédiges les champs de prose d'un CV adapté à une offre : le titre, le résumé et le regroupement des compétences. Les expériences, projets, formations et langues sont ajoutés à part, tels qu'ils sont écrits dans le profil : ne les rédige pas.\n\n\
-         {COMMON_RULES}\n\
-         {}\n\n\
+        "{}\n\n\
+         Tu rédiges les champs de prose d'un CV adapté à une offre : le titre, le résumé et le regroupement des compétences. Les expériences, projets, formations et langues sont ajoutés à part, tels qu'ils sont écrits dans le profil : ne les rédige pas.\n\n\
+         {COMMON_RULES}\n\n\
          Description des champs.\n\
          title : le titre professionnel affiché sous le nom, adapté à l'offre.\n\
          summary : le résumé de la section profil.\n\
-         skills_groups : les compétences du profil regroupées en catégories pertinentes pour l'offre.",
-        language_rule(input.target_lang, input.example_lang)
+         skills_groups : les compétences du profil regroupées en catégories pertinentes pour l'offre ; chaque catégorie est nommée dans la langue du document.\n\n\
+         {}",
+        language_rule(input.target_lang, input.example_lang),
+        language_reminder(input.target_lang)
     )
 }
 
@@ -119,7 +126,7 @@ fn system_prompt(input: &CvWritingInput<'_>) -> String {
 fn user_message(input: &CvWritingInput<'_>) -> String {
     let mut blocks = vec![
         format!("ANALYSE DE L'OFFRE :\n{}", input.offer_analysis),
-        profile_facts_block(input.profile, input.selection, input.matching),
+        profile_facts_block(input.profile, input.selection, input.matching, input.entry_texts),
         style_model_block(&example_prose(input.example)),
     ];
     blocks.extend(guidance_block(&content_guidance(input.guidance)));
@@ -151,11 +158,13 @@ fn skill_violations(content: &CvContent, profile: &ProfileDto) -> Vec<Violation>
             let normalized = skill.trim().to_lowercase();
             if !known.contains(&normalized) {
                 violations.push(Violation {
+                    advisory: false,
                     field: "skills_groups".to_string(),
                     message: format!("« {skill} » n'est pas une compétence du profil. N'utilise que les compétences listées, écrites à l'identique."),
                 });
             } else if seen.contains(&normalized) {
                 violations.push(Violation {
+                    advisory: false,
                     field: "skills_groups".to_string(),
                     message: format!("« {skill} » apparaît dans plusieurs groupes. Chaque compétence n'apparaît qu'une fois."),
                 });
@@ -205,7 +214,7 @@ async fn call_once(
     target: &ClaudeTarget,
 ) -> Result<CvContent, AppError> {
     let message = with_feedback(user_message(input), feedback.as_ref());
-    let raw = call_claude(&system_prompt(input), &message, Some(cv_content_schema()), target).await?;
+    let raw = call_claude("rédaction:cv", &system_prompt(input), &message, Some(cv_content_schema()), target).await?;
     let mut content: CvContent = serde_json::from_str(raw.trim()).map_err(|e| {
         AppError::Llm(format!("La rédaction du CV n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}"))
     })?;
@@ -231,6 +240,7 @@ pub async fn write_cv(input: &CvWritingInput<'_>, target: &ClaudeTarget) -> Resu
     };
     write_with_retries(
         "CV",
+        &language_reminder(input.target_lang),
         |feedback| call_once(input, feedback, target),
         |content| review(content, input, &checks),
         |content| {
@@ -274,6 +284,7 @@ mod tests {
                 github: None,
                 portfolio: None,
                 interets: None,
+                langue_profil: "fr".to_string(),
                 created_at: now,
             },
             experiences: Vec::new(),
