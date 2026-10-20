@@ -130,7 +130,7 @@ async fn call_once(
     target: &ClaudeTarget,
 ) -> Result<LmContent, AppError> {
     let message = with_feedback(user_message(input), feedback.as_ref());
-    let raw = call_claude(&system_prompt(input), &message, Some(lm_content_schema()), target).await?;
+    let raw = call_claude("rédaction:lettre", &system_prompt(input), &message, Some(lm_content_schema()), target).await?;
     serde_json::from_str(raw.trim()).map_err(|e| {
         AppError::Llm(format!("La rédaction de la lettre n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}"))
     })

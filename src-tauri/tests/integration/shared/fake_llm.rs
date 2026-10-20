@@ -113,7 +113,7 @@ impl LlmCaller for FakeLlm {
             index
         };
         let reply = self.reply_for(step, call_index);
-        Box::pin(async move { reply.map(|text| LlmResponse { text, stop_reason: Some("end_turn".to_string()) }) })
+        Box::pin(async move { reply.map(|text| LlmResponse { text, stop_reason: Some("end_turn".to_string()), usage: None, request_id: None }) })
     }
 }
 

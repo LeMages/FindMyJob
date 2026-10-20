@@ -22,9 +22,11 @@
 
 // Importation des modules standard
 use std::path::Path;
+use std::sync::Arc;
 
 // Importation des modules internes
 use crate::documents::paragraph_check::paragraph_problems;
+use crate::documents::templatize_debug::TemplatizeDebug;
 use crate::documents::sparse_check::{cleared_data, sparse_problems, SPARSE_FIELDS};
 use crate::documents::typst::{compile_template, CompiledDocument};
 use crate::storage_paths;
@@ -37,7 +39,7 @@ use crate::docgen::sentinel_data::{hardcoded_values, is_month_word, sentinel_cv_
 use crate::docgen::text_diff::{diff_words, normalize_quotes};
 use crate::error::AppError;
 use crate::llm::{templatize_reference, TemplatizeFeedback, TemplatizeOutput};
-use crate::llm::ClaudeTarget;
+use crate::llm::{CallRecorder, ClaudeTarget};
 use crate::models::{CvData, CvExampleData, LmData, LmExampleData, ProseField, TemplateArtifacts};
 use crate::trace_log;
 
@@ -97,8 +99,8 @@ enum Validation {
 /// * `root` - Dossier racine de compilation (fichiers annexes de la référence).
 /// * `fonts_dir` - Dossier des polices importées par l'utilisateur.
 /// * `target` - Clé API et modèle Claude à utiliser.
-/// * `debug_dir` - Dossier où conserver les sorties rejetées (mode DEV
-///   uniquement, `None` en PROD).
+/// * `debug_dir` - Dossier où conserver la référence, chaque essai et ses
+///   appels à Claude (mode DEV uniquement, `None` en PROD).
 ///
 /// # Returns
 ///
@@ -116,6 +118,9 @@ pub async fn templatize(
     let mut feedback: Option<TemplatizeFeedback> = None;
     let mut previous_problems: Vec<Vec<String>> = Vec::new();
     let computes_date = reference_typ.contains("datetime.today");
+    let debug = debug_dir.map(|dir| TemplatizeDebug::start(dir, reference_typ));
+    let recorder = Arc::new(CallRecorder::default());
+    let target = &target.with_recorder(Arc::clone(&recorder));
 
     for attempt in 1..=MAX_ATTEMPTS {
         let output = templatize_reference(reference_typ, doc_type, feedback.as_ref(), target).await?;
@@ -123,8 +128,14 @@ pub async fn templatize(
             .map_err(|e| AppError::Llm(format!("Données d'exemple non sérialisables : {e}")))?;
 
         let context = ValidationContext { reference, computes_date, doc_type, root, fonts_dir };
-        let problems = match validate(&output, &example_data_json, &context).await? {
+        let validation = validate(&output, &example_data_json, &context).await?;
+        let calls = recorder.drain();
+        let files = [("template.typ", output.template_typ.as_str()), ("example_data.json", example_data_json.as_str())];
+        let problems = match validation {
             Validation::Accepted { page_count } => {
+                if let Some(debug) = &debug {
+                    debug.save_attempt("accepted", &files, &[], &calls);
+                }
                 return Ok(ValidatedTemplate {
                     template_typ: output.template_typ,
                     example_data_json,
@@ -139,6 +150,9 @@ pub async fn templatize(
                 trace_log::log(&format!(
                     "[templatize] {doc_type} : template accepté malgré des séparateurs orphelins : {problems:?}"
                 ));
+                if let Some(debug) = &debug {
+                    debug.save_attempt("accepted", &files, &problems, &calls);
+                }
                 return Ok(ValidatedTemplate {
                     template_typ: output.template_typ,
                     example_data_json,
@@ -151,8 +165,8 @@ pub async fn templatize(
         let problems = flag_oscillation(problems, &mut previous_problems);
 
         trace_log::log(&format!("[templatize] {doc_type} : tentative {attempt}/{MAX_ATTEMPTS} rejetée : {problems:?}"));
-        if let Some(dir) = debug_dir {
-            save_rejected_attempt(dir, attempt, &output.template_typ, &example_data_json, &problems);
+        if let Some(debug) = &debug {
+            debug.save_attempt(&format!("attempt_{attempt}"), &files, &problems, &calls);
         }
         feedback = Some(TemplatizeFeedback {
             previous_template: output.template_typ,
@@ -247,22 +261,6 @@ async fn validate(
         Some(page_count) if blocking == 0 => Validation::Rejected { problems, tolerable: Some(page_count) },
         _ => Validation::Rejected { problems, tolerable: None },
     })
-}
-
-/// Conserve une sortie rejetée (template, données d'exemple, problèmes)
-/// dans le dossier de debug. Un échec d'écriture est tracé sans faire
-/// échouer l'import : le debug ne doit jamais bloquer l'utilisateur.
-fn save_rejected_attempt(dir: &Path, attempt: u8, template_typ: &str, example_data_json: &str, problems: &[String]) {
-    let files = [
-        (format!("attempt_{attempt}_template.typ"), template_typ.to_string()),
-        (format!("attempt_{attempt}_example_data.json"), example_data_json.to_string()),
-        (format!("attempt_{attempt}_problems.txt"), problems.join("\n")),
-    ];
-    let written = std::fs::create_dir_all(dir)
-        .and_then(|()| files.iter().try_for_each(|(name, content)| std::fs::write(dir.join(name), content)));
-    if let Err(e) = written {
-        trace_log::log(&format!("[templatize] sortie rejetée non conservée dans {} : {e}", dir.display()));
-    }
 }
 
 /// Ajoute `OSCILLATION_HINT` aux problèmes d'une tentative s'ils sont

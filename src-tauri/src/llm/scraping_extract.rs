@@ -115,7 +115,7 @@ pub async fn extract_offer_fields(
     target: &ClaudeTarget,
 ) -> Result<ScrapedOfferFields, AppError> {
     let user_message = build_user_message(text, hints);
-    let raw_response = call_claude(SYSTEM_PROMPT, &user_message, Some(scraped_offer_schema()), target).await?;
+    let raw_response = call_claude("extraction d'offre", SYSTEM_PROMPT, &user_message, Some(scraped_offer_schema()), target).await?;
 
     // Le structured output garantit normalement un JSON conforme au schéma ;
     // ce parsing reste un filet de sécurité plutôt qu'une validation de forme.

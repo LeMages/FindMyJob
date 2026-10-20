@@ -40,7 +40,7 @@ async fn translate<T: Serialize + DeserializeOwned>(
     );
     let source = serde_json::to_string_pretty(labels)
         .map_err(|e| AppError::Llm(format!("Libellés non sérialisables : {e}")))?;
-    let raw = call_claude(&system_prompt, &format!("LIBELLÉS :\n{source}"), Some(schema), target).await?;
+    let raw = call_claude("traduction:libellés", &system_prompt, &format!("LIBELLÉS :\n{source}"), Some(schema), target).await?;
     serde_json::from_str(raw.trim())
         .map_err(|e| AppError::Llm(format!("La traduction des libellés n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}")))
 }

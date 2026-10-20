@@ -15,6 +15,7 @@ use std::pin::Pin;
 // Importation des modules internes
 use crate::error::AppError;
 use crate::llm::api_key::ApiKey;
+use crate::llm::call_record::TokenUsage;
 
 /// Requête envoyée au modèle, déjà résolue (clé, modèle, prompts).
 ///
@@ -41,9 +42,13 @@ pub struct LlmRequest<'a> {
 ///
 /// * `text` - Texte du premier bloc `text` de la réponse.
 /// * `stop_reason` - `stop_reason` brut renvoyé par l'API, pour le diagnostic.
+/// * `usage` - Tokens consommés, si l'API les a rapportés.
+/// * `request_id` - Identifiant de requête Anthropic (en-tête `request-id`).
 pub struct LlmResponse {
     pub text: String,
     pub stop_reason: Option<String>,
+    pub usage: Option<TokenUsage>,
+    pub request_id: Option<String>,
 }
 
 /// Future renvoyé par [`LlmCaller::call`], boxé pour que le trait reste

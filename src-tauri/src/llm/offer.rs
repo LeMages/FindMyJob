@@ -73,7 +73,7 @@ Description des champs à renseigner :
 
     let user_message = format!("Analyse cette offre d'emploi :\n\n{description_offre}");
 
-    let raw_response = call_claude(system_prompt, &user_message, Some(offer_analysis_schema()), target).await?;
+    let raw_response = call_claude("analyse d'offre", system_prompt, &user_message, Some(offer_analysis_schema()), target).await?;
 
     // Le structured output garantit normalement un JSON conforme au schéma ;
     // ce parsing reste un filet de sécurité plutôt qu'une validation de forme.

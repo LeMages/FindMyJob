@@ -198,7 +198,7 @@ pub async fn templatize_reference(
         ("guidance", serde_json::json!({ "type": "string" })),
     ]);
 
-    let raw = call_claude_with_tokens(&system_prompt, &user_message, Some(schema), TEMPLATIZE_MAX_TOKENS, target).await?;
+    let raw = call_claude_with_tokens("templatisation", &system_prompt, &user_message, Some(schema), TEMPLATIZE_MAX_TOKENS, target).await?;
     parse_output(&raw)
 }
 

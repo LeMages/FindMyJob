@@ -1,6 +1,7 @@
 //! Traçabilité d'une génération : tout ce qui a mené aux documents
 //! (analyse d'offre, matching, sélection, budgets, contenus rédigés,
-//! rapports du linter, essais), écrit dans un dossier de debug.
+//! rapports du linter, essais, appels à Claude), écrit dans un dossier de
+//! debug.
 
 // Importation des crates externes
 use serde::Serialize;
@@ -11,6 +12,7 @@ use crate::docgen::budgets::{CvBudget, LmBudget};
 use crate::docgen::lint::Violation;
 use crate::error::AppError;
 use crate::llm::writing_loop::AttemptReport;
+use crate::llm::LlmCallRecord;
 use crate::models::{CvContent, LmContent, MatchingResult};
 
 /// Trace d'un document généré.
@@ -44,6 +46,7 @@ pub struct DocumentTrace<C> {
 /// * `experience_ids`, `project_ids` - Entrées retenues, dans l'ordre d'affichage.
 /// * `cv_budget`, `lm_budget` - Budgets initiaux.
 /// * `cv`, `lm` - Trace de chaque document.
+/// * `llm_calls` - Appels à Claude (modèle, tokens, durée, prompts, réponses).
 pub struct GenerationTrace {
     pub offer_analysis: Value,
     pub matching: MatchingResult,
@@ -53,6 +56,7 @@ pub struct GenerationTrace {
     pub lm_budget: LmBudget,
     pub cv: DocumentTrace<CvContent>,
     pub lm: DocumentTrace<LmContent>,
+    pub llm_calls: Vec<LlmCallRecord>,
 }
 
 /// Résumé des essais d'un document, pour `attempts.json`.
@@ -86,6 +90,7 @@ impl GenerationTrace {
                 json!({ "cv": to_value(&self.cv.residual_violations)?, "lm": to_value(&self.lm.residual_violations)? }),
             ),
             ("attempts.json", json!({ "cv": attempts_of(&self.cv), "lm": attempts_of(&self.lm) })),
+            ("llm_calls.json", to_value(&self.llm_calls)?),
         ];
         entries
             .into_iter()

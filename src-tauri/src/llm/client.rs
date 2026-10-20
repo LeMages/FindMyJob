@@ -11,7 +11,7 @@
 
 // Importation des modules standard
 use std::sync::LazyLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 // Importation des crates externes
 use reqwest::Client;
@@ -19,6 +19,7 @@ use serde::Deserialize;
 
 // Importation des modules internes
 use crate::error::AppError;
+use crate::llm::call_record::{self, LlmCallRecord, TokenUsage, ERROR_PREFIX};
 use crate::llm::caller::{LlmCaller, LlmFuture, LlmRequest, LlmResponse};
 use crate::llm::target::ClaudeTarget;
 use crate::trace_log;
@@ -33,8 +34,6 @@ pub const DEFAULT_MODEL: &str = "claude-sonnet-4-6";
 /// Modèles proposés dans le sélecteur des paramètres.
 pub const AVAILABLE_MODELS: [&str; 2] = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"];
 /// Plafond de tokens de sortie — largement suffisant pour un JSON d'analyse.
-/// Visibilité `pub(crate)` pour permettre aux points d'appel utilisant
-/// [`call_claude_with_tokens_meta`] de réutiliser le même plafond par défaut.
 pub(crate) const MAX_TOKENS: u32 = 8192;
 /// Délai maximal d'un appel complet. Large : les générations Typst/prose
 /// produisent des milliers de tokens et peuvent durer plusieurs minutes.
@@ -61,20 +60,28 @@ struct ContentBlock {
 }
 
 #[derive(Deserialize)]
+struct ApiUsage {
+    input_tokens: u32,
+    output_tokens: u32,
+}
+
+#[derive(Deserialize)]
 struct ApiResponse {
     content: Vec<ContentBlock>,
     stop_reason: Option<String>,
+    usage: Option<ApiUsage>,
 }
 
 /// Envoie un message à l'API Claude et retourne le texte de la réponse.
 ///
 /// Utilise le plafond de tokens par défaut ([`MAX_TOKENS`]), adapté aux
-/// réponses JSON courtes (analyse de style, d'offre, de matching...). Pour
-/// les réponses volumineuses (ex. assemblage Typst), voir
+/// réponses JSON courtes (analyse d'offre, matching, rédaction...). Pour
+/// les réponses volumineuses (ex. template Typst), voir
 /// [`call_claude_with_tokens`].
 ///
 /// # Arguments
 ///
+/// * `label` - Étape appelante, reprise dans les traces.
 /// * `system` - Prompt système (instructions, contexte de la tâche).
 /// * `user_message` - Message utilisateur (contenu à traiter).
 /// * `output_schema` - Schéma JSON optionnel : si fourni, la requête active
@@ -86,26 +93,29 @@ struct ApiResponse {
 ///
 /// Le texte du premier bloc de type `text` dans la réponse.
 pub async fn call_claude(
+    label: &str,
     system: &str,
     user_message: &str,
     output_schema: Option<serde_json::Value>,
     target: &ClaudeTarget,
 ) -> Result<String, AppError> {
-    call_claude_with_tokens(system, user_message, output_schema, MAX_TOKENS, target).await
+    call_claude_with_tokens(label, system, user_message, output_schema, MAX_TOKENS, target).await
 }
 
 /// Variante de [`call_claude`] avec un plafond de tokens de sortie explicite.
 ///
-/// Nécessaire pour les étapes produisant du code Typst complet (CV/lettre),
-/// dont la longueur dépasse largement le plafond par défaut d'une réponse JSON.
+/// Nécessaire pour les étapes produisant du code Typst complet, dont la
+/// longueur dépasse largement le plafond par défaut d'une réponse JSON.
+/// Chaque appel, réussi ou non, est tracé ([`call_record::report`]) : modèle,
+/// tokens, durée, `stop_reason`, identifiant de requête, et prompts complets
+/// si la cible porte un journal.
 ///
 /// # Arguments
 ///
+/// * `label` - Étape appelante, reprise dans les traces.
 /// * `system` - Prompt système (instructions, contexte de la tâche).
 /// * `user_message` - Message utilisateur (contenu à traiter).
-/// * `output_schema` - Schéma JSON optionnel : si fourni, la requête active
-///   les structured outputs (`output_config.format`) pour garantir une
-///   réponse JSON strictement conforme.
+/// * `output_schema` - Schéma JSON optionnel des structured outputs.
 /// * `max_tokens` - Plafond de tokens de sortie pour cette requête.
 /// * `target` - Clé API et modèle Claude à utiliser.
 ///
@@ -113,32 +123,13 @@ pub async fn call_claude(
 ///
 /// Le texte du premier bloc de type `text` dans la réponse.
 pub async fn call_claude_with_tokens(
+    label: &str,
     system: &str,
     user_message: &str,
     output_schema: Option<serde_json::Value>,
     max_tokens: u32,
     target: &ClaudeTarget,
 ) -> Result<String, AppError> {
-    call_claude_with_tokens_meta(system, user_message, output_schema, max_tokens, target)
-        .await
-        .map(|(text, _stop_reason)| text)
-}
-
-/// Variante de [`call_claude_with_tokens`] qui expose aussi le `stop_reason`
-/// brut de la réponse, en plus du texte. Utilisée par les points d'appel qui
-/// ont besoin de logger le `stop_reason` d'un appel réussi (diagnostic du
-/// pipeline LM) sans dupliquer la logique d'appel réseau.
-///
-/// # Returns
-///
-/// Le texte du premier bloc `text` de la réponse, et le `stop_reason` associé.
-pub async fn call_claude_with_tokens_meta(
-    system: &str,
-    user_message: &str,
-    output_schema: Option<serde_json::Value>,
-    max_tokens: u32,
-    target: &ClaudeTarget,
-) -> Result<(String, Option<String>), AppError> {
     let request = LlmRequest {
         system,
         user_message,
@@ -147,8 +138,34 @@ pub async fn call_claude_with_tokens_meta(
         api_key: &target.api_key,
         model: &target.model,
     };
-    let response = target.caller.call(request).await?;
-    Ok((response.text, response.stop_reason))
+    let started = Instant::now();
+    let result = target.caller.call(request).await;
+    let mut record = LlmCallRecord {
+        label: label.to_string(),
+        model: target.model.clone(),
+        usage: None,
+        duration_ms: started.elapsed().as_millis(),
+        stop_reason: None,
+        request_id: None,
+        system: system.to_string(),
+        user: user_message.to_string(),
+        response: String::new(),
+    };
+    match result {
+        Ok(response) => {
+            record.usage = response.usage;
+            record.stop_reason = response.stop_reason;
+            record.request_id = response.request_id;
+            record.response = response.text.clone();
+            call_record::report(record, target.recorder.as_deref());
+            Ok(response.text)
+        }
+        Err(e) => {
+            record.response = format!("{ERROR_PREFIX}{e}");
+            call_record::report(record, target.recorder.as_deref());
+            Err(e)
+        }
+    }
 }
 
 /// Implémentation réelle de [`LlmCaller`] : appel HTTP à l'API Messages
@@ -217,11 +234,19 @@ async fn send_request(request: LlmRequest<'_>) -> Result<LlmResponse, AppError> 
             }
         })?;
 
+    // L'identifiant de requête est lu avant de consommer la réponse : c'est
+    // la seule référence à donner au support Anthropic pour un appel donné.
+    let request_id = response
+        .headers()
+        .get("request-id")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
+
     if !response.status().is_success() {
         let status = response.status();
         let body_text = response.text().await.unwrap_or_default();
         return Err(AppError::Llm(format!(
-            "API Claude erreur {status}: {body_text}"
+            "API Claude erreur {status} (request_id={request_id:?}): {body_text}"
         )));
     }
 
@@ -276,5 +301,8 @@ async fn send_request(request: LlmRequest<'_>) -> Result<LlmResponse, AppError> 
             AppError::Llm("Pas de contenu texte dans la réponse API".to_string())
         })?;
 
-    Ok(LlmResponse { text, stop_reason })
+    let usage = api_response
+        .usage
+        .map(|u| TokenUsage { input_tokens: u.input_tokens, output_tokens: u.output_tokens });
+    Ok(LlmResponse { text, stop_reason, usage, request_id })
 }

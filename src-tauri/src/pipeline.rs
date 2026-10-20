@@ -43,7 +43,7 @@ use crate::llm::matching::match_profile;
 use crate::llm::offer::analyze_offer;
 use crate::llm::profile_translation::translate_entry_texts;
 use crate::llm::writing_loop::WritingOutcome;
-use crate::llm::{ClaudeTarget, LlmCaller};
+use crate::llm::{CallRecorder, ClaudeTarget, LlmCaller};
 use crate::models::{
     CvContent, CvExampleData, CvLabels, LmContent, LmExampleData, LmLabels, MatchingResult, ProfileDto,
     Recipient,
@@ -206,7 +206,11 @@ async fn prepare(
     // 1. Profil, modèle, références templatisées, destinataire
     // ------------------------------------------------------------------
     let profile = db::profile::build_profile(pool).await?;
-    let target = ClaudeTargetSource { pool, api_key: request.api_key, llm: request.llm }.resolve().await?;
+    // Tous les appels de la génération sont journalisés pour `llm_calls.json`.
+    let target = ClaudeTargetSource { pool, api_key: request.api_key, llm: request.llm }
+        .resolve()
+        .await?
+        .with_recorder(Arc::new(CallRecorder::default()));
     let cv_ref: ReferenceTemplate<CvExampleData> =
         load_reference(pool, request.data_dir, request.session_id, "cv", "CV").await?;
     let lm_ref: ReferenceTemplate<LmExampleData> =
@@ -350,6 +354,7 @@ fn into_result(
         lm_budget: ctx.lm_budget,
         cv: cv_trace,
         lm: lm_trace,
+        llm_calls: ctx.target.recorder.as_ref().map(|r| r.snapshot()).unwrap_or_default(),
     };
     GeneratedDocuments { cv, lm, trace }
 }

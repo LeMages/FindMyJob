@@ -9,6 +9,7 @@ pub mod reference_versions;
 pub mod sparse_check;
 pub mod storage;
 pub mod templatize;
+pub mod templatize_debug;
 pub mod typst;
 pub mod typst_diagnostics;
 pub mod typst_lines;

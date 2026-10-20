@@ -72,7 +72,7 @@ async fn call_once(
     target: &ClaudeTarget,
 ) -> Result<MatchingResult, AppError> {
     let message = with_feedback(user_message.to_string(), feedback.as_ref());
-    let raw = call_claude(system_prompt, &message, Some(schema.clone()), target).await?;
+    let raw = call_claude("matching", system_prompt, &message, Some(schema.clone()), target).await?;
     serde_json::from_str(raw.trim()).map_err(|e| {
         AppError::Llm(format!("Le matching n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}"))
     })
