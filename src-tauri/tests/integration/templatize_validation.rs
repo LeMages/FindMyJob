@@ -215,3 +215,16 @@ async fn separateur_orphelin_designe_et_non_bloquant() {
     assert!(verdict.problems.iter().any(|p| p.contains("`level`")), "{:?}", verdict.problems);
     assert_eq!(verdict.blocking, 0, "seuls des orphelins : template utilisable en dernier recours");
 }
+
+#[test]
+fn saut_de_ligne_du_source_normalise_dans_les_valeurs() {
+    // Sortie réelle de l'étape A : la ligne de commentaire au milieu d'un
+    // paragraphe laissait un « \n » qui devenait un retour à la ligne.
+    let lm = reference("lm_balisee.typ", "lettre_motivation");
+    let mut data = example("lm_balisee_example_data.json");
+    let first = data["paragraphs"][0].as_str().expect("paragraphe").replace("école. C'est", "école. \nC'est");
+    data["paragraphs"][0] = first.into();
+    let checked = check(&lm, &data).expect("données valides");
+    assert!(!checked.paragraphs[0].contains('\n'), "{}", checked.paragraphs[0]);
+    assert!(!checked.example["paragraphs"][0].as_str().expect("paragraphe").contains('\n'));
+}

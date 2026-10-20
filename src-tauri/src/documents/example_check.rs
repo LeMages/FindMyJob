@@ -79,6 +79,8 @@ pub struct ExampleContext<'a> {
 ///
 /// `CheckedExample`, ou tous les problèmes relevés.
 pub fn check_example(raw: &Value, context: &ExampleContext<'_>) -> Result<CheckedExample, Vec<String>> {
+    let normalized = normalize_whitespace(raw, 0);
+    let raw = &normalized;
     let typed = TypedExample::parse(raw, context.doc_type).map_err(|problem| vec![problem])?;
     let mut problems = Vec::new();
     if !SUPPORTED_LANGS.contains(&typed.lang()) {
@@ -223,6 +225,24 @@ fn absent_values(raw: &Value, context: &ExampleContext<'_>) -> Vec<String> {
             format!("{path} vaut « {value} », qui n'apparaît pas tel quel dans l'original : recopie la valeur affichée.")
         })
         .collect()
+}
+
+/// Données dont chaque chaîne a ses espaces normalisés (un espace entre
+/// deux mots, aucun au bord). Le LLM recopie parfois le saut de ligne du
+/// source au milieu d'un paragraphe (avant un commentaire de balise) :
+/// rendu, il deviendrait un retour à la ligne absent de l'original.
+fn normalize_whitespace(value: &Value, depth: usize) -> Value {
+    if depth > MAX_DEPTH {
+        return value.clone();
+    }
+    match value {
+        Value::String(text) => Value::String(text.split_whitespace().collect::<Vec<_>>().join(" ")),
+        Value::Array(items) => Value::Array(items.iter().map(|item| normalize_whitespace(item, depth + 1)).collect()),
+        Value::Object(map) => {
+            Value::Object(map.iter().map(|(key, field)| (key.clone(), normalize_whitespace(field, depth + 1))).collect())
+        }
+        other => other.clone(),
+    }
 }
 
 /// Toutes les chaînes non vides des données.

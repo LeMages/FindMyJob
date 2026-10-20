@@ -24,7 +24,7 @@ pub const EXAMPLE_DATA_RULES: &str = "Règles de example_data :
 2. Un champ absent de l'original vaut une chaîne vide ou une liste vide. N'invente jamais une valeur : chaque valeur se lit dans l'original.
 3. `lang` vaut la langue dans laquelle l'original est rédigé : \"fr\" ou \"en\".
 4. `identity.permis` vaut true seulement si l'original affiche le permis de conduire.
-5. Les commentaires de l'original (// …) ne sont pas du contenu : ignore-les.";
+5. Les commentaires de l'original (// …) ne sont pas du contenu : ignore-les. Une valeur ne contient jamais de saut de ligne : les lignes d'un même paragraphe sont jointes par un espace.";
 
 /// Règle du lieu de l'expéditeur, pour les données d'exemple.
 pub const ADDRESS_DATA_RULE: &str = "Lieu de l'expéditeur :
