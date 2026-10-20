@@ -19,32 +19,23 @@ use crate::llm::doc_data_schema::object;
 use crate::llm::target::ClaudeTarget;
 use crate::llm::validated_call::call_until_valid;
 use crate::llm::writing_loop::WritingFeedback;
-use crate::llm::writing_rules::{language_name, with_feedback};
+use crate::llm::writing_rules::with_feedback;
+use crate::models::doc_lang::direction;
 
 /// Schéma de sortie de la traduction : même forme que `CvEntryTexts`.
 pub fn translation_schema() -> Value {
     let id = json!({ "type": "integer" });
     let lines = json!({ "type": "array", "items": { "type": "string" } });
     let entry = object(&[("id", id.clone()), ("lines", lines.clone())]);
-    let project = object(&[("id", id), ("pour_qui", json!({ "type": "string" })), ("lines", lines)]);
+    let project = object(&[("id", id.clone()), ("pour_qui", json!({ "type": "string" })), ("lines", lines)]);
+    let language = object(&[("id", id), ("nom", json!({ "type": "string" })), ("level", json!({ "type": "string" }))]);
     object(&[
         ("experiences", json!({ "type": "array", "items": entry.clone() })),
         ("projects", json!({ "type": "array", "items": project })),
         ("formations", json!({ "type": "array", "items": entry })),
+        ("langues", json!({ "type": "array", "items": language })),
+        ("interets", json!({ "type": "array", "items": { "type": "string" } })),
     ])
-}
-
-/// Sens de la traduction, en toutes lettres (« du français vers l'anglais »).
-fn direction(from: &str, to: &str) -> String {
-    let source = match from {
-        "en" => format!("de l'{}", language_name(from)),
-        _ => format!("du {}", language_name(from)),
-    };
-    let destination = match to {
-        "en" => format!("l'{}", language_name(to)),
-        _ => format!("le {}", language_name(to)),
-    };
-    format!("{source} vers {destination}")
 }
 
 /// Prompt système de la traduction.
@@ -55,6 +46,7 @@ fn system_prompt(from: &str, to: &str) -> String {
          Chaque ligne de `lines` est traduite en une ligne, dans le même ordre : même nombre de lignes que l'original, sans saut de ligne.\n\
          Une traduction n'est pas plus longue que l'original : au plus {LENGTH_TOLERANCE_PERCENT} % de caractères en plus (ou {SHORT_TEXT_MARGIN_CHARS} caractères pour un texte court). Plus court est accepté.\n\
          `pour_qui` est le nom de l'organisation d'un projet : traduis-le seulement s'il est un nom commun (par exemple une association décrite), garde un nom propre tel quel. Un texte vide reste vide.\n\
+         `langues` : traduis le nom de chaque langue et son niveau (« Langue maternelle » devient « Native »), en gardant les certifications et scores tels quels (TOEIC 840). `interets` : un centre d'intérêt traduit par élément, dans le même ordre.\n\
          Garde les mêmes identifiants, une entrée par entrée de l'original.",
         direction(from, to)
     )
@@ -68,6 +60,11 @@ fn trimmed(mut texts: CvEntryTexts) -> CvEntryTexts {
         project.pour_qui = project.pour_qui.trim().to_string();
         trim(&mut project.lines);
     }
+    for langue in texts.langues.iter_mut() {
+        langue.nom = langue.nom.trim().to_string();
+        langue.level = langue.level.trim().to_string();
+    }
+    trim(&mut texts.interets);
     texts
 }
 

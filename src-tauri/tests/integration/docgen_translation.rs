@@ -3,7 +3,7 @@
 
 // Importation des modules internes
 use crate::common;
-use findmyjob_lib::docgen::entry_texts::{source_texts, CvEntryTexts, EntryLines, ProjectTexts};
+use findmyjob_lib::docgen::entry_texts::{source_texts, CvEntryTexts, EntryLines, LanguageTexts, ProjectTexts};
 use findmyjob_lib::docgen::selection::select;
 use findmyjob_lib::docgen::translation_check::{max_translated_chars, translation_problems};
 
@@ -20,6 +20,8 @@ fn original() -> CvEntryTexts {
             lines: vec!["Tableau de bord des adhésions".to_string()],
         }],
         formations: vec![EntryLines { id: 30, lines: vec!["Spécialité données".to_string()] }],
+        langues: vec![LanguageTexts { id: 40, nom: "Anglais".to_string(), level: "Courant (TOEIC 840)".to_string() }],
+        interets: vec!["Escalade".to_string()],
     }
 }
 
@@ -36,6 +38,8 @@ fn translated() -> CvEntryTexts {
             lines: vec!["Membership dashboard".to_string()],
         }],
         formations: vec![EntryLines { id: 30, lines: vec!["Data major".to_string()] }],
+        langues: vec![LanguageTexts { id: 40, nom: "English".to_string(), level: "Fluent (TOEIC 840)".to_string() }],
+        interets: vec!["Climbing".to_string()],
     }
 }
 
@@ -117,4 +121,22 @@ fn identifiants_inconnus_manquants_ou_en_double() {
     assert!(problems.iter().any(|p| p.contains("projects : l'id 99 n'est pas une entrée")), "{problems:?}");
     assert!(problems.iter().any(|p| p.contains("projects : l'id 20 manque")), "{problems:?}");
     assert!(problems.iter().any(|p| p.contains("formations : l'id 30 apparaît plusieurs fois")), "{problems:?}");
+}
+
+#[test]
+fn langues_et_interets_traduits_valides() {
+    let mut bad = translated();
+    bad.langues[0].level = String::new();
+    bad.interets.push("Chess".to_string());
+    let problems = translation_problems(&original(), &bad);
+    assert!(problems.iter().any(|p| p.contains("langues id 40.level")), "{problems:?}");
+    assert!(problems.iter().any(|p| p.contains("interets contient 2")), "{problems:?}");
+}
+
+#[test]
+fn textes_source_avec_langues_et_interets_du_profil() {
+    let mut profile = common::profile();
+    profile.user.interets = Some("Escalade\nPhotographie".to_string());
+    let texts = source_texts(&profile, &select(&profile, &[]));
+    assert_eq!(texts.interets, ["Escalade", "Photographie"]);
 }

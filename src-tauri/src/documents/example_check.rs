@@ -18,10 +18,9 @@ use crate::docgen::example_facts::{
 };
 use crate::documents::markup::hard_texts::hard_texts;
 use crate::documents::markup::{attach_zones, ReferenceMarkup};
+use crate::models::doc_lang::is_supported;
 use crate::models::{CvExampleData, LmExampleData, ProseField, ProseGuidance};
 
-/// Langues de document prises en charge.
-const SUPPORTED_LANGS: [&str; 2] = ["fr", "en"];
 /// Chemins dont la valeur n'a pas à figurer dans l'original : libellés
 /// (affichés seulement si leur section ou leur champ l'est : mois, période
 /// en cours, permis…), langue, granularité des périodes, textes en dur.
@@ -83,7 +82,7 @@ pub fn check_example(raw: &Value, context: &ExampleContext<'_>) -> Result<Checke
     let raw = &normalized;
     let typed = TypedExample::parse(raw, context.doc_type).map_err(|problem| vec![problem])?;
     let mut problems = Vec::new();
-    if !SUPPORTED_LANGS.contains(&typed.lang()) {
+    if !is_supported(typed.lang()) {
         problems.push(format!("lang vaut \"{}\", attendu \"fr\" ou \"en\".", typed.lang()));
     }
     problems.extend(typed.specific_problems());

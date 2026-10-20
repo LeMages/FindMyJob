@@ -6,6 +6,7 @@ pub mod connection_test;
 pub mod contact;
 pub mod doc_content;
 pub mod doc_data;
+pub mod doc_lang;
 pub mod document;
 pub mod event_type;
 pub mod experience;

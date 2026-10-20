@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use crate::docgen::budgets::CvBudget;
 use crate::docgen::example_facts::cv_information_values;
 use crate::docgen::lint::{lint_cv_budget, Violation};
+use crate::docgen::entry_texts::CvEntryTexts;
 use crate::docgen::selection::Selection;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
@@ -33,6 +34,7 @@ use crate::llm::target::ClaudeTarget;
 /// * `matching` - Résultat du matching.
 /// * `selection` - Entrées du profil retenues.
 /// * `profile` - Profil complet du candidat.
+/// * `entry_texts` - Descriptions des entrées, dans la langue du document.
 /// * `example` - Contenu de la référence (modèle de style).
 /// * `guidance` - Consignes de la référence (champs aux chemins de
 ///   `CvData` : `identity.title`, `summary`).
@@ -44,6 +46,7 @@ pub struct CvWritingInput<'a> {
     pub matching: &'a MatchingResult,
     pub selection: &'a Selection,
     pub profile: &'a ProfileDto,
+    pub entry_texts: &'a CvEntryTexts,
     pub example: &'a CvData,
     pub guidance: &'a ProseGuidance,
     pub budget: CvBudget,
@@ -123,7 +126,7 @@ fn system_prompt(input: &CvWritingInput<'_>) -> String {
 fn user_message(input: &CvWritingInput<'_>) -> String {
     let mut blocks = vec![
         format!("ANALYSE DE L'OFFRE :\n{}", input.offer_analysis),
-        profile_facts_block(input.profile, input.selection, input.matching),
+        profile_facts_block(input.profile, input.selection, input.matching, input.entry_texts),
         style_model_block(&example_prose(input.example)),
     ];
     blocks.extend(guidance_block(&content_guidance(input.guidance)));
@@ -281,6 +284,7 @@ mod tests {
                 github: None,
                 portfolio: None,
                 interets: None,
+                langue_profil: "fr".to_string(),
                 created_at: now,
             },
             experiences: Vec::new(),

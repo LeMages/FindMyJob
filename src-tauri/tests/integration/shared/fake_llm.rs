@@ -26,6 +26,7 @@ pub enum Step {
     LmContent,
     ProfileTranslation,
     ScrapedOffer,
+    ReferenceTranslation,
     ExampleCv,
     ExampleLm,
     TemplateCv,
@@ -134,7 +135,14 @@ impl LlmCaller for FakeLlm {
             });
             index
         };
-        let reply = self.reply_for(step, call_index);
+        let reply = match step {
+            // Sans surcharge, la traduction de la référence reprend chaque
+            // élément demandé (mêmes identifiants), préfixé de « [en] ».
+            Step::ReferenceTranslation if !self.overrides.lock().unwrap().contains_key(&step) => {
+                Ok(echo_translation(request.user_message))
+            }
+            _ => self.reply_for(step, call_index),
+        };
         Box::pin(async move { reply.map(|text| LlmResponse { text, stop_reason: Some("end_turn".to_string()), usage: None, request_id: None }) })
     }
 }
@@ -154,6 +162,7 @@ fn step_of(system: &str, schema: Option<&Value>) -> Step {
         return if has("period_style") { Step::ExampleCv } else { Step::ExampleLm };
     }
     let candidates = [
+        ("items", Step::ReferenceTranslation),
         ("job_title", Step::OfferAnalysis),
         ("summary_strategy", Step::Matching),
         ("months_short", Step::CvLabels),
@@ -181,11 +190,25 @@ fn default_reply(step: Step) -> String {
         Step::LmContent => read_fixture("lm_content.json"),
         Step::ProfileTranslation => read_fixture("profile_translation.json"),
         Step::ScrapedOffer => read_fixture("scraped_offer.json"),
+        Step::ReferenceTranslation => unreachable!("réponse construite depuis la demande"),
         Step::ExampleCv => read_reference("cv_example_data.json"),
         Step::ExampleLm => read_reference("lm_example_data.json"),
         Step::TemplateCv => typst_block(&read_reference("cv_template.typ")),
         Step::TemplateLm => typst_block(&read_reference("lm_template.typ")),
     }
+}
+
+/// Traduction factice des textes de la référence : chaque élément du
+/// message, préfixé de « [en] ».
+fn echo_translation(user_message: &str) -> String {
+    let json = user_message.split_once("TEXTES À TRADUIRE :\n").map(|(_, rest)| rest).unwrap_or_default();
+    let json = json.split("\n\nTA RÉPONSE PRÉCÉDENTE").next().unwrap_or_default();
+    let mut request: Value = serde_json::from_str(json).expect("éléments à traduire en JSON");
+    for item in request["items"].as_array_mut().expect("liste d'éléments") {
+        let text = item["text"].as_str().unwrap_or_default().to_string();
+        item["text"] = Value::String(format!("[en] {text}"));
+    }
+    request.to_string()
 }
 
 /// Template entouré d'un bloc ```typst```, comme une réponse de l'étape B.

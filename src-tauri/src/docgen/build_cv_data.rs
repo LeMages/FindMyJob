@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 // Importation des modules internes
 use crate::docgen::entry_texts::CvEntryTexts;
-use crate::docgen::identity::{build_identity, display_url, lines, text};
+use crate::docgen::identity::{build_identity, display_url, text};
 use crate::docgen::period_format::{format_period, PeriodStyleText};
 use crate::docgen::selection::Selection;
 use crate::models::{
@@ -110,12 +110,7 @@ pub fn build_cv_data(
         })
         .collect();
 
-    let langues = profile
-        .langues
-        .iter()
-        .filter(|l| !text(l.nom.as_ref()).is_empty())
-        .map(|l| CvLangue { nom: text(l.nom.as_ref()), level: text(l.level.as_ref()) })
-        .collect();
+    let langues = texts.langues.iter().map(|l| CvLangue { nom: l.nom.clone(), level: l.level.clone() }).collect();
 
     let document = layout.document;
     CvData {
@@ -127,7 +122,7 @@ pub fn build_cv_data(
         projects,
         formations,
         langues,
-        interets: lines(profile.user.interets.as_ref()),
+        interets: texts.interets.clone(),
         labels: layout.labels.clone(),
         texts: layout.texts.clone(),
     }

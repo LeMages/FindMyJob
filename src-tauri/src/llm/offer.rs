@@ -36,7 +36,7 @@ pub fn offer_analysis_schema() -> serde_json::Value {
             "experience_level": { "type": "string", "enum": ["junior", "mid", "senior", "lead"] },
             "key_responsibilities": { "type": "array", "items": { "type": "string" } },
             "keywords": { "type": "array", "items": { "type": "string" } },
-            "language": { "type": "string", "enum": ["fr", "en"] }
+            "language": { "type": "string", "enum": ["fr", "en", "inconnue"] }
         },
         "required": [
             "job_title", "company_context", "required_skills", "preferred_skills",
@@ -45,6 +45,20 @@ pub fn offer_analysis_schema() -> serde_json::Value {
         "additionalProperties": false
     })
 }
+
+/// Prompt système de l'analyse d'offre. La langue retenue est celle du
+/// corps de l'offre, pas celle de la plateforme qui l'affiche.
+pub const OFFER_SYSTEM_PROMPT: &str = r#"Tu es un expert en recrutement. Analyse cette offre d'emploi et retourne un JSON structuré.
+
+Description des champs à renseigner :
+- job_title : intitulé du poste
+- company_context : secteur, taille, culture de l'entreprise si mentionnés (chaîne vide si rien n'est précisé)
+- required_skills : compétences explicitement exigées, séparées en technical (techniques) et soft (comportementales)
+- preferred_skills : compétences mentionnées comme un plus, non obligatoires, même découpage
+- experience_level : niveau d'expérience visé
+- key_responsibilities : missions principales du poste
+- keywords : mots-clés importants de l'offre, à reprendre dans le CV/la lettre de motivation
+- language : langue du corps de l'offre, c'est-à-dire de sa description, de ses missions et du profil recherché. Ignore les mentions de la plateforme ou du site (menus, boutons, bandeaux, en-têtes, mentions légales) : une offre rédigée en anglais sur un site français est en anglais. "inconnue" si le corps est trop court ou mélange les langues à parts égales."#;
 
 /// Analyse une offre d'emploi via l'API Claude et en extrait une structure
 /// exploitable par les étapes suivantes du pipeline (matching, rédaction).
@@ -59,17 +73,7 @@ pub fn offer_analysis_schema() -> serde_json::Value {
 /// Le JSON d'analyse (sérialisé de façon canonique). Toute erreur d'appel,
 /// de refus ou de format inattendu remonte telle quelle.
 pub async fn analyze_offer(description_offre: &str, target: &ClaudeTarget) -> Result<String, AppError> {
-    let system_prompt = r#"Tu es un expert en recrutement. Analyse cette offre d'emploi et retourne un JSON structuré.
-
-Description des champs à renseigner :
-- job_title : intitulé du poste
-- company_context : secteur, taille, culture de l'entreprise si mentionnés (chaîne vide si rien n'est précisé)
-- required_skills : compétences explicitement exigées, séparées en technical (techniques) et soft (comportementales)
-- preferred_skills : compétences mentionnées comme un plus, non obligatoires, même découpage
-- experience_level : niveau d'expérience visé
-- key_responsibilities : missions principales du poste
-- keywords : mots-clés importants de l'offre, à reprendre dans le CV/la lettre de motivation
-- language : langue dans laquelle l'offre est rédigée"#;
+    let system_prompt = OFFER_SYSTEM_PROMPT;
 
     let user_message = format!("Analyse cette offre d'emploi :\n\n{description_offre}");
 

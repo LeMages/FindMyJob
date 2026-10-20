@@ -16,6 +16,7 @@ use findmyjob_lib::llm::lm_writing::lm_content_schema;
 use findmyjob_lib::llm::matching::matching_schema;
 use findmyjob_lib::llm::offer::offer_analysis_schema;
 use findmyjob_lib::llm::profile_translation::translation_schema;
+use findmyjob_lib::llm::reference_translation::reference_translation_schema;
 use findmyjob_lib::llm::schema_size::{schema_size, SchemaSize};
 use findmyjob_lib::llm::scraping_extract::scraped_offer_schema;
 use findmyjob_lib::llm::templatize_example::example_output_schema;
@@ -34,6 +35,7 @@ fn sent_schemas() -> Vec<(&'static str, Value)> {
         ("libellés CV", cv_labels_schema()),
         ("libellés lettre", lm_labels_schema()),
         ("traduction du profil", translation_schema()),
+        ("traduction de la référence", reference_translation_schema()),
         ("rédaction CV", cv_content_schema()),
         ("rédaction lettre", lm_content_schema()),
         ("extraction d'offre", scraped_offer_schema()),

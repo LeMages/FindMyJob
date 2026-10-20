@@ -18,6 +18,7 @@ pub mod offer;
 pub mod profile_facts;
 pub mod profile_translation;
 pub mod prose_checks;
+pub mod reference_translation;
 pub mod schema_size;
 pub mod scraping_extract;
 pub mod target;

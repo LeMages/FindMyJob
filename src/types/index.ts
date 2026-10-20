@@ -53,6 +53,8 @@ export interface UserView {
   portfolio: string | null
   /** Centres d'intérêt, une ligne = un item. */
   interets: string | null
+  /** Langue dans laquelle le profil est rédigé (`fr` ou `en`). */
+  langue_profil: string
   created_at: string
 }
 // ── Suivi de candidatures (kanban) ───────────────────────────────────────────

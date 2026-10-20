@@ -7,6 +7,7 @@ pub mod example_check;
 pub mod fonts;
 pub mod markup;
 pub mod paragraph_check;
+pub mod reference_texts_cache;
 pub mod reference_versions;
 pub mod sparse_check;
 pub mod storage;

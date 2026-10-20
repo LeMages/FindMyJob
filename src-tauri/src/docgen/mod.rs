@@ -27,6 +27,7 @@ pub mod page_fit;
 pub mod period_format;
 pub mod recipient;
 pub mod reference_template;
+pub mod reference_texts_translation;
 pub mod selection;
 pub mod sentinel_data;
 pub mod text_diff;

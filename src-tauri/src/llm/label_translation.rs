@@ -10,20 +10,13 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::error::AppError;
 use crate::llm::client::call_claude;
 use crate::llm::doc_data_schema::{cv_labels_schema, lm_labels_schema};
+use crate::models::doc_lang::language_name;
 use crate::models::{CvLabels, LmLabels};
 use crate::llm::target::ClaudeTarget;
 
 /// Version du prompt de traduction des libellés : un cache écrit avec une
 /// autre version est retraduit. À incrémenter à chaque modification du prompt.
 pub const LABELS_PROMPT_VERSION: u32 = 2;
-
-/// Nom lisible d'une langue, pour le prompt.
-fn language_name(lang: &str) -> &'static str {
-    match lang {
-        "en" => "anglais",
-        _ => "français",
-    }
-}
 
 /// Traduit un jeu de libellés selon un schéma donné.
 async fn translate<T: Serialize + DeserializeOwned>(

@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use crate::docgen::budgets::LmBudget;
 use crate::docgen::example_facts::lm_information_values;
 use crate::docgen::lint::lint_lm_budget;
+use crate::docgen::entry_texts::CvEntryTexts;
 use crate::docgen::selection::Selection;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
@@ -37,6 +38,7 @@ Les paragraphes ne contiennent ni la formule d'appel ni la formule de politesse 
 /// * `matching` - Résultat du matching.
 /// * `selection` - Entrées du profil retenues.
 /// * `profile` - Profil complet du candidat.
+/// * `entry_texts` - Descriptions des entrées, dans la langue du document.
 /// * `example` - Contenu de la référence (modèle de style).
 /// * `guidance` - Consignes de la référence (`subject`, `paragraphs[i]`).
 /// * `budget` - Budget de longueur.
@@ -48,6 +50,7 @@ pub struct LmWritingInput<'a> {
     pub matching: &'a MatchingResult,
     pub selection: &'a Selection,
     pub profile: &'a ProfileDto,
+    pub entry_texts: &'a CvEntryTexts,
     pub example: &'a LmData,
     pub guidance: &'a ProseGuidance,
     pub budget: LmBudget,
@@ -111,7 +114,7 @@ fn user_message(input: &LmWritingInput<'_>) -> String {
     let mut blocks = vec![
         format!("ENTREPRISE DESTINATAIRE : {company}"),
         format!("ANALYSE DE L'OFFRE :\n{}", input.offer_analysis),
-        profile_facts_block(input.profile, input.selection, input.matching),
+        profile_facts_block(input.profile, input.selection, input.matching, input.entry_texts),
         style_model_block(&example_prose(input.example)),
     ];
     blocks.extend(guidance_block(input.guidance));

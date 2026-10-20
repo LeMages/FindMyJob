@@ -26,6 +26,8 @@ use crate::models::{CvContent, LmContent, MatchingResult};
 /// * `page_retries` - Relances dues au dépassement de pages.
 /// * `warning` - Avertissement éventuel (pages dépassées).
 /// * `labels_translated` - Vrai si les libellés ont été traduits.
+/// * `reference_texts_translated` - Vrai si les textes de la référence
+///   (textes en dur, zones [FIXE], consignes) ont été traduits.
 #[derive(Serialize)]
 pub struct DocumentTrace<C> {
     pub content: C,
@@ -35,6 +37,7 @@ pub struct DocumentTrace<C> {
     pub page_retries: u8,
     pub warning: Option<String>,
     pub labels_translated: bool,
+    pub reference_texts_translated: bool,
 }
 
 /// Trace complète d'une génération.
@@ -68,6 +71,7 @@ fn attempts_of<C>(doc: &DocumentTrace<C>) -> Value {
         "page_count": doc.page_count,
         "warning": doc.warning,
         "labels_translated": doc.labels_translated,
+        "reference_texts_translated": doc.reference_texts_translated,
     })
 }
 

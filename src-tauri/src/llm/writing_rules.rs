@@ -6,6 +6,7 @@
 
 // Importation des modules internes
 use crate::llm::writing_loop::WritingFeedback;
+use crate::models::doc_lang::language_name;
 use crate::models::ProseGuidance;
 
 /// Consignes communes aux deux documents, avec leur ordre de priorité. Une
@@ -28,22 +29,6 @@ const ZONE_RULES: &str = "Règles des zones.
 [VARIABLE] : remplace le texte de la zone par les informations tirées de l'offre, en suivant sa consigne.
 [ADAPTABLE] : rédige la zone à partir du profil selon l'offre, en suivant sa consigne, sans rien inventer.
 Les zones d'un champ s'enchaînent dans le même ordre, sans rien ajouter entre elles. Un champ sans zone est rédigé à partir du profil et de l'offre.";
-
-/// Nom lisible d'une langue de document, pour les prompts.
-///
-/// # Arguments
-///
-/// * `lang` - Code de langue (`"fr"` ou `"en"`).
-///
-/// # Returns
-///
-/// « anglais » ou « français ».
-pub fn language_name(lang: &str) -> &'static str {
-    match lang {
-        "en" => "anglais",
-        _ => "français",
-    }
-}
 
 /// Consigne de langue, placée en tête du prompt système : langue cible, et
 /// transposition de la voix si le modèle de style est dans une autre langue.
