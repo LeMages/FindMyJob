@@ -5,7 +5,6 @@
 // Importation des modules internes
 use findmyjob_lib::docgen::budgets::{lm_budget, WordRange};
 use findmyjob_lib::docgen::fixed_zones::{fixed_zone_violations, transform_outside_fixed, without_fixed_text};
-use findmyjob_lib::docgen::guidance_consistency::guidance_problems;
 use findmyjob_lib::docgen::lint::{lint_prose, strip_dashes, strip_forbidden_marks};
 use findmyjob_lib::docgen::words::count_words;
 use findmyjob_lib::models::{LmData, ProseField, ProseGuidance, ProseZone, ZoneMode};
@@ -32,29 +31,6 @@ fn guidance() -> ProseGuidance {
             zone("paragraphs[0]", ZoneMode::Variable, "Je postule chez Exemple SA."),
         ],
     }
-}
-
-// ======================================================================
-// Cohérence des zones (templatisation)
-// ======================================================================
-
-#[test]
-fn zones_coherentes_acceptees() {
-    let fields = [field("subject", "Candidature"), field("paragraphs[0]", &format!("{FIXED} Je postule chez Exemple SA."))];
-    assert!(guidance_problems(&guidance(), &fields).is_empty());
-}
-
-#[test]
-fn zones_incoherentes_signalees() {
-    let fields = [field("paragraphs[0]", &format!("{FIXED} Je postule ailleurs."))];
-    let problems = guidance_problems(&guidance(), &fields);
-    assert_eq!(problems.len(), 1, "{problems:?}");
-    assert!(problems[0].contains("\"ailleurs.\""), "{problems:?}");
-
-    let mut unknown = guidance();
-    unknown.zones.push(zone("paragraphs[7]", ZoneMode::Fixe, "x"));
-    let fields = [field("paragraphs[0]", &format!("{FIXED} Je postule chez Exemple SA."))];
-    assert!(guidance_problems(&unknown, &fields).iter().any(|p| p.contains("paragraphs[7]")));
 }
 
 // ======================================================================

@@ -426,7 +426,7 @@ fn lettre_sans_ville_ni_separateur_orphelin() {
 
 #[test]
 fn reference_d_une_version_precedente_a_reimporter() {
-    use crate::docgen::reference_template::load_texts;
+    use crate::documents::reference_template::load_texts;
     use crate::error::AppError;
 
     let dir = std::env::temp_dir().join(format!("findmyjob-reference-texts-{}", std::process::id()));

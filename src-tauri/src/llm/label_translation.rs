@@ -53,7 +53,7 @@ async fn translate<T: Serialize + DeserializeOwned>(
 ///
 /// # Returns
 ///
-/// Libellés traduits, à valider par l'appelant (`docgen::labels_cache`).
+/// Libellés traduits, à valider par l'appelant (`documents::labels_cache`).
 pub async fn translate_cv_labels(labels: &CvLabels, from: &str, to: &str, target: &ClaudeTarget) -> Result<CvLabels, AppError> {
     translate(labels, "CV", cv_labels_schema(), from, to, target).await
 }
