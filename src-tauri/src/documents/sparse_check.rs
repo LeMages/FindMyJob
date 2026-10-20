@@ -92,8 +92,8 @@ pub async fn sparse_problems(
         // Orphelins qui n'apparaissent qu'en vidant plusieurs champs à la fois.
         return Ok(vec![format!(
             "Rendu avec les champs secondaires vides ({}), le template laisse des séparateurs orphelins : {}. \
-             Un champ vide doit faire disparaître sa valeur et le séparateur qui l'accompagne : construis la liste \
-             des valeurs non vides, puis joins-la avec le séparateur.",
+             Un champ vide doit faire disparaître sa valeur et le séparateur qui l'accompagne : place le séparateur \
+             dans un `if` sur les champs qu'il sépare.",
             SPARSE_FIELDS.join(", "),
             quote(&orphans)
         )]);
@@ -104,8 +104,8 @@ pub async fn sparse_problems(
             format!(
                 "Quand le champ `{field}` est vide, le template laisse les séparateurs orphelins {}. Un séparateur \
                  placé avant ou après `{field}` (par exemple « : » entre une langue et son niveau, ou « | » entre \
-                 deux valeurs) ne s'affiche que si `{field}` n'est pas vide : teste `{field} != \"\"`, ou construis \
-                 la liste des valeurs non vides puis joins-la avec le séparateur.",
+                 deux valeurs) ne s'affiche que si `{field}` n'est pas vide : place-le dans un `if` qui \
+                 teste `{field} != \"\"`.",
                 quote(&orphans)
             )
         })

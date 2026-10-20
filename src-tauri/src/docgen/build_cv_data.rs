@@ -5,6 +5,9 @@
 //! formations viennent uniquement du profil : une section vide dans le
 //! profil reste vide. Aucun appel LLM.
 
+// Importation des modules standard
+use std::collections::BTreeMap;
+
 // Importation des modules internes
 use crate::docgen::document_fallback::list_or_document;
 use crate::docgen::entry_texts::CvEntryTexts;
@@ -23,6 +26,7 @@ use crate::models::{
 /// * `period_style` - Granularité des périodes par section.
 /// * `separator` - Séparateur de période de la référence.
 /// * `lang` - Langue du CV.
+/// * `texts` - Textes en dur de la référence, dans la langue du CV.
 /// * `document` - Données d'exemple de la référence, reprises quand le
 ///   profil est vide sur une information d'identité, les compétences, les
 ///   langues ou les centres d'intérêt (jamais pour les expériences, projets
@@ -33,6 +37,7 @@ pub struct CvLayout<'a> {
     pub period_style: &'a PeriodStyle,
     pub separator: &'a str,
     pub lang: &'a str,
+    pub texts: &'a BTreeMap<String, String>,
 }
 
 /// Assemble les données du CV.
@@ -125,5 +130,6 @@ pub fn build_cv_data(
         langues: list_or_document(langues, &document.langues),
         interets: list_or_document(lines(profile.user.interets.as_ref()), &document.interets),
         labels: layout.labels.clone(),
+        texts: layout.texts.clone(),
     }
 }

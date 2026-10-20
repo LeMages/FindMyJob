@@ -3,6 +3,7 @@
 //! commentaires, et rattachement des zones aux champs de prose.
 
 pub mod attach;
+pub mod hard_texts;
 pub mod model;
 pub mod parse;
 pub mod source_events;

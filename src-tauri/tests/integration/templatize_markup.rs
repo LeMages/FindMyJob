@@ -7,14 +7,14 @@ use findmyjob_lib::documents::markup::{attach_zones, parse_markup, MarkupError};
 use findmyjob_lib::models::{LmExampleData, ProseField, ProseZone, ZoneMode};
 
 /// Champs de prose (objet, paragraphes) des données d'exemple de la lettre réelle.
-fn letter_fields() -> (Vec<ProseField>, LmExampleData) {
+fn letter_fields() -> Vec<ProseField> {
     let example: LmExampleData =
-        serde_json::from_str(&read_reference("real/lm_exemple_example_data.json")).expect("données d'exemple");
+        serde_json::from_str(&read_reference("real/lm_balisee_example_data.json")).expect("données d'exemple");
     let mut fields = vec![ProseField { path: "subject".into(), text: example.data.subject.clone() }];
     fields.extend(
         example.data.paragraphs.iter().enumerate().map(|(i, p)| ProseField { path: format!("paragraphs[{i}]"), text: p.clone() }),
     );
-    (fields, example)
+    fields
 }
 
 /// Zone sans sa consigne, pour comparer le découpage.
@@ -34,9 +34,10 @@ fn lettre_balisee_redonne_les_zones_de_la_reference() {
     assert!(markup.general.contains("La lettre doit tenir sur une page."));
     assert_eq!(markup.zones.len(), 9);
 
-    let (fields, example) = letter_fields();
-    let guidance = attach_zones(&markup.general, &markup.zones, &fields).expect("zones rattachées");
-    let expected: Vec<_> = example.guidance.zones.iter().map(shape).collect();
+    let guidance = attach_zones(&markup.general, &markup.zones, &letter_fields()).expect("zones rattachées");
+    let expected: Vec<ProseZone> =
+        serde_json::from_str(&read_reference("real/lm_balisee_expected_zones.json")).expect("zones attendues");
+    let expected: Vec<_> = expected.iter().map(shape).collect();
     assert_eq!(guidance.zones.iter().map(shape).collect::<Vec<_>>(), expected);
     // Consigne sur plusieurs lignes, recollée ligne à ligne.
     let adaptable = guidance.zones.iter().find(|z| z.mode == ZoneMode::Adaptable).expect("zone adaptable");

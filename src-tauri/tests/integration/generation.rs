@@ -9,6 +9,7 @@ use serde_json::Value;
 // Importation des modules internes
 use crate::shared::{fake_llm, seed, test_state};
 use fake_llm::{Reply, Step};
+use findmyjob_lib::llm::client::TEMPLATIZE_MODEL;
 use findmyjob_lib::docgen::lint::lint_prose;
 use findmyjob_lib::error::AppError;
 use findmyjob_lib::models::{GenerationProgress, GenerationStatus, ProseField};
@@ -71,9 +72,11 @@ fn assert_no_generated_files(state: &AppState, sid: i64, cid: i64) {
 #[tokio::test]
 async fn generation_remplit_data_json_depuis_le_profil() {
     let (app, sid) = ready_app("generation-ok").await;
-    // Les références de test passent la validation dès le premier essai.
-    assert_eq!(app.llm.calls_for(Step::TemplatizeCv), 1);
-    assert_eq!(app.llm.calls_for(Step::TemplatizeLm), 1);
+    // Les références de test passent la validation dès le premier essai,
+    // avec le modèle imposé à la templatisation.
+    for step in [Step::ExampleCv, Step::TemplateCv, Step::ExampleLm, Step::TemplateLm] {
+        assert_eq!(app.llm.models_for(step), [TEMPLATIZE_MODEL], "{step:?}");
+    }
 
     let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
     let progress = wait_generation(&app.state, view.id).await;

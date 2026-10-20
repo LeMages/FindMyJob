@@ -31,6 +31,10 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Modèle utilisé par défaut si aucun n'est configuré en base (voir
 /// `db::settings::resolve_llm_model`).
 pub const DEFAULT_MODEL: &str = "claude-sonnet-4-6";
+/// Modèle imposé pour la templatisation des références, quel que soit le
+/// modèle des paramètres : le Sonnet le plus récent de `AVAILABLE_MODELS`.
+/// Un modèle plus léger y échoue (voir docs/audit-generation-documents.md).
+pub const TEMPLATIZE_MODEL: &str = "claude-sonnet-4-6";
 /// Modèles proposés dans le sélecteur des paramètres.
 pub const AVAILABLE_MODELS: [&str; 2] = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"];
 /// Plafond de tokens de sortie — largement suffisant pour un JSON d'analyse.

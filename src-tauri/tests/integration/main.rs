@@ -42,4 +42,6 @@ mod services_files;
 mod sessions_lifecycle;
 mod startup_run_mode;
 mod templatize_markup;
+mod templatize_retries;
+mod templatize_validation;
 mod text_conversion;

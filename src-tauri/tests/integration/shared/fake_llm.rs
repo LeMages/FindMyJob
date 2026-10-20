@@ -26,8 +26,10 @@ pub enum Step {
     LmContent,
     ProfileTranslation,
     ScrapedOffer,
-    TemplatizeCv,
-    TemplatizeLm,
+    ExampleCv,
+    ExampleLm,
+    TemplateCv,
+    TemplateLm,
 }
 
 /// Réponse renvoyée pour une étape.
@@ -40,6 +42,11 @@ pub enum Reply {
     Sequence(&'static [&'static str]),
     /// Erreur de l'API simulée (`AppError::Llm`).
     Error(&'static str),
+    /// Fichiers de `tests/fixtures/` (chemins relatifs) renvoyés tels quels
+    /// dans l'ordre des appels de l'étape, le dernier répété au-delà ; un
+    /// fichier `.typ` est entouré d'un bloc ```typst```, comme une réponse
+    /// de l'étape B de la templatisation.
+    Files(&'static [&'static str]),
 }
 
 /// Appel reçu, pour les vérifications.
@@ -48,10 +55,12 @@ pub enum Reply {
 ///
 /// * `step` - Étape reconnue.
 /// * `user_message` - Message utilisateur envoyé.
+/// * `model` - Modèle demandé.
 #[derive(Debug, Clone)]
 pub struct RecordedCall {
     pub step: Step,
     pub user_message: String,
+    pub model: String,
 }
 
 /// Exécutant factice.
@@ -82,6 +91,11 @@ impl FakeLlm {
         self.calls.lock().unwrap().len()
     }
 
+    /// Modèles demandés pour une étape, dans l'ordre des appels.
+    pub fn models_for(&self, step: Step) -> Vec<String> {
+        self.calls.lock().unwrap().iter().filter(|c| c.step == step).map(|c| c.model.clone()).collect()
+    }
+
     /// Messages utilisateur reçus pour une étape.
     pub fn messages_for(&self, step: Step) -> Vec<String> {
         self.calls.lock().unwrap().iter().filter(|c| c.step == step).map(|c| c.user_message.clone()).collect()
@@ -98,6 +112,10 @@ impl FakeLlm {
                 Ok(read_fixture(name))
             }
             Some(Reply::Error(message)) => Err(AppError::Llm(message.to_string())),
+            Some(Reply::Files(names)) => {
+                let name = names.get(call_index).or(names.last()).expect("séquence de fichiers non vide");
+                Ok(raw_file(name))
+            }
             None => Ok(default_reply(step)),
         }
     }
@@ -105,11 +123,15 @@ impl FakeLlm {
 
 impl LlmCaller for FakeLlm {
     fn call<'a>(&'a self, request: LlmRequest<'a>) -> LlmFuture<'a> {
-        let step = step_of(request.output_schema.as_ref());
+        let step = step_of(request.system, request.output_schema.as_ref());
         let call_index = {
             let mut calls = self.calls.lock().unwrap();
             let index = calls.iter().filter(|c| c.step == step).count();
-            calls.push(RecordedCall { step, user_message: request.user_message.to_string() });
+            calls.push(RecordedCall {
+                step,
+                user_message: request.user_message.to_string(),
+                model: request.model.to_string(),
+            });
             index
         };
         let reply = self.reply_for(step, call_index);
@@ -117,16 +139,19 @@ impl LlmCaller for FakeLlm {
     }
 }
 
-/// Reconnaît l'étape d'après une propriété propre à son schéma de sortie.
-fn step_of(schema: Option<&Value>) -> Step {
+/// Reconnaît l'étape d'après une propriété propre à son schéma de sortie ;
+/// l'étape B de la templatisation, sans schéma, d'après son prompt système.
+fn step_of(system: &str, schema: Option<&Value>) -> Step {
+    if schema.is_none() && system.starts_with("Tu écris le template Typst") {
+        return if system.contains("(CV)") { Step::TemplateCv } else { Step::TemplateLm };
+    }
     let properties = schema
         .and_then(|s| s.get("properties"))
         .and_then(Value::as_object)
         .unwrap_or_else(|| panic!("FakeLlm : appel sans schéma de sortie, étape inconnue"));
     let has = |key: &str| properties.contains_key(key);
-    if has("template_typ") {
-        let is_cv = properties["example_data"]["properties"].get("period_style").is_some();
-        return if is_cv { Step::TemplatizeCv } else { Step::TemplatizeLm };
+    if has("identity") {
+        return if has("period_style") { Step::ExampleCv } else { Step::ExampleLm };
     }
     let candidates = [
         ("job_title", Step::OfferAnalysis),
@@ -156,19 +181,32 @@ fn default_reply(step: Step) -> String {
         Step::LmContent => read_fixture("lm_content.json"),
         Step::ProfileTranslation => read_fixture("profile_translation.json"),
         Step::ScrapedOffer => read_fixture("scraped_offer.json"),
-        Step::TemplatizeCv => templatize_reply("cv_template.typ", "cv_example_data.json"),
-        Step::TemplatizeLm => templatize_reply("lm_template.typ", "lm_example_data.json"),
+        Step::ExampleCv => read_reference("cv_example_data.json"),
+        Step::ExampleLm => read_reference("lm_example_data.json"),
+        Step::TemplateCv => typst_block(&read_reference("cv_template.typ")),
+        Step::TemplateLm => typst_block(&read_reference("lm_template.typ")),
     }
 }
 
-/// Réponse de templatisation : template et données d'exemple de test. Les
-/// consignes sont lues par Rust dans le balisage, le modèle ne les rend pas.
-fn templatize_reply(template: &str, example_data: &str) -> String {
-    let mut example: Value = serde_json::from_str(&read_reference(example_data)).expect("données d'exemple JSON");
-    if let Some(map) = example.as_object_mut() {
-        map.remove("guidance");
+/// Template entouré d'un bloc ```typst```, comme une réponse de l'étape B.
+fn typst_block(template: &str) -> String {
+    format!("Voici le template.
+```typst
+{template}
+```
+")
+}
+
+/// Lit un fichier de `tests/fixtures/` ; un `.typ` est rendu comme une
+/// réponse de l'étape B.
+fn raw_file(name: &str) -> String {
+    let path = fixtures_dir().join(name);
+    let content = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("fixture {} illisible : {e}", path.display()));
+    if name.ends_with(".typ") {
+        typst_block(&content)
+    } else {
+        content
     }
-    serde_json::json!({ "template_typ": read_reference(template), "example_data": example }).to_string()
 }
 
 /// Dossier des fixtures de test.

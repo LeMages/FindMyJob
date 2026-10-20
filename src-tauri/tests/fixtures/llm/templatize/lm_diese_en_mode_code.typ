@@ -67,7 +67,7 @@
   set align(left)
   set par(justify: false, leading: 0.35em)
   let lines = ()
-  if data.recipient.company != "" { lines.push(text(weight: "bold", data.recipient.company)) }
+  #if data.recipient.company != "" { lines.push(text(weight: "bold", data.recipient.company)) }
   for line in data.recipient.extra_lines.filter(v => v != "") { lines.push(line) }
   if data.recipient.location != "" { lines.push(data.recipient.location) }
   lines.join(linebreak())
@@ -112,3 +112,6 @@
 #v(16pt)
 
 #joined((data.identity.prenom, data.identity.nom), " ")
+
+#v(12pt)
+#text(size: 9pt, fill: gray)[#data.texts.t1]

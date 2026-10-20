@@ -22,6 +22,7 @@ use std::sync::Arc;
 use sqlx::SqlitePool;
 
 // Importation des modules internes
+use crate::clock;
 use crate::db;
 use crate::services::api_key::ApiKeyAccess;
 use crate::services::claude_target::ClaudeTargetSource;
@@ -171,10 +172,10 @@ impl GenerationContext {
             selection: &self.selection,
             profile: &self.profile,
             example: &self.cv_ref.example.data,
-            guidance: &self.cv_ref.example.guidance,
+            guidance: &self.cv_ref.texts.guidance,
             budget,
             target_lang: &self.lang,
-            example_lang: &self.cv_ref.example.detected_lang,
+            example_lang: &self.cv_ref.example.data.lang,
         }
     }
 
@@ -186,11 +187,11 @@ impl GenerationContext {
             selection: &self.selection,
             profile: &self.profile,
             example: &self.lm_ref.example.data,
-            guidance: &self.lm_ref.example.guidance,
+            guidance: &self.lm_ref.texts.guidance,
             budget,
             company: &self.recipient.company,
             target_lang: &self.lang,
-            example_lang: &self.lm_ref.example.detected_lang,
+            example_lang: &self.lm_ref.example.data.lang,
         }
     }
 }
@@ -222,31 +223,31 @@ async fn prepare(
     // ------------------------------------------------------------------
     on_progress(1, "Analyse de l'offre…");
     let offer_analysis = analyze_offer(request.description_offre, &target).await?;
-    let lang = target_language(&offer_analysis, &cv_ref.example.detected_lang);
+    let lang = target_language(&offer_analysis, &cv_ref.example.data.lang);
 
     on_progress(2, "Matching profil / offre…");
     let project_count = expected_project_count(&profile, cv_ref.example.data.projects.len());
     let matching = match_profile(&offer_analysis, &profile, project_count, &target).await?;
     let selection = select(&profile, &matching.project_ids);
-    let mut cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count).with_fixed_words(&cv_ref.example.guidance);
+    let mut cv_budget = cv_budget(&cv_ref.example.data, cv_ref.page_count).with_fixed_words(&cv_ref.texts.guidance);
     // Pas plus de groupes de compétences que de domaines dans le profil,
     // sinon le modèle doit en inventer un.
     let mut domains: Vec<&str> = profile.skills.iter().map(|s| s.domaine.trim()).collect();
     domains.sort_unstable();
     domains.dedup();
     cv_budget.skills_group_count = cv_budget.skills_group_count.min(domains.len());
-    let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count).with_fixed_words(&lm_ref.example.guidance);
+    let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count).with_fixed_words(&lm_ref.texts.guidance);
 
     // ------------------------------------------------------------------
     // 3. Libellés et textes des entrées dans la langue de l'offre. Le profil
     //    n'a pas de langue déclarée : il est supposé rédigé dans la langue
-    //    du CV de référence (`detected_lang`), la même que pour les libellés.
+    //    du CV de référence, la même que pour les libellés.
     // ------------------------------------------------------------------
     let source = source_texts(&profile, &selection);
-    let profile_lang = cv_ref.example.detected_lang.as_str();
+    let profile_lang = cv_ref.example.data.lang.as_str();
     let (cv_labels, lm_labels, entry_texts) = tokio::try_join!(
-        resolve_cv_labels(&cv_ref.example.data.labels, &cv_ref.example.detected_lang, &lang, &cv_ref.dir, &target),
-        resolve_lm_labels(&lm_ref.example.data.labels, &lm_ref.example.detected_lang, &lang, &lm_ref.dir, &target),
+        resolve_cv_labels(&cv_ref.example.data.labels, &cv_ref.example.data.lang, &lang, &cv_ref.dir, &target),
+        resolve_lm_labels(&lm_ref.example.data.labels, &lm_ref.example.data.lang, &lang, &lm_ref.dir, &target),
         translate_entry_texts(&source, profile_lang, &lang, &target),
     )?;
 
@@ -281,6 +282,7 @@ async fn produce_cv(
         period_style: &ctx.cv_ref.example.period_style,
         separator: &separator,
         lang: &ctx.lang,
+        texts: &ctx.cv_ref.texts.texts,
     };
     let target = CompileTarget {
         label: "CV",
@@ -313,8 +315,9 @@ async fn produce_lm(
         document: &ctx.lm_ref.example.data,
         labels: &ctx.lm_labels.labels,
         title,
-        date: chrono::Local::now().date_naive(),
+        date: clock::today_local(),
         lang: &ctx.lang,
+        texts: &ctx.lm_ref.texts.texts,
     };
     let target = CompileTarget {
         label: "lettre",

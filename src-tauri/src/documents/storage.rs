@@ -22,7 +22,7 @@ use crate::clock;
 use crate::db;
 use crate::db::document_versions::NewVersion;
 use crate::db::transaction::begin_write;
-use crate::documents::templatize::{templatize, template_artifacts, write_template_files, ValidatedTemplate};
+use crate::documents::templatize::{templatize, template_artifacts, write_template_files, TemplatizeInput, ValidatedTemplate};
 use crate::documents::typst::{compile_document, compile_to_pdf};
 use crate::startup::run_mode::RunMode;
 use crate::storage_paths;
@@ -194,7 +194,7 @@ async fn persist_version(
     let (version_dir, template, now) = (version_dir.as_str(), &template, now.as_str());
     let written = async move {
         write_version_files(data_dir, version_dir, pending.content, pending.pdf)?;
-        write_template_files(data_dir, template, pending.validated)?;
+        write_template_files(data_dir, version_dir, template, pending.validated)?;
         db::documents::set_current(&mut tx, pending.session_id, pending.doc_type, version_id, now).await?;
         let doc = db::documents::get_current(&mut *tx, pending.session_id, pending.doc_type)
             .await?
@@ -272,8 +272,8 @@ pub async fn save_reference(
             &storage_paths::templatize_debug_dir(session_id, doc_type, &clock::file_stamp()),
         )
     });
-    let validated =
-        templatize(&content, &reference, doc_type, &doc_dir, fonts_dir, &target, debug_dir.as_deref()).await?;
+    let input = TemplatizeInput { source: &content, rendered: &reference, doc_type, root: &doc_dir, fonts_dir };
+    let validated = templatize(&input, &target, debug_dir.as_deref()).await?;
 
     // ------------------------------------------------------------------
     // 4. Version en base, fichiers et référence courante, atomiquement

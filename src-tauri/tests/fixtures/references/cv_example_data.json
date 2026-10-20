@@ -89,14 +89,9 @@
       "Déc."
     ]
   },
-  "detected_lang": "fr",
   "period_style": {
     "experiences": "month",
     "projects": "year",
     "formations": "year"
-  },
-  "guidance": {
-    "general": "",
-    "zones": []
   }
 }
