@@ -151,6 +151,34 @@ fn build_user_message(reference_typ: &str, feedback: Option<&TemplatizeFeedback>
     message
 }
 
+/// Schéma de sortie de la templatisation d'un type de document.
+///
+/// # Arguments
+///
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+///
+/// # Returns
+///
+/// Le schéma, ou `None` pour un type inconnu.
+pub fn templatize_output_schema(doc_type: &str) -> Option<serde_json::Value> {
+    match doc_type {
+        "cv" => Some(output_schema(cv_example_data_schema())),
+        "lettre_motivation" => Some(output_schema(lm_example_data_schema())),
+        _ => None,
+    }
+}
+
+/// Enveloppe la sortie de la templatisation autour du schéma des données.
+fn output_schema(data_schema: serde_json::Value) -> serde_json::Value {
+    object(&[
+        ("template_typ", serde_json::json!({ "type": "string" })),
+        ("example_data", data_schema),
+        // Chaîne JSON plutôt qu'objet : avec un objet, la grammaire compilée
+        // du schéma CV dépasse le plafond de l'API.
+        ("guidance", serde_json::json!({ "type": "string" })),
+    ])
+}
+
 /// Convertit un document de référence Typst en template + données d'exemple.
 ///
 /// # Arguments
@@ -190,13 +218,7 @@ pub async fn templatize_reference(
          {TEMPLATE_RULES}\n\n{EXAMPLE_DATA_RULES}\n\n{fields}\n\n{ADDRESS_RULE}\n\n{GUIDANCE_RULES}"
     );
     let user_message = build_user_message(reference_typ, feedback);
-    let schema = object(&[
-        ("template_typ", serde_json::json!({ "type": "string" })),
-        ("example_data", data_schema),
-        // Chaîne JSON plutôt qu'objet : avec un objet, la grammaire compilée
-        // du schéma CV dépasse le plafond de l'API.
-        ("guidance", serde_json::json!({ "type": "string" })),
-    ]);
+    let schema = output_schema(data_schema);
 
     let raw = call_claude_with_tokens("templatisation", &system_prompt, &user_message, Some(schema), TEMPLATIZE_MAX_TOKENS, target).await?;
     parse_output(&raw)

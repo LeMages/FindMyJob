@@ -25,7 +25,7 @@ use crate::models::{MatchingResult, ProfileDto};
 /// vide n'est pas un schéma valide. Le nombre d'éléments n'est pas
 /// contraint par le schéma (les structured outputs ne bornent pas une
 /// liste au-delà de 1) : il est vérifié en Rust.
-fn matching_schema(profile: &ProfileDto, expected: usize) -> Value {
+pub fn matching_schema(profile: &ProfileDto, expected: usize) -> Value {
     let skill = object(&[
         ("skill", json!({ "type": "string" })),
         ("match_type", json!({ "type": "string", "enum": ["exact", "related", "transferable"] })),

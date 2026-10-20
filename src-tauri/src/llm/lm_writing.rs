@@ -55,7 +55,7 @@ pub struct LmWritingInput<'a> {
 }
 
 /// Schéma de sortie de la rédaction de la lettre.
-fn lm_content_schema() -> Value {
+pub fn lm_content_schema() -> Value {
     let text = json!({ "type": "string", "minLength": 1 });
     object(&[
         ("subject", text.clone()),

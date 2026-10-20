@@ -22,7 +22,7 @@ use crate::llm::writing_loop::WritingFeedback;
 use crate::llm::writing_rules::{language_name, with_feedback};
 
 /// Schéma de sortie de la traduction : même forme que `CvEntryTexts`.
-fn translation_schema() -> Value {
+pub fn translation_schema() -> Value {
     let id = json!({ "type": "integer" });
     let lines = json!({ "type": "array", "items": { "type": "string" } });
     let entry = object(&[("id", id.clone()), ("lines", lines.clone())]);

@@ -60,7 +60,7 @@ fn list(items: Value) -> Value {
 }
 
 /// Schéma de sortie de la rédaction du CV.
-fn cv_content_schema() -> Value {
+pub fn cv_content_schema() -> Value {
     object(&[
         ("title", text()),
         ("summary", text()),

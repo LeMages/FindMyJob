@@ -37,7 +37,7 @@ pub struct ScrapedContact {
 /// (`output_config.format`). `type_contrat` est restreint aux valeurs du
 /// `<select>` du formulaire (`stage`/`alternance`/`interim`/`cdd`/`cdi`) —
 /// pas `freelance`, absent de ce `<select>` bien qu'autorisé en base.
-fn scraped_offer_schema() -> serde_json::Value {
+pub fn scraped_offer_schema() -> serde_json::Value {
     serde_json::json!({
         "type": "object",
         "properties": {

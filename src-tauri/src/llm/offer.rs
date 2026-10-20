@@ -9,7 +9,7 @@ use crate::llm::target::ClaudeTarget;
 
 /// Schéma JSON attendu pour l'analyse d'offre, utilisé comme structured
 /// output (`output_config.format`).
-fn offer_analysis_schema() -> serde_json::Value {
+pub fn offer_analysis_schema() -> serde_json::Value {
     serde_json::json!({
         "type": "object",
         "properties": {
