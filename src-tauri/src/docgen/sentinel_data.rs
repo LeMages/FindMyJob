@@ -10,6 +10,9 @@
 //! si bien qu'une branche conditionnée à un champ (`if data.summary != ""`)
 //! est rendue elle aussi.
 
+// Importation des modules standard
+use std::collections::BTreeMap;
+
 // Importation des crates externes
 use serde_json::Value;
 
@@ -46,11 +49,12 @@ const MAX_DEPTH: usize = 16;
 /// # Arguments
 ///
 /// * `lang` - Langue du document (`"fr"` ou `"en"`), gardée telle quelle.
+/// * `text_ids` - Identifiants des textes en dur de la référence (`data.texts`).
 ///
 /// # Returns
 ///
 /// Données au schéma `CvData`, en JSON.
-pub fn sentinel_cv_data(lang: &str) -> Result<Value, serde_json::Error> {
+pub fn sentinel_cv_data(lang: &str, text_ids: &[String]) -> Result<Value, serde_json::Error> {
     let data = CvData {
         identity: Identity { permis: true, ..Default::default() },
         lang: lang.to_string(),
@@ -61,6 +65,7 @@ pub fn sentinel_cv_data(lang: &str) -> Result<Value, serde_json::Error> {
         langues: vec![CvLangue::default()],
         interets: vec![String::new()],
         labels: CvLabels { months_short: vec![String::new(); 12], ..Default::default() },
+        texts: empty_texts(text_ids),
         ..Default::default()
     };
     Ok(marked(serde_json::to_value(data)?))
@@ -72,18 +77,25 @@ pub fn sentinel_cv_data(lang: &str) -> Result<Value, serde_json::Error> {
 /// # Arguments
 ///
 /// * `lang` - Langue du document (`"fr"` ou `"en"`), gardée telle quelle.
+/// * `text_ids` - Identifiants des textes en dur de la référence (`data.texts`).
 ///
 /// # Returns
 ///
 /// Données au schéma `LmData`, en JSON.
-pub fn sentinel_lm_data(lang: &str) -> Result<Value, serde_json::Error> {
+pub fn sentinel_lm_data(lang: &str, text_ids: &[String]) -> Result<Value, serde_json::Error> {
     let data = LmData {
         identity: Identity { permis: true, ..Default::default() },
         lang: lang.to_string(),
         paragraphs: vec![String::new()],
+        texts: empty_texts(text_ids),
         ..Default::default()
     };
     Ok(marked(serde_json::to_value(data)?))
+}
+
+/// Textes en dur vides (marqués ensuite), par identifiant.
+fn empty_texts(text_ids: &[String]) -> BTreeMap<String, String> {
+    text_ids.iter().map(|id| (id.clone(), String::new())).collect()
 }
 
 /// Remplace chaque chaîne des données (sauf `lang`) par un marqueur unique.
@@ -137,6 +149,31 @@ pub fn hardcoded_values(text: &str, values: &[String]) -> Vec<String> {
             !keys.is_empty() && hardcoded.windows(keys.len()).any(|window| window == keys.as_slice())
         })
         .cloned()
+        .collect()
+}
+
+/// Textes restés écrits en dur dans un rendu sentinelle : suites de mots
+/// entre deux marqueurs qui contiennent une lettre (la ponctuation et les
+/// séparateurs au bord sont retirés). Toutes les données étant marquées,
+/// chacune est un texte que le template n'a pas lu dans `data`.
+///
+/// # Arguments
+///
+/// * `text` - Texte rendu avec les données sentinelles.
+///
+/// # Returns
+///
+/// Les textes en dur, dans l'ordre du rendu.
+pub fn hardcoded_runs(text: &str) -> Vec<String> {
+    let has_letter = |w: &&str| w.chars().any(char::is_alphabetic);
+    strip_markers(text)
+        .split(" | ")
+        .filter_map(|segment| {
+            let tokens: Vec<&str> = segment.split_whitespace().collect();
+            let first = tokens.iter().position(has_letter)?;
+            let last = tokens.iter().rposition(has_letter)?;
+            Some(tokens[first..=last].join(" "))
+        })
         .collect()
 }
 

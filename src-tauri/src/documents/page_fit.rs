@@ -1,7 +1,14 @@
 //! Compilation d'un document généré avec son template, et ajustement au
 //! nombre de pages de la référence : si le PDF dépasse, la rédaction est
 //! relancée avec des budgets réduits de 15 % (cumulés), deux fois au
-//! maximum, puis le document est conservé avec un avertissement.
+//! maximum, puis le document est conservé avec un avertissement affiché
+//! dans la fiche de la candidature.
+//!
+//! Seule la prose rédigée a un budget : si le document dépasse encore sans
+//! aucune prose, le dépassement vient des sections du profil (expériences,
+//! projets, formations) et aucune relance ne peut le résoudre. Le document
+//! est alors gardé tout de suite, avec un avertissement qui invite à
+//! raccourcir le profil.
 
 // Importation des modules standard
 use std::future::Future;
@@ -29,7 +36,8 @@ const BUDGET_REDUCTION: f64 = 0.85;
 /// * `data_json` - Données passées au template (`data.json`).
 /// * `page_count` - Nombre de pages du PDF.
 /// * `page_retries` - Nombre de relances dues au dépassement de pages.
-/// * `warning` - Avertissement si le document dépasse encore ses pages.
+/// * `warning` - Avertissement pour l'utilisateur si le document dépasse
+///   encore ses pages.
 /// * `writing` - Rédaction finalement retenue.
 /// * `rounds` - Essais de chaque rédaction (initiale puis relances).
 pub struct FittedDocument<C> {
@@ -57,6 +65,44 @@ pub struct CompileTarget<'a> {
     pub root: &'a Path,
     pub fonts_dir: &'a Path,
     pub max_pages: usize,
+}
+
+/// Dépassement du nombre de pages, et ce qu'on en fait.
+#[derive(Clone, Copy)]
+enum Overflow {
+    /// La prose peut encore raccourcir : relance.
+    Retry,
+    /// Dépassement après toutes les relances.
+    Prose,
+    /// Dépassement même sans prose : il vient des sections du profil.
+    Profile,
+}
+
+impl Overflow {
+    /// Avertissement montré à l'utilisateur.
+    fn warning(self, target: &CompileTarget<'_>, page_count: usize) -> String {
+        let (label, max) = (target.label, target.max_pages);
+        match self {
+            Overflow::Profile => format!(
+                "Le {label} fait {page_count} page(s) au lieu de {max} : les sections reprises du profil                  (expériences, projets, formations) prennent trop de place. Raccourcissez-les dans votre profil."
+            ),
+            _ => format!(
+                "Le {label} fait {page_count} page(s) au lieu de {max}, malgré deux raccourcissements du texte                  rédigé. Raccourcissez votre profil ou relancez la génération."
+            ),
+        }
+    }
+}
+
+/// Vrai si le document dépasse son nombre de pages même sans aucune prose
+/// rédigée : aucune réduction des budgets ne peut alors le faire tenir.
+async fn overflows_without_prose<C: Default, D: Serialize>(
+    target: &CompileTarget<'_>,
+    build: &impl Fn(&C) -> D,
+) -> Result<bool, AppError> {
+    let data_json = serde_json::to_string(&build(&C::default()))
+        .map_err(|e| AppError::Validation(format!("Données du {} non sérialisables : {e}", target.label)))?;
+    let (_, page_count) = compile(target, &data_json).await?;
+    Ok(page_count > target.max_pages)
 }
 
 /// Compile des données avec le template (hors du runtime async).
@@ -89,6 +135,7 @@ pub async fn fit_to_pages<C, D, Fut>(
     rewrite: impl Fn(f64) -> Fut,
 ) -> Result<FittedDocument<C>, AppError>
 where
+    C: Default,
     D: Serialize,
     Fut: Future<Output = Result<WritingOutcome<C>, AppError>>,
 {
@@ -101,14 +148,17 @@ where
             .map_err(|e| AppError::Validation(format!("Données du {} non sérialisables : {e}", target.label)))?;
         let (pdf, page_count) = compile(target, &data_json).await?;
 
-        let fits = page_count <= target.max_pages;
-        if fits || page_retries >= MAX_PAGE_RETRIES {
-            let warning = (!fits).then(|| {
-                format!(
-                    "Le {} fait {page_count} page(s) pour {} attendue(s), malgré {MAX_PAGE_RETRIES} réductions des budgets.",
-                    target.label, target.max_pages
-                )
-            });
+        let overflow = if page_count <= target.max_pages {
+            None
+        } else if page_retries >= MAX_PAGE_RETRIES {
+            Some(Overflow::Prose)
+        } else if page_retries == 0 && overflows_without_prose(target, &build).await? {
+            Some(Overflow::Profile)
+        } else {
+            Some(Overflow::Retry)
+        };
+        if !matches!(overflow, Some(Overflow::Retry)) {
+            let warning = overflow.map(|o| o.warning(target, page_count));
             if let Some(w) = &warning {
                 trace_log::log(&format!("[page_fit] {w}"));
             }

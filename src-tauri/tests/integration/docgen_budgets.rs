@@ -6,11 +6,12 @@ use findmyjob_lib::docgen::budgets::{cv_budget, lm_budget, WordRange};
 use findmyjob_lib::docgen::words::count_words;
 
 #[test]
-fn plage_de_mots_a_dix_pour_cent() {
+fn plage_de_mots_asymetrique() {
+    // Trop long : limite stricte à +10 %. Trop court : souple, jusqu'à -30 %.
     let range = WordRange::around(100);
-    assert_eq!((range.min, range.target, range.max), (90, 100, 110));
-    assert!(range.contains(90) && range.contains(110));
-    assert!(!range.contains(89) && !range.contains(111));
+    assert_eq!((range.min, range.target, range.max), (70, 100, 110));
+    assert!(range.contains(70) && range.contains(110));
+    assert!(!range.contains(69) && !range.contains(111));
 }
 
 #[test]

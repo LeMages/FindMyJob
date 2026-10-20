@@ -3,12 +3,23 @@
 //! des références et stockage sur disque.
 
 pub mod doc_type;
+pub mod example_check;
 pub mod fonts;
+pub mod generation_trace;
+pub mod labels_cache;
+pub mod markup;
+pub mod page_fit;
 pub mod paragraph_check;
+pub mod reference_template;
+pub mod reference_texts_cache;
 pub mod reference_versions;
 pub mod sparse_check;
 pub mod storage;
+pub mod template_check;
+pub mod template_edits;
+pub mod template_problems;
 pub mod templatize;
+pub mod templatize_debug;
 pub mod typst;
 pub mod typst_diagnostics;
 pub mod typst_lines;

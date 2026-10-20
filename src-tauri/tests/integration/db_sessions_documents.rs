@@ -100,7 +100,7 @@ async fn supprimer_une_version_detache_les_candidatures() {
     let cv = seed::reference(&pool, sid, "cv").await;
     let lm = seed::reference(&pool, sid, "lettre_motivation").await;
     let cid = seed::candidature(&pool, sid, seed::NOW).await;
-    candidatures::set_documents(&pool, cid, ("a/cv.pdf", "a/lm.pdf"), (cv, lm)).await.unwrap();
+    candidatures::set_documents(&pool, cid, ("a/cv.pdf", "a/lm.pdf"), (cv, lm), &[]).await.unwrap();
     assert_eq!(candidatures::fetch_detail(&pool, cid).await.unwrap().cv_reference_version, Some(1));
 
     sqlx::query("DELETE FROM document_versions WHERE id = $1").bind(cv).execute(&pool).await.unwrap();

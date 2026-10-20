@@ -6,7 +6,7 @@
 //! chronologique. Les dates simples sont au format `YYYY-MM-DD`.
 
 // Importation des crates externes
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Local, NaiveDate, Utc};
 
 /// Format des dates-heures stockées (RFC 3339 UTC, millisecondes, suffixe `Z`).
 const TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3fZ";
@@ -37,6 +37,16 @@ pub fn now_utc() -> String {
 /// Horodatage UTC compact, en millisecondes.
 pub fn file_stamp() -> String {
     Utc::now().format(FILE_STAMP_FORMAT).to_string()
+}
+
+/// Date du jour dans le fuseau de l'utilisateur : celle qu'une lettre
+/// affiche (une lettre datée en UTC pourrait l'être de la veille).
+///
+/// # Returns
+///
+/// Date locale du jour.
+pub fn today_local() -> NaiveDate {
+    Local::now().date_naive()
 }
 
 /// Convertit une date-heure au format de stockage.

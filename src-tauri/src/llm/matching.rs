@@ -25,7 +25,7 @@ use crate::models::{MatchingResult, ProfileDto};
 /// vide n'est pas un schéma valide. Le nombre d'éléments n'est pas
 /// contraint par le schéma (les structured outputs ne bornent pas une
 /// liste au-delà de 1) : il est vérifié en Rust.
-fn matching_schema(profile: &ProfileDto, expected: usize) -> Value {
+pub fn matching_schema(profile: &ProfileDto, expected: usize) -> Value {
     let skill = object(&[
         ("skill", json!({ "type": "string" })),
         ("match_type", json!({ "type": "string", "enum": ["exact", "related", "transferable"] })),
@@ -72,7 +72,7 @@ async fn call_once(
     target: &ClaudeTarget,
 ) -> Result<MatchingResult, AppError> {
     let message = with_feedback(user_message.to_string(), feedback.as_ref());
-    let raw = call_claude(system_prompt, &message, Some(schema.clone()), target).await?;
+    let raw = call_claude("matching", system_prompt, &message, Some(schema.clone()), target).await?;
     serde_json::from_str(raw.trim()).map_err(|e| {
         AppError::Llm(format!("Le matching n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}"))
     })
@@ -145,6 +145,7 @@ mod tests {
                 github: None,
                 portfolio: None,
                 interets: None,
+                langue_profil: "fr".to_string(),
                 created_at: chrono::Utc::now(),
             },
             experiences: Vec::new(),

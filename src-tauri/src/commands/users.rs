@@ -6,6 +6,7 @@ use crate::clock;
 use crate::db;
 use crate::error::AppError;
 use crate::models::{CreateUserInput, ProfileDto, UpdateUserInfoInput, UserView};
+use crate::services;
 
 /// Indique si le profil a déjà été créé (déclenche l'onboarding sinon).
 ///
@@ -98,4 +99,19 @@ pub async fn update_user_info(
     input: UpdateUserInfoInput,
 ) -> Result<UserView, AppError> {
     db::users::update_user_info(&ctx.state()?.pool, input).await
+}
+
+/// Change la langue dans laquelle le profil est rédigé.
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+/// * `langue` - Code de langue (`"fr"` ou `"en"`).
+///
+/// # Returns
+///
+/// `UserView` mis à jour.
+#[tauri::command]
+pub async fn update_profile_language(ctx: tauri::State<'_, AppContext>, langue: String) -> Result<UserView, AppError> {
+    services::profile_language::set_profile_language(&ctx.state()?.pool, &langue).await
 }

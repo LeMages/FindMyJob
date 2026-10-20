@@ -70,6 +70,7 @@ interface UserInfoDraft {
   github: string
   portfolio: string
   interets: string
+  langue_profil: string
 }
 
 const draftUserInfo = ref<UserInfoDraft>({
@@ -84,6 +85,7 @@ const draftUserInfo = ref<UserInfoDraft>({
   github: '',
   portfolio: '',
   interets: '',
+  langue_profil: 'fr',
 })
 
 function isUserInfoDirty(): boolean {
@@ -100,7 +102,8 @@ function isUserInfoDirty(): boolean {
     draftUserInfo.value.permis !== (u.permis ?? false) ||
     draftUserInfo.value.linkedin !== (u.linkedin ?? '') ||
     draftUserInfo.value.github !== (u.github ?? '') ||
-    draftUserInfo.value.portfolio !== (u.portfolio ?? '')
+    draftUserInfo.value.portfolio !== (u.portfolio ?? '') ||
+    draftUserInfo.value.langue_profil !== u.langue_profil
   )
 }
 
@@ -136,6 +139,7 @@ function enterEditMode() {
     github: u?.github ?? '',
     portfolio: u?.portfolio ?? '',
     interets: u?.interets ?? '',
+    langue_profil: u?.langue_profil ?? 'fr',
   }
   draftDescription.value = u?.description ?? ''
   saveError.value = null
@@ -210,6 +214,14 @@ async function saveUserInfo(): Promise<void> {
   syncUserInfo(updated)
 }
 
+/** Sauvegarde la langue du profil, si elle a changé. */
+async function saveProfileLanguage(): Promise<void> {
+  if (draftUserInfo.value.langue_profil === profile.value?.user.langue_profil) return
+  const updated = await invoke<UserView>('update_profile_language', { langue: draftUserInfo.value.langue_profil })
+  profile.value!.user = updated
+  syncUserInfo(updated)
+}
+
 /** Sauvegarde la description libre du profil, si elle a changé. */
 async function saveDescription(): Promise<void> {
   if (draftDescription.value === (profile.value?.user.description ?? '')) return
@@ -232,6 +244,7 @@ async function saveAll() {
   try {
     // 1. Informations utilisateur (identité + description)
     await saveUserInfo()
+    await saveProfileLanguage()
     await saveDescription()
 
     // 2. Listes éditables — chaque section gère ses propres ajouts/modifications/suppressions
@@ -404,6 +417,13 @@ const lieu = computed(() => {
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">Centres d'intérêt (un par ligne)</label>
         <textarea v-model="draftUserInfo.interets" rows="3" class="w-full border border-neutral-300 rounded-lg px-3 py-2 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 resize-y" placeholder="Handball"></textarea>
+      </div>
+      <div class="mb-[14px] w-[260px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">Langue dans laquelle le profil est rédigé</label>
+        <select v-model="draftUserInfo.langue_profil" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
+          <option value="fr">Français</option>
+          <option value="en">Anglais</option>
+        </select>
       </div>
       <label class="inline-flex items-center gap-2 text-[13.5px] cursor-pointer select-none mt-0.5">
         <input type="checkbox" v-model="draftUserInfo.permis" />

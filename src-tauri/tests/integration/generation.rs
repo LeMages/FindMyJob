@@ -9,6 +9,7 @@ use serde_json::Value;
 // Importation des modules internes
 use crate::shared::{fake_llm, seed, test_state};
 use fake_llm::{Reply, Step};
+use findmyjob_lib::llm::client::TEMPLATIZE_MODEL;
 use findmyjob_lib::docgen::lint::lint_prose;
 use findmyjob_lib::error::AppError;
 use findmyjob_lib::models::{GenerationProgress, GenerationStatus, ProseField};
@@ -71,9 +72,11 @@ fn assert_no_generated_files(state: &AppState, sid: i64, cid: i64) {
 #[tokio::test]
 async fn generation_remplit_data_json_depuis_le_profil() {
     let (app, sid) = ready_app("generation-ok").await;
-    // Les références de test passent la validation dès le premier essai.
-    assert_eq!(app.llm.calls_for(Step::TemplatizeCv), 1);
-    assert_eq!(app.llm.calls_for(Step::TemplatizeLm), 1);
+    // Les références de test passent la validation dès le premier essai,
+    // avec le modèle imposé à la templatisation.
+    for step in [Step::ExampleCv, Step::TemplateCv, Step::ExampleLm, Step::TemplateLm] {
+        assert_eq!(app.llm.models_for(step), [TEMPLATIZE_MODEL], "{step:?}");
+    }
 
     let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
     let progress = wait_generation(&app.state, view.id).await;
@@ -151,7 +154,8 @@ async fn prose_vide_relance_puis_echoue() {
 
     assert!(matches!(progress.status, GenerationStatus::Failed));
     let error = progress.error.expect("message d'échec");
-    assert!(error.contains("reste invalide après 3 essais"), "erreur : {error}");
+    // Message lisible pour l'utilisateur ; le détail technique est tracé.
+    assert!(error.starts_with("La génération des documents a échoué"), "erreur : {error}");
     // Un essai puis deux relances avec le retour de la revue.
     assert_eq!(app.llm.calls_for(Step::CvContent), 3);
     assert_eq!(count(&app.state.pool, "candidatures").await, 0);
@@ -167,7 +171,7 @@ async fn echec_de_generation_supprime_candidature_et_fichiers() {
     let progress = wait_generation(&app.state, view.id).await;
 
     assert!(matches!(progress.status, GenerationStatus::Failed));
-    assert!(progress.error.is_some_and(|e| e.contains("529")));
+    assert!(progress.error.is_some_and(|e| e.contains("indisponible ou surchargée")));
     assert!(matches!(
         db::candidatures::fetch_detail(&app.state.pool, view.id).await,
         Err(AppError::NotFound(_))
@@ -210,8 +214,7 @@ async fn matching_invalide_relance_puis_echoue() {
 
     assert!(matches!(progress.status, GenerationStatus::Failed));
     let error = progress.error.expect("message d'échec");
-    assert!(error.contains("Le matching reste invalide après 3 essais"), "erreur : {error}");
-    assert!(error.contains("l'id 99 n'est pas un projet du profil"), "erreur : {error}");
+    assert!(error.starts_with("La génération des documents a échoué"), "erreur : {error}");
     assert_eq!(app.llm.calls_for(Step::Matching), 3);
     assert_eq!(app.llm.calls_for(Step::CvContent), 0, "aucune rédaction sans projets valides");
     assert_eq!(count(&app.state.pool, "candidatures").await, 0);
@@ -279,8 +282,7 @@ async fn traduction_invalide_relance_puis_echoue() {
 
     assert!(matches!(progress.status, GenerationStatus::Failed));
     let error = progress.error.expect("message d'échec");
-    assert!(error.contains("La traduction du profil reste invalide après 3 essais"), "erreur : {error}");
-    assert!(error.contains("attendu exactement 1"), "erreur : {error}");
+    assert!(error.starts_with("La génération des documents a échoué"), "erreur : {error}");
     assert_eq!(app.llm.calls_for(Step::ProfileTranslation), 3);
     assert_eq!(count(&app.state.pool, "candidatures").await, 0);
     assert_no_generated_files(&app.state, sid, cid);

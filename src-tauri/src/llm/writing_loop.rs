@@ -1,11 +1,14 @@
 //! Boucle de rédaction avec retry : appel LLM, revue (validation bloquante
-//! et linter), puis nouvel appel avec la sortie précédente et la liste des
+//! et linter), puis nouvel appel avec la meilleure sortie obtenue et ses
 //! problèmes, deux fois au maximum.
 //!
-//! Après le dernier essai, une validation bloquante en échec fait échouer
-//! la rédaction ; les violations du linter, elles, ne bloquent pas : les
-//! tirets restants sont remplacés mécaniquement (`finalize`) et le reste
-//! est journalisé.
+//! Seuls les problèmes bloquants et les violations strictes relancent ; un
+//! écart signalé sans relance (texte un peu court) est conservé tel quel.
+//! Le meilleur essai (le moins de problèmes) est retenu, jamais une
+//! régression. Après le dernier essai, une validation bloquante en échec
+//! fait échouer la rédaction ; les violations du linter, elles, ne
+//! bloquent pas : les tirets restants sont remplacés mécaniquement
+//! (`finalize`) et le reste est journalisé.
 
 // Importation des modules standard
 use std::future::Future;
@@ -47,16 +50,30 @@ pub struct Review {
 }
 
 impl Review {
-    fn is_clean(&self) -> bool {
-        self.blocking.is_empty() && self.violations.is_empty()
+    /// Vrai si rien ne justifie une relance.
+    fn is_acceptable(&self) -> bool {
+        self.blocking.is_empty() && self.violations.iter().all(|v| v.advisory)
     }
 
+    /// Score de l'essai (plus petit = meilleur) : bloquants, violations
+    /// strictes, puis écarts signalés.
+    fn score(&self) -> (usize, usize, usize) {
+        let strict = self.violations.iter().filter(|v| !v.advisory).count();
+        (self.blocking.len(), strict, self.violations.len() - strict)
+    }
+
+    /// Problèmes à corriger, renvoyés en feedback (sans les écarts tolérés).
     fn problems(&self) -> Vec<String> {
         self.blocking
             .iter()
             .cloned()
-            .chain(self.violations.iter().map(|v| format!("{} : {}", v.field, v.message)))
+            .chain(self.violations.iter().filter(|v| !v.advisory).map(|v| format!("{} : {}", v.field, v.message)))
             .collect()
+    }
+
+    /// Tous les problèmes relevés, pour la trace.
+    fn all_problems(&self) -> Vec<String> {
+        self.blocking.iter().cloned().chain(self.violations.iter().map(|v| format!("{} : {}", v.field, v.message))).collect()
     }
 }
 
@@ -91,7 +108,9 @@ pub struct WritingOutcome<T> {
 /// # Arguments
 ///
 /// * `label` - Nom du document, pour les journaux et les erreurs.
-/// * `call` - Appel LLM, avec le retour de l'essai précédent.
+/// * `language_reminder` - Rappel de la langue cible, ajouté en tête des
+///   problèmes renvoyés en feedback.
+/// * `call` - Appel LLM, avec le retour du meilleur essai précédent.
 /// * `review` - Revue d'une sortie.
 /// * `finalize` - Nettoyage mécanique appliqué après le dernier essai.
 ///
@@ -101,6 +120,7 @@ pub struct WritingOutcome<T> {
 /// encore après le dernier essai.
 pub async fn write_with_retries<T, Call, Fut>(
     label: &str,
+    language_reminder: &str,
     call: Call,
     review: impl Fn(&T) -> Review,
     finalize: impl Fn(&mut T),
@@ -111,26 +131,27 @@ where
     Fut: Future<Output = Result<T, AppError>>,
 {
     let mut attempts = Vec::new();
-    let mut feedback: Option<WritingFeedback> = None;
-    let mut last: Option<(T, Review)> = None;
+    let mut best: Option<(T, Review)> = None;
 
     for attempt in 1..=MAX_WRITING_ATTEMPTS {
-        let content = call(feedback.clone()).await?;
+        let feedback = match &best {
+            Some((content, verdict)) => Some(feedback_for(label, language_reminder, content, verdict)?),
+            None => None,
+        };
+        let content = call(feedback).await?;
         let verdict = review(&content);
-        attempts.push(AttemptReport { attempt, problems: verdict.problems() });
-        if verdict.is_clean() {
-            return Ok(WritingOutcome { content, attempts, residual_violations: Vec::new() });
+        attempts.push(AttemptReport { attempt, problems: verdict.all_problems() });
+        if verdict.is_acceptable() {
+            return Ok(WritingOutcome { content, attempts, residual_violations: verdict.violations });
         }
-
         trace_log::log(&format!("[writing] {label} : essai {attempt}/{MAX_WRITING_ATTEMPTS}, problèmes : {:?}", verdict.problems()));
-        let previous_output = serde_json::to_string_pretty(&content)
-            .map_err(|e| AppError::Llm(format!("Sortie de rédaction non sérialisable ({label}) : {e}")))?;
-        feedback = Some(WritingFeedback { previous_output, problems: verdict.problems() });
-        last = Some((content, verdict));
+        if best.as_ref().is_none_or(|(_, b)| verdict.score() < b.score()) {
+            best = Some((content, verdict));
+        }
     }
 
     // Toujours Some : la boucle fait au moins un tour sans retour anticipé.
-    let (mut content, verdict) = last.ok_or_else(|| AppError::Llm(format!("Aucune rédaction produite ({label}).")))?;
+    let (mut content, verdict) = best.ok_or_else(|| AppError::Llm(format!("Aucune rédaction produite ({label}).")))?;
     if !verdict.blocking.is_empty() {
         return Err(AppError::Llm(format!(
             "La rédaction ({label}) reste invalide après {MAX_WRITING_ATTEMPTS} essais : {}",
@@ -144,4 +165,18 @@ where
         trace_log::log(&format!("[writing] {label} : violations conservées après nettoyage : {residual:?}"));
     }
     Ok(WritingOutcome { content, attempts, residual_violations: residual })
+}
+
+/// Retour sur le meilleur essai : sa sortie et ses problèmes, précédés du
+/// rappel de langue.
+fn feedback_for<T: Serialize>(
+    label: &str,
+    language_reminder: &str,
+    content: &T,
+    verdict: &Review,
+) -> Result<WritingFeedback, AppError> {
+    let previous_output = serde_json::to_string_pretty(content)
+        .map_err(|e| AppError::Llm(format!("Sortie de rédaction non sérialisable ({label}) : {e}")))?;
+    let problems = std::iter::once(language_reminder.to_string()).chain(verdict.problems()).collect();
+    Ok(WritingFeedback { previous_output, problems })
 }

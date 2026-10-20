@@ -1,0 +1,75 @@
+Le template ne compile pas avec example_data : Erreur de compilation Typst :
+ligne 81 : the character `#` is not valid in code (« #if data.labels.extra.at(0, default: "") != "" { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 86 : the character `#` is not valid in code (« #let location_parts = (data.identity.ville, data.identity.zip_code).filter(v => v != "") »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 87 : the character `#` is not valid in code (« #if location_parts.len() > 0 { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 95 : the character `#` is not valid in code (« #if data.identity.permis { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 119 : the character `#` is not valid in code (« #let skills_text = group.skills.join(", ") »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 120 : the character `#` is not valid in code (« #skill-line(group.category, skills_text) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 126 : the character `#` is not valid in code (« #entry-header(exp.poste, exp.entreprise, exp.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 127 : the character `#` is not valid in code (« #for bullet in exp.bullets { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 128 : the character `#` is not valid in code (« #bullet-item(bullet) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 136 : the character `#` is not valid in code (« #entry-header(proj.titre, proj.pour_qui, proj.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 137 : the character `#` is not valid in code (« #for bullet in proj.bullets { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 138 : the character `#` is not valid in code (« #bullet-item(bullet) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 146 : the character `#` is not valid in code (« #entry-header(edu.titre, edu.ecole, edu.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 147 : the character `#` is not valid in code (« #for detail in edu.details { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 148 : the character `#` is not valid in code (« #bullet-item(detail) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 155 : the character `#` is not valid in code (« #for (i, langue) in data.langues.enumerate() { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 156 : the character `#` is not valid in code (« #if i > 0 { »). Indice : you are already in code mode Indice : try removing the `#`
+Supprime le # devant ces instructions : tu es déjà dans un bloc de code ({…} ou #(…)), où if, for, let et les appels s'écrivent sans #.
+Le template ne compile pas quand tous les champs sont vides (chaînes vides, listes vides) : Erreur de compilation Typst :
+ligne 81 : the character `#` is not valid in code (« #if data.labels.extra.at(0, default: "") != "" { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 86 : the character `#` is not valid in code (« #let location_parts = (data.identity.ville, data.identity.zip_code).filter(v => v != "") »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 87 : the character `#` is not valid in code (« #if location_parts.len() > 0 { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 95 : the character `#` is not valid in code (« #if data.identity.permis { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 119 : the character `#` is not valid in code (« #let skills_text = group.skills.join(", ") »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 120 : the character `#` is not valid in code (« #skill-line(group.category, skills_text) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 126 : the character `#` is not valid in code (« #entry-header(exp.poste, exp.entreprise, exp.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 127 : the character `#` is not valid in code (« #for bullet in exp.bullets { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 128 : the character `#` is not valid in code (« #bullet-item(bullet) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 136 : the character `#` is not valid in code (« #entry-header(proj.titre, proj.pour_qui, proj.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 137 : the character `#` is not valid in code (« #for bullet in proj.bullets { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 138 : the character `#` is not valid in code (« #bullet-item(bullet) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 146 : the character `#` is not valid in code (« #entry-header(edu.titre, edu.ecole, edu.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 147 : the character `#` is not valid in code (« #for detail in edu.details { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 148 : the character `#` is not valid in code (« #bullet-item(detail) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 155 : the character `#` is not valid in code (« #for (i, langue) in data.langues.enumerate() { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 156 : the character `#` is not valid in code (« #if i > 0 { »). Indice : you are already in code mode Indice : try removing the `#`
+Supprime le # devant ces instructions : tu es déjà dans un bloc de code ({…} ou #(…)), où if, for, let et les appels s'écrivent sans #.
+Le template ne compile pas quand chaque champ contient une valeur et chaque liste un seul élément : Erreur de compilation Typst :
+ligne 81 : the character `#` is not valid in code (« #if data.labels.extra.at(0, default: "") != "" { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 86 : the character `#` is not valid in code (« #let location_parts = (data.identity.ville, data.identity.zip_code).filter(v => v != "") »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 87 : the character `#` is not valid in code (« #if location_parts.len() > 0 { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 95 : the character `#` is not valid in code (« #if data.identity.permis { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 119 : the character `#` is not valid in code (« #let skills_text = group.skills.join(", ") »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 120 : the character `#` is not valid in code (« #skill-line(group.category, skills_text) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 126 : the character `#` is not valid in code (« #entry-header(exp.poste, exp.entreprise, exp.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 127 : the character `#` is not valid in code (« #for bullet in exp.bullets { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 128 : the character `#` is not valid in code (« #bullet-item(bullet) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 136 : the character `#` is not valid in code (« #entry-header(proj.titre, proj.pour_qui, proj.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 137 : the character `#` is not valid in code (« #for bullet in proj.bullets { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 138 : the character `#` is not valid in code (« #bullet-item(bullet) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 146 : the character `#` is not valid in code (« #entry-header(edu.titre, edu.ecole, edu.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 147 : the character `#` is not valid in code (« #for detail in edu.details { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 148 : the character `#` is not valid in code (« #bullet-item(detail) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 155 : the character `#` is not valid in code (« #for (i, langue) in data.langues.enumerate() { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 156 : the character `#` is not valid in code (« #if i > 0 { »). Indice : you are already in code mode Indice : try removing the `#`
+Supprime le # devant ces instructions : tu es déjà dans un bloc de code ({…} ou #(…)), où if, for, let et les appels s'écrivent sans #.
+Le template ne compile pas quand les champs secondaires sont vides (title, email, telephone, ville, zip_code, linkedin, github, portfolio, entreprise, lieu, pour_qui, stack, url, ecole, level, location) : Erreur de compilation Typst :
+ligne 81 : the character `#` is not valid in code (« #if data.labels.extra.at(0, default: "") != "" { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 86 : the character `#` is not valid in code (« #let location_parts = (data.identity.ville, data.identity.zip_code).filter(v => v != "") »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 87 : the character `#` is not valid in code (« #if location_parts.len() > 0 { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 95 : the character `#` is not valid in code (« #if data.identity.permis { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 119 : the character `#` is not valid in code (« #let skills_text = group.skills.join(", ") »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 120 : the character `#` is not valid in code (« #skill-line(group.category, skills_text) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 126 : the character `#` is not valid in code (« #entry-header(exp.poste, exp.entreprise, exp.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 127 : the character `#` is not valid in code (« #for bullet in exp.bullets { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 128 : the character `#` is not valid in code (« #bullet-item(bullet) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 136 : the character `#` is not valid in code (« #entry-header(proj.titre, proj.pour_qui, proj.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 137 : the character `#` is not valid in code (« #for bullet in proj.bullets { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 138 : the character `#` is not valid in code (« #bullet-item(bullet) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 146 : the character `#` is not valid in code (« #entry-header(edu.titre, edu.ecole, edu.period) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 147 : the character `#` is not valid in code (« #for detail in edu.details { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 148 : the character `#` is not valid in code (« #bullet-item(detail) »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 155 : the character `#` is not valid in code (« #for (i, langue) in data.langues.enumerate() { »). Indice : you are already in code mode Indice : try removing the `#`
+ligne 156 : the character `#` is not valid in code (« #if i > 0 { »). Indice : you are already in code mode Indice : try removing the `#`
