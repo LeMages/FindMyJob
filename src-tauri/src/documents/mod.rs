@@ -8,6 +8,7 @@ pub mod fonts;
 pub mod generation_trace;
 pub mod labels_cache;
 pub mod markup;
+pub mod missing_fonts;
 pub mod page_fit;
 pub mod paragraph_check;
 pub mod reference_template;

@@ -10,6 +10,7 @@ use typst_layout::PagedDocument;
 use typst_library::diag::Warned;
 
 // Importation des modules internes
+use crate::documents::missing_fonts::{missing_font_families, missing_fonts_message};
 use crate::documents::typst_diagnostics::{describe_compile_error, describe_warnings};
 use crate::documents::typst_lines::{extract_lines, TextLine};
 use crate::documents::typst_text::extract_text;
@@ -38,6 +39,8 @@ pub struct CompiledDocument {
 }
 
 /// Compile une source Typst en PDF.
+///
+/// Une police introuvable est une erreur, jamais un repli silencieux.
 ///
 /// Recherche les fichiers annexes du document (images, polices locales) dans
 /// `root`, et s'appuie sur les polices système, les polices embarquées de
@@ -96,7 +99,8 @@ pub fn compile_template(
 }
 
 /// Construit le moteur Typst, compile, puis exporte en PDF. Les
-/// avertissements du compilateur sont tracés et renvoyés.
+/// avertissements du compilateur sont tracés et renvoyés ; une police
+/// introuvable fait échouer la compilation.
 fn compile(
     content: String,
     data_json: Option<Vec<u8>>,
@@ -127,6 +131,13 @@ fn compile(
         trace_log::log(&format!("[typst] avertissement : {warning}"));
     }
     let doc = output.map_err(|e| format!("Erreur de compilation Typst :\n{}", describe_compile_error(&e, &content)))?;
+
+    // Typst se replie en silence sur sa police par défaut : un document dans
+    // une autre police que celle demandée ne doit jamais sortir.
+    let missing = missing_font_families(&diagnostics, &content);
+    if !missing.is_empty() {
+        return Err(missing_fonts_message(&missing));
+    }
 
     let pdf = typst_pdf::pdf(&doc, &Default::default()).map_err(|e| format!("Erreur de génération PDF : {:?}", e))?;
     Ok(CompiledDocument {
