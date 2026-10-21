@@ -9,6 +9,11 @@
 //! projets, formations) et aucune relance ne peut le résoudre. Le document
 //! est alors gardé tout de suite, avec un avertissement qui invite à
 //! raccourcir le profil.
+//!
+//! Toutes les chaînes des données passent par la normalisation des tirets
+//! (`docgen::data_normalization`) avant chaque compilation. Un tiret encore
+//! présent dans le texte rendu ne peut venir que d'un séparateur écrit en
+//! dur dans le template : il est journalisé, sans bloquer.
 
 // Importation des modules standard
 use std::future::Future;
@@ -18,6 +23,8 @@ use std::path::Path;
 use serde::Serialize;
 
 // Importation des modules internes
+use crate::docgen::dash_normalization::dash_marks;
+use crate::docgen::data_normalization::normalize_document_data;
 use crate::documents::typst::compile_template;
 use crate::error::AppError;
 use crate::llm::writing_loop::{AttemptReport, WritingOutcome};
@@ -40,6 +47,8 @@ const BUDGET_REDUCTION: f64 = 0.85;
 ///   encore ses pages.
 /// * `writing` - Rédaction finalement retenue.
 /// * `rounds` - Essais de chaque rédaction (initiale puis relances).
+/// * `rendered_dash_marks` - Tirets interdits encore présents dans le texte
+///   rendu (séparateurs écrits en dur dans le template).
 pub struct FittedDocument<C> {
     pub pdf: Vec<u8>,
     pub data_json: String,
@@ -48,6 +57,14 @@ pub struct FittedDocument<C> {
     pub warning: Option<String>,
     pub writing: WritingOutcome<C>,
     pub rounds: Vec<Vec<AttemptReport>>,
+    pub rendered_dash_marks: Vec<String>,
+}
+
+/// Document compilé : PDF, nombre de pages et texte rendu.
+struct Compiled {
+    pdf: Vec<u8>,
+    page_count: usize,
+    text: String,
 }
 
 /// Ce qui est compilé et contre quoi.
@@ -99,21 +116,42 @@ async fn overflows_without_prose<C: Default, D: Serialize>(
     target: &CompileTarget<'_>,
     build: &impl Fn(&C) -> D,
 ) -> Result<bool, AppError> {
-    let data_json = serde_json::to_string(&build(&C::default()))
-        .map_err(|e| AppError::Validation(format!("Données du {} non sérialisables : {e}", target.label)))?;
-    let (_, page_count) = compile(target, &data_json).await?;
-    Ok(page_count > target.max_pages)
+    let data_json = normalized_data_json(target, &build(&C::default()))?;
+    let compiled = compile(target, &data_json).await?;
+    Ok(compiled.page_count > target.max_pages)
+}
+
+/// Sérialise les données d'un document, tirets de toutes ses chaînes
+/// normalisés.
+fn normalized_data_json<D: Serialize>(target: &CompileTarget<'_>, data: &D) -> Result<String, AppError> {
+    let unserializable = |e: serde_json::Error| AppError::Validation(format!("Données du {} non sérialisables : {e}", target.label));
+    let mut value = serde_json::to_value(data).map_err(unserializable)?;
+    normalize_document_data(&mut value);
+    serde_json::to_string_pretty(&value).map_err(unserializable)
+}
+
+/// Relève les tirets interdits du texte rendu et les journalise.
+fn rendered_dash_marks(target: &CompileTarget<'_>, text: &str) -> Vec<String> {
+    let marks: Vec<String> = dash_marks(text).into_iter().map(|mark| mark.label().to_string()).collect();
+    if !marks.is_empty() {
+        trace_log::log(&format!(
+            "[page_fit] {} : marques interdites encore présentes dans le rendu (séparateur en dur du template ?) : {}",
+            target.label,
+            marks.join(", ")
+        ));
+    }
+    marks
 }
 
 /// Compile des données avec le template (hors du runtime async).
-async fn compile(target: &CompileTarget<'_>, data_json: &str) -> Result<(Vec<u8>, usize), AppError> {
+async fn compile(target: &CompileTarget<'_>, data_json: &str) -> Result<Compiled, AppError> {
     let (template, data) = (target.template.to_string(), data_json.as_bytes().to_vec());
     let (root, fonts) = (target.root.to_path_buf(), target.fonts_dir.to_path_buf());
     let compiled = tokio::task::spawn_blocking(move || compile_template(template, data, root, fonts))
         .await
         .map_err(|e| AppError::Validation(format!("Erreur interne de compilation Typst : {e}")))?
         .map_err(|e| AppError::Validation(format!("Compilation du {} impossible : {e}", target.label)))?;
-    Ok((compiled.pdf, compiled.page_count))
+    Ok(Compiled { pdf: compiled.pdf, page_count: compiled.page_count, text: compiled.text })
 }
 
 /// Compile un document et l'ajuste au nombre de pages de la référence.
@@ -144,9 +182,8 @@ where
     let mut page_retries = 0u8;
 
     loop {
-        let data_json = serde_json::to_string_pretty(&build(&writing.content))
-            .map_err(|e| AppError::Validation(format!("Données du {} non sérialisables : {e}", target.label)))?;
-        let (pdf, page_count) = compile(target, &data_json).await?;
+        let data_json = normalized_data_json(target, &build(&writing.content))?;
+        let Compiled { pdf, page_count, text } = compile(target, &data_json).await?;
 
         let overflow = if page_count <= target.max_pages {
             None
@@ -162,7 +199,17 @@ where
             if let Some(w) = &warning {
                 trace_log::log(&format!("[page_fit] {w}"));
             }
-            return Ok(FittedDocument { pdf, data_json, page_count, page_retries, warning, writing, rounds });
+            let rendered_dash_marks = rendered_dash_marks(target, &text);
+            return Ok(FittedDocument {
+                pdf,
+                data_json,
+                page_count,
+                page_retries,
+                warning,
+                writing,
+                rounds,
+                rendered_dash_marks,
+            });
         }
 
         page_retries += 1;

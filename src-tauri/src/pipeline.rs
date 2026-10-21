@@ -8,8 +8,9 @@
 //! 3. rédaction de la prose du CV (titre, résumé, compétences) et de la
 //!    lettre en parallèle (LLM, avec linter et retry), dans le style de la
 //!    référence et sous budgets ;
-//! 4. assemblage déterministe des données (Rust) et compilation du template
-//!    de chaque référence, avec ajustement au nombre de pages.
+//! 4. assemblage déterministe des données (Rust), normalisation des tirets
+//!    de toutes leurs chaînes et compilation du template de chaque
+//!    référence, avec ajustement au nombre de pages.
 //!
 //! Aucun LLM ne produit de Typst pendant la génération. Rien n'est écrit sur
 //! disque ni en base ici : c'est à l'appelant de persister le résultat.
@@ -134,6 +135,7 @@ fn finish<C>(
         warning: fitted.warning,
         labels_translated: translated.0,
         reference_texts_translated: translated.1,
+        rendered_dash_marks: fitted.rendered_dash_marks,
     };
     (GeneratedDocument { pdf: fitted.pdf, data_json: fitted.data_json, reference_version_id }, trace)
 }

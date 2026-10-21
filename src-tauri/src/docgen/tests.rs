@@ -110,7 +110,7 @@ fn profile() -> ProfileDto {
 /// Assemble le CV d'un profil, textes des entrées tirés du profil.
 fn cv_data(profile: &ProfileDto, selection: &Selection, document: &CvData) -> CvData {
     let (labels, style) = (cv_labels(), period_style());
-    let layout = CvLayout { document, labels: &labels, period_style: &style, separator: " – ", lang: "fr", texts: &NO_TEXTS };
+    let layout = CvLayout { document, labels: &labels, period_style: &style, separator: " - ", lang: "fr", texts: &NO_TEXTS };
     build_cv_data(profile, selection, &source_texts(profile, selection), &cv_content(), &layout)
 }
 
@@ -200,7 +200,7 @@ fn cv_data_fusionne_profil_contenu_et_libelles() {
     assert_eq!(data.identity.linkedin, "linkedin.com/in/camille-martin");
     assert_eq!(data.experiences[0].poste, "Stage data");
     assert_eq!(data.experiences[0].entreprise, "Société Exemple");
-    assert_eq!(data.experiences[0].period, "Nov. 2025 – Avr. 2026");
+    assert_eq!(data.experiences[0].period, "Nov. 2025 - Avr. 2026");
     assert_eq!(
         data.experiences[0].bullets,
         vec!["A conçu un pipeline.".to_string(), "Mis en production chez le client".to_string()],
@@ -212,7 +212,7 @@ fn cv_data_fusionne_profil_contenu_et_libelles() {
     assert_eq!(data.projects[0].bullets, vec!["Fait 20.".to_string()]);
     assert_eq!(data.projects[0].stack, "Rust, Typst");
     assert_eq!(data.projects[0].url, "github.com/camille/projet-a");
-    assert_eq!(data.formations[0].period, "2022 – 2027");
+    assert_eq!(data.formations[0].period, "2022 - 2027");
     assert_eq!(data.formations[0].details, vec!["Spécialité data".to_string(), "Échange à l'étranger".to_string()]);
     assert_eq!(data.interets, vec!["Escalade".to_string(), "Photographie".to_string()]);
     assert_eq!(data.lang, "fr");
@@ -312,7 +312,7 @@ fn textes_traduits_injectes_sans_toucher_aux_noms() {
     texts.formations[0].lines = vec!["Data major".to_string(), "Exchange abroad".to_string()];
     let (labels, style) = (cv_labels(), period_style());
     let layout =
-        CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " – ", lang: "en", texts: &NO_TEXTS };
+        CvLayout { document: &CvData::default(), labels: &labels, period_style: &style, separator: " - ", lang: "en", texts: &NO_TEXTS };
 
     let data = build_cv_data(&profile, &selection, &texts, &cv_content(), &layout);
 

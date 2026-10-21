@@ -10,10 +10,12 @@ use serde_json::Value;
 
 // Importation des modules internes
 use crate::shared::fake_llm::{read_reference, Reply, Step};
+use crate::shared::no_dashes::{assert_no_dash_in_data, assert_no_dash_in_text};
 use crate::shared::seed;
 use crate::shared::test_state::{self, artefact, candidature_input, wait_generation, TestApp};
 use findmyjob_lib::db;
 use findmyjob_lib::documents;
+use findmyjob_lib::documents::typst::compile_template;
 use findmyjob_lib::llm::offer::OFFER_SYSTEM_PROMPT;
 use findmyjob_lib::models::{GenerationStatus, REFERENCE_TEXTS_FILE};
 use findmyjob_lib::services::candidatures;
@@ -98,6 +100,31 @@ async fn offre_anglaise_documents_entierement_en_anglais() {
     assert!(completed, "seconde génération : {error:?}");
     assert_eq!(app.llm.calls_for(Step::ReferenceTranslation), 2, "caches réutilisés");
     assert_eq!(app.llm.calls_for(Step::CvLabels), 1, "libellés en cache");
+}
+
+#[tokio::test]
+async fn references_avec_tirets_documents_sans_tiret() {
+    // Les références réelles emploient des « – » (objet de la lettre,
+    // périodes et titres du CV) : aucun ne doit rester dans les documents.
+    for reference in ["real/lm_balisee.typ", "real/cv_balise.typ"] {
+        assert!(read_reference(reference).contains('\u{2013}'), "{reference} doit contenir un « – »");
+    }
+    let (app, sid) = app_with_real_references("references-sans-tiret").await;
+
+    let (cid, error, completed) = generate(&app, sid).await;
+    assert!(completed, "génération : {error:?}");
+
+    for doc_type in ["cv", "lettre_motivation"] {
+        let generated = data(&app, sid, doc_type, cid);
+        assert_no_dash_in_data(doc_type, &generated);
+        // Les templates de ces références n'écrivent aucun tiret en dur : le
+        // texte rendu n'en contient donc aucun non plus.
+        let dir = version_dir(&app, sid, doc_type).await;
+        let template = std::fs::read_to_string(dir.join("template.typ")).expect("template");
+        let raw = serde_json::to_vec(&generated).expect("data.json");
+        let rendered = compile_template(template, raw, dir, app.state.fonts_dir.clone()).expect("compilation");
+        assert_no_dash_in_text(doc_type, &rendered.text);
+    }
 }
 
 #[tokio::test]

@@ -3,6 +3,7 @@
 
 pub mod fake_llm;
 pub mod fake_secret_store;
+pub mod no_dashes;
 pub mod offer_server;
 pub mod seed;
 pub mod temp_dir;
