@@ -49,6 +49,7 @@ const BUDGET_REDUCTION: f64 = 0.85;
 /// * `rounds` - Essais de chaque rédaction (initiale puis relances).
 /// * `rendered_dash_marks` - Tirets interdits encore présents dans le texte
 ///   rendu (séparateurs écrits en dur dans le template).
+/// * `typst_warnings` - Avertissements non bloquants de la compilation retenue.
 pub struct FittedDocument<C> {
     pub pdf: Vec<u8>,
     pub data_json: String,
@@ -58,13 +59,16 @@ pub struct FittedDocument<C> {
     pub writing: WritingOutcome<C>,
     pub rounds: Vec<Vec<AttemptReport>>,
     pub rendered_dash_marks: Vec<String>,
+    pub typst_warnings: Vec<String>,
 }
 
-/// Document compilé : PDF, nombre de pages et texte rendu.
+/// Document compilé : PDF, nombre de pages, texte rendu et avertissements
+/// du compilateur.
 struct Compiled {
     pdf: Vec<u8>,
     page_count: usize,
     text: String,
+    warnings: Vec<String>,
 }
 
 /// Ce qui est compilé et contre quoi.
@@ -151,7 +155,7 @@ async fn compile(target: &CompileTarget<'_>, data_json: &str) -> Result<Compiled
         .await
         .map_err(|e| AppError::Validation(format!("Erreur interne de compilation Typst : {e}")))?
         .map_err(|e| AppError::Validation(format!("Compilation du {} impossible : {e}", target.label)))?;
-    Ok(Compiled { pdf: compiled.pdf, page_count: compiled.page_count, text: compiled.text })
+    Ok(Compiled { pdf: compiled.pdf, page_count: compiled.page_count, text: compiled.text, warnings: compiled.warnings })
 }
 
 /// Compile un document et l'ajuste au nombre de pages de la référence.
@@ -183,7 +187,7 @@ where
 
     loop {
         let data_json = normalized_data_json(target, &build(&writing.content))?;
-        let Compiled { pdf, page_count, text } = compile(target, &data_json).await?;
+        let Compiled { pdf, page_count, text, warnings } = compile(target, &data_json).await?;
 
         let overflow = if page_count <= target.max_pages {
             None
@@ -209,6 +213,7 @@ where
                 writing,
                 rounds,
                 rendered_dash_marks,
+                typst_warnings: warnings,
             });
         }
 

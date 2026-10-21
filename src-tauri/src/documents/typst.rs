@@ -7,11 +7,13 @@ use std::path::PathBuf;
 // Importation des crates externes
 use typst_as_lib::{typst_kit_options::TypstKitFontOptions, TypstEngine};
 use typst_layout::PagedDocument;
+use typst_library::diag::Warned;
 
 // Importation des modules internes
-use crate::documents::typst_diagnostics::describe_compile_error;
+use crate::documents::typst_diagnostics::{describe_compile_error, describe_warnings};
 use crate::documents::typst_lines::{extract_lines, TextLine};
 use crate::documents::typst_text::extract_text;
+use crate::trace_log;
 
 /// Nom sous lequel les données d'un template sont exposées au compilateur.
 /// Un template les lit avec `json("data.json")`.
@@ -26,11 +28,13 @@ pub const TEMPLATE_DATA_FILE: &str = "data.json";
 /// * `page_count` - Nombre de pages du document.
 /// * `text` - Texte rendu, dans l'ordre de mise en page.
 /// * `lines` - Lignes de texte positionnées, de haut en bas.
+/// * `warnings` - Avertissements non bloquants du compilateur, situés.
 pub struct CompiledDocument {
     pub pdf: Vec<u8>,
     pub page_count: usize,
     pub text: String,
     pub lines: Vec<TextLine>,
+    pub warnings: Vec<String>,
 }
 
 /// Compile une source Typst en PDF.
@@ -91,7 +95,8 @@ pub fn compile_template(
     compile(template, Some(data_json), root, fonts_dir)
 }
 
-/// Construit le moteur Typst, compile, puis exporte en PDF.
+/// Construit le moteur Typst, compile, puis exporte en PDF. Les
+/// avertissements du compilateur sont tracés et renvoyés.
 fn compile(
     content: String,
     data_json: Option<Vec<u8>>,
@@ -116,13 +121,21 @@ fn compile(
         .search_fonts_with(font_options)
         .build();
 
-    let doc: PagedDocument = engine
-        .compile()
-        .output
-        .map_err(|e| format!("Erreur de compilation Typst :\n{}", describe_compile_error(&e, &content)))?;
+    let Warned { output, warnings: diagnostics } = engine.compile::<PagedDocument>();
+    let warnings = describe_warnings(&diagnostics, &content);
+    for warning in &warnings {
+        trace_log::log(&format!("[typst] avertissement : {warning}"));
+    }
+    let doc = output.map_err(|e| format!("Erreur de compilation Typst :\n{}", describe_compile_error(&e, &content)))?;
 
     let pdf = typst_pdf::pdf(&doc, &Default::default()).map_err(|e| format!("Erreur de génération PDF : {:?}", e))?;
-    Ok(CompiledDocument { pdf, page_count: doc.pages().len(), text: extract_text(&doc), lines: extract_lines(&doc) })
+    Ok(CompiledDocument {
+        pdf,
+        page_count: doc.pages().len(),
+        text: extract_text(&doc),
+        lines: extract_lines(&doc),
+        warnings,
+    })
 }
 
 #[cfg(test)]

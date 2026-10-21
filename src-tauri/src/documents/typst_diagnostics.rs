@@ -32,6 +32,20 @@ pub fn describe_compile_error(error: &TypstAsLibError, main_source: &str) -> Str
     }
 }
 
+/// Décrit les avertissements d'une compilation Typst, situés comme les erreurs.
+///
+/// # Arguments
+///
+/// * `warnings` - Avertissements renvoyés par le compilateur.
+/// * `main_source` - Source principale compilée, pour situer les diagnostics.
+///
+/// # Returns
+///
+/// Une description par avertissement, dans l'ordre du compilateur.
+pub fn describe_warnings(warnings: &[SourceDiagnostic], main_source: &str) -> Vec<String> {
+    warnings.iter().map(|warning| describe_diagnostic(warning, main_source)).collect()
+}
+
 /// Décrit un diagnostic, avec sa ligne s'il pointe dans la source principale.
 fn describe_diagnostic(diagnostic: &SourceDiagnostic, main_source: &str) -> String {
     let hints = diagnostic.hints.iter().map(|hint| format!(" Indice : {}", hint.v)).collect::<String>();

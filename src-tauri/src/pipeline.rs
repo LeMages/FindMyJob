@@ -136,6 +136,7 @@ fn finish<C>(
         labels_translated: translated.0,
         reference_texts_translated: translated.1,
         rendered_dash_marks: fitted.rendered_dash_marks,
+        typst_warnings: fitted.typst_warnings,
     };
     (GeneratedDocument { pdf: fitted.pdf, data_json: fitted.data_json, reference_version_id }, trace)
 }
