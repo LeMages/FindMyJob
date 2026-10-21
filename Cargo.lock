@@ -1677,6 +1677,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tokio",
  "typst-as-lib",
+ "typst-kit",
  "typst-layout",
  "typst-library",
  "typst-pdf",

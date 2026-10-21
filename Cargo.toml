@@ -15,6 +15,9 @@ typst-pdf = "0.15"
 typst-layout = "0.15"
 typst-library = "0.15"
 typst-syntax = "0.15"
+# Polices embarquées et système, lues pour signaler une famille importée
+# homonyme (déjà présent via typst-as-lib).
+typst-kit = { version = "0.15", default-features = false, features = ["embedded-fonts", "scan-fonts"] }
 base64 = "0.22"
 scraper = "0.22"
 url = "2"

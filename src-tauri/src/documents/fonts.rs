@@ -5,19 +5,22 @@
 //! fichiers, jamais le nom du dossier.
 
 // Importation des modules standard
+use std::collections::HashSet;
 use std::path::Path;
 
 // Importation des modules internes
 use crate::documents::font_files::scan_font_files;
 use crate::documents::font_metadata::read_families;
+use crate::documents::font_shadowing::{provided_families, shadowed_families};
 use crate::error::AppError;
 use crate::models::FontFolderView;
 
 /// Décrit un dossier de polices déjà importé.
-fn describe_folder(folder: String, dir: &Path) -> Result<FontFolderView, AppError> {
+fn describe_folder(folder: String, dir: &Path, provided: &HashSet<String>) -> Result<FontFolderView, AppError> {
     let scan = scan_font_files(dir).map_err(AppError::Validation)?;
     let families = read_families(dir, &scan.fonts);
-    Ok(FontFolderView { folder, families, file_count: scan.fonts.len(), shadowed_families: Vec::new() })
+    let shadowed_families = shadowed_families(families.iter().map(|f| f.name.as_str()), provided);
+    Ok(FontFolderView { folder, families, file_count: scan.fonts.len(), shadowed_families })
 }
 
 /// Liste les dossiers de polices importés par l'utilisateur.
@@ -28,7 +31,8 @@ fn describe_folder(folder: String, dir: &Path) -> Result<FontFolderView, AppErro
 ///
 /// # Returns
 ///
-/// Une entrée par sous-dossier de `polices/`, avec ses familles, triée par
+/// Une entrée par sous-dossier de `polices/`, avec ses familles et ses
+/// homonymes embarquées ou système, triée par
 /// dossier. Liste vide si aucune police n'a encore été importée (dossier
 /// absent).
 pub fn list_fonts(fonts_dir: &Path) -> Result<Vec<FontFolderView>, AppError> {
@@ -39,10 +43,11 @@ pub fn list_fonts(fonts_dir: &Path) -> Result<Vec<FontFolderView>, AppError> {
     let entries = std::fs::read_dir(fonts_dir)
         .map_err(|e| AppError::Validation(format!("Impossible de lire le dossier des polices : {}", e)))?;
 
+    let provided = provided_families();
     let mut folders = Vec::new();
     for entry in entries.flatten().filter(|e| e.path().is_dir()) {
         let folder = entry.file_name().to_string_lossy().to_string();
-        folders.push(describe_folder(folder, &entry.path())?);
+        folders.push(describe_folder(folder, &entry.path(), &provided)?);
     }
 
     folders.sort_by(|a, b| a.folder.cmp(&b.folder));
@@ -63,7 +68,8 @@ pub fn list_fonts(fonts_dir: &Path) -> Result<Vec<FontFolderView>, AppError> {
 ///
 /// # Returns
 ///
-/// Le dossier importé, avec ses familles et leurs variantes.
+/// Le dossier importé, avec ses familles, leurs variantes et les familles
+/// homonymes d'une police embarquée ou système.
 pub fn import_font_folder(fonts_dir: &Path, source_path: &str) -> Result<FontFolderView, AppError> {
     // ------------------------------------------------------------------
     // 1. Validation du dossier source et repérage des polices
@@ -109,7 +115,11 @@ pub fn import_font_folder(fonts_dir: &Path, source_path: &str) -> Result<FontFol
         copy_font_file(&source.join(relative), &dest_dir.join(relative))?;
     }
 
-    Ok(FontFolderView { folder, families, file_count: scan.fonts.len(), shadowed_families: Vec::new() })
+    // Homonyme d'une police embarquée ou système : l'import réussit, l'UI
+    // avertit que la version importée ne servira que pour les variantes
+    // absentes de l'autre.
+    let shadowed_families = shadowed_families(families.iter().map(|f| f.name.as_str()), &provided_families());
+    Ok(FontFolderView { folder, families, file_count: scan.fonts.len(), shadowed_families })
 }
 
 /// Copie un fichier de police, en créant son dossier de destination.
