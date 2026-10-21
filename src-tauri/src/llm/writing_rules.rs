@@ -21,7 +21,7 @@ Quand deux consignes s'opposent, la plus forte l'emporte.
 
 Style. Imite la voix du modèle de style : même registre, même personne grammaticale, même temps, même longueur de phrases, même façon d'ouvrir les éléments. Garde le rôle et l'ordre des éléments du modèle, sauf quand une zone [ADAPTABLE] demande de choisir ou d'ordonner autrement.
 Contenu. Hors des zones [FIXE], n'emprunte au modèle ni ses faits ni ses chiffres : il ne sert qu'au style. Tous les faits viennent du profil ; un chiffre n'apparaît que s'il figure dans le profil. Un élément énonce un fait, il ne commente jamais son adéquation au poste (par exemple « directement transférable à » ou « ce qui correspond à »). Les mots-clés de l'offre ne sont repris que là où ils décrivent un fait réel du profil.
-Forme. N'utilise ni tiret cadratin, ni tiret demi-cadratin, ni gras Markdown, ni backticks, sauf dans un texte à recopier.";
+Forme. N'écris jamais « — » (tiret cadratin), « – » (tiret demi-cadratin), « --- » ni « -- », même dans un texte à recopier : à leur place, mets une virgule ou des parenthèses pour une incise, un deux-points pour une précision, un point pour séparer deux idées, un trait d'union simple (-) entre deux nombres. N'utilise ni gras Markdown ni backticks, sauf dans un texte à recopier.";
 
 /// Règles des zones balisées de la référence.
 const ZONE_RULES: &str = "Règles des zones.

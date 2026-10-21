@@ -65,7 +65,7 @@ src-tauri/
     db/                              one file per table + joins.rs, profile.rs, init.rs (pool, migrations), transaction.rs
     services/                        business logic beyond a DB call: applications, generation, settings, API key, Claude target, offer import, sessions
     documents/                       reference markup (markup/), two-step templatization and its validation, reference loading, translation caches, page fitting, generation trace, Typst compilation, versions, on-disk document storage, fonts
-    docgen/                          pure pipeline logic, no LLM/DB/files/Typst (cv_data/lm_data builders, budgets, linter, fixed zones, selection, entry texts and translation checks, reference-text translation items, sentinel data, period/date formatting, text diff)
+    docgen/                          pure pipeline logic, no LLM/DB/files/Typst (cv_data/lm_data builders, budgets, linter, dash normalization of the rendered data, fixed zones, selection, entry texts and translation checks, reference-text translation items, sentinel data, period/date formatting, text diff)
     pipeline.rs, progress.rs         generation orchestration, in-memory progress store
     offer_extraction.rs, url_normalize.rs   import cascade, duplicate detection
     commands/                        one #[tauri::command] file per domain, each calling a service or a db function
