@@ -118,6 +118,7 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
   - CV/LM generation with real Typst compilation, empty-prose retries and failure cleanup (`generation.rs`), asymmetric budgets, page warnings and no fallback to the reference (`generation_budgets.rs`), full translation with real marked-up references and caches (`generation_translation.rs`);
   - reference markup (`templatize_markup.rs`), step A/B validation on real references (`templatize_validation.rs`) and the two-step templatization loop replaying real failing outputs (`templatize_retries.rs`);
   - the size of every structured output schema against the API grammar cap (`llm_schema_size.rs`);
+  - fonts: an imported fixture font used and embedded without warning, a missing family failing the compilation (`typst_fonts.rs`), and the font import (subfolders, `.ttc`, WOFF refusal, family names, homonyms) (`font_import.rs`);
   - profile, session and application-deletion lifecycles;
   - one end-to-end scenario (`end_to_end.rs`).
 
@@ -126,6 +127,7 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
   Helpers live in `src-tauri/tests/integration/shared/` (the pure-logic tests' shared fixtures in `src-tauri/tests/integration/common/`):
   - `fake_llm.rs` is an `LlmCaller` with canned answers from `tests/fixtures/llm/`, routed by output schema (the template step, without schema, by its system prompt); `Reply::Files` replays raw files, e.g. real failing templates; it records the model of each call;
   - `offer_server.rs` is the local HTTP server;
+  - `font_fixtures.rs` copies a fixture font folder (`tests/fixtures/fonts/`) into a test's folder;
   - `temp_dir.rs` gives each test a unique temporary folder;
   - `test_state.rs` builds an `AppState` (in-memory pool, temp data folder, fake keyring, fake LLM), seeds a profile and test references, and waits for a generation.
 

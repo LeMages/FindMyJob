@@ -192,7 +192,7 @@ Each session owns one reference CV and one reference cover letter, stored under 
 6. Deterministic assembly (`docgen/build_cv_data.rs`, `docgen/build_lm_data.rs`): identity, periods, experiences, projects, education, languages and interests come from the profile (or their translation), never from the reference — an empty profile section stays empty; only an empty identity field falls back to the reference (`docgen/document_fallback.rs`). `texts` carries the reference's hard-coded texts in the document's language.
 7. Compilation with page fitting (`documents/page_fit.rs`): over the reference's page count, writing is re-run with budgets reduced by 15 % (cumulative), twice at most — unless the document overflows even without any prose, in which case the profile sections are the cause and no retry is made. A remaining overflow is stored on the application (`candidatures.generation_warnings`) and shown on its page.
 
-No LLM produces Typst during generation. **Compilation** uses `typst-as-lib` (`documents/typst.rs`) inside `spawn_blocking`, serving the data as a virtual `data.json` file, with fonts from the system, `typst-kit` embedded fonts and fonts imported by the user into `<data folder>/polices/<family>/`.
+No LLM produces Typst during generation. **Compilation** uses `typst-as-lib` (`documents/typst.rs`) inside `spawn_blocking`, serving the data as a virtual `data.json` file, with fonts from the system, `typst-kit` embedded fonts and fonts imported by the user into `<data folder>/polices/<source folder>/` (subfolders kept). Typst warnings are traced (`trace_log`, `typst_warnings` in the generation's `attempts.json`) and returned in `CompiledDocument.warnings`; an `unknown font family` warning (`documents/missing_fonts.rs`, the only place that matches it) fails the compilation with a French message naming the family, instead of Typst's silent fallback to Libertinus Serif. Fonts are imported recursively (`.ttf`, `.otf`, `.ttc`, `.otc`; WOFF/WOFF2 refused); Settings shows the family names read from the files (`documents/font_metadata.rs`), their variants, and warns when a family is also provided by Typst or the system (`documents/font_shadowing.rs`).
 
 **Artifacts**: `.../artefact/<candidature_id>.pdf` and `.data.json` (the template version is `candidatures.{cv,lm}_reference_version_id`). **Trace** (DEV and PROD): `documents/sessions/<session_id>/debug/<candidature_id>/` holds `offer_analysis.json`, `matching.json`, `selection.json`, `budgets.json`, `cv_content.json`, `lm_content.json`, `lint_report.json`, `attempts.json` and `llm_calls.json` (every Claude call: model, tokens, duration, stop reason, request id, prompts and response). Every call also logs a one-line summary through `trace_log`.
 
@@ -244,7 +244,7 @@ Two functions (`generate_application_email`, `generate_application_message`), pl
 | `interviews` | pending interviews for an application, all interviews for a session |
 | `scraping`, `capture` | offer extraction from a URL, from the capture window, or from pasted text; see « Offer import by link » below |
 | `documents`, `document_versions` | reference CV & cover letter (get, import, compile), status, versions (list, preview, restore), attached PDFs (info, preview, export), downloads folder, text export |
-| `fonts` | list / import / delete an imported font family |
+| `fonts` | list / import / delete an imported font folder (families and variants read from the files) |
 | `settings` | LLM model, theme, connection test |
 | `system` | open a URL with the OS |
 
