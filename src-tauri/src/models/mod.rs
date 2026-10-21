@@ -45,7 +45,7 @@ pub use document::{
 };
 pub use event_type::EventType;
 pub use experience::{CreateExperienceInput, ExperienceView};
-pub use font::FontFamilyView;
+pub use font::{FontFamilyInfo, FontFolderView};
 pub use formation::{CreateFormationInput, FormationView};
 pub use generation_progress::{GenerationProgress, GenerationStatus};
 pub use interview::{InterviewContactView, InterviewView, PlanningInterviewView};

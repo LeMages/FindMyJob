@@ -4,6 +4,8 @@
 
 pub mod doc_type;
 pub mod example_check;
+pub mod font_files;
+pub mod font_metadata;
 pub mod fonts;
 pub mod generation_trace;
 pub mod labels_cache;
