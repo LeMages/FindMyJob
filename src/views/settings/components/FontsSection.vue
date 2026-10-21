@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * Section « Polices » des Paramètres : liste des familles de polices
- * importées par l'utilisateur pour la compilation Typst, import depuis un
- * dossier Google Fonts décompressé, suppression.
+ * Section « Polices » des Paramètres : familles de polices importées par
+ * l'utilisateur pour la compilation Typst (nom exact à écrire dans `font:`,
+ * variantes, homonymes), import depuis un dossier Google Fonts décompressé,
+ * suppression.
  */
 
 // Importation des modules Vue / framework
@@ -14,13 +15,22 @@ import { open } from '@tauri-apps/plugin-dialog'
 
 // Importation des modules internes
 import { useFonts } from '@/composables/useFonts'
-import type { FontFamilyView } from '@/types'
+import type { FontFolderView } from '@/types'
 
 const { fonts, loading, loadFonts, importFontFolder, deleteFont } = useFonts()
 
 const importing = ref(false)
 const importFeedback = ref<{ type: 'success' | 'error'; text: string } | null>(null)
-const confirmDeleteFont = ref<FontFamilyView | null>(null)
+const confirmDeleteFont = ref<FontFolderView | null>(null)
+
+/** Avertissement affiché pour une famille déjà fournie par le système ou par Typst. */
+const SHADOWED_WARNING =
+  "Cette famille est déjà fournie par le système ou par Typst : la version importée ne sera utilisée que pour les variantes absentes de l'autre."
+
+/** Noms de famille d'un dossier, entre guillemets, pour les messages. */
+function quotedFamilies(folder: FontFolderView): string {
+  return folder.families.map((f) => `"${f.name}"`).join(', ')
+}
 
 onMounted(() => {
   void loadFonts()
@@ -34,10 +44,10 @@ async function pickAndImportFolder() {
   importing.value = true
   importFeedback.value = null
   try {
-    const error = await importFontFolder(selected)
-    importFeedback.value = error
-      ? { type: 'error', text: error }
-      : { type: 'success', text: 'Police importée.' }
+    const result = await importFontFolder(selected)
+    importFeedback.value = result.error !== null
+      ? { type: 'error', text: result.error }
+      : { type: 'success', text: `Police importée. À écrire dans font: ${quotedFamilies(result.imported)}.` }
   } finally {
     importing.value = false
   }
@@ -46,7 +56,7 @@ async function pickAndImportFolder() {
 /** Supprime la police en attente de confirmation. */
 async function confirmDelete() {
   if (!confirmDeleteFont.value) return
-  const error = await deleteFont(confirmDeleteFont.value.name)
+  const error = await deleteFont(confirmDeleteFont.value.folder)
   if (error) {
     importFeedback.value = { type: 'error', text: error }
   }
@@ -72,11 +82,24 @@ async function openFontsGoogle() {
       <div v-if="fonts.length" class="mb-[14px]">
         <div
           v-for="font in fonts"
-          :key="font.name"
-          class="flex items-center gap-2 py-[7px] border-b border-neutral-50 last:border-b-0"
+          :key="font.folder"
+          class="flex items-start gap-2 py-[7px] border-b border-neutral-50 last:border-b-0"
         >
-          <span class="flex-1 text-[13px] text-neutral-950">{{ font.name }}</span>
-          <span class="font-mono text-[11px] text-neutral-500 flex-none">{{ font.file_count }} fichier{{ font.file_count > 1 ? 's' : '' }}</span>
+          <div class="flex-1 min-w-0">
+            <div v-for="family in font.families" :key="family.name" class="py-[2px]">
+              <div class="flex items-baseline gap-2 flex-wrap">
+                <span class="font-mono text-[13px] text-neutral-950 select-all" title="Nom à écrire dans font:">{{ family.name }}</span>
+                <span class="font-mono text-[11px] text-neutral-500">{{ family.variants.join(' · ') }}</span>
+              </div>
+              <div
+                v-if="font.shadowed_families.includes(family.name)"
+                class="mt-1 text-[12px] leading-[1.45] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-[10px] py-[6px]"
+              >
+                {{ SHADOWED_WARNING }}
+              </div>
+            </div>
+          </div>
+          <span class="font-mono text-[11px] text-neutral-500 flex-none pt-[2px]">{{ font.file_count }} fichier{{ font.file_count > 1 ? 's' : '' }}</span>
           <button
             class="w-[30px] h-[30px] rounded-7 flex items-center justify-center cursor-pointer flex-none text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
             type="button"
@@ -103,7 +126,8 @@ async function openFontsGoogle() {
         <div class="text-[12px] text-neutral-400 max-w-[520px] leading-[1.45]">
           Téléchargez une police sur
           <button type="button" class="text-blue-500 bg-transparent border-none p-0 cursor-pointer hover:underline" @click="openFontsGoogle">fonts.google.com</button>,
-          décompressez le ZIP, puis sélectionnez le dossier ici.
+          décompressez le ZIP, puis sélectionnez son dossier ici (sous-dossiers compris).
+          Formats acceptés : .ttf, .otf, .ttc, .otc. Écrivez dans <code class="font-mono">font:</code> le nom affiché ci-dessus.
         </div>
       </div>
       <button
@@ -128,7 +152,8 @@ async function openFontsGoogle() {
 
       <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[6px]">Cette action est irréversible.</div>
       <div class="bg-neutral-50 border border-neutral-200 rounded-9 px-[14px] py-3 mb-5 text-[13.5px]">
-        <strong>{{ confirmDeleteFont.name }}</strong> sera supprimée définitivement.
+        <strong>{{ quotedFamilies(confirmDeleteFont) || confirmDeleteFont.folder }}</strong>
+        {{ confirmDeleteFont.families.length > 1 ? 'seront supprimées' : 'sera supprimée' }} définitivement.
       </div>
 
       <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">

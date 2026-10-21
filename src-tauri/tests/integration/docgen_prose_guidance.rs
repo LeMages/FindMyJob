@@ -5,7 +5,7 @@
 // Importation des modules internes
 use findmyjob_lib::docgen::budgets::{lm_budget, WordRange};
 use findmyjob_lib::docgen::fixed_zones::{fixed_zone_violations, transform_outside_fixed, without_fixed_text};
-use findmyjob_lib::docgen::lint::{lint_prose, strip_dashes, strip_forbidden_marks};
+use findmyjob_lib::docgen::lint::{lint_prose, strip_dashes};
 use findmyjob_lib::docgen::words::count_words;
 use findmyjob_lib::models::{LmData, ProseField, ProseGuidance, ProseZone, ZoneMode};
 
@@ -63,11 +63,11 @@ fn le_linter_ignore_le_texte_recopie() {
 }
 
 #[test]
-fn une_marque_de_la_reference_est_autorisee() {
+fn une_marque_de_la_reference_reste_interdite() {
     let fields = [field("subject", "Data Engineer – Stage")];
-    assert!(lint_prose(&fields, "Objet : Stagiaire – Stage de fin d'études").is_empty());
-    assert_eq!(strip_forbidden_marks("a – b — c", "x – y"), "a – b, c");
-    assert_eq!(strip_dashes("a – b"), "a, b");
+    let violations = lint_prose(&fields, "Objet : Stagiaire – Stage de fin d'études");
+    assert_eq!(violations.len(), 1, "la référence n'exempte aucune marque : {violations:?}");
+    assert_eq!(strip_dashes("a – b — c"), "a, b, c");
 }
 
 #[test]

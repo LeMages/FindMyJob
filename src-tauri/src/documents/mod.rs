@@ -4,10 +4,14 @@
 
 pub mod doc_type;
 pub mod example_check;
+pub mod font_files;
+pub mod font_metadata;
+pub mod font_shadowing;
 pub mod fonts;
 pub mod generation_trace;
 pub mod labels_cache;
 pub mod markup;
+pub mod missing_fonts;
 pub mod page_fit;
 pub mod paragraph_check;
 pub mod reference_template;

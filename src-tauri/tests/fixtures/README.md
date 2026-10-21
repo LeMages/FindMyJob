@@ -28,6 +28,17 @@ La référence déposée par les tests (`test_state::reference_source`) est le t
 
 `*_example_data.json` sont les données d'exemple correctes (sortie de l'étape A, sans `texts`), `*_template.typ` le template correct (étape B), écrits à la main : les textes en dur sont lus dans `data.texts` (`t1`, `t2`…). `lm_balisee_expected_zones.json` est le découpage attendu des zones de la lettre. Les tests de `templatize_validation.rs` les passent dans `check_example` et `check_template` : si l'un d'eux est refusé, la validation est devenue trop stricte. La police `Arimo` des références n'est pas embarquée : sans elle, Typst prend une police de repli, la référence passe à 2 pages et le template doit rester en dessous.
 
+## `fonts/` : polices de fixture
+
+Sous-ensembles Basic Latin (U+0020–U+007E) générés avec fontTools (`subset`, `varLib.instancer`) à partir de polices sous licence SIL OFL 1.1 ; chaque dossier garde son `OFL.txt`. Utilisées par `typst_fonts.rs` et `font_import.rs` via `shared/font_fixtures.rs`.
+
+| Dossier | Contenu | Utilisé pour |
+|---|---|---|
+| `arimo/static/Arimo-Regular.ttf` | Instance statique 400 d'Arimo (police variable de Google Fonts), sous un sous-dossier comme dans une archive | Police importée utilisée sans avertissement et présente dans le PDF ; import récursif, nom de famille « Arimo » |
+| `collection/Arimo.ttc` | Collection : Arimo Regular et Italic (instances 400) | Import d'une collection `.ttc` |
+| `libertinus/LibertinusSerif-Regular.ttf` | Libertinus Serif Regular, homonyme d'une police embarquée par Typst | Avertissement d'homonyme ; dossier `Libertinus_Serif` vs famille `Libertinus Serif` |
+| `web/Exemple-Regular.woff2` | Fichier texte factice : seule l'extension compte | Refus des formats WOFF/WOFF2 |
+
 ## `llm/` : réponses figées du modèle
 
 Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l'étape est reconnue d'après le schéma de sortie demandé ; `Reply::Sequence` enchaîne plusieurs fichiers pour une relance réussie) :
@@ -43,6 +54,7 @@ Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l
 | `profile_translation.json` | Traduction du profil | Expérience 1, projet 1 et formation 1 de `test_state::seed_profile`, une ligne chacun |
 | `profile_translation_lignes.json` | Traduction du profil | Deux lignes pour une description d'une ligne, pour déclencher les relances puis l'échec |
 | `lm_content.json` | Rédaction de la lettre | Un tiret cadratin volontaire |
+| `lm_content_double_tiret.json` | Rédaction de la lettre | « --- » dans l'objet et « -- » dans un paragraphe (tirets ASCII), que la normalisation doit remplacer |
 | `cv_labels.json`, `lm_labels.json` | Traduction des libellés | Utilisées seulement si la langue de l'offre diffère de celle de la référence |
 | `scraped_offer.json` | Extraction d'offre (étape LLM) | Balises HTML, emojis, contrat en majuscules et `mailto:`, que `finalize_fields` doit nettoyer |
 

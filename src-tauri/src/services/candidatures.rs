@@ -10,6 +10,7 @@ use sqlx::SqlitePool;
 use crate::app_state::AppState;
 use crate::clock;
 use crate::db;
+use crate::docgen::dash_normalization::normalize_application_message;
 use crate::documents;
 use crate::services::candidature_validation::validate_create;
 use crate::services::generation;
@@ -164,7 +165,7 @@ pub async fn postuler_avec_message(state: &AppState, id: i64, kind: ApplicationM
     let contact = db::contacts::list_for_candidature(pool, id).await?.into_iter().next();
     let target = state.claude().resolve().await?;
 
-    let text = match kind {
+    let written = match kind {
         ApplicationMessage::Mail => {
             crate::llm::generate_application_email(&profile, &detail, contact.as_ref(), &target).await?
         }
@@ -172,6 +173,9 @@ pub async fn postuler_avec_message(state: &AppState, id: i64, kind: ApplicationM
             crate::llm::generate_application_message(&profile, &detail, contact.as_ref(), &target).await?
         }
     };
+    // Filet déterministe : aucun tiret cadratin ni « -- » ne doit rester,
+    // même si le modèle ignore la consigne.
+    let text = normalize_application_message(&written);
     db::candidatures::mark_postule(pool, id, Some(&text), &clock::now_utc()).await?;
     Ok(text)
 }

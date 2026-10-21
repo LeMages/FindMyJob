@@ -9,10 +9,13 @@ use chrono::{Datelike, NaiveDate};
 use crate::models::PeriodGranularity;
 
 /// Séparateur utilisé quand la référence n'en montre aucun.
-const DEFAULT_SEPARATOR: &str = " – ";
+const DEFAULT_SEPARATOR: &str = " - ";
 /// Séparateurs reconnus dans les périodes de la référence, du plus au moins
 /// spécifique.
 const KNOWN_SEPARATORS: [&str; 3] = [" – ", " — ", " - "];
+/// Tirets d'un séparateur de la référence, remplacés par « - » : aucun
+/// document généré n'affiche de tiret cadratin ou demi-cadratin.
+const FORBIDDEN_DASHES: [char; 2] = ['\u{2013}', '\u{2014}'];
 
 /// Style de formatage des périodes d'un document.
 ///
@@ -20,7 +23,7 @@ const KNOWN_SEPARATORS: [&str; 3] = [" – ", " — ", " - "];
 ///
 /// * `months_short` - Les 12 abréviations de mois de la référence.
 /// * `present` - Borne de fin d'une période en cours (ex. « aujourd'hui »).
-/// * `separator` - Séparateur entre début et fin (ex. « – »).
+/// * `separator` - Séparateur entre début et fin (ex. « - »).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PeriodStyleText {
     pub months_short: Vec<String>,
@@ -36,14 +39,15 @@ pub struct PeriodStyleText {
 ///
 /// # Returns
 ///
-/// Le premier séparateur connu trouvé, sinon « – ».
+/// Le premier séparateur connu trouvé, sinon « - », ses tirets cadratins
+/// ou demi-cadratins remplacés par « - ».
 pub fn detect_separator<'a>(periods: impl IntoIterator<Item = &'a str>) -> String {
     let periods: Vec<&str> = periods.into_iter().collect();
     KNOWN_SEPARATORS
         .iter()
         .find(|sep| periods.iter().any(|p| p.contains(*sep)))
         .unwrap_or(&DEFAULT_SEPARATOR)
-        .to_string()
+        .replace(FORBIDDEN_DASHES, "-")
 }
 
 /// Formate une date seule selon la granularité.
@@ -60,9 +64,9 @@ fn format_date(date: NaiveDate, granularity: PeriodGranularity, style: &PeriodSt
 
 /// Formate une période.
 ///
-/// - début et fin : « début – fin », ou une seule date si elles s'affichent
+/// - début et fin : « début - fin », ou une seule date si elles s'affichent
 ///   identiques (même année en granularité année, même mois sinon) ;
-/// - début seul (période en cours) : « début – aujourd'hui », ou le début
+/// - début seul (période en cours) : « début - aujourd'hui », ou le début
 ///   seul si la référence n'a pas de libellé pour le présent ;
 /// - fin seule : la fin ; aucune date : chaîne vide.
 ///

@@ -8,6 +8,7 @@ use serde_json::Value;
 
 // Importation des modules internes
 use crate::shared::{fake_llm, seed, test_state};
+use crate::shared::no_dashes::{assert_no_dash_in_data, assert_no_dash_in_text};
 use fake_llm::{Reply, Step};
 use findmyjob_lib::llm::client::TEMPLATIZE_MODEL;
 use findmyjob_lib::docgen::lint::lint_prose;
@@ -142,6 +143,55 @@ async fn generation_remplit_data_json_depuis_le_profil() {
         .expect("recompilation du CV");
     assert_eq!(rendered.page_count, 1);
     assert!(rendered.text.contains("ALEX MARTIN"), "texte du CV : {}", rendered.text);
+}
+
+#[tokio::test]
+async fn aucun_tiret_interdit_dans_les_documents_generes() {
+    let (app, sid) = ready_app("generation-sans-tiret").await;
+    // « -- » et « --- » écrits par le LLM, « — » dans des noms officiels du
+    // profil : la base n'est pas modifiée, seul le rendu l'est.
+    app.llm.respond_with(Step::LmContent, Reply::Fixture("lm_content_double_tiret.json"));
+    let pool = &app.state.pool;
+    sqlx::query("UPDATE experiences SET poste = 'Fondateur — Framework de forecasting' WHERE id = 1")
+        .execute(pool)
+        .await
+        .expect("poste avec tiret");
+    sqlx::query("UPDATE projets SET titre = 'ALGN — Autonomous Legal Graph Navigator' WHERE id = 1")
+        .execute(pool)
+        .await
+        .expect("titre avec tiret");
+
+    let (cid, progress) = generate(&app, sid).await;
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+
+    // ------------------------------------------------------------------
+    // 1. data.json : aucune chaîne avec un tiret interdit
+    // ------------------------------------------------------------------
+    let (cv_raw, cv) = read_data(&app.state, sid, "cv", cid);
+    let (lm_raw, lm) = read_data(&app.state, sid, "lettre_motivation", cid);
+    assert_no_dash_in_data("CV", &cv);
+    assert_no_dash_in_data("lettre", &lm);
+    assert_eq!(cv["experiences"][0]["poste"], "Fondateur - Framework de forecasting");
+    assert_eq!(cv["projects"][0]["titre"], "ALGN - Autonomous Legal Graph Navigator");
+    assert_eq!(lm["subject"], "Candidature, stage de data engineer");
+    let paragraph = lm["paragraphs"][1].as_str().expect("paragraphe");
+    assert!(paragraph.contains("pipelines SQL, un travail proche"), "{paragraph}");
+    let profile = db::profile::build_profile(pool).await.expect("profil");
+    assert_eq!(profile.experiences[0].poste, "Fondateur — Framework de forecasting", "base inchangée");
+
+    // ------------------------------------------------------------------
+    // 2. Texte rendu : aucun tiret interdit non plus
+    // ------------------------------------------------------------------
+    for (doc_type, raw) in [("cv", cv_raw), ("lettre_motivation", lm_raw)] {
+        let doc = db::documents::get_current(pool, sid, doc_type).await.expect("lecture").expect("référence");
+        let dir = storage_paths::to_absolute(
+            &app.state.data_dir,
+            &storage_paths::version_dir(sid, doc_type, doc.current_version_id),
+        );
+        let template = std::fs::read_to_string(dir.join("template.typ")).expect("template");
+        let rendered = compile_template(template, raw.into_bytes(), dir, app.state.fonts_dir.clone()).expect("compilation");
+        assert_no_dash_in_text(doc_type, &rendered.text);
+    }
 }
 
 #[tokio::test]

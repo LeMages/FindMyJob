@@ -134,11 +134,15 @@ fn user_message(input: &CvWritingInput<'_>) -> String {
     blocks.join("\n\n")
 }
 
-/// Validation bloquante : champs de prose vides. Un document ne peut pas
-/// être assemblé sans eux.
+/// Validation bloquante : titre ou résumé vide. Un document ne peut pas
+/// être assemblé sans eux. Une catégorie de compétences vide ne bloque
+/// pas : son groupe est retiré (`retain_profile_skills`).
 fn blocking_problems(content: &CvContent) -> Vec<String> {
-    let empty = content.prose_fields().into_iter().filter(|f| f.text.trim().is_empty());
-    empty.map(|f| format!("{} est vide.", f.path)).collect()
+    [("title", &content.title), ("summary", &content.summary)]
+        .into_iter()
+        .filter(|(_, text)| text.trim().is_empty())
+        .map(|(path, _)| format!("{path} est vide."))
+        .collect()
 }
 
 /// Compétences du profil, normalisées pour la comparaison.

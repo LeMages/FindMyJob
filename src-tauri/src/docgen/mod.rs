@@ -3,8 +3,9 @@
 //! depuis le profil et l'offre, budgets de longueur, sélection des entrées
 //! du profil, textes des entrées et validation de leur traduction,
 //! traduction des textes de la référence (découpage et validation),
-//! linter de la prose et zones [FIXE], données sentinelles, formatage des
-//! périodes et des dates, comparaison de textes rendus.
+//! linter de la prose et zones [FIXE], normalisation des tirets du texte
+//! rendu, données sentinelles, formatage des périodes et des dates,
+//! comparaison de textes rendus.
 //!
 //! Ce qui lit la base, écrit des fichiers, appelle le LLM ou compile du
 //! Typst (références, caches de traduction, ajustement aux pages, trace)
@@ -14,6 +15,8 @@
 pub mod budgets;
 pub mod build_cv_data;
 pub mod build_lm_data;
+pub mod dash_normalization;
+pub mod data_normalization;
 pub mod date_format;
 pub mod document_fallback;
 pub mod entry_texts;
