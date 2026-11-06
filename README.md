@@ -8,7 +8,7 @@ Open-source desktop app to track your job applications.
 
 FindMyJob helps students organize their search for an internship, apprenticeship, or full-time job, from the first offer they spot to the final answer. Beyond plain tracking, it uses AI to remove the tedious parts: filling in an offer's details, drafting a follow-up, tailoring a CV and cover letter to the job.
 
-<!-- Screenshot placeholder: add a screenshot of the tracking view here once available. -->
+![Tracking view of a session](docs/screenshots/00_tracking.png)
 
 ## Features
 
@@ -28,19 +28,19 @@ The typical path, from first launch to your first tailored application.
 
 On first launch, a short wizard asks for the interface language (English or French, changeable later in **Settings**), then your identity, contact details, location, a short description and your links (LinkedIn, GitHub, portfolio). Only your first name, last name and email are required; everything can be edited later.
 
-<!-- Screenshot placeholder: onboarding wizard (Identity step). -->
+![First-launch wizard, Identity step](docs/screenshots/01_onboarding.png)
 
 ### 2. Add your Anthropic API key
 
 The AI features (offer import, CV and cover letter tailoring, application messages) need an [Anthropic API key](https://console.anthropic.com/). Open **Settings → Artificial intelligence**, paste your key and save it (see [Anthropic API key](#anthropic-api-key)).
 
-<!-- Screenshot placeholder: Settings, Artificial intelligence block. -->
+![Settings, Artificial intelligence block](docs/screenshots/02_api_key.png)
 
 ### 3. Complete your profile in detail
 
 Open your profile from the bottom of the sidebar (**View profile**) and fill in your experiences, education, projects, skills and languages, and set the language your profile is written in. The more detail you give, the better the generated documents: the AI only uses what your profile says and never invents facts.
 
-<!-- Screenshot placeholder: profile page in edit mode. -->
+![Profile page](docs/screenshots/03_profile.png)
 
 ### 4. Write your CV and cover letter in Typst with Claude
 
@@ -48,24 +48,24 @@ FindMyJob tailors *your own* documents, so it needs a reference CV and cover let
 
 You can add writing instructions as `//` comments in the file (`[CONSIGNES]`, `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) to say which parts stay word for word and which are rewritten for each offer. See [`docs/reference-markup.md`](docs/reference-markup.md).
 
-### 5. Create a session and import your documents
+### 5. Import the fonts used by your documents
+
+If your CV or cover letter uses fonts that are not built in, import them before importing the documents, so the generated PDFs match your originals: download the font (for example from [Google Fonts](https://fonts.google.com/)), unzip it, then select its folder in **Settings → Fonts**. Write in `font:` the exact family name shown there. A document that uses a missing font is refused at import instead of silently falling back to another font.
+
+![Settings, Fonts block with an imported family](docs/screenshots/05_fonts.png)
+
+### 6. Create a session and import your documents
 
 A session groups the applications of one search (for example "Internship 2027"). Click **+ New session** in the sidebar and name it. Then open its **Settings** tab and, in the **Documents** card, import your CV and cover letter `.typ` files. Each session has its own reference documents, and they are analyzed once at import.
 
-<!-- Screenshot placeholder: session Settings tab, Documents card with both references imported. -->
-
-### 6. Import the fonts used by your documents
-
-If your CV or cover letter uses fonts that are not built in, import them so the generated PDFs match your originals: download the font (for example from [Google Fonts](https://fonts.google.com/)), unzip it, then select its folder in **Settings → Fonts**. Write in `font:` the exact family name shown there. A document that uses a missing font fails to compile instead of silently falling back.
-
-<!-- Screenshot placeholder: Settings, Fonts block with an imported family. -->
+![Session Settings tab, Documents card with both references imported](docs/screenshots/06_session_documents.png)
 
 ### 7. Add offers and apply
 
 In your session, click **+ New application** and paste the offer's link: the form is filled in automatically for you to review. If the site can't be read, open the page inside FindMyJob, paste its text, or fill the form by hand. On creation, FindMyJob generates a CV and cover letter tailored to the offer, in the offer's language. You then follow the application from the tracking view (status timeline, follow-ups, interviews in the **Planning** tab).
 
-<!-- Screenshot placeholder: New application, offer link step. -->
-<!-- Screenshot placeholder: application detail with generated documents. -->
+![New application, offer link step](docs/screenshots/07_new_application.png)
+![Application detail with the generated documents](docs/screenshots/07_application_detail.png)
 
 ## Architecture
 
@@ -177,7 +177,7 @@ Application de bureau open source pour suivre vos candidatures.
 
 FindMyJob aide les étudiants à organiser leur recherche de stage, d'alternance ou d'emploi, de la première offre repérée jusqu'à la réponse finale. Au-delà du simple suivi, elle utilise l'IA pour supprimer les tâches fastidieuses : remplir les détails d'une offre, rédiger une relance, adapter un CV et une lettre de motivation au poste.
 
-<!-- Screenshot placeholder: capture de la vue de suivi, à ajouter quand elle sera disponible. -->
+![Vue de suivi d'une session](docs/screenshots/00_tracking.png)
 
 ## Fonctionnalités
 
@@ -197,19 +197,19 @@ Le parcours type, du premier lancement à votre première candidature adaptée.
 
 Au premier lancement, un court assistant demande la langue de l'interface (français ou anglais, modifiable ensuite dans les **Paramètres**), puis votre identité, vos coordonnées, votre localisation, une courte description et vos liens (LinkedIn, GitHub, portfolio). Seuls le prénom, le nom et l'email sont obligatoires ; tout reste modifiable par la suite.
 
-<!-- Screenshot placeholder: assistant de première configuration (étape Identité). -->
+![Assistant de premier lancement, étape Identité](docs/screenshots/01_onboarding.png)
 
 ### 2. Ajouter votre clé API Anthropic
 
 Les fonctions d'IA (import d'offre, adaptation du CV et de la lettre, messages de candidature) nécessitent une [clé API Anthropic](https://console.anthropic.com/). Ouvrez **Paramètres → Intelligence artificielle**, collez votre clé et enregistrez-la (voir [Clé API Anthropic](#clé-api-anthropic)).
 
-<!-- Screenshot placeholder: Paramètres, bloc Intelligence artificielle. -->
+![Paramètres, bloc Intelligence artificielle](docs/screenshots/02_api_key.png)
 
 ### 3. Compléter votre profil en détail
 
 Ouvrez votre profil depuis le bas de la barre latérale (**Voir le profil**) et renseignez vos expériences, formations, projets, compétences et langues, ainsi que la langue dans laquelle votre profil est rédigé. Plus vous donnez de détails, meilleurs sont les documents générés : l'IA n'utilise que ce que dit votre profil et n'invente jamais de faits.
 
-<!-- Screenshot placeholder: page du profil en mode édition. -->
+![Page du profil](docs/screenshots/03_profile.png)
 
 ### 4. Rédiger votre CV et votre lettre en Typst avec Claude
 
@@ -217,24 +217,24 @@ FindMyJob adapte *vos propres* documents : il lui faut donc un CV et une lettre 
 
 Vous pouvez ajouter des consignes de rédaction en commentaires `//` dans le fichier (`[CONSIGNES]`, `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) pour indiquer quelles parties restent mot pour mot et lesquelles sont réécrites pour chaque offre. Voir [`docs/reference-markup.md`](docs/reference-markup.md).
 
-### 5. Créer une session et importer vos documents
+### 5. Importer les polices utilisées par vos documents
+
+Si votre CV ou votre lettre utilise des polices non intégrées, importez-les avant d'importer les documents, pour que les PDF générés correspondent à vos originaux : téléchargez la police (par exemple sur [Google Fonts](https://fonts.google.com/)), décompressez-la, puis sélectionnez son dossier dans **Paramètres → Polices**. Écrivez dans `font:` le nom exact de la famille affiché à cet endroit. Un document qui utilise une police manquante est refusé à l'import au lieu de basculer silencieusement sur une autre police.
+
+![Paramètres, bloc Polices avec une famille importée](docs/screenshots/05_fonts.png)
+
+### 6. Créer une session et importer vos documents
 
 Une session regroupe les candidatures d'une même recherche (par exemple « Stage 2027 »). Cliquez sur **+ Nouvelle session** dans la barre latérale et donnez-lui un nom. Ouvrez ensuite son onglet **Paramètres** et, dans la carte **Documents**, importez les fichiers `.typ` de votre CV et de votre lettre. Chaque session a ses propres documents de référence, analysés une seule fois à l'import.
 
-<!-- Screenshot placeholder: onglet Paramètres de la session, carte Documents avec les deux références importées. -->
-
-### 6. Importer les polices utilisées par vos documents
-
-Si votre CV ou votre lettre utilise des polices non intégrées, importez-les pour que les PDF générés correspondent à vos originaux : téléchargez la police (par exemple sur [Google Fonts](https://fonts.google.com/)), décompressez-la, puis sélectionnez son dossier dans **Paramètres → Polices**. Écrivez dans `font:` le nom exact de la famille affiché à cet endroit. Un document qui utilise une police manquante échoue à la compilation au lieu de basculer silencieusement sur une autre.
-
-<!-- Screenshot placeholder: Paramètres, bloc Polices avec une famille importée. -->
+![Onglet Paramètres de la session, carte Documents avec les deux références importées](docs/screenshots/06_session_documents.png)
 
 ### 7. Ajouter des offres et postuler
 
 Dans votre session, cliquez sur **+ Nouvelle candidature** et collez le lien de l'offre : le formulaire est rempli automatiquement pour que vous le vérifiiez. Si le site ne peut pas être lu, ouvrez la page dans FindMyJob, collez son texte, ou remplissez le formulaire à la main. À la création, FindMyJob génère un CV et une lettre adaptés à l'offre, dans la langue de l'offre. Vous suivez ensuite la candidature depuis la vue de suivi (historique des statuts, relances, entretiens dans l'onglet **Planning**).
 
-<!-- Screenshot placeholder: Nouvelle candidature, étape du lien de l'offre. -->
-<!-- Screenshot placeholder: détail d'une candidature avec les documents générés. -->
+![Nouvelle candidature, étape du lien de l'offre](docs/screenshots/07_new_application.png)
+![Détail d'une candidature avec les documents générés](docs/screenshots/07_application_detail.png)
 
 ## Architecture technique
 
