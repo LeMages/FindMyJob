@@ -16,6 +16,53 @@ FindMyJob helps students organize their search for an internship, apprenticeship
 
 Every offer enters the app through its link (or its pasted text): FindMyJob never collects offers on its own.
 
+## Usage
+
+The typical path, from first launch to your first tailored application.
+
+### 1. Fill in your basic information
+
+On first launch, a short wizard asks for your identity, contact details, location, a short description and your links (LinkedIn, GitHub, portfolio). Only your first name, last name and email are required; everything can be edited later.
+
+<!-- Screenshot placeholder: onboarding wizard (step 1, Identité). -->
+
+### 2. Add your Anthropic API key
+
+The AI features (offer import, CV and cover letter tailoring, application messages) need an [Anthropic API key](https://console.anthropic.com/). Open **Paramètres → Intelligence artificielle**, paste your key and save it (see [Anthropic API key](#anthropic-api-key)).
+
+<!-- Screenshot placeholder: Paramètres, Intelligence artificielle block. -->
+
+### 3. Complete your profile in detail
+
+Open your profile from the bottom of the sidebar (**Voir le profil**) and fill in your experiences, education, projects, skills and languages, and set the language your profile is written in. The more detail you give, the better the generated documents: the AI only uses what your profile says and never invents facts.
+
+<!-- Screenshot placeholder: profile page in edit mode. -->
+
+### 4. Write your CV and cover letter in Typst with Claude
+
+FindMyJob tailors *your own* documents, so it needs a reference CV and cover letter written in [Typst](https://typst.app/) (`.typ` files). If you don't have them yet, ask [Claude](https://claude.ai/) to convert your current CV and cover letter (PDF or Word) to Typst, then check the result compiles and looks right.
+
+You can add writing instructions as `//` comments in the file (`[CONSIGNES]`, `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) to say which parts stay word for word and which are rewritten for each offer. See [`docs/reference-markup.md`](docs/reference-markup.md).
+
+### 5. Create a session and import your documents
+
+A session groups the applications of one search (for example "Internship 2027"). Click **+ Nouvelle session** in the sidebar and name it. Then open its **Paramètres** tab and, in the **Documents** card, import your CV and cover letter `.typ` files. Each session has its own reference documents, and they are analyzed once at import.
+
+<!-- Screenshot placeholder: session Paramètres tab, Documents card with both references imported. -->
+
+### 6. Import the fonts used by your documents
+
+If your CV or cover letter uses fonts that are not built in, import them so the generated PDFs match your originals: download the font (for example from [Google Fonts](https://fonts.google.com/)), unzip it, then select its folder in **Paramètres → Polices**. Write in `font:` the exact family name shown there. A document that uses a missing font fails to compile instead of silently falling back.
+
+<!-- Screenshot placeholder: Paramètres, Polices block with an imported family. -->
+
+### 7. Add offers and apply
+
+In your session, click **Nouvelle candidature** and paste the offer's link: the form is filled in automatically for you to review. If the site can't be read, open the page inside FindMyJob, paste its text, or fill the form by hand. On creation, FindMyJob generates a CV and cover letter tailored to the offer, in the offer's language. You then follow the application from the tracking view (status timeline, follow-ups, interviews in the **Planning** tab).
+
+<!-- Screenshot placeholder: Nouvelle candidature, offer link step. -->
+<!-- Screenshot placeholder: application detail with generated documents. -->
+
 ## Architecture
 
 FindMyJob is a standalone desktop app: one process, no server, no Docker. It follows the standard Tauri layout:
