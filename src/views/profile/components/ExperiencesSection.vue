@@ -7,13 +7,15 @@
 
 // Importation des modules Vue / framework
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import { useEditableList } from '@/composables/useEditableList'
 import { insertBullet } from '@/composables/insertBullet'
 import { parseBulletDescription } from '@/composables/parseBulletDescription'
-import { MONTHS, buildYearRange, fmtRange } from './dateRangeFormat'
+import { typeContratOptions } from '@/composables/candidature_display'
+import { months, buildYearRange, fmtRange } from './dateRangeFormat'
 import type { ExperienceView, CreateExperienceInput } from '@/types/index'
 
 const props = defineProps<{
@@ -36,23 +38,17 @@ interface ExpDraft {
 
 type ExpDisplayItem = ExperienceView & { isPending?: true; pendingKind?: 'new' | 'edited' }
 
-const TYPE_LABELS: Record<string, string> = {
-  stage: 'Stage',
-  alternance: 'Alternance',
-  interim: 'Intérim',
-  cdd: 'CDD',
-  cdi: 'CDI',
-}
+const { t } = useI18n()
 
 /**
- * Libellé lisible d'un type de contrat.
+ * Libellé lisible (traduit) d'un type de contrat.
  *
- * @param t - Type de contrat brut (ex. `"stage"`), ou `null`.
+ * @param value - Type de contrat brut (ex. `"stage"`), ou `null`.
  * @returns Libellé affichable, ou chaîne vide si absent.
  */
-function typeLabel(t: string | null): string {
-  if (!t) return ''
-  return TYPE_LABELS[t] ?? t
+function typeLabel(value: string | null): string {
+  if (!value) return ''
+  return typeContratOptions().find((opt) => opt.value === value)?.label ?? value
 }
 
 const yearRange = buildYearRange()
@@ -191,14 +187,14 @@ defineExpose({ hasChanges, reset, save })
 <template>
   <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
     <div :class="editMode ? 'flex items-center justify-between mb-[14px]' : ''">
-      <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">EXPÉRIENCES</div>
+      <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">{{ t('profile.experiences.section') }}</div>
       <button
         v-if="editMode"
         class="h-[30px] px-3 text-[12px] rounded-lg border border-neutral-300 bg-surface-2 font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         type="button"
         @click="openAddModal"
       >
-        + Ajouter
+        {{ t('common.add') }}
       </button>
     </div>
     <template v-if="allItems.length">
@@ -214,7 +210,7 @@ defineExpose({ hasChanges, reset, save })
             <div class="text-[14px] font-semibold">{{ exp.poste }}</div>
             <span v-if="exp.type_contrat" class="inline-block font-mono text-[10.5px] border border-neutral-300 rounded-5 px-[7px] py-0.5 text-neutral-700">{{ typeLabel(exp.type_contrat) }}</span>
             <span v-if="exp.isPending" class="inline-block font-mono text-[10.5px] rounded-5 px-[7px] py-0.5 border border-amber-300 text-amber-700 bg-amber-50">
-              {{ exp.pendingKind === 'edited' ? 'Modifié' : 'Non enregistré' }}
+              {{ exp.pendingKind === 'edited' ? t('profile.pending.edited') : t('profile.pending.new') }}
             </span>
           </div>
           <div class="text-[13px] text-neutral-500 mt-px">
@@ -233,7 +229,7 @@ defineExpose({ hasChanges, reset, save })
           <button
             class="w-[30px] h-[30px] rounded-7 border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer flex-none text-neutral-600 hover:bg-surface-3 hover:text-neutral-950 hover:border-neutral-300"
             type="button"
-            title="Modifier"
+            :title="t('common.edit')"
             @click="openEditModal(exp)"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -244,7 +240,7 @@ defineExpose({ hasChanges, reset, save })
           <button
             class="w-[30px] h-[30px] rounded-7 flex items-center justify-center cursor-pointer flex-none text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
             type="button"
-            title="Supprimer"
+            :title="t('common.delete')"
             @click="deleteItem(exp)"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -257,7 +253,7 @@ defineExpose({ hasChanges, reset, save })
         </div>
       </div>
     </template>
-    <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune expérience renseignée</div>
+    <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('profile.experiences.empty') }}</div>
   </div>
 
   <!-- Popup ajout/modification d'expérience -->
@@ -265,48 +261,44 @@ defineExpose({ hasChanges, reset, save })
     <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6">
       <div class="flex items-center justify-between mb-5">
         <div class="text-[17px] font-semibold">
-          {{ editTarget.kind === 'new' ? 'Ajouter une expérience' : 'Modifier une expérience' }}
+          {{ editTarget.kind === 'new' ? t('profile.experiences.add_title') : t('profile.experiences.edit_title') }}
         </div>
         <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" type="button" @click="closeModal">×</button>
       </div>
 
       <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Intitulé du poste *</label>
-        <input v-model="draft.poste" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Développeur Full-Stack" />
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.experiences.job_title') }}</label>
+        <input v-model="draft.poste" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.experiences.job_placeholder')" />
       </div>
 
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Entreprise</label>
-          <input v-model="draft.entreprise" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom de l'entreprise" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.company') }}</label>
+          <input v-model="draft.entreprise" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('detail.job.company_placeholder')" />
         </div>
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Lieu</label>
-          <input v-model="draft.lieu" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Paris, France" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.location') }}</label>
+          <input v-model="draft.lieu" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.experiences.location_placeholder')" />
         </div>
       </div>
 
       <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Type de contrat</label>
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.contract') }}</label>
         <select
           v-model="draft.type_contrat"
           class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
         >
-          <option value="">-- Sélectionner --</option>
-          <option value="stage">Stage</option>
-          <option value="alternance">Alternance</option>
-          <option value="interim">Intérim</option>
-          <option value="cdd">CDD</option>
-          <option value="cdi">CDI</option>
+          <option value="">{{ t('common.select_placeholder') }}</option>
+          <option v-for="opt in typeContratOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
       </div>
 
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Début</label>
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.experiences.start') }}</label>
           <div class="flex gap-2">
             <select v-model="draft.debut_mois" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1">
-              <option v-for="(m, idx) in MONTHS" :key="idx" :value="idx + 1">{{ m }}</option>
+              <option v-for="(m, idx) in months()" :key="idx" :value="idx + 1">{{ m }}</option>
             </select>
             <select v-model="draft.debut_annee" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1">
               <option v-for="y in yearRange" :key="y" :value="y">{{ y }}</option>
@@ -314,11 +306,11 @@ defineExpose({ hasChanges, reset, save })
           </div>
         </div>
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Fin</label>
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.experiences.end') }}</label>
           <div class="flex gap-2 items-center flex-wrap">
             <template v-if="!draft.en_cours">
               <select v-model="draft.fin_mois" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1 min-w-[80px]">
-                <option v-for="(m, idx) in MONTHS" :key="idx" :value="idx + 1">{{ m }}</option>
+                <option v-for="(m, idx) in months()" :key="idx" :value="idx + 1">{{ m }}</option>
               </select>
               <select v-model="draft.fin_annee" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 flex-1 min-w-[80px]">
                 <option v-for="y in yearRange" :key="y" :value="y">{{ y }}</option>
@@ -326,7 +318,7 @@ defineExpose({ hasChanges, reset, save })
             </template>
             <label class="flex items-center gap-[6px] text-[13px] cursor-pointer whitespace-nowrap select-none">
               <input type="checkbox" v-model="draft.en_cours" />
-              En cours
+              {{ t('profile.in_progress') }}
             </label>
           </div>
         </div>
@@ -334,19 +326,19 @@ defineExpose({ hasChanges, reset, save })
 
       <div class="mb-0">
         <div class="flex items-center justify-between mb-[5px]">
-          <label class="text-[12px] text-neutral-600 mb-0 block">Description</label>
+          <label class="text-[12px] text-neutral-600 mb-0 block">{{ t('profile.description') }}</label>
           <button
             type="button"
             class="inline-flex items-center gap-1 h-6 px-[9px] text-[12px] rounded-5 border border-neutral-300 bg-surface-2 text-neutral-700 cursor-pointer leading-none transition-colors duration-[120ms] hover:bg-surface-3 hover:border-neutral-300 hover:text-neutral-950"
-            aria-label="Ajouter une puce"
+            :aria-label="t('profile.bullet.add')"
             @click="descTextarea && insertBullet(descTextarea, draft.description, v => draft.description = v)"
-          ><span aria-hidden="true">•</span> Puce</button>
+          ><span aria-hidden="true">•</span> {{ t('profile.bullet.label') }}</button>
         </div>
         <textarea
           ref="descTextarea"
           v-model="draft.description"
           class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[100px]"
-          placeholder="Décris tes missions, technologies utilisées…"
+          :placeholder="t('profile.experiences.description_placeholder')"
         />
       </div>
 
@@ -355,14 +347,14 @@ defineExpose({ hasChanges, reset, save })
           class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           type="button"
           @click="closeModal"
-        >Annuler</button>
+        >{{ t('common.cancel') }}</button>
         <button
           class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600"
           :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !draft.poste.trim() }"
           type="button"
           :disabled="!draft.poste.trim()"
           @click="saveModal"
-        >Valider</button>
+        >{{ t('common.validate') }}</button>
       </div>
     </div>
   </div>

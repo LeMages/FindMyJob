@@ -7,11 +7,14 @@
 
 // Importation des modules Vue / framework
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import { useEditableList } from '@/composables/useEditableList'
 import type { SkillView, CreateSkillInput } from '@/types/index'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   items: SkillView[]
@@ -156,14 +159,14 @@ defineExpose({ hasChanges, reset, save })
 <template>
   <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
     <div :class="editMode ? 'flex items-center justify-between mb-[14px]' : ''">
-      <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">COMPÉTENCES</div>
+      <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">{{ t('profile.skills.section') }}</div>
       <button
         v-if="editMode"
         class="h-[30px] px-3 text-[12px] rounded-lg border border-neutral-300 bg-surface-2 font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         type="button"
         @click="openAdd"
       >
-        + Ajouter
+        {{ t('common.add') }}
       </button>
     </div>
 
@@ -177,7 +180,7 @@ defineExpose({ hasChanges, reset, save })
           </div>
         </template>
       </template>
-      <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune compétence renseignée</div>
+      <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('profile.skills.empty') }}</div>
     </template>
 
     <!-- Vue édition : liste avec boutons édition/suppression -->
@@ -193,13 +196,13 @@ defineExpose({ hasChanges, reset, save })
           >
             <span class="flex-1 text-[13px] text-neutral-950">{{ s.nom }}</span>
             <span v-if="s.isPending" class="inline-block font-mono text-[10.5px] rounded-5 px-[7px] py-0.5 border border-amber-300 text-amber-700 bg-amber-50 flex-none">
-              {{ s.pendingKind === 'edited' ? 'Modifié' : 'Non enregistré' }}
+              {{ s.pendingKind === 'edited' ? t('profile.pending.edited') : t('profile.pending.new') }}
             </span>
             <div class="flex flex-row gap-[5px] flex-none self-center ml-[6px]">
               <button
                 class="w-[30px] h-[30px] rounded-7 border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer flex-none text-neutral-600 hover:bg-surface-3 hover:text-neutral-950 hover:border-neutral-300"
                 type="button"
-                title="Modifier"
+                :title="t('common.edit')"
                 @click="openEdit(s)"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -210,7 +213,7 @@ defineExpose({ hasChanges, reset, save })
               <button
                 class="w-[30px] h-[30px] rounded-7 flex items-center justify-center cursor-pointer flex-none text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
                 type="button"
-                title="Supprimer"
+                :title="t('common.delete')"
                 @click="deleteItem(s)"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -224,7 +227,7 @@ defineExpose({ hasChanges, reset, save })
           </div>
         </template>
       </template>
-      <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune compétence renseignée</div>
+      <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('profile.skills.empty') }}</div>
     </template>
   </div>
 
@@ -233,23 +236,23 @@ defineExpose({ hasChanges, reset, save })
     <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[440px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6">
       <div class="flex items-center justify-between mb-5">
         <div class="text-[17px] font-semibold">
-          {{ editTarget.kind === 'new' ? 'Ajouter une compétence' : 'Modifier une compétence' }}
+          {{ editTarget.kind === 'new' ? t('profile.skills.add_title') : t('profile.skills.edit_title') }}
         </div>
         <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" type="button" @click="close">×</button>
       </div>
 
       <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom de la compétence *</label>
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.skills.name') }}</label>
         <input v-model="draft.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Python, Vue.js, Figma…" />
       </div>
 
       <div class="mb-0">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Domaine *</label>
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.skills.domain') }}</label>
         <div class="relative">
           <input
             v-model="draft.domaine"
             class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
-            placeholder="Langages, Frameworks, Outils…"
+            :placeholder="t('profile.skills.domain_placeholder')"
             autocomplete="off"
             @focus="domainDropdownOpen = true"
             @input="domainDropdownOpen = true"
@@ -270,12 +273,14 @@ defineExpose({ hasChanges, reset, save })
               class="px-[13px] py-[9px] text-[13.5px] cursor-pointer border-t border-neutral-100 text-green-500 flex gap-1 hover:bg-green-50"
               @mousedown.prevent="domainDropdownOpen = false"
             >
-              Créer <strong>« {{ draft.domaine.trim() }} »</strong>
+              <i18n-t keypath="profile.skills.create" scope="global">
+                <template #name><strong>{{ t('profile.skills.quoted', { name: draft.domaine.trim() }) }}</strong></template>
+              </i18n-t>
             </div>
             <div
               v-if="!filteredDomains.length && !draft.domaine.trim()"
               class="px-[13px] py-[9px] text-[12px] text-neutral-400 font-mono cursor-default"
-            >Aucun domaine existant</div>
+            >{{ t('profile.skills.no_domain') }}</div>
           </div>
         </div>
       </div>
@@ -285,14 +290,14 @@ defineExpose({ hasChanges, reset, save })
           class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           type="button"
           @click="close"
-        >Annuler</button>
+        >{{ t('common.cancel') }}</button>
         <button
           class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600"
           :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !draft.nom.trim() || !draft.domaine.trim() }"
           type="button"
           :disabled="!draft.nom.trim() || !draft.domaine.trim()"
           @click="saveModal"
-        >Valider</button>
+        >{{ t('common.validate') }}</button>
       </div>
     </div>
   </div>

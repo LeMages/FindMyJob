@@ -1,5 +1,5 @@
-//! Commandes Tauri pour les paramètres applicatifs : modèle LLM, thème, test
-//! de connexion, clé API Anthropic.
+//! Commandes Tauri pour les paramètres applicatifs : modèle LLM, thème,
+//! langue de l'interface, test de connexion, clé API Anthropic.
 
 // Importation des modules internes
 use crate::app_state::AppContext;
@@ -65,6 +65,35 @@ pub async fn get_theme(ctx: tauri::State<'_, AppContext>) -> Result<String, AppE
 #[tauri::command]
 pub async fn set_theme(ctx: tauri::State<'_, AppContext>, theme: String) -> Result<(), AppError> {
     services::settings::set_theme(&ctx.state()?.pool, &theme).await
+}
+
+/// Renvoie la langue de l'interface configurée.
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+///
+/// # Returns
+///
+/// `"fr"` ou `"en"`.
+#[tauri::command]
+pub async fn get_ui_language(ctx: tauri::State<'_, AppContext>) -> Result<String, AppError> {
+    db::settings::resolve_ui_lang(&ctx.state()?.pool).await
+}
+
+/// Enregistre la langue de l'interface choisie.
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+/// * `lang` - Langue choisie.
+///
+/// # Returns
+///
+/// `Ok(())`, ou `AppError::Validation` pour une langue inconnue.
+#[tauri::command]
+pub async fn set_ui_language(ctx: tauri::State<'_, AppContext>, lang: String) -> Result<(), AppError> {
+    services::settings::set_ui_lang(&ctx.state()?.pool, &lang).await
 }
 
 /// Teste la connexion à l'API Claude.

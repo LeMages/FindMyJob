@@ -8,6 +8,7 @@
 
 // Importation des modules Vue / framework
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 // Importation des composants
 import ContactFormPopup from './ContactFormPopup.vue'
@@ -22,6 +23,8 @@ import {
   applyByMail,
   applyByMessage,
 } from '@/stores/app'
+
+const { t } = useI18n()
 
 /** Confirme la suppression de la candidature ouverte et affiche l'erreur éventuelle. */
 async function confirmDelete() {
@@ -74,10 +77,10 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
       <!-- Apply popup -->
       <template v-if="state.detailPopup === 'apply'">
         <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">Postuler</div>
+          <div class="text-[17px] font-semibold">{{ t('detail.apply.title') }}</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
-        <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[18px]">Comment veux-tu postuler à cette offre ?</div>
+        <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[18px]">{{ t('detail.apply.question') }}</div>
 
         <div
           class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-surface-2 hover:border-neutral-300 hover:bg-surface-3"
@@ -86,8 +89,8 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         >
           <div class="text-[15px] w-[38px] text-center flex-none">✉</div>
           <div>
-            <div class="text-[14px] font-semibold">Postuler par mail</div>
-            <div class="text-[12px] text-neutral-500 mt-0.5">{{ applyingVia === 'mail' ? 'Rédaction du mail par l\'IA…' : 'Rédiger et envoyer un mail de candidature.' }}</div>
+            <div class="text-[14px] font-semibold">{{ t('detail.apply.mail_title') }}</div>
+            <div class="text-[12px] text-neutral-500 mt-0.5">{{ applyingVia === 'mail' ? t('detail.apply.mail_writing') : t('detail.apply.mail_description') }}</div>
           </div>
         </div>
 
@@ -98,8 +101,8 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         >
           <div class="text-[15px] w-[38px] text-center flex-none">💬</div>
           <div>
-            <div class="text-[14px] font-semibold">Postuler par message</div>
-            <div class="text-[12px] text-neutral-500 mt-0.5">{{ applyingVia === 'message' ? 'Rédaction du message par l\'IA…' : 'Envoyer un message via la plateforme de l\'offre.' }}</div>
+            <div class="text-[14px] font-semibold">{{ t('detail.apply.message_title') }}</div>
+            <div class="text-[12px] text-neutral-500 mt-0.5">{{ applyingVia === 'message' ? t('detail.apply.message_writing') : t('detail.apply.message_description') }}</div>
           </div>
         </div>
 
@@ -110,8 +113,8 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         >
           <div class="text-[15px] w-[38px] text-center flex-none">→</div>
           <div>
-            <div class="text-[14px] font-semibold">Postuler sans message</div>
-            <div class="text-[12px] text-neutral-500 mt-0.5">Marquer la candidature comme envoyée, sans message.</div>
+            <div class="text-[14px] font-semibold">{{ t('detail.apply.none_title') }}</div>
+            <div class="text-[12px] text-neutral-500 mt-0.5">{{ t('detail.apply.none_description') }}</div>
           </div>
         </div>
       </template>
@@ -119,32 +122,32 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
       <!-- Mail popup -->
       <template v-else-if="state.detailPopup === 'mail'">
         <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">Rédiger le mail de candidature</div>
+          <div class="text-[17px] font-semibold">{{ t('detail.mail.title') }}</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
         <div class="mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Objet</label>
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.mail.subject_label') }}</label>
           <input
             class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
-            :value="`Candidature — ${state.selectedCard?.role ?? ''} — Alex Martin`"
+            :value="t('detail.mail.subject', { role: state.selectedCard?.role ?? '' })"
           />
         </div>
         <div class="mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Corps du mail</label>
-          <textarea class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[180px]" placeholder="Madame, Monsieur, ..." />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.mail.body_label') }}</label>
+          <textarea class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[180px]" :placeholder="t('detail.mail.body_placeholder')" />
         </div>
         <button class="w-full justify-center mb-1 h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3">
-          ✦ Générer par IA
+          {{ t('detail.mail.generate') }}
         </button>
         <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
           <button
             class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="closeDetailPopup"
-          >Annuler</button>
+          >{{ t('common.cancel') }}</button>
           <button
             class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
             @click="closeDetailPopup"
-          >Enregistrer</button>
+          >{{ t('common.save') }}</button>
         </div>
       </template>
 
@@ -154,51 +157,50 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
       <!-- Confirm delete contact popup -->
       <template v-else-if="state.detailPopup === 'confirmDeleteContact' && state.detailContact">
         <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">Supprimer définitivement le contact</div>
+          <div class="text-[17px] font-semibold">{{ t('detail.delete_contact.title') }}</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
         <div class="text-[13px] text-neutral-600 leading-[1.6]">
-          {{ state.detailContact.nom }} sera retiré du carnet, de cette candidature et de ses entretiens.
+          {{ t('detail.delete_contact.body', { name: state.detailContact.nom }) }}
           <template v-if="otherCandidatureCount > 0">
-            Il est aussi lié à {{ otherCandidatureCount }} autre{{ otherCandidatureCount > 1 ? 's' : '' }}
-            candidature{{ otherCandidatureCount > 1 ? 's' : '' }}, d'où il sera également retiré.
+            {{ t('detail.delete_contact.also_linked', otherCandidatureCount) }}
           </template>
-          Cette action est irréversible.
+          {{ t('common.irreversible') }}
         </div>
         <div v-if="deleteContactError" class="text-[12.5px] text-red-600 mt-3">{{ deleteContactError }}</div>
         <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
           <button
             class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="closeDetailPopup"
-          >Annuler</button>
+          >{{ t('common.cancel') }}</button>
           <button
             class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-red-600 bg-red-600 text-white hover:bg-red-700"
             @click="confirmDeleteContact"
-          >Supprimer définitivement</button>
+          >{{ t('detail.delete_contact.confirm') }}</button>
         </div>
       </template>
 
       <!-- Offer content popup -->
       <template v-else-if="state.detailPopup === 'offer'">
         <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">Contenu de l'offre</div>
+          <div class="text-[17px] font-semibold">{{ t('detail.offer.title') }}</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
         <div class="bg-neutral-50 border border-neutral-200 rounded-10 p-[18px] text-[13px] leading-[1.7] text-neutral-700 min-h-[200px] font-sans whitespace-pre-wrap">
-          {{ state.detailCandidature?.description_offre || 'Aucun contenu d\'offre renseigné.' }}
+          {{ state.detailCandidature?.description_offre || t('detail.offer.empty') }}
         </div>
         <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
           <button
             class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
             @click="closeDetailPopup"
-          >Fermer</button>
+          >{{ t('common.close') }}</button>
         </div>
       </template>
 
       <!-- Status history content popup -->
       <template v-else-if="state.detailPopup === 'statusHistoryContent'">
         <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">Contenu envoyé</div>
+          <div class="text-[17px] font-semibold">{{ t('detail.sent_content.title') }}</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
         <div class="bg-neutral-50 border border-neutral-200 rounded-10 p-[18px] text-[13px] leading-[1.7] text-neutral-700 min-h-[200px] font-mono whitespace-pre-wrap">
@@ -208,28 +210,28 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
           <button
             class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
             @click="closeDetailPopup"
-          >Fermer</button>
+          >{{ t('common.close') }}</button>
         </div>
       </template>
 
       <!-- Confirm delete popup -->
       <template v-else-if="state.detailPopup === 'confirmDelete'">
         <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">Supprimer la candidature</div>
+          <div class="text-[17px] font-semibold">{{ t('detail.delete_application.title') }}</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
         </div>
         <div class="text-[13px] text-neutral-600 leading-[1.6]">
-          Cette candidature sera définitivement retirée de votre suivi. Cette action est irréversible.
+          {{ t('detail.delete_application.body') }}
         </div>
         <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
           <button
             class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="closeDetailPopup"
-          >Annuler</button>
+          >{{ t('common.cancel') }}</button>
           <button
             class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-red-600 bg-red-600 text-white hover:bg-red-700"
             @click="confirmDelete"
-          >Supprimer</button>
+          >{{ t('common.delete') }}</button>
         </div>
       </template>
 

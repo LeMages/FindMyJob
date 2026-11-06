@@ -10,14 +10,17 @@
 
 // Importation des modules Vue / framework
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
 import { formatDateTime } from '@/composables/date_time_format'
 import DocumentVersionsPopup from '@/components/DocumentVersionsPopup.vue'
 import ReferenceMarkupHelp from '@/components/ReferenceMarkupHelp.vue'
 import type { DocumentReferenceView, DocumentVersionView } from '@/types/index'
+
+const { t } = useI18n()
 
 interface Props {
   docType: 'cv' | 'lettre_motivation'
@@ -49,21 +52,21 @@ const error = ref<string | null>(null)
 const saveCommand = computed(() => (isCv.value ? 'save_cv' : 'save_lettre_motivation'))
 const compileCommand = computed(() => (isCv.value ? 'compile_cv' : 'compile_lettre_motivation'))
 
-const docLabel = computed(() => (isCv.value ? 'CV' : 'Lettre de motivation'))
-const emptyLabel = computed(() => (isCv.value ? 'Aucun CV renseigné' : 'Aucune lettre de motivation renseignée'))
-const savedLabel = computed(() => (isCv.value ? 'Enregistré le' : 'Enregistrée le'))
-const previewTitle = computed(() => (isCv.value ? 'Visualiser le CV compilé' : 'Visualiser la lettre compilée'))
+const docLabel = computed(() => (isCv.value ? t('detail.documents.cv') : t('detail.documents.cover_letter')))
+const emptyLabel = computed(() => (isCv.value ? t('documents.reference.empty_cv') : t('documents.reference.empty_lm')))
+const savedLabelKey = computed(() => (isCv.value ? 'documents.reference.saved_cv' : 'documents.reference.saved_lm'))
+const previewTitle = computed(() => (isCv.value ? t('documents.reference.preview_cv') : t('documents.reference.preview_lm')))
 const uploadLabel = computed(() => {
-  if (!isCv.value) return props.reference ? 'Remplacer la lettre' : 'Ajouter une lettre'
-  return props.reference ? 'Remplacer le CV' : 'Ajouter un CV'
+  if (!isCv.value) return props.reference ? t('documents.reference.replace_lm') : t('documents.reference.add_lm')
+  return props.reference ? t('documents.reference.replace_cv') : t('documents.reference.add_cv')
 })
-const modalTitle = computed(() => (isCv.value ? 'Aperçu du CV' : 'Aperçu de la lettre de motivation'))
-const iframeTitle = computed(() => (isCv.value ? 'Aperçu PDF du CV' : 'Aperçu PDF de la lettre de motivation'))
+const modalTitle = computed(() => (isCv.value ? t('detail.documents.cv_preview_title') : t('detail.documents.lm_preview_title')))
+const iframeTitle = computed(() => (isCv.value ? t('documents.reference.iframe_cv') : t('documents.reference.iframe_lm')))
 const saveErrorFallback = computed(() =>
-  isCv.value ? 'Erreur lors de la sauvegarde du CV.' : 'Erreur lors de la sauvegarde de la lettre de motivation.',
+  isCv.value ? t('error.fallback.save_cv') : t('error.fallback.save_cover_letter'),
 )
 const compileErrorFallback = computed(() =>
-  isCv.value ? 'Erreur lors de la compilation du CV.' : 'Erreur lors de la compilation de la lettre de motivation.',
+  isCv.value ? t('error.fallback.compile_cv') : t('error.fallback.compile_cover_letter'),
 )
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -75,7 +78,9 @@ const previewError = ref<string | null>(null)
 const previewData = ref<string | null>(null)
 const previewVersionNumber = ref<number | null>(null)
 const previewModalTitle = computed(() =>
-  previewVersionNumber.value == null ? modalTitle.value : `${modalTitle.value} — version ${previewVersionNumber.value}`,
+  previewVersionNumber.value == null
+    ? modalTitle.value
+    : t('documents.reference.with_version', { title: modalTitle.value, version: previewVersionNumber.value }),
 )
 
 // ── Versions ─────────────────────────────────────────────────────────────────
@@ -112,7 +117,7 @@ async function loadVersions() {
     })
   } catch (e: unknown) {
     versions.value = []
-    versionsLoadError.value = extractErrorMessage(e, "Impossible de charger l'historique des versions.")
+    versionsLoadError.value = backendErrorMessage(e, t('error.fallback.load_versions'))
   }
 }
 
@@ -141,7 +146,7 @@ async function onFileSelected(event: Event) {
   if (!file) return
 
   if (!file.name.toLowerCase().endsWith('.typ')) {
-    error.value = 'Seuls les fichiers .typ sont acceptés.'
+    error.value = t('documents.reference.only_typ')
     input.value = ''
     return
   }
@@ -159,7 +164,7 @@ async function onFileSelected(event: Event) {
     emit('update:reference', saved)
     justSaved.value = true
   } catch (e: unknown) {
-    error.value = extractErrorMessage(e, saveErrorFallback.value)
+    error.value = backendErrorMessage(e, saveErrorFallback.value)
   } finally {
     saving.value = false
     input.value = ''
@@ -180,7 +185,7 @@ async function openPreview(loadPdf: () => Promise<string>, errorFallback: string
   try {
     previewData.value = await loadPdf()
   } catch (e: unknown) {
-    previewError.value = extractErrorMessage(e, errorFallback)
+    previewError.value = backendErrorMessage(e, errorFallback)
   } finally {
     previewLoading.value = false
   }
@@ -199,7 +204,7 @@ async function previewVersion(version: number) {
   previewVersionNumber.value = version
   await openPreview(
     () => invoke<string>('get_document_version_pdf', { sessionId: props.sessionId, docType: props.docType, version }),
-    "Impossible de charger l'aperçu de cette version.",
+    t('error.fallback.load_version_preview'),
   )
 }
 
@@ -240,7 +245,7 @@ defineExpose({ hasChanges, reset })
         <!-- Document actuel : nom du fichier et date de la version courante -->
         <template v-if="reference">
           <div class="text-[12px] text-neutral-700 mt-px whitespace-nowrap overflow-hidden text-ellipsis font-mono">{{ displayFilename }}</div>
-          <div class="text-[11px] text-neutral-500 mt-px">{{ savedLabel }} {{ displayDate }}</div>
+          <div class="text-[11px] text-neutral-500 mt-px">{{ t(savedLabelKey, { date: displayDate }) }}</div>
         </template>
         <div v-else class="text-[12px] text-neutral-400 mt-px font-mono">{{ emptyLabel }}</div>
       </div>
@@ -283,8 +288,8 @@ defineExpose({ hasChanges, reset })
           v-if="reference"
           class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-neutral-300 bg-surface-2 text-neutral-600 cursor-pointer transition-colors duration-150 hover:bg-surface-3 hover:border-neutral-400"
           type="button"
-          title="Versions"
-          aria-label="Versions"
+          :title="t('documents.reference.versions')"
+          :aria-label="t('documents.reference.versions')"
           @click="versionsOpen = true"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -300,7 +305,7 @@ defineExpose({ hasChanges, reset })
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-blue-500 flex-none">
         <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
       </svg>
-      <span>Sauvegarde…</span>
+      <span>{{ t('profile.saving') }}</span>
     </div>
     <div v-if="error" class="mt-[10px] text-[12px] text-red-600 whitespace-pre-line">{{ error }}</div>
     <ReferenceMarkupHelp v-if="editMode" />
@@ -340,7 +345,7 @@ defineExpose({ hasChanges, reset })
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-blue-500">
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
-            Compilation en cours…
+            {{ t('documents.reference.compiling') }}
           </div>
           <div v-else-if="previewError" class="flex items-start gap-[10px] text-red-600 text-[13px] max-w-[480px] p-5 bg-red-50 border border-red-200 rounded-lg leading-[1.5]">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">

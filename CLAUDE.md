@@ -38,6 +38,7 @@ The Rust side (`src-tauri/`) is the single source of truth for business rules (s
 | Claude call traces (model, tokens, duration, request id, prompts) | `src-tauri/src/llm/call_record.rs`; generation `debug/<cid>/llm_calls.json`, DEV `templatize_debug/` |
 | Tauri commands | `src-tauri/src/commands/*.rs`, one file per domain, registered in `lib.rs` (`generate_handler!`) |
 | TypeScript types | `src/types/index.ts` (hand-mirrored from `src-tauri/src/models`, no codegen) |
+| Interface language (FR / EN) | `src/i18n.ts` (`vue-i18n` instance, `t` for non-component code, `dateLocale()`), `src/locales/fr.ts` (reference) and `en.ts`, `src/composables/useUiLanguage.ts` (setting `ui_lang`), `src/composables/backend_error_message.ts` (backend messages shown in English) |
 | Vue views and components | `src/views/<view_name>/` (one folder per view) and `src/components/` (shared) |
 
 ## Code conventions
@@ -146,6 +147,11 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
 
 ## Key conventions
 
-- All user-facing text is in French.
+- **Interface language (i18n).** The frontend is bilingual (French / English), the backend is not:
+  - every visible text in `src/` goes through `t()` (`useI18n()` in components, `t` from `@/i18n` elsewhere), `<i18n-t>` when the text contains markup; never a hard-coded string;
+  - `src/locales/fr.ts` is the reference; `en.ts` is typed `satisfies typeof fr`, so a missing or extra key fails `vue-tsc`. Every new key gets its French and English text in the same change;
+  - values stored in the database stay in French (statuses, sources, language levels…): only their displayed label is translated;
+  - the Rust backend is not translated: its messages are French; in English the UI shows a generic translated message followed by the original (`backendErrorMessage`, `backendTextMessage`);
+  - the interface language (`ui_lang` setting) is independent of the documents' language: CVs and cover letters always follow the offer's language.
 - The app's data (database, documents, fonts) lives in the Tauri app data folder, never inside the project tree.
 - The Anthropic API key is read from `ANTHROPIC_API_KEY` in `.env` in DEV mode, and from the system keyring in PROD mode (set from Paramètres). It is never hardcoded, committed or stored in the database. `.env` is gitignored; `.env.example` documents it without a value.

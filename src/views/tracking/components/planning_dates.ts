@@ -1,8 +1,11 @@
 /**
- * Utilitaires de dates pour l'onglet planning (semaine, mois, formatage
- * français). Regroupé ici car utilisé par plusieurs composants de
- * `views/tracking/components/`.
+ * Utilitaires de dates pour l'onglet planning (semaine, mois, formatage dans
+ * la langue de l'interface). Regroupé ici car utilisé par plusieurs
+ * composants de `views/tracking/components/`.
  */
+
+// Importation des modules internes
+import { dateLocale, t } from '@/i18n'
 
 /**
  * Parse la date d'un entretien en objet `Date`, en heure locale.
@@ -150,7 +153,7 @@ export function formatHour(hour: number): string {
  * @returns Chaîne formatée, ex. `"14:30"`.
  */
 export function formatTime(d: Date): string {
-  return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })
 }
 
 /**
@@ -161,7 +164,7 @@ export function formatTime(d: Date): string {
  * @returns Chaîne formatée, ex. `"lun. 12"`.
  */
 export function formatDayLabel(d: Date): string {
-  return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })
+  return d.toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric' })
 }
 
 /**
@@ -171,7 +174,7 @@ export function formatDayLabel(d: Date): string {
  * @returns Chaîne formatée, ex. `"janvier 2026"`.
  */
 export function formatMonthLabel(d: Date): string {
-  return d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  return d.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' })
 }
 
 /**
@@ -181,6 +184,6 @@ export function formatMonthLabel(d: Date): string {
  * @returns Chaîne formatée, ex. `"lundi 12 janvier 2026 à 14:30"`.
  */
 export function formatFullDate(d: Date): string {
-  const datePart = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-  return `${datePart} à ${formatTime(d)}`
+  const datePart = d.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  return `${datePart} ${t('common.date.at')} ${formatTime(d)}`
 }

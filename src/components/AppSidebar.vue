@@ -4,6 +4,9 @@
  * et aux paramètres. Composant partagé, monté une seule fois par `App.vue`.
  */
 
+// Importation des modules Vue / framework
+import { useI18n } from 'vue-i18n'
+
 // Importation des modules internes
 import {
   state,
@@ -13,6 +16,8 @@ import {
   openDeleteSessionPopup,
   navigate,
 } from '@/stores/app'
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -24,7 +29,7 @@ import {
     </div>
 
     <!-- Sessions -->
-    <div class="px-[18px] pt-3 pb-[6px] mt-3 font-mono text-[10.5px] tracking-[.07em] text-neutral-400 flex-none">MES SESSIONS</div>
+    <div class="px-[18px] pt-3 pb-[6px] mt-3 font-mono text-[10.5px] tracking-[.07em] text-neutral-400 flex-none">{{ t('sidebar.sessions') }}</div>
     <nav class="flex-1 overflow-y-auto px-[10px]">
       <div
         v-for="s in allSessions"
@@ -43,14 +48,14 @@ import {
           class="bg-transparent border-none cursor-pointer px-[6px] py-0.5 text-[15px] leading-none rounded-md flex-none opacity-0 transition-opacity duration-150 group-hover:opacity-100"
           :class="s.id === state.sessionId ? 'text-white/40 hover:bg-white/10 hover:text-white' : 'text-neutral-300 hover:text-neutral-800 hover:bg-neutral-100'"
           @click.stop="openDeleteSessionPopup(s.id, s.nom)"
-          title="Supprimer"
+          :title="t('common.delete')"
         >×</button>
       </div>
 
       <div
         class="mx-1 mt-2 mb-3 py-[9px] px-[10px] border border-dashed border-neutral-300 rounded-lg text-[13px] text-neutral-600 cursor-pointer text-center select-none hover:bg-neutral-200 hover:text-neutral-800"
         @click="addSession"
-      >+ Nouvelle session</div>
+      >{{ t('sidebar.new_session') }}</div>
     </nav>
 
     <!-- User bar -->
@@ -59,10 +64,10 @@ import {
         <div class="w-[34px] h-[34px] rounded-full flex-none flex items-center justify-center font-semibold text-[13px] bg-neutral-200 text-neutral-700">{{ state.userInitials || '…' }}</div>
         <div>
           <div class="text-[13px] font-semibold leading-tight">{{ state.userDisplayName || '…' }}</div>
-          <div class="text-[11px] text-neutral-500">Voir le profil</div>
+          <div class="text-[11px] text-neutral-500">{{ t('sidebar.view_profile') }}</div>
         </div>
       </button>
-      <button class="w-[38px] h-[38px] flex-none rounded-lg border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer hover:bg-surface-3" @click="navigate('settings')" title="Paramètres">
+      <button class="w-[38px] h-[38px] flex-none rounded-lg border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer hover:bg-surface-3" @click="navigate('settings')" :title="t('sidebar.settings')">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" class="text-neutral-700">
           <line x1="3" y1="5" x2="15" y2="5" stroke="currentColor" stroke-width="1.4" />
           <line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" stroke-width="1.4" />

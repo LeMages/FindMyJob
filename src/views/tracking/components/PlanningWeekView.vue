@@ -7,11 +7,14 @@
 
 // Importation des modules Vue / framework
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 // Importation des modules internes
 import { interviewStatusDotColor, interviewTypeColor } from '@/composables/candidature_display'
 import { addDays, formatDayLabel, formatHour, formatTime, interviewStatusDot, isPast, isSameDay, isToday, parseInterviewDate } from './planning_dates'
 import type { PlanningInterviewView } from '@/types'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   items: PlanningInterviewView[]
@@ -87,7 +90,7 @@ function itemsForDay(day: Date) {
             class="absolute top-1 right-1 w-2 h-2 rounded-full"
             :class="interviewStatusDotColor(entry.statusDot)"
           />
-          <div class="font-semibold truncate pr-3">{{ entry.interview.entreprise ?? 'Entreprise inconnue' }}</div>
+          <div class="font-semibold truncate pr-3">{{ entry.interview.entreprise ?? t('common.unknown_company') }}</div>
           <div class="truncate text-[10.5px]">{{ entry.interview.poste }} · <span class="font-mono">{{ formatTime(entry.date) }}</span></div>
         </div>
       </div>

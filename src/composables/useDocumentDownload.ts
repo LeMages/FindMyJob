@@ -10,7 +10,8 @@ import { ref } from 'vue'
 // Importation des modules internes
 import { state, showToast } from '@/stores/app'
 import { downloadCandidatureDocument } from '@/composables/document_download'
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { t } from '@/i18n'
 import type { DownloadDocType } from '@/composables/document_file_name'
 
 /**
@@ -39,9 +40,9 @@ export function useDocumentDownload() {
         nom: state.userNom,
         prenom: state.userPrenom,
       })
-      showToast(`Document téléchargé : ${saved}`)
+      showToast(t('toast.document_downloaded', { path: saved }))
     } catch (e: unknown) {
-      showToast(extractErrorMessage(e, 'Impossible de télécharger le document.'), 'error')
+      showToast(backendErrorMessage(e, t('error.fallback.download_document')), 'error')
     } finally {
       downloading.value = null
     }
