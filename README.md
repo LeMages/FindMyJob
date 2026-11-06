@@ -48,6 +48,8 @@ FindMyJob tailors *your own* documents, so it needs a reference CV and cover let
 
 You can add writing instructions as `//` comments in the file (`[CONSIGNES]`, `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) to say which parts stay word for word and which are rewritten for each offer. See [`docs/reference-markup.md`](docs/reference-markup.md).
 
+Two complete examples for a fictional student are in the repository: [`docs/cv_exemple.typ`](docs/cv_exemple.typ) and [`docs/lm_exemple.typ`](docs/lm_exemple.typ) (in French, using the Arimo font). You can import them as they are to try the app, or use them as a model for your own documents.
+
 ### 5. Import the fonts used by your documents
 
 If your CV or cover letter uses fonts that are not built in, import them before importing the documents, so the generated PDFs match your originals: download the font (for example from [Google Fonts](https://fonts.google.com/)), unzip it, then select its folder in **Settings → Fonts**. Write in `font:` the exact family name shown there. A document that uses a missing font is refused at import instead of silently falling back to another font.
@@ -216,6 +218,8 @@ Ouvrez votre profil depuis le bas de la barre latérale (**Voir le profil**) et 
 FindMyJob adapte *vos propres* documents : il lui faut donc un CV et une lettre de motivation de référence rédigés en [Typst](https://typst.app/) (fichiers `.typ`). Si vous n'en avez pas encore, demandez à [Claude](https://claude.ai/) de convertir votre CV et votre lettre actuels (PDF ou Word) en Typst, puis vérifiez que le résultat compile et s'affiche correctement.
 
 Vous pouvez ajouter des consignes de rédaction en commentaires `//` dans le fichier (`[CONSIGNES]`, `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) pour indiquer quelles parties restent mot pour mot et lesquelles sont réécrites pour chaque offre. Voir [`docs/reference-markup.md`](docs/reference-markup.md).
+
+Deux exemples complets, pour un étudiant fictif, sont disponibles dans le dépôt : [`docs/cv_exemple.typ`](docs/cv_exemple.typ) et [`docs/lm_exemple.typ`](docs/lm_exemple.typ) (en français, avec la police Arimo). Vous pouvez les importer tels quels pour essayer l'application, ou vous en servir de modèle pour vos propres documents.
 
 ### 5. Importer les polices utilisées par vos documents
 
