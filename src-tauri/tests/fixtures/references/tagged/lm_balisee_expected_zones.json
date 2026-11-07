@@ -9,7 +9,7 @@
     "field": "paragraphs[0]",
     "mode": "fixe",
     "instruction": "Les deux premières phrases.",
-    "text": "Actuellement étudiant en dernière année du cycle ingénieur à l'Efrei Paris, spécialisé en Data Engineering et Machine Learning, je suis à la recherche d'un stage de fin d'études de 6 mois à partir de mars 2027. Ce stage, obligatoire pour l'obtention de mon diplôme, doit se dérouler à l'étranger et fera l'objet d'une convention établie par mon école."
+    "text": "Actuellement étudiant en dernière année du cycle ingénieur à l'École Supérieure du Numérique de Lyon, spécialisé en Data et Cloud, je suis à la recherche d'un stage de fin d'études de 6 mois à partir de mars 2027. Ce stage, obligatoire pour l'obtention de mon diplôme, peut se dérouler en France ou à l'étranger et fera l'objet d'une convention établie par mon école."
   },
   {
     "field": "paragraphs[0]",
@@ -20,8 +20,8 @@
   {
     "field": "paragraphs[1]",
     "mode": "adaptable",
-    "instruction": "Choisir et ordonner, parmi les expériences et projets du profil, les réalisations les plus pertinentes pour l'offre (ex. : mettre le RAG en avant pour une offre orientée IA, le pipeline de données pour une offre Data Engineering). Garder les chiffres exacts du profil. Le projet personnel de forecasting n'est jamais présenté comme un projet entrepreneurial et n'est pas nommé.",
-    "text": "Lors de mon stage de 6 mois chez Need4Viz, j'ai conçu et déployé un pipeline de forecasting sur plus de 2 000 séries temporelles issues d'univers SAP, avec des modèles Transformer atteignant une Directional Accuracy de 80%. J'y ai également développé un système RAG intégré à l'outil de visualisation de l'entreprise, ainsi que les API REST permettant de mettre ces modèles en production. En parallèle, je poursuis ce travail sur le forecasting dans un projet personnel, pour lequel j'ai conçu des prévisions par intervalles sur des données d'entreprise et l'architecture qui les accompagne (Rust, PostgreSQL, Docker)."
+    "instruction": "Choisir et ordonner, parmi les expériences et projets du profil, les réalisations les plus pertinentes pour l'offre (ex. : mettre les tableaux de bord en avant pour une offre orientée BI, le pipeline de données pour une offre Data Engineering). Garder les chiffres exacts du profil. Le projet personnel n'est jamais présenté comme un projet entrepreneurial et n'est pas nommé.",
+    "text": "Lors de mon stage de 6 mois chez Transvia Logistique, j'ai refondu le pipeline d'ingestion de plus de 300 entrepôts avec Airflow et dbt, ce qui a réduit le temps de traitement de 40% tout en maintenant un taux d'erreur inférieur à 1%. J'y ai également conçu des tableaux de bord de suivi des livraisons adoptés par cinq équipes opérationnelles, ainsi que les API REST exposant ces indicateurs aux outils internes. En parallèle, j'ai développé un projet personnel de recherche sémantique dans des notices techniques, déployé sur Azure avec Terraform et une chaîne d'intégration continue complète."
   },
   {
     "field": "paragraphs[2]",
@@ -33,12 +33,12 @@
     "field": "paragraphs[2]",
     "mode": "fixe",
     "instruction": "",
-    "text": "Mon semestre d'échange à l'Université Concordia de Montréal et mon niveau d'anglais (TOEIC 840) me permettent par ailleurs d'évoluer sans difficulté dans un environnement international."
+    "text": "Mon semestre d'échange à l'Université de Lisbonne et mon niveau d'anglais (TOEIC 905) me permettent par ailleurs d'évoluer sans difficulté dans un environnement international."
   },
   {
     "field": "paragraphs[3]",
     "mode": "fixe",
-    "instruction": "Statut de frontalier, disponibilité et demande d'entretien.",
-    "text": "Résidant à Thyez, à une quarantaine de minutes de Genève, je peux travailler en tant que frontalier et serai pleinement disponible dès mars 2027. Autonome, rigoureux et curieux, je serais heureux de mettre mes compétences au service de vos projets et d'en discuter avec vous lors d'un entretien, en présentiel ou à distance."
+    "instruction": "Mobilité, disponibilité et demande d'entretien.",
+    "text": "Mobile et prêt à m'installer à proximité de votre site, je serai pleinement disponible dès mars 2027 pour toute la durée du stage. Autonome, rigoureux et curieux, je serais heureux de mettre mes compétences au service de vos projets et d'en discuter avec vous lors d'un entretien, en présentiel ou à distance."
   }
 ]

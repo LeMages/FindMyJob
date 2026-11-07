@@ -144,6 +144,9 @@ async fn lettre_balisee_template_conforme_acceptee() {
     let lm = reference("lm_balisee.typ", "lettre_motivation");
     let verdict = verdict(&lm, "lm_balisee_example_data.json", &template("lm_balisee_template.typ")).await;
     assert!(verdict.problems.is_empty(), "problèmes :\n- {}", verdict.problems.join("\n- "));
+    // La consigne de la référence impose une lettre d'une page.
+    assert_eq!(lm.rendered.page_count, 1);
+    assert_eq!(verdict.page_count, Some(1));
 }
 
 #[tokio::test]
