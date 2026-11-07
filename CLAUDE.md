@@ -117,7 +117,7 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
 - **Test coverage.** `cargo test` covers HTML/Markdown-to-text conversion, the offer import's pure logic, the documents pipeline's pure logic, the `db` layer on in-memory SQLite and the file-handling services. It also runs service-level tests, at the level the Tauri commands call:
   - offer import by link (real reduced pages served by a local `wiremock` server, typed failures) and by capture (`offer_import.rs`);
   - CV/LM generation with real Typst compilation, empty-prose retries and failure cleanup (`generation.rs`), asymmetric budgets, page warnings and no fallback to the reference (`generation_budgets.rs`), full translation with real marked-up references and caches (`generation_translation.rs`);
-  - reference markup (`templatize_markup.rs`), step A/B validation on real references (`templatize_validation.rs`) and the two-step templatization loop replaying real failing outputs (`templatize_retries.rs`);
+  - reference markup (`templatize_markup.rs`), step A/B validation on tagged references (`templatize_validation.rs`) and the two-step templatization loop replaying real failing outputs (`templatize_retries.rs`);
   - the size of every structured output schema against the API grammar cap (`llm_schema_size.rs`);
   - fonts: an imported fixture font used and embedded without warning, a missing family failing the compilation (`typst_fonts.rs`), and the font import (subfolders, `.ttc`, WOFF refusal, family names, homonyms) (`font_import.rs`);
   - profile, session and application-deletion lifecycles;

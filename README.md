@@ -104,7 +104,7 @@ The data folder depends on the run mode, set by `MODE` in `.env`:
 ## Getting started
 
 ```bash
-git clone https://github.com/KanASon/FindMyJob.git
+git clone https://github.com/LeMages/FindMyJob.git
 cd FindMyJob
 cp .env.example .env   # set MODE=DEV for an isolated dev-data/ folder, and fill in ANTHROPIC_API_KEY
 npm install
@@ -275,7 +275,7 @@ Le dossier de données dépend du mode d'exécution, défini par `MODE` dans le 
 ## Démarrage
 
 ```bash
-git clone https://github.com/KanASon/FindMyJob.git
+git clone https://github.com/LeMages/FindMyJob.git
 cd FindMyJob
 cp .env.example .env   # MODE=DEV pour un dossier dev-data/ isolé, et renseigner ANTHROPIC_API_KEY
 npm install
