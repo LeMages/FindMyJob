@@ -8,6 +8,7 @@
 
 // Importation des modules Vue / framework
 import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 // Importation des modules externes
 import { invoke } from '@tauri-apps/api/core'
@@ -17,15 +18,13 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { useFonts } from '@/composables/useFonts'
 import type { FontFolderView } from '@/types'
 
+const { t } = useI18n()
+
 const { fonts, loading, loadFonts, importFontFolder, deleteFont } = useFonts()
 
 const importing = ref(false)
 const importFeedback = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 const confirmDeleteFont = ref<FontFolderView | null>(null)
-
-/** Avertissement affiché pour une famille déjà fournie par le système ou par Typst. */
-const SHADOWED_WARNING =
-  "Cette famille est déjà fournie par le système ou par Typst : la version importée ne sera utilisée que pour les variantes absentes de l'autre."
 
 /** Noms de famille d'un dossier, entre guillemets, pour les messages. */
 function quotedFamilies(folder: FontFolderView): string {
@@ -47,7 +46,7 @@ async function pickAndImportFolder() {
     const result = await importFontFolder(selected)
     importFeedback.value = result.error !== null
       ? { type: 'error', text: result.error }
-      : { type: 'success', text: `Police importée. À écrire dans font: ${quotedFamilies(result.imported)}.` }
+      : { type: 'success', text: t('settings.fonts.imported', { families: quotedFamilies(result.imported) }) }
   } finally {
     importing.value = false
   }
@@ -75,9 +74,9 @@ async function openFontsGoogle() {
 
 <template>
   <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-    <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">POLICES</div>
+    <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('settings.fonts.section') }}</div>
 
-    <div v-if="loading" class="text-[12px] text-neutral-400 text-center py-6 font-mono">Chargement…</div>
+    <div v-if="loading" class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('common.loading') }}</div>
     <template v-else>
       <div v-if="fonts.length" class="mb-[14px]">
         <div
@@ -88,22 +87,22 @@ async function openFontsGoogle() {
           <div class="flex-1 min-w-0">
             <div v-for="family in font.families" :key="family.name" class="py-[2px]">
               <div class="flex items-baseline gap-2 flex-wrap">
-                <span class="font-mono text-[13px] text-neutral-950 select-all" title="Nom à écrire dans font:">{{ family.name }}</span>
+                <span class="font-mono text-[13px] text-neutral-950 select-all" :title="t('settings.fonts.name_hint')">{{ family.name }}</span>
                 <span class="font-mono text-[11px] text-neutral-500">{{ family.variants.join(' · ') }}</span>
               </div>
               <div
                 v-if="font.shadowed_families.includes(family.name)"
                 class="mt-1 text-[12px] leading-[1.45] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-[10px] py-[6px]"
               >
-                {{ SHADOWED_WARNING }}
+                {{ t('settings.fonts.shadowed_warning') }}
               </div>
             </div>
           </div>
-          <span class="font-mono text-[11px] text-neutral-500 flex-none pt-[2px]">{{ font.file_count }} fichier{{ font.file_count > 1 ? 's' : '' }}</span>
+          <span class="font-mono text-[11px] text-neutral-500 flex-none pt-[2px]">{{ t('settings.fonts.file_count', { n: font.file_count }, font.file_count) }}</span>
           <button
             class="w-[30px] h-[30px] rounded-7 flex items-center justify-center cursor-pointer flex-none text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
             type="button"
-            title="Supprimer"
+            :title="t('common.delete')"
             @click="confirmDeleteFont = font"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -115,7 +114,7 @@ async function openFontsGoogle() {
           </button>
         </div>
       </div>
-      <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune police importée</div>
+      <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('settings.fonts.empty') }}</div>
     </template>
 
     <div class="flex items-center justify-between gap-5 pt-2">
@@ -124,17 +123,21 @@ async function openFontsGoogle() {
           {{ importFeedback.text }}
         </div>
         <div class="text-[12px] text-neutral-400 max-w-[520px] leading-[1.45]">
-          Téléchargez une police sur
-          <button type="button" class="text-blue-500 bg-transparent border-none p-0 cursor-pointer hover:underline" @click="openFontsGoogle">fonts.google.com</button>,
-          décompressez le ZIP, puis sélectionnez son dossier ici (sous-dossiers compris).
-          Formats acceptés : .ttf, .otf, .ttc, .otc. Écrivez dans <code class="font-mono">font:</code> le nom affiché ci-dessus.
+          <i18n-t keypath="settings.fonts.help" tag="span" scope="global">
+            <template #link>
+              <button type="button" class="text-blue-500 bg-transparent border-none p-0 cursor-pointer hover:underline" @click="openFontsGoogle">fonts.google.com</button>
+            </template>
+            <template #font>
+              <code class="font-mono">font:</code>
+            </template>
+          </i18n-t>
         </div>
       </div>
       <button
         class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="importing"
         @click="pickAndImportFolder"
-      >{{ importing ? 'Import…' : 'Ajouter une police' }}</button>
+      >{{ importing ? t('settings.fonts.importing') : t('settings.fonts.add') }}</button>
     </div>
   </div>
 
@@ -146,14 +149,14 @@ async function openFontsGoogle() {
   >
     <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[440px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
       <div class="flex items-center justify-between mb-5">
-        <div class="text-[17px] font-semibold">Supprimer la police</div>
+        <div class="text-[17px] font-semibold">{{ t('settings.fonts.delete_title') }}</div>
         <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" type="button" @click="confirmDeleteFont = null">×</button>
       </div>
 
-      <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[6px]">Cette action est irréversible.</div>
+      <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[6px]">{{ t('common.irreversible') }}</div>
       <div class="bg-neutral-50 border border-neutral-200 rounded-9 px-[14px] py-3 mb-5 text-[13.5px]">
         <strong>{{ quotedFamilies(confirmDeleteFont) || confirmDeleteFont.folder }}</strong>
-        {{ confirmDeleteFont.families.length > 1 ? 'seront supprimées' : 'sera supprimée' }} définitivement.
+        {{ t('settings.fonts.delete_body', confirmDeleteFont.families.length) }}
       </div>
 
       <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
@@ -161,12 +164,12 @@ async function openFontsGoogle() {
           class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           type="button"
           @click="confirmDeleteFont = null"
-        >Annuler</button>
+        >{{ t('common.cancel') }}</button>
         <button
           class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-surface-3 hover:text-neutral-800"
           type="button"
           @click="confirmDelete"
-        >Supprimer</button>
+        >{{ t('common.delete') }}</button>
       </div>
     </div>
   </div>

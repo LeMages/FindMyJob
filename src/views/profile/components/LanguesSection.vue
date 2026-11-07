@@ -8,6 +8,7 @@
 // Importation des modules Vue / framework
 import { computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { useI18n } from 'vue-i18n'
 
 // Importation des modules internes
 import { useEditableList } from '@/composables/useEditableList'
@@ -25,16 +26,36 @@ interface LangDraft {
 
 type LangDisplayItem = LangView & { isPending?: true; pendingKind?: 'new' | 'edited' }
 
-const LANG_LEVELS = [
-  'Langue maternelle',
-  'Bilingue',
-  'Courant (C2)',
-  'Avancé (C1)',
-  'Intermédiaire avancé (B2)',
-  'Intermédiaire (B1)',
-  'Élémentaire (A2)',
-  'Débutant (A1)',
+const { t } = useI18n()
+
+// Niveaux stockés en base sous leur libellé français (`langues.level`) : la
+// valeur ne change jamais, seul l'affichage est traduit via un identifiant
+// stable (`profile.languages.level.<key>`).
+const LANG_LEVELS: { value: string; key: string }[] = [
+  { value: 'Langue maternelle', key: 'native' },
+  { value: 'Bilingue', key: 'bilingual' },
+  { value: 'Courant (C2)', key: 'c2' },
+  { value: 'Avancé (C1)', key: 'c1' },
+  { value: 'Intermédiaire avancé (B2)', key: 'b2' },
+  { value: 'Intermédiaire (B1)', key: 'b1' },
+  { value: 'Élémentaire (A2)', key: 'a2' },
+  { value: 'Débutant (A1)', key: 'a1' },
 ]
+
+/** Options du sélecteur de niveau, libellés traduits (re-calculés au changement de langue). */
+const levelOptions = computed(() =>
+  LANG_LEVELS.map(({ value, key }) => ({ value, label: t(`profile.languages.level.${key}`) })),
+)
+
+/**
+ * Libellé affiché d'un niveau stocké : traduit s'il fait partie de la liste,
+ * tel quel sinon (saisie ancienne ou libre).
+ */
+function levelLabel(level: string | null): string {
+  if (!level) return ''
+  const known = LANG_LEVELS.find((l) => l.value === level)
+  return known ? t(`profile.languages.level.${known.key}`) : level
+}
 
 function defaultLangDraft(): LangDraft {
   return { nom: '', level: '' }
@@ -112,14 +133,14 @@ defineExpose({ hasChanges, reset, save })
 <template>
   <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
     <div :class="editMode ? 'flex items-center justify-between mb-[14px]' : ''">
-      <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">LANGUES</div>
+      <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">{{ t('profile.languages.section') }}</div>
       <button
         v-if="editMode"
         class="h-[30px] px-3 text-[12px] rounded-lg border border-neutral-300 bg-surface-2 font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         type="button"
         @click="openAddModal"
       >
-        + Ajouter
+        {{ t('common.add') }}
       </button>
     </div>
     <template v-if="allItems.length">
@@ -130,15 +151,15 @@ defineExpose({ hasChanges, reset, save })
         :class="[lang.isPending ? 'opacity-[0.72]' : '', i === allItems.length - 1 ? 'border-b-0' : '']"
       >
         <span class="text-[14px] font-medium">{{ lang.nom ?? '—' }}</span>
-        <span class="font-mono text-[11px] text-neutral-500 flex-1 text-right">{{ lang.level ?? '' }}</span>
+        <span class="font-mono text-[11px] text-neutral-500 flex-1 text-right">{{ levelLabel(lang.level) }}</span>
         <span v-if="lang.isPending" class="inline-block font-mono text-[10.5px] rounded-5 px-[7px] py-0.5 border border-amber-300 text-amber-700 bg-amber-50 flex-none">
-          {{ lang.pendingKind === 'edited' ? 'Modifié' : 'Non enregistré' }}
+          {{ lang.pendingKind === 'edited' ? t('profile.pending.edited') : t('profile.pending.new') }}
         </span>
         <div v-if="editMode" class="flex flex-row gap-[5px] flex-none self-center ml-2">
           <button
             class="w-[30px] h-[30px] rounded-7 border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer flex-none text-neutral-600 hover:bg-surface-3 hover:text-neutral-950 hover:border-neutral-300"
             type="button"
-            title="Modifier"
+            :title="t('common.edit')"
             @click="openEditModal(lang)"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -149,7 +170,7 @@ defineExpose({ hasChanges, reset, save })
           <button
             class="w-[30px] h-[30px] rounded-7 flex items-center justify-center cursor-pointer flex-none text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
             type="button"
-            title="Supprimer"
+            :title="t('common.delete')"
             @click="deleteItem(lang)"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -162,7 +183,7 @@ defineExpose({ hasChanges, reset, save })
         </div>
       </div>
     </template>
-    <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune langue renseignée</div>
+    <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('profile.languages.empty') }}</div>
   </div>
 
   <!-- Popup ajout/modification de langue -->
@@ -170,24 +191,24 @@ defineExpose({ hasChanges, reset, save })
     <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[420px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6">
       <div class="flex items-center justify-between mb-5">
         <div class="text-[17px] font-semibold">
-          {{ editTarget.kind === 'new' ? 'Ajouter une langue' : 'Modifier une langue' }}
+          {{ editTarget.kind === 'new' ? t('profile.languages.add_title') : t('profile.languages.edit_title') }}
         </div>
         <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" type="button" @click="closeModal">×</button>
       </div>
 
       <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Langue *</label>
-        <input v-model="draft.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Anglais, Espagnol…" />
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.languages.name') }}</label>
+        <input v-model="draft.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.languages.name_placeholder')" />
       </div>
 
       <div class="mb-0">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Niveau</label>
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.languages.level_label') }}</label>
         <select
           v-model="draft.level"
           class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
         >
-          <option value="">-- Sélectionner --</option>
-          <option v-for="lvl in LANG_LEVELS" :key="lvl" :value="lvl">{{ lvl }}</option>
+          <option value="">{{ t('common.select_placeholder') }}</option>
+          <option v-for="lvl in levelOptions" :key="lvl.value" :value="lvl.value">{{ lvl.label }}</option>
         </select>
       </div>
 
@@ -196,14 +217,14 @@ defineExpose({ hasChanges, reset, save })
           class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           type="button"
           @click="closeModal"
-        >Annuler</button>
+        >{{ t('common.cancel') }}</button>
         <button
           class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600"
           :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !draft.nom.trim() }"
           type="button"
           :disabled="!draft.nom.trim()"
           @click="saveModal"
-        >Valider</button>
+        >{{ t('common.validate') }}</button>
       </div>
     </div>
   </div>

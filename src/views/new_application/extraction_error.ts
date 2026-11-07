@@ -6,7 +6,8 @@
  */
 
 // Importation des modules internes
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { t } from '@/i18n'
 import type { ScrapingFailure } from '@/types'
 
 /**
@@ -20,18 +21,25 @@ export type ExtractionOutcome =
   | { kind: 'unavailable'; message: string }
   | { kind: 'error'; message: string }
 
-/** Texte affiché pour chaque raison d'échec. */
+/**
+ * Clé de traduction du texte affiché pour chaque raison d'échec. Le texte est
+ * résolu à l'appel (`failureMessage`), dans la langue de l'interface.
+ */
 const FAILURE_MESSAGES: Record<ScrapingFailure, string> = {
-  invalid_url: "Ce lien n'est pas valide : seules les adresses web publiques en http ou https sont acceptées.",
-  offer_unavailable: "Cette offre est introuvable ou a expiré : la page n'existe plus sur le site.",
-  access_denied: 'Ce site refuse la lecture automatique de ses pages.',
-  timeout: "Le site n'a pas répondu à temps.",
-  network: "Le site n'a pas pu être joint.",
-  not_html: "Ce lien ne mène pas à une page web (fichier PDF ou autre document).",
-  empty_page: 'La page récupérée est vide.',
-  too_large: 'La page est trop volumineuse pour être analysée (plus de 5 Mo).',
-  insufficient_content:
-    "La page récupérée ne contient pas le texte de l'offre (contenu chargé en JavaScript, vérification anti-robot ou bandeau cookies).",
+  invalid_url: 'offer_import.failure.invalid_url',
+  offer_unavailable: 'offer_import.failure.offer_unavailable',
+  access_denied: 'offer_import.failure.access_denied',
+  timeout: 'offer_import.failure.timeout',
+  network: 'offer_import.failure.network',
+  not_html: 'offer_import.failure.not_html',
+  empty_page: 'offer_import.failure.empty_page',
+  too_large: 'offer_import.failure.too_large',
+  insufficient_content: 'offer_import.failure.insufficient_content',
+}
+
+/** Texte traduit d'une raison d'échec. */
+function failureMessage(failure: ScrapingFailure): string {
+  return t(FAILURE_MESSAGES[failure])
 }
 
 /** Raisons pour lesquelles ouvrir la page dans FindMyJob peut aider. */
@@ -70,7 +78,7 @@ export function scrapingFailureOf(e: unknown): ScrapingFailure | null {
  */
 export function extractionErrorMessage(e: unknown, fallback: string): string {
   const failure = scrapingFailureOf(e)
-  return failure ? FAILURE_MESSAGES[failure] : extractErrorMessage(e, fallback)
+  return failure ? failureMessage(failure) : backendErrorMessage(e, fallback)
 }
 
 /**
@@ -82,10 +90,10 @@ export function extractionErrorMessage(e: unknown, fallback: string): string {
 export function classifyExtractionError(e: unknown): ExtractionOutcome {
   const failure = scrapingFailureOf(e)
   if (failure === 'offer_unavailable') {
-    return { kind: 'unavailable', message: FAILURE_MESSAGES[failure] }
+    return { kind: 'unavailable', message: failureMessage(failure) }
   }
   if (failure && CHOICE_FAILURES.includes(failure)) {
-    return { kind: 'choice', message: FAILURE_MESSAGES[failure], canCapture: CAPTURABLE_FAILURES.includes(failure) }
+    return { kind: 'choice', message: failureMessage(failure), canCapture: CAPTURABLE_FAILURES.includes(failure) }
   }
-  return { kind: 'error', message: extractionErrorMessage(e, "L'analyse de l'offre a échoué.") }
+  return { kind: 'error', message: extractionErrorMessage(e, t('error.fallback.analyze_offer')) }
 }

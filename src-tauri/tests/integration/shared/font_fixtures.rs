@@ -12,10 +12,22 @@ use crate::shared::fake_llm::fixtures_dir;
 ///
 /// # Arguments
 ///
-/// * `name` - Dossier de fixture (`arimo`, `collection`, `libertinus`, `web`).
+/// * `name` - Dossier de fixture (`arimo`, `arimo_reference`, `collection`, `libertinus`, `web`).
 /// * `dest` - Dossier de destination, créé au besoin.
 pub fn copy_font_fixture(name: &str, dest: &Path) {
     copy_dir(&fixtures_dir().join("fonts").join(name), dest);
+}
+
+/// Copie la police Arimo des références réelles (`fonts/arimo_reference/`,
+/// quatre styles) dans un dossier de polices, comme une police importée par
+/// l'utilisateur. Sans elle, les références qui demandent Arimo ne compilent
+/// pas : une famille introuvable est une erreur bloquante.
+///
+/// # Arguments
+///
+/// * `fonts_dir` - Dossier de polices propre au test, créé au besoin.
+pub fn install_reference_font(fonts_dir: &Path) {
+    copy_font_fixture("arimo_reference", &fonts_dir.join("arimo_reference"));
 }
 
 /// Copie récursive d'un dossier (fixtures peu profondes).

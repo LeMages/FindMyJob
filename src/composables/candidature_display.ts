@@ -1,7 +1,12 @@
 /**
  * Libellés et regroupements d'affichage partagés entre le kanban de suivi et
  * la page de détail d'une candidature — dérivés du statut brut stocké en base.
+ * Les libellés sont traduits à l'appel (langue de l'interface) ; les valeurs
+ * stockées ne changent jamais.
  */
+
+// Importation des modules internes
+import { t, te } from '@/i18n'
 
 // Statuts terminaux négatifs : la candidature n'évoluera plus et n'a pas
 // débouché sur une acceptation — elle sort du pipeline principal et va en
@@ -15,55 +20,76 @@ export interface SelectOption {
   label: string
 }
 
-/** Types de contrat proposés à la création/modification d'une candidature. */
-export const TYPE_CONTRAT_OPTIONS: SelectOption[] = [
-  { value: 'stage', label: 'Stage' },
-  { value: 'alternance', label: 'Alternance' },
-  { value: 'interim', label: 'Intérim' },
-  { value: 'cdd', label: 'CDD' },
-  { value: 'cdi', label: 'CDI' },
+/**
+ * Construit des options de sélection dont le libellé est traduit à l'appel :
+ * appelée dans un rendu ou un `computed`, la liste se re-traduit au
+ * changement de langue de l'interface.
+ *
+ * @param values - Valeurs stockées en base (jamais traduites).
+ * @param keyPrefix - Préfixe des clés de traduction (`<prefix>.<valeur>`).
+ * @returns Options `{ value, label }`.
+ */
+function translatedOptions(values: readonly string[], keyPrefix: string): SelectOption[] {
+  return values.map((value) => ({ value, label: t(`${keyPrefix}.${value}`) }))
+}
+
+/**
+ * Libellé traduit d'une valeur brute, avec repli sur la valeur elle-même si
+ * aucune clé n'existe (valeur inconnue du frontend).
+ */
+function translatedLabel(keyPrefix: string, value: string): string {
+  const key = `${keyPrefix}.${value}`
+  return te(key) ? t(key) : value
+}
+
+/**
+ * Types de contrat proposés à la création/modification d'une candidature.
+ *
+ * @returns Options traduites (valeurs inchangées).
+ */
+export function typeContratOptions(): SelectOption[] {
+  return translatedOptions(['stage', 'alternance', 'interim', 'cdd', 'cdi'], 'contract')
+}
+
+/**
+ * Types d'entretien proposés au formulaire de planification.
+ *
+ * @returns Options traduites (valeurs inchangées).
+ */
+export function interviewTypeOptions(): SelectOption[] {
+  return translatedOptions(['rh', 'technique', 'manager', 'final', 'autre'], 'interview.type')
+}
+
+/**
+ * Modalités d'entretien proposées au formulaire de planification.
+ *
+ * @returns Options traduites (valeurs inchangées).
+ */
+export function modaliteOptions(): SelectOption[] {
+  return translatedOptions(['visio', 'presentiel', 'telephone'], 'interview.modalite')
+}
+
+// Les sources sont stockées en base sous leur libellé français complet
+// (`candidatures.source`) : la valeur ne change jamais, seul l'affichage est
+// traduit via un identifiant stable.
+const SOURCE_VALUES: { value: string; key: string }[] = [
+  { value: 'Plateforme en ligne (Indeed, LinkedIn, Welcome to the Jungle...)', key: 'online_platform' },
+  { value: "Site carrière de l'entreprise (formulaire sur le site)", key: 'company_site' },
+  { value: 'Mail (candidature directe par email)', key: 'email' },
+  { value: 'Cooptation / Réseau (recommandation, contact perso)', key: 'referral' },
+  { value: 'Forum / Salon emploi (rencontre physique)', key: 'job_fair' },
+  { value: 'École (job board, offres des profs / asso)', key: 'school' },
+  { value: 'Autre', key: 'other' },
 ]
 
-/** Types d'entretien proposés au formulaire de planification. */
-export const INTERVIEW_TYPE_OPTIONS: SelectOption[] = [
-  { value: 'rh', label: 'RH' },
-  { value: 'technique', label: 'Technique' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'final', label: 'Final' },
-  { value: 'autre', label: 'Autre' },
-]
-
-/** Modalités d'entretien proposées au formulaire de planification. */
-export const MODALITE_OPTIONS: SelectOption[] = [
-  { value: 'visio', label: 'Visio' },
-  { value: 'presentiel', label: 'Présentiel' },
-  { value: 'telephone', label: 'Téléphone' },
-]
-
-/** Plateformes d'origine de l'offre proposées à la création/modification d'une candidature. */
-export const SOURCE_OPTIONS: SelectOption[] = [
-  { value: 'Plateforme en ligne (Indeed, LinkedIn, Welcome to the Jungle...)', label: 'Plateforme en ligne (Indeed, LinkedIn, Welcome to the Jungle...)' },
-  { value: "Site carrière de l'entreprise (formulaire sur le site)", label: "Site carrière de l'entreprise (formulaire sur le site)" },
-  { value: 'Mail (candidature directe par email)', label: 'Mail (candidature directe par email)' },
-  { value: 'Cooptation / Réseau (recommandation, contact perso)', label: 'Cooptation / Réseau (recommandation, contact perso)' },
-  { value: 'Forum / Salon emploi (rencontre physique)', label: 'Forum / Salon emploi (rencontre physique)' },
-  { value: 'École (job board, offres des profs / asso)', label: 'École (job board, offres des profs / asso)' },
-  { value: 'Autre', label: 'Autre' },
-]
-
-/** Libellés d'affichage des statuts bruts de candidature. */
-const STATUS_LABELS: Record<string, string> = {
-  a_postuler: 'À postuler',
-  postule: 'Candidature envoyée',
-  relance: 'Discussion',
-  entretien: 'Entretien',
-  entretien_passe: 'En attente de réponse',
-  offre: 'Offre',
-  refus: 'Refus',
-  abandon: 'Abandon',
-  ghosting: 'Ghosté',
-  accepte: 'Accepté',
-  offre_refusee: 'Offre déclinée',
+/**
+ * Plateformes d'origine de l'offre proposées à la création/modification
+ * d'une candidature.
+ *
+ * @returns Options traduites (valeurs stockées en français, inchangées).
+ */
+export function sourceOptions(): SelectOption[] {
+  return SOURCE_VALUES.map(({ value, key }) => ({ value, label: t(`source.${key}`) }))
 }
 
 /** Classes Tailwind (fond + texte) associées à chaque statut brut de candidature. */
@@ -79,41 +105,6 @@ const STATUS_COLORS: Record<string, string> = {
   ghosting: 'bg-neutral-200 text-neutral-500',
   accepte: 'bg-emerald-100 text-emerald-700',
   offre_refusee: 'bg-rose-100 text-rose-700',
-}
-
-/** Libellés d'affichage des types d'événement de la timeline de suivi. */
-const EVENT_LABELS: Record<string, string> = {
-  creation: 'Candidature créée',
-  candidature_envoyee: 'Candidature envoyée',
-  relance: 'Relance envoyée',
-  entretien_planifie: 'Entretien planifié',
-  entretien_passe: 'Entretien passé',
-  offre_recue: 'Offre reçue',
-  refus_recu: 'Refus reçu',
-  ghosting: 'Ghosting',
-  desistement: 'Désistement',
-  accepter_offre: 'Offre acceptée',
-  decliner_offre: 'Offre déclinée',
-  message_envoye: 'Message envoyé',
-  message_recu: 'Message reçu',
-  appel: 'Appel',
-  note: 'Note',
-}
-
-/** Libellés d'affichage des types d'entretien. */
-const INTERVIEW_TYPE_LABELS: Record<string, string> = {
-  rh: 'RH',
-  technique: 'Technique',
-  manager: 'Manager',
-  final: 'Final',
-  autre: 'Autre',
-}
-
-/** Libellés d'affichage des modalités d'entretien. */
-const MODALITE_LABELS: Record<string, string> = {
-  visio: 'Visio',
-  presentiel: 'Présentiel',
-  telephone: 'Téléphone',
 }
 
 /** Classes Tailwind (fond + bordure + texte) associées à chaque type d'entretien, utilisées dans le planning. */
@@ -138,7 +129,7 @@ const INTERVIEW_STATUS_DOT_COLORS: Record<'passed' | 'overdue', string> = {
  * @returns Libellé lisible, ou le statut brut si inconnu.
  */
 export function statusLabel(status: string): string {
-  return STATUS_LABELS[status] ?? status
+  return translatedLabel('status', status)
 }
 
 /**
@@ -158,7 +149,19 @@ export function statusColor(status: string): string {
  * @returns Libellé lisible, ou le type brut si inconnu.
  */
 export function eventLabel(eventType: string): string {
-  return EVENT_LABELS[eventType] ?? eventType
+  return translatedLabel('event.history', eventType)
+}
+
+/**
+ * Libellé d'action d'un événement proposable (popup d'ajout d'événement).
+ *
+ * @param eventType - Type d'événement brut (`AvailableEvent.event_type`).
+ * @param backendLabel - Libellé renvoyé par le backend, utilisé si le type est inconnu.
+ * @returns Libellé traduit, ou le libellé du backend.
+ */
+export function eventActionLabel(eventType: string, backendLabel: string): string {
+  const key = `event.action.${eventType}`
+  return te(key) ? t(key) : backendLabel
 }
 
 /**
@@ -168,8 +171,8 @@ export function eventLabel(eventType: string): string {
  * @returns Libellé lisible, le type brut si inconnu, ou « Entretien » si absent.
  */
 export function interviewTypeLabel(type: string | null): string {
-  if (!type) return 'Entretien'
-  return INTERVIEW_TYPE_LABELS[type] ?? type
+  if (!type) return t('interview.type_default')
+  return translatedLabel('interview.type', type)
 }
 
 /**
@@ -179,7 +182,7 @@ export function interviewTypeLabel(type: string | null): string {
  * @returns Libellé lisible, ou la modalité brute si inconnue.
  */
 export function modaliteLabel(modalite: string): string {
-  return MODALITE_LABELS[modalite] ?? modalite
+  return translatedLabel('interview.modalite', modalite)
 }
 
 /**

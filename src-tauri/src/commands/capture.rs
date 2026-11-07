@@ -80,7 +80,7 @@ pub async fn open_capture_window(
 
     let data_dir = ctx.state()?.capture_profile_dir.clone();
     WebviewWindowBuilder::new(&app, CAPTURE_LABEL, WebviewUrl::External(url))
-        .title("FindMyJob — page de l'offre")
+        .title("FindMyJob")
         .inner_size(1100.0, 800.0)
         .data_directory(data_dir)
         .build()

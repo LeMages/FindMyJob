@@ -9,11 +9,12 @@
 
 // Importation des modules Vue / framework
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import { setUserInfo } from '@/stores/app'
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
 import ExperiencesSection from './components/ExperiencesSection.vue'
 import FormationsSection from './components/FormationsSection.vue'
 import ProjetsSection from './components/ProjetsSection.vue'
@@ -29,6 +30,8 @@ import type {
   SkillView,
   LangView,
 } from '@/types/index'
+
+const { t } = useI18n()
 
 const profile = ref<ProfileDto | null>(null)
 const loading = ref(true)
@@ -47,7 +50,7 @@ async function openExternalLink(url: string): Promise<void> {
   try {
     await invoke('open_url', { url })
   } catch (e: unknown) {
-    linkError.value = extractErrorMessage(e, "Impossible d'ouvrir ce lien.")
+    linkError.value = backendErrorMessage(e, t('error.fallback.open_link'))
   }
 }
 
@@ -192,9 +195,9 @@ async function saveUserInfo(): Promise<void> {
   const github = d.github.trim()
   const portfolio = d.portfolio.trim()
 
-  if (!isValidUrlOrEmpty(linkedin)) throw new Error('Le lien LinkedIn n\'est pas une URL valide.')
-  if (!isValidUrlOrEmpty(github)) throw new Error('Le lien GitHub n\'est pas une URL valide.')
-  if (!isValidUrlOrEmpty(portfolio)) throw new Error('Le lien portfolio n\'est pas une URL valide.')
+  if (!isValidUrlOrEmpty(linkedin)) throw new Error(t('profile.links.invalid_linkedin'))
+  if (!isValidUrlOrEmpty(github)) throw new Error(t('profile.links.invalid_github'))
+  if (!isValidUrlOrEmpty(portfolio)) throw new Error(t('profile.links.invalid_portfolio'))
 
   const input: UpdateUserInfoInput = {
     prenom: d.prenom.trim() || null,
@@ -267,7 +270,7 @@ async function saveAll() {
 
     editMode.value = false
   } catch (e: unknown) {
-    saveError.value = extractErrorMessage(e, 'Erreur lors de la sauvegarde.')
+    saveError.value = backendErrorMessage(e, t('error.fallback.save_profile'))
   } finally {
     saving.value = false
   }
@@ -279,7 +282,7 @@ onMounted(async () => {
     profile.value = data
     syncUserInfo(data.user)
   } catch (e: unknown) {
-    loadError.value = extractErrorMessage(e, 'Impossible de charger le profil.')
+    loadError.value = backendErrorMessage(e, t('error.fallback.load_profile'))
   } finally {
     loading.value = false
   }
@@ -303,7 +306,7 @@ const lieu = computed(() => {
 <template>
   <!-- Loading -->
   <div v-if="loading" class="px-9 pt-[26px] pb-11">
-    <div class="text-[12px] text-neutral-400 text-center py-6 font-mono mt-[60px]">Chargement…</div>
+    <div class="text-[12px] text-neutral-400 text-center py-6 font-mono mt-[60px]">{{ t('common.loading') }}</div>
   </div>
 
   <!-- Load error -->
@@ -313,8 +316,8 @@ const lieu = computed(() => {
 
   <!-- Profile -->
   <div v-else-if="profile" class="px-9 pt-[26px]" :class="editMode ? 'pb-[90px]' : 'pb-11'">
-    <h1 class="text-2xl font-semibold leading-tight">Mon profil</h1>
-    <div class="text-[13px] text-neutral-500 mt-[5px] font-mono mb-[18px]">Ces informations pré-remplissent tes candidatures.</div>
+    <h1 class="text-2xl font-semibold leading-tight">{{ t('profile.title') }}</h1>
+    <div class="text-[13px] text-neutral-500 mt-[5px] font-mono mb-[18px]">{{ t('profile.subtitle') }}</div>
 
     <!-- Header -->
     <div class="flex items-center gap-5 bg-surface-1 border border-neutral-200 rounded-xl p-6">
@@ -370,7 +373,7 @@ const lieu = computed(() => {
             </svg>
             Portfolio
           </a>
-          <span v-if="profile.user.permis === true">Permis B</span>
+          <span v-if="profile.user.permis === true">{{ t('profile.driving_licence') }}</span>
         </div>
         <div v-if="linkError" class="text-[12px] text-red-500 mt-[7px]">{{ linkError }}</div>
       </div>
@@ -378,62 +381,62 @@ const lieu = computed(() => {
         v-if="!editMode"
         class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         @click="enterEditMode"
-      >Modifier</button>
+      >{{ t('common.edit') }}</button>
     </div>
 
     <!-- Section infos de base (visible uniquement en mode édition) -->
     <div v-if="editMode" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px] mt-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">INFORMATIONS</div>
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('profile.info.section') }}</div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Prénom</label>
-          <input v-model="draftUserInfo.prenom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Prénom" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.first_name') }}</label>
+          <input v-model="draftUserInfo.prenom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.placeholders.first_name')" />
         </div>
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom</label>
-          <input v-model="draftUserInfo.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.last_name') }}</label>
+          <input v-model="draftUserInfo.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.placeholders.last_name')" />
         </div>
       </div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Adresse e-mail</label>
-          <input v-model="draftUserInfo.email" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" type="email" placeholder="prenom.nom@email.com" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.email') }}</label>
+          <input v-model="draftUserInfo.email" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" type="email" :placeholder="t('profile.placeholders.email')" />
         </div>
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Téléphone</label>
-          <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="+33 6 00 00 00 00" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.phone') }}</label>
+          <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.placeholders.phone')" />
         </div>
       </div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Ville</label>
-          <input v-model="draftUserInfo.ville" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Lyon" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.city') }}</label>
+          <input v-model="draftUserInfo.ville" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.placeholders.city')" />
         </div>
         <div class="w-[140px] mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Code postal</label>
-          <input v-model="draftUserInfo.zip_code" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="69000" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.zip_code') }}</label>
+          <input v-model="draftUserInfo.zip_code" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.placeholders.zip_code')" />
         </div>
       </div>
       <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Centres d'intérêt (un par ligne)</label>
-        <textarea v-model="draftUserInfo.interets" rows="3" class="w-full border border-neutral-300 rounded-lg px-3 py-2 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 resize-y" placeholder="Handball"></textarea>
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.interests') }}</label>
+        <textarea v-model="draftUserInfo.interets" rows="3" class="w-full border border-neutral-300 rounded-lg px-3 py-2 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 resize-y" :placeholder="t('profile.placeholders.interests')"></textarea>
       </div>
       <div class="mb-[14px] w-[260px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Langue dans laquelle le profil est rédigé</label>
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.profile_language') }}</label>
         <select v-model="draftUserInfo.langue_profil" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
-          <option value="fr">Français</option>
-          <option value="en">Anglais</option>
+          <option value="fr">{{ t('profile.info.lang_fr') }}</option>
+          <option value="en">{{ t('profile.info.lang_en') }}</option>
         </select>
       </div>
       <label class="inline-flex items-center gap-2 text-[13.5px] cursor-pointer select-none mt-0.5">
         <input type="checkbox" v-model="draftUserInfo.permis" />
-        Permis B
+        {{ t('profile.driving_licence') }}
       </label>
     </div>
 
     <!-- Section liens (visible uniquement en mode édition) -->
     <div v-if="editMode" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">LIENS</div>
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('profile.links.section') }}</div>
       <div class="flex gap-[14px]">
         <div class="flex-1">
           <label class="text-[12px] text-neutral-600 mb-[5px] flex items-center gap-1.5">
@@ -465,7 +468,7 @@ const lieu = computed(() => {
             </svg>
             Portfolio
           </label>
-          <input v-model="draftUserInfo.portfolio" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://monsite.com" />
+          <input v-model="draftUserInfo.portfolio" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.placeholders.portfolio')" />
         </div>
       </div>
     </div>
@@ -475,16 +478,16 @@ const lieu = computed(() => {
       <div>
         <!-- À propos -->
         <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-          <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">À PROPOS</div>
+          <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('profile.about.section') }}</div>
           <template v-if="!editMode">
             <div v-if="profile.user.description" class="text-[13px] text-neutral-700 mt-[7px] leading-[1.55]">{{ profile.user.description }}</div>
-            <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">Non renseigné</div>
+            <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('common.not_specified') }}</div>
           </template>
           <textarea
             v-else
             v-model="draftDescription"
             class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
-            placeholder="Décris ton parcours, tes objectifs…"
+            :placeholder="t('profile.placeholders.about')"
           />
         </div>
 
@@ -508,14 +511,14 @@ const lieu = computed(() => {
         class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-red-400 text-white border-red-400 hover:bg-red-600 hover:border-red-600"
         type="button"
         @click="cancelEdit"
-      >Annuler</button>
+      >{{ t('common.cancel') }}</button>
       <button
         class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600"
         :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !isDirty || saving }"
         type="button"
         :disabled="!isDirty || saving"
         @click="saveAll"
-      >{{ saving ? 'Sauvegarde…' : 'Valider' }}</button>
+      >{{ saving ? t('profile.saving') : t('common.validate') }}</button>
     </div>
   </div>
 </template>

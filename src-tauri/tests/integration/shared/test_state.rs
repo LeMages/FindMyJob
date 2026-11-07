@@ -14,6 +14,7 @@ use sqlx::SqlitePool;
 // Importation des modules internes
 use crate::shared::fake_llm::{read_reference, FakeLlm};
 use crate::shared::fake_secret_store::FakeSecretStore;
+use crate::shared::font_fixtures::install_reference_font;
 use crate::shared::seed;
 use crate::shared::temp_dir::unique_temp_dir;
 use findmyjob_lib::models::{
@@ -55,9 +56,12 @@ pub struct TestApp {
 pub async fn app(name: &str) -> TestApp {
     let data_dir = unique_temp_dir(name);
     let llm = Arc::new(FakeLlm::default());
+    // Les références réelles demandent Arimo : elle est déjà importée.
+    let fonts_dir = storage_paths::fonts_dir(&data_dir);
+    install_reference_font(&fonts_dir);
     let state = AppState {
         pool: seed::pool().await,
-        fonts_dir: storage_paths::fonts_dir(&data_dir),
+        fonts_dir,
         capture_profile_dir: data_dir.join("capture_webview"),
         data_dir,
         progress: ProgressStore::new(),

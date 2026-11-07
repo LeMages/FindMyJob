@@ -45,7 +45,9 @@ package.json, vite.config.ts, tsconfig*.json, index.html, eslint.config.js
 src/
   views/<view_name>/XxxView.vue      one view = one folder, view-specific components inside
   components/                        components shared across views
-  composables/                       reusable view-layer logic (formatting, editable lists)
+  composables/                       reusable view-layer logic (formatting, editable lists, interface language, backend error messages)
+  i18n.ts                            vue-i18n instance (interface language only), t / te / dateLocale for non-component code
+  locales/fr.ts, locales/en.ts       interface texts: fr.ts is the reference, en.ts is typed `satisfies typeof fr`
   stores/app.ts                      global reactive app state
   types/index.ts                     TS DTOs hand-mirrored from src-tauri/src/models
 src-tauri/
@@ -100,6 +102,16 @@ Vue proposes, Rust disposes: Vue never hardcodes the legal transitions, it asks 
 
 The source of truth for the IPC contract is the Rust DTOs in `src-tauri/src/models`. `src/types/index.ts` is written by hand, mirroring those DTOs, with no code generation (`tauri-specta` / `ts-rs` not worth the churn yet). Errors reach the frontend as `AppError` serialized `{kind, message}`.
 
+### Interface language (FR / EN)
+
+Only the frontend is bilingual. Every visible text goes through `vue-i18n` (`src/i18n.ts`, Composition mode): components call `useI18n()`, other modules import `t` from `@/i18n`; module-level labels are functions or `computed` so they follow a language switch without reload. `src/locales/fr.ts` is the reference and `en.ts` is typed `satisfies typeof fr` (a missing or extra key fails `vue-tsc`).
+
+- **Setting.** The language is the `ui_lang` row of `settings` (`fr` or `en`, default `fr`), read by `get_ui_language` and written by `set_ui_language`. `src/composables/useUiLanguage.ts` applies it before the first render (`initUiLanguage` in `main.ts`) and changes it from Settings and from the onboarding's first step.
+- **Stored values stay French.** Statuses, sources, contract types, language levels… are stored as before; `composables/candidature_display.ts` maps them to translated labels.
+- **Backend messages.** The Rust side is not translated. `backendErrorMessage(e, fallback)` (`src/composables/backend_error_message.ts`) shows the original French message in French; in English, the generic message of the `AppError.kind` followed by the original in parentheses. `backendTextMessage(original, generic)` does the same for free error text carried by a DTO (connection test result, generation failure). Generation warnings (`generation_warnings`) are shown as is under a translated title.
+- **Generation progress** is translated from `current_step` (`generation.step.0` to `generation.step.5`, in the order of the steps of `pipeline.rs`); `step_label` is shown as is only for an unknown step.
+- **Independent of the documents' language.** The interface language never changes the language of generated CVs and cover letters, which always follow the offer.
+
 ## 5. Data model
 
 The database is a single SQLite file, `findmyjob.db`, in the app data folder (see §12). The Rust side owns the pool (`sqlx::SqlitePool`, `db/init.rs`): WAL journal, foreign keys enabled on every connection, 5 s `busy_timeout`. Every write transaction is opened with `BEGIN IMMEDIATE` (`db/transaction.rs::begin_write`) so a read-then-write transaction takes the write lock up front instead of failing with `SQLITE_BUSY`.
@@ -123,7 +135,7 @@ Table summary:
 | `projets` | Personal projects attached to the profile |
 | `experiences` | Work experience entries in the profile |
 | `skills` | Skills, grouped by a free-text domain; `(domaine, nom)` unique |
-| `settings` | Key-value app settings (`llm_model`, `theme`) |
+| `settings` | Key-value app settings (`llm_model`, `theme`, `ui_lang`) |
 | `sessions` | A search "session" (name, status) grouping a set of applications, with its own reference CV/cover letter |
 | `document_versions` | One row per uploaded reference (CV or letter), never overwritten: files, template, page count |
 | `documents` | Pointer `(session_id, doc_type) → current_version_id`, plus `updated_at` |
@@ -245,7 +257,7 @@ Two functions (`generate_application_email`, `generate_application_message`), pl
 | `scraping`, `capture` | offer extraction from a URL, from the capture window, or from pasted text; see « Offer import by link » below |
 | `documents`, `document_versions` | reference CV & cover letter (get, import, compile), status, versions (list, preview, restore), attached PDFs (info, preview, export), downloads folder, text export |
 | `fonts` | list / import / delete an imported font folder (families and variants read from the files) |
-| `settings` | LLM model, theme, connection test |
+| `settings` | LLM model, theme, interface language, connection test |
 | `system` | open a URL with the OS |
 
 Paths received from the frontend (`get_document_info`, `get_document_pdf`, `download_document`) are relative paths resolved under the data folder by `storage_paths::resolve_untrusted`: absolute paths and `..` are refused, and an existing file is canonicalized before the containment check.
@@ -299,7 +311,7 @@ The result is managed as `AppContext`: either the `AppState`, or the initializat
 - Apply flow: no message / by mail / by message, all exporting documents to disk.
 - Offer import from a link (JSON-LD, then page text + LLM), from a page captured in the FindMyJob window, or from pasted text, prefilling the new-application form; choice screen on failure, non-blocking duplicate warning.
 - Interview planning (week/month views).
-- Settings: LLM model selection, Anthropic API key (system keyring in PROD with save/delete, read-only `.env` state in DEV), connection test (run again after a key is saved), fonts, theme.
+- Settings: LLM model selection, Anthropic API key (system keyring in PROD with save/delete, read-only `.env` state in DEV), connection test (run again after a key is saved), fonts, theme, interface language (French / English).
 - CI/CD: lint, clippy and tests (Linux + Windows) on every PR to `dev`, full Tauri build check on PRs to `staging`/`main`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
 
 ### Planned / out of MVP scope

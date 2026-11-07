@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 // Importation des modules internes
 use crate::shared::fake_llm::{read_reference, FakeLlm, Reply, Step};
+use crate::shared::font_fixtures::install_reference_font;
 use crate::shared::temp_dir::unique_temp_dir;
 use findmyjob_lib::documents::templatize::{templatize, TemplatizeInput, ValidatedTemplate};
 use findmyjob_lib::documents::typst::compile_document;
@@ -24,6 +25,7 @@ const LM_TEMPLATE: &str = "references/real/lm_balisee_template.typ";
 async fn run(reference: &str, doc_type: &str, llm: Arc<FakeLlm>) -> Result<ValidatedTemplate, AppError> {
     let root = unique_temp_dir("templatize-retries");
     let fonts = root.join("polices");
+    install_reference_font(&fonts);
     let source = read_reference(&format!("real/{reference}"));
     let rendered = compile_document(source.clone(), root.clone(), fonts.clone()).expect("la référence compile");
     // Le modèle des paramètres (Haiku) doit être remplacé par le modèle imposé.

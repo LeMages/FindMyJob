@@ -6,6 +6,7 @@
 
 // Importation des modules Vue / framework
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
@@ -18,13 +19,16 @@ import {
   closeTrashPopup,
   addSession,
 } from '@/stores/app'
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { dateLocale } from '@/i18n'
 import { statusLabel, statusColor, TRASHED_STATUSES } from '@/composables/candidature_display'
 import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
 import TrashPopup from '@/views/tracking/components/TrashPopup.vue'
 import CandidaturesTabs from '@/views/tracking/components/CandidaturesTabs.vue'
 import PlanningPanel from '@/views/tracking/components/PlanningPanel.vue'
 import SessionParametersForm from '@/views/tracking/components/SessionParametersForm.vue'
+
+const { t } = useI18n()
 
 const candidatures = ref<CandidatureView[]>([])
 const loading = ref(true)
@@ -58,7 +62,7 @@ const trashedCandidatures = computed(() =>
  */
 function candidatedDate(c: CandidatureView): string {
   const iso = c.created_at
-  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+  return new Date(iso).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 /**
@@ -148,7 +152,7 @@ async function loadCandidatures() {
       sessionId: sid,
     })
   } catch (e: unknown) {
-    loadError.value = extractErrorMessage(e, 'Impossible de charger les candidatures.')
+    loadError.value = backendErrorMessage(e, t('error.fallback.load_applications'))
   } finally {
     loading.value = false
   }
@@ -167,7 +171,7 @@ watch(sessionId, loadDocumentsStatus)
       class="px-6 py-3 text-[14px] h-9 rounded-lg inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
       @click="addSession"
     >
-      + Créer ma première session
+      {{ t('tracking.create_first_session') }}
     </button>
   </div>
 
@@ -179,7 +183,7 @@ watch(sessionId, loadDocumentsStatus)
         <div>
           <h1 class="text-2xl font-semibold leading-tight">{{ currentSession.nom }}</h1>
           <div class="text-[13px] text-neutral-500 mt-[5px] font-mono">
-            {{ visibleCandidatures.length }} candidatures · dernière mise à jour {{ new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) }}
+            {{ t('tracking.summary', { n: visibleCandidatures.length, date: new Date().toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long' }) }, visibleCandidatures.length) }}
           </div>
         </div>
         <div class="flex items-center gap-[10px]">
@@ -194,11 +198,11 @@ watch(sessionId, loadDocumentsStatus)
               <line x1="5.5" y1="8" x2="5.5" y2="12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
               <line x1="9.5" y1="8" x2="9.5" y2="12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
             </svg>
-            Corbeille
+            {{ t('tracking.trash') }}
           </button>
           <span
             class="inline-block"
-            :title="documentsBlocking ? `${missingDocumentsMessage} Complète-les dans l'onglet Paramètres.` : undefined"
+            :title="documentsBlocking ? t('tracking.documents_blocking_hint', { message: missingDocumentsMessage }) : undefined"
           >
             <button
               class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
@@ -206,7 +210,7 @@ watch(sessionId, loadDocumentsStatus)
               :disabled="sessionIsAccepted || documentsBlocking"
               @click="navigate('new')"
             >
-              + Nouvelle candidature
+              {{ t('tracking.new_application') }}
             </button>
           </span>
         </div>
@@ -214,12 +218,12 @@ watch(sessionId, loadDocumentsStatus)
     </div>
 
     <!-- Onglets -->
-    <CandidaturesTabs :active="activeTab" @select="t => (activeTab = t)" />
+    <CandidaturesTabs :active="activeTab" @select="tab => (activeTab = tab)" />
 
     <!-- Onglet Candidatures -->
     <template v-if="activeTab === 'candidatures'">
       <!-- Loading -->
-      <div v-if="loading" class="text-[12px] text-neutral-400 text-center py-6 font-mono mt-[60px]">Chargement…</div>
+      <div v-if="loading" class="text-[12px] text-neutral-400 text-center py-6 font-mono mt-[60px]">{{ t('common.loading') }}</div>
 
       <!-- Load error -->
       <div v-else-if="loadError" class="text-[12px] text-red-500 text-center py-6 font-mono mt-[60px]">{{ loadError }}</div>
@@ -231,11 +235,11 @@ watch(sessionId, loadDocumentsStatus)
           <table class="w-full text-[13px] border-collapse bg-surface-1 border border-neutral-200 rounded-10 overflow-hidden">
             <thead>
               <tr class="text-left bg-neutral-950">
-                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">ENTREPRISE</th>
-                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">POSTE</th>
-                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">STATUT</th>
-                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">CANDIDATÉ</th>
-                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">INACTIVITÉ</th>
+                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">{{ t('tracking.columns.company') }}</th>
+                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">{{ t('tracking.columns.role') }}</th>
+                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">{{ t('tracking.columns.status') }}</th>
+                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">{{ t('tracking.columns.applied') }}</th>
+                <th class="py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-white">{{ t('tracking.columns.inactivity') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -256,12 +260,12 @@ watch(sessionId, loadDocumentsStatus)
                   <span class="inline-block font-medium text-[12px] rounded-5 px-[9px] py-1" :class="statusColor(c.status)">{{ statusLabel(c.status) }}</span>
                 </td>
                 <td class="py-2.5 px-4 font-mono text-neutral-500">{{ candidatedDate(c) }}</td>
-                <td class="py-2.5 px-4 font-mono" :class="inactivityColor(inactivityDays(c))">{{ inactivityDays(c) }} j</td>
+                <td class="py-2.5 px-4 font-mono" :class="inactivityColor(inactivityDays(c))">{{ t('tracking.inactivity_days', { n: inactivityDays(c) }) }}</td>
               </tr>
             </tbody>
           </table>
 
-          <div v-if="visibleCandidatures.length === 0" class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune candidature</div>
+          <div v-if="visibleCandidatures.length === 0" class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('tracking.empty') }}</div>
         </div>
       </template>
     </template>

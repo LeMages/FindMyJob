@@ -17,7 +17,8 @@ import type {
   ContactDraft, ContactInput, NewTimelineEvent,
   UpdateCandidatureInput,
 } from '@/types'
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { t } from '@/i18n'
 import { downloadApplyDocuments, type ApplyMessageExport } from '@/composables/document_download'
 import { draftToContactInput, emptyContactDraft } from '@/composables/contact_draft'
 
@@ -182,7 +183,7 @@ export async function updateSession(id: number, patch: Partial<UpdateSessionInpu
     if (idx !== -1) backendSessions.value[idx] = updated
     return null
   } catch (e: unknown) {
-    return extractErrorMessage(e, 'Impossible de mettre à jour la session.')
+    return backendErrorMessage(e, t('error.fallback.update_session'))
   }
 }
 
@@ -297,7 +298,7 @@ async function loadCardDetail(id: number) {
     state.detailCvInfo = cvInfo
     state.detailLettreInfo = lettreInfo
   } catch (e: unknown) {
-    state.detailError = extractErrorMessage(e, 'Impossible de charger la candidature.')
+    state.detailError = backendErrorMessage(e, t('error.fallback.load_application'))
   } finally {
     state.detailLoading = false
   }
@@ -332,7 +333,7 @@ export async function addTimelineEvent(event: NewTimelineEvent): Promise<string 
     await reloadDetail()
     return null
   } catch (e: unknown) {
-    return extractErrorMessage(e, "Impossible d'ajouter l'événement.")
+    return backendErrorMessage(e, t('error.fallback.add_event'))
   }
 }
 
@@ -374,7 +375,7 @@ export async function updateDetailCandidature(patch: Partial<UpdateCandidatureIn
     }
     return null
   } catch (e: unknown) {
-    return extractErrorMessage(e, 'Impossible de mettre à jour la candidature.')
+    return backendErrorMessage(e, t('error.fallback.update_application'))
   }
 }
 
@@ -411,7 +412,7 @@ export async function loadContactBook(): Promise<string | null> {
     state.contactBook = await invoke<ContactView[]>('list_contacts')
     return null
   } catch (e: unknown) {
-    return extractErrorMessage(e, 'Impossible de charger le carnet de contacts.')
+    return backendErrorMessage(e, t('error.fallback.load_contacts'))
   }
 }
 
@@ -444,7 +445,7 @@ async function runContactOperation(operation: () => Promise<unknown>, errorFallb
     state.detailContact = null
     return null
   } catch (e: unknown) {
-    return extractErrorMessage(e, errorFallback)
+    return backendErrorMessage(e, errorFallback)
   }
 }
 
@@ -459,16 +460,16 @@ export async function addContactToDetail(draft: ContactDraft): Promise<string | 
   const current = state.detailCandidature
   if (!current) return null
   if (draft.mode === 'existing') {
-    if (draft.contact_id === null) return 'Choisis un contact du carnet.'
+    if (draft.contact_id === null) return t('contacts.errors.pick_from_book')
     const contactId = draft.contact_id
     return runContactOperation(
       () => invoke<void>('link_contact', { candidatureId: current.id, contactId }),
-      'Impossible de lier le contact.',
+      t('error.fallback.link_contact'),
     )
   }
   return runContactOperation(
     () => invoke<ContactView>('create_contact', { input: draftToContactInput(draft), candidatureId: current.id }),
-    'Impossible de créer le contact.',
+    t('error.fallback.create_contact'),
   )
 }
 
@@ -482,7 +483,7 @@ export async function addContactToDetail(draft: ContactDraft): Promise<string | 
 export async function updateContact(id: number, input: ContactInput): Promise<string | null> {
   return runContactOperation(
     () => invoke<ContactView>('update_contact', { id, input }),
-    'Impossible de modifier le contact.',
+    t('error.fallback.update_contact'),
   )
 }
 
@@ -498,7 +499,7 @@ export async function unlinkContact(contactId: number): Promise<string | null> {
   if (!current) return null
   return runContactOperation(
     () => invoke<void>('unlink_contact', { candidatureId: current.id, contactId }),
-    'Impossible de retirer le contact de la candidature.',
+    t('error.fallback.unlink_contact'),
   )
 }
 
@@ -511,7 +512,7 @@ export async function unlinkContact(contactId: number): Promise<string | null> {
 export async function deleteContact(id: number): Promise<string | null> {
   return runContactOperation(
     () => invoke<void>('delete_contact', { id }),
-    'Impossible de supprimer le contact.',
+    t('error.fallback.delete_contact'),
   )
 }
 
@@ -591,7 +592,7 @@ export async function deleteCandidature(): Promise<string | null> {
     state.screen = 'tracking'
     return null
   } catch (e: unknown) {
-    return extractErrorMessage(e, 'Impossible de supprimer la candidature.')
+    return backendErrorMessage(e, t('error.fallback.delete_application'))
   }
 }
 
@@ -607,9 +608,9 @@ async function downloadDocumentsAfterApply(candidature: CandidatureDetail, messa
   try {
     const owner = { nom: state.userNom, prenom: state.userPrenom }
     const dir = await downloadApplyDocuments(candidature, owner, message)
-    if (dir) showToast(`Documents téléchargés dans ${dir}`)
+    if (dir) showToast(t('toast.documents_downloaded', { dir }))
   } catch (e: unknown) {
-    showToast(extractErrorMessage(e, 'Impossible de télécharger les documents de la candidature.'), 'error')
+    showToast(backendErrorMessage(e, t('error.fallback.download_application_documents')), 'error')
   }
 }
 
@@ -639,7 +640,7 @@ async function applyVia(command: string, errorFallback: string, messageFileName?
     void downloadDocumentsAfterApply(current, message)
     return null
   } catch (e: unknown) {
-    return extractErrorMessage(e, errorFallback)
+    return backendErrorMessage(e, errorFallback)
   }
 }
 
@@ -651,7 +652,7 @@ async function applyVia(command: string, errorFallback: string, messageFileName?
  * @returns Message d'erreur en cas d'échec, sinon `null`.
  */
 export async function applyWithoutMessage(): Promise<string | null> {
-  return applyVia('postuler_sans_message', 'Impossible de postuler sans message.')
+  return applyVia('postuler_sans_message', t('error.fallback.apply_without_message'))
 }
 
 /**
@@ -662,7 +663,7 @@ export async function applyWithoutMessage(): Promise<string | null> {
  * @returns Message d'erreur en cas d'échec, sinon `null`.
  */
 export async function applyByMail(): Promise<string | null> {
-  return applyVia('postuler_par_mail', 'Impossible de postuler par mail.', 'Mail_de_candidature.txt')
+  return applyVia('postuler_par_mail', t('error.fallback.apply_by_email'), 'Mail_de_candidature.txt')
 }
 
 /**
@@ -674,7 +675,7 @@ export async function applyByMail(): Promise<string | null> {
  * @returns Message d'erreur en cas d'échec, sinon `null`.
  */
 export async function applyByMessage(): Promise<string | null> {
-  return applyVia('postuler_par_message', 'Impossible de postuler par message.', 'Message_candidature.txt')
+  return applyVia('postuler_par_message', t('error.fallback.apply_by_message'), 'Message_candidature.txt')
 }
 
 // Expose raw state for components that need it

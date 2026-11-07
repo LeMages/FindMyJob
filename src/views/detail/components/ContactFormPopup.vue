@@ -7,6 +7,7 @@
 
 // Importation des modules Vue / framework
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 // Importation des composants
 import ContactEntryFields from '@/components/ContactEntryFields.vue'
@@ -14,6 +15,8 @@ import ContactEntryFields from '@/components/ContactEntryFields.vue'
 // Importation des modules internes
 import { state, closeDetailPopup, addContactToDetail, updateContact } from '@/stores/app'
 import { draftFromContact, draftToContactInput, emptyContactDraft } from '@/composables/contact_draft'
+
+const { t } = useI18n()
 
 const editing = state.detailContact
 const draft = ref(editing ? draftFromContact(editing) : emptyContactDraft())
@@ -37,11 +40,11 @@ async function save() {
 <template>
   <div>
     <div class="flex items-center justify-between mb-5">
-      <div class="text-[17px] font-semibold">{{ editing ? 'Modifier le contact' : 'Ajouter un contact' }}</div>
+      <div class="text-[17px] font-semibold">{{ editing ? t('contact_form.edit_title') : t('contact_form.add_title') }}</div>
       <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
     </div>
     <div v-if="editing && editing.candidature_count > 1" class="text-[12px] text-neutral-500 font-mono -mt-2 mb-4">
-      Ce contact est lié à {{ editing.candidature_count }} candidatures : la modification s'applique partout.
+      {{ t('contact_form.shared_warning', editing.candidature_count) }}
     </div>
 
     <ContactEntryFields
@@ -57,12 +60,12 @@ async function save() {
       <button
         class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         @click="closeDetailPopup"
-      >Annuler</button>
+      >{{ t('common.cancel') }}</button>
       <button
         class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-default"
         :disabled="saving"
         @click="save"
-      >{{ saving ? 'Enregistrement…' : 'Enregistrer' }}</button>
+      >{{ saving ? t('common.saving') : t('common.save') }}</button>
     </div>
   </div>
 </template>

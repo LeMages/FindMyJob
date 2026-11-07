@@ -8,12 +8,15 @@
 
 // Importation des modules Vue / framework
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
 import { useDocumentDownload } from '@/composables/useDocumentDownload'
 import type { DownloadDocType } from '@/composables/document_file_name'
+
+const { t } = useI18n()
 
 const visible = ref(false)
 const loading = ref(false)
@@ -42,7 +45,7 @@ async function open(path: string, label: string, type: DownloadDocType) {
   try {
     data.value = await invoke<string>('get_document_pdf', { path })
   } catch (e: unknown) {
-    error.value = extractErrorMessage(e, "Impossible de charger l'aperçu du document.")
+    error.value = backendErrorMessage(e, t('error.fallback.load_preview'))
   } finally {
     loading.value = false
   }
@@ -74,7 +77,7 @@ defineExpose({ open })
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              {{ downloading ? 'Téléchargement…' : 'Télécharger' }}
+              {{ downloading ? t('documents.preview.downloading') : t('detail.documents.download') }}
             </button>
             <button
               class="w-7 h-7 rounded-7 border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer text-neutral-600 hover:bg-surface-3 hover:text-neutral-950"
@@ -93,7 +96,7 @@ defineExpose({ open })
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-blue-500">
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
-            Chargement…
+            {{ t('common.loading') }}
           </div>
           <div v-else-if="error" class="flex items-start gap-[10px] text-red-600 text-[13px] max-w-[480px] p-5 bg-red-50 border border-red-200 rounded-lg leading-[1.5]">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
@@ -107,7 +110,7 @@ defineExpose({ open })
             v-else-if="data"
             :src="`data:application/pdf;base64,${data}`"
             class="w-full h-full border-none block"
-            title="Aperçu PDF"
+            :title="t('documents.preview.pdf_title')"
           />
         </div>
       </div>

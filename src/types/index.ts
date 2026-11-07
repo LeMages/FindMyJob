@@ -500,3 +500,6 @@ export interface FontFolderView {
   /** Familles déjà fournies par Typst ou par le système. */
   shadowed_families: string[]
 }
+
+/** Langue de l'interface (indépendante de la langue des documents générés). */
+export type UiLanguage = 'fr' | 'en'

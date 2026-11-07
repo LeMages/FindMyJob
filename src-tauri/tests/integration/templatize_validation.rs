@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 // Importation des modules internes
 use crate::shared::fake_llm::read_reference;
+use crate::shared::font_fixtures::install_reference_font;
 use crate::shared::temp_dir::unique_temp_dir;
 use findmyjob_lib::documents::example_check::{check_example, CheckedExample, ExampleContext};
 use findmyjob_lib::documents::markup::parse_markup;
@@ -27,6 +28,7 @@ struct Reference {
 fn reference(name: &str, doc_type: &'static str) -> Reference {
     let root = unique_temp_dir("templatize-validation");
     let fonts = root.join("polices");
+    install_reference_font(&fonts);
     let source = read_reference(&format!("real/{name}"));
     let rendered = compile_document(source.clone(), root.clone(), fonts.clone()).expect("la référence compile");
     Reference { source, rendered, doc_type, root, fonts }

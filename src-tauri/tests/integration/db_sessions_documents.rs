@@ -8,6 +8,7 @@ use findmyjob_lib::error::AppError;
 use findmyjob_lib::models::UpdateSessionInput;
 use findmyjob_lib::db::transaction::begin_write;
 use findmyjob_lib::db::{candidatures, document_versions, documents, sessions, settings};
+use findmyjob_lib::services;
 
 async fn count(pool: &sqlx::SqlitePool, table: &str) -> i64 {
     sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}")).fetch_one(pool).await.unwrap()
@@ -117,4 +118,15 @@ async fn reglages_upsert_par_cle() {
     settings::set(&pool, settings::KEY_THEME, "clair").await.unwrap();
     assert_eq!(settings::resolve_theme(&pool).await.unwrap(), "clair");
     assert_eq!(settings::resolve_llm_model(&pool, "modele-defaut").await.unwrap(), "modele-defaut");
+}
+
+#[tokio::test]
+async fn langue_interface_defaut_ecriture_et_refus() {
+    let pool = seed::pool().await;
+    assert_eq!(settings::resolve_ui_lang(&pool).await.unwrap(), "fr");
+    services::settings::set_ui_lang(&pool, "en").await.unwrap();
+    assert_eq!(settings::resolve_ui_lang(&pool).await.unwrap(), "en");
+    let err = services::settings::set_ui_lang(&pool, "de").await.unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)), "valeur hors liste refusée : {err:?}");
+    assert_eq!(settings::resolve_ui_lang(&pool).await.unwrap(), "en", "valeur précédente conservée");
 }

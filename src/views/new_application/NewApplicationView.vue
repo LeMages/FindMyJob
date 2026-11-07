@@ -7,6 +7,7 @@
 
 // Importation des modules Vue / framework
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des composants
@@ -28,12 +29,15 @@ import {
   removeContactDraft,
   resetContactDrafts,
 } from '@/stores/app'
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { sourceOptions, typeContratOptions } from '@/composables/candidature_display'
 import { draftFromScraped, draftToCandidatureContact } from '@/composables/contact_draft'
 import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
 import { useGenerationProgress } from '@/composables/useGenerationProgress'
 import { useOfferImport } from './useOfferImport'
 import { useDuplicateOffers } from './useDuplicateOffers'
+
+const { t } = useI18n()
 
 const roleRef = ref('')
 const companyRef = ref('')
@@ -143,7 +147,7 @@ async function submit() {
     showProgressModal.value = true
     startProgressPolling(candidature.id)
   } catch (e: unknown) {
-    saveError.value = extractErrorMessage(e, 'Erreur lors de la création de la candidature.')
+    saveError.value = backendErrorMessage(e, t('error.fallback.create_application'))
   } finally {
     saving.value = false
   }
@@ -229,23 +233,23 @@ async function goToManual() {
 
 <template>
   <div class="px-9 pt-[26px] pb-11">
-    <button class="bg-transparent border-none font-mono text-[12px] text-neutral-500 cursor-pointer py-1 mb-[14px] inline-block hover:text-neutral-950" @click="navigate('tracking')">← Retour au suivi</button>
+    <button class="bg-transparent border-none font-mono text-[12px] text-neutral-500 cursor-pointer py-1 mb-[14px] inline-block hover:text-neutral-950" @click="navigate('tracking')">{{ t('detail.back_to_tracking') }}</button>
 
     <div class="flex items-center justify-between mb-5">
       <div>
-        <h1 class="text-2xl font-semibold leading-tight">Nouvelle candidature</h1>
+        <h1 class="text-2xl font-semibold leading-tight">{{ t('new_application.title') }}</h1>
         <div class="text-[13px] text-neutral-500 mt-[5px] font-mono">{{ currentSession?.nom }}</div>
       </div>
       <button
         class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         @click="navigate('tracking')"
-      >Annuler</button>
+      >{{ t('common.cancel') }}</button>
     </div>
 
     <!-- Sans session courante, aucune candidature ne peut être créée -->
     <div v-if="!currentSession" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[18px] text-[13px] text-amber-700 flex items-center justify-between gap-3">
-      <span>Aucune session de recherche n'est sélectionnée : crée ou choisis une session dans le suivi avant d'ajouter une candidature.</span>
-      <button class="underline font-medium whitespace-nowrap" @click="navigate('tracking')">Aller au suivi</button>
+      <span>{{ t('new_application.no_session') }}</span>
+      <button class="underline font-medium whitespace-nowrap" @click="navigate('tracking')">{{ t('new_application.go_to_tracking') }}</button>
     </div>
 
     <OfferLinkStep
@@ -291,68 +295,58 @@ async function goToManual() {
     />
 
     <template v-if="step === 'form'">
-    <button class="bg-transparent border-none font-mono text-[12px] text-neutral-500 cursor-pointer py-1 mb-[10px] hover:text-neutral-950" @click="offerImport.backToUrl">← Revenir au lien de l'offre</button>
+    <button class="bg-transparent border-none font-mono text-[12px] text-neutral-500 cursor-pointer py-1 mb-[10px] hover:text-neutral-950" @click="offerImport.backToUrl">{{ t('new_application.back_to_offer_link') }}</button>
     <DuplicateOfferWarning :duplicates="duplicates" :check-error="checkError" />
     <!-- Détails du poste -->
     <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">DÉTAILS DU POSTE</div>
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('detail.job.section') }}</div>
       <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Intitulé du poste <span class="text-red-500 font-semibold">*</span></label>
-        <input v-model="roleRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. Stage Data Scientist" />
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.title') }} <span class="text-red-500 font-semibold">*</span></label>
+        <input v-model="roleRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('detail.job.title_placeholder')" />
       </div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Entreprise <span class="text-red-500 font-semibold">*</span></label>
-          <input v-model="companyRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Nom de l'entreprise" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.company') }} <span class="text-red-500 font-semibold">*</span></label>
+          <input v-model="companyRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('detail.job.company_placeholder')" />
         </div>
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Lieu <span class="text-red-500 font-semibold">*</span></label>
-          <input v-model="locationRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ville, pays" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.location') }} <span class="text-red-500 font-semibold">*</span></label>
+          <input v-model="locationRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('new_application.form.location_placeholder')" />
         </div>
       </div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Type de contrat <span class="text-red-500 font-semibold">*</span></label>
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.contract') }} <span class="text-red-500 font-semibold">*</span></label>
           <select
             v-model="typeRef"
             class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
           >
-            <option value="">-- Sélectionner --</option>
-            <option value="stage">Stage</option>
-            <option value="alternance">Alternance</option>
-            <option value="interim">Intérim</option>
-            <option value="cdd">CDD</option>
-            <option value="cdi">CDI</option>
+            <option value="">{{ t('common.select_placeholder') }}</option>
+            <option v-for="opt in typeContratOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </div>
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Gratification</label>
-          <input v-model="remunerationRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="Ex. 1 300 €/mois" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.salary') }}</label>
+          <input v-model="remunerationRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('detail.job.salary_placeholder')" />
         </div>
       </div>
       <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Plateforme de l'offre <span class="text-red-500 font-semibold">*</span></label>
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.platform') }} <span class="text-red-500 font-semibold">*</span></label>
         <select
           v-model="sourceRef"
           class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
         >
-          <option value="">-- Sélectionner --</option>
-          <option>Plateforme en ligne (Indeed, LinkedIn, Welcome to the Jungle...)</option>
-          <option>Site carrière de l'entreprise (formulaire sur le site)</option>
-          <option>Mail (candidature directe par email)</option>
-          <option>Cooptation / Réseau (recommandation, contact perso)</option>
-          <option>Forum / Salon emploi (rencontre physique)</option>
-          <option>École (job board, offres des profs / asso)</option>
-          <option>Autre</option>
+          <option value="">{{ t('common.select_placeholder') }}</option>
+          <option v-for="opt in sourceOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
       </div>
       <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Lien de l'offre</label>
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.link') }}</label>
         <input v-model="urlOffreRef" @change="checkDuplicates(urlOffreRef)" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://..." />
       </div>
       <div class="mb-0">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Contenu de l'offre <span class="text-red-500 font-semibold">*</span></label>
-        <textarea v-model="descriptionOffreRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-40" placeholder="Colle ici le texte complet de l'offre d'emploi..." />
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.offer.title') }} <span class="text-red-500 font-semibold">*</span></label>
+        <textarea v-model="descriptionOffreRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-40" :placeholder="t('new_application.form.offer_placeholder')" />
       </div>
     </div>
 
@@ -361,14 +355,14 @@ async function goToManual() {
 
     <!-- Notes -->
     <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">NOTES</div>
-      <textarea v-model="notesRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-20" placeholder="Notes libres, contexte, points à préparer..." />
+      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('detail.notes.section') }}</div>
+      <textarea v-model="notesRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-20" :placeholder="t('new_application.form.notes_placeholder')" />
     </div>
 
     <!-- Documents de référence manquants -->
     <div v-if="documentsBlocking" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[14px] text-[13px] text-amber-700 flex items-center justify-between gap-3">
       <span>{{ missingDocumentsMessage }}</span>
-      <button class="underline font-medium whitespace-nowrap" @click="navigate('settings')">Aller aux paramètres</button>
+      <button class="underline font-medium whitespace-nowrap" @click="navigate('settings')">{{ t('new_application.go_to_settings') }}</button>
     </div>
 
     <!-- Error -->
@@ -381,7 +375,7 @@ async function goToManual() {
       :disabled="saving || !isValid || documentsBlocking || !currentSession"
       @click="submit"
     >
-      {{ saving ? 'Enregistrement…' : 'Valider la candidature →' }}
+      {{ saving ? t('common.saving') : t('new_application.submit') }}
     </button>
     </template>
 

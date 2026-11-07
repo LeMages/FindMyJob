@@ -20,6 +20,16 @@ pub const VALID_THEMES: [&str; 3] = ["clair", "sombre", "systeme"];
 /// Thème appliqué en l'absence de valeur enregistrée.
 pub const DEFAULT_THEME: &str = "systeme";
 
+/// Clé du paramètre stockant la langue de l'interface (indépendante de la
+/// langue des documents générés, qui suit toujours celle de l'offre).
+pub const KEY_UI_LANG: &str = "ui_lang";
+
+/// Valeurs valides pour le paramètre `ui_lang`.
+pub const VALID_UI_LANGS: [&str; 2] = ["fr", "en"];
+
+/// Langue d'interface appliquée en l'absence de valeur enregistrée.
+pub const DEFAULT_UI_LANG: &str = "fr";
+
 /// Récupère la valeur brute associée à une clé de paramètre.
 ///
 /// # Arguments
@@ -95,4 +105,18 @@ pub async fn resolve_llm_model(pool: &SqlitePool, default: &str) -> Result<Strin
 /// Le thème à appliquer (`"clair"`, `"sombre"` ou `"systeme"`).
 pub async fn resolve_theme(pool: &SqlitePool) -> Result<String, AppError> {
     Ok(get(pool, KEY_THEME).await?.unwrap_or_else(|| DEFAULT_THEME.to_string()))
+}
+
+/// Résout la langue de l'interface configurée : valeur en base, ou
+/// [`DEFAULT_UI_LANG`] si aucune valeur n'est encore enregistrée.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+///
+/// # Returns
+///
+/// La langue de l'interface à appliquer (`"fr"` ou `"en"`).
+pub async fn resolve_ui_lang(pool: &SqlitePool) -> Result<String, AppError> {
+    Ok(get(pool, KEY_UI_LANG).await?.unwrap_or_else(|| DEFAULT_UI_LANG.to_string()))
 }

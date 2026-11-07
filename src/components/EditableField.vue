@@ -13,6 +13,7 @@
 
 // Importation des modules Vue / framework
 import { computed, nextTick, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 export interface EditableFieldOption {
   value: string
@@ -74,12 +75,14 @@ const displayClass = computed(() => {
   return `${baseClass} h-[38px] flex items-center truncate ${selectable} ${interactiveClass.value}`
 })
 
+const { t } = useI18n()
+
 // Un select s'ouvre au premier clic, comme un menu déroulant classique ; les
 // champs texte attendent un double-clic pour éviter les entrées en édition
 // accidentelles au simple clic (sélection, focus de lecture...).
 const editHint = computed(() => {
-  if (!props.editable) return 'Modifiable uniquement au statut « À postuler »'
-  return props.type === 'select' ? 'Cliquer pour modifier' : 'Double-cliquer pour modifier'
+  if (!props.editable) return t('editable_field.locked')
+  return props.type === 'select' ? t('editable_field.click_to_edit') : t('editable_field.double_click_to_edit')
 })
 
 /** Affiche un message d'erreur sous le champ pendant `ERROR_DISPLAY_MS`. */
