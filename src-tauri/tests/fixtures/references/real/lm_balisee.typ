@@ -6,8 +6,6 @@
 
 #set text(font: "Arimo", size: 10.5pt, fill: rgb("2B2B2B"), lang: "fr")
 // Note: Liberation Sans is metrically identical to Arial.
-// Espacement mesuré sur les vrais contours des glyphes
-#set text(top-edge: "ascender", bottom-edge: "descender")
 #set par(leading: 0.55em, justify: true)
 #set text(hyphenate: false)
 
@@ -19,7 +17,7 @@
 // === Spacing ===
 #let space-para = 12pt   // entre deux paragraphes
 
-#show par: set block(spacing: space-para)
+#set par(spacing: space-para)
 
 // === Document ===
 
