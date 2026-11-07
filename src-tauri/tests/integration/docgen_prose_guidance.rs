@@ -20,7 +20,7 @@ fn zone(field: &str, mode: ZoneMode, text: &str) -> ProseZone {
 }
 
 /// Dernier paragraphe de la lettre de référence : une zone fixe.
-const FIXED: &str = "Résidant à Thyez, à une quarantaine de minutes de Genève, je peux travailler en tant que frontalier.";
+const FIXED: &str = "Résidant à Lyon, je suis mobile et prêt à m'installer à proximité de votre site.";
 
 /// Consignes : paragraphe 0 découpé en une zone fixe puis une variable.
 fn guidance() -> ProseGuidance {
@@ -39,19 +39,19 @@ fn guidance() -> ProseGuidance {
 
 #[test]
 fn zone_fixe_recopiee_avec_une_information_mise_a_jour() {
-    let information = vec!["Thyez".to_string()];
-    let written = FIXED.replace("Thyez", "Annecy") + " Je postule chez Lumen.";
+    let information = vec!["Lyon".to_string()];
+    let written = FIXED.replace("Lyon", "Nantes") + " Je postule chez Lumen.";
     let violations = fixed_zone_violations(&guidance(), &[field("paragraphs[0]", &written)], &information);
     assert!(violations.is_empty(), "{violations:?}");
 }
 
 #[test]
 fn zone_fixe_reecrite_signalee() {
-    let information = vec!["Thyez".to_string()];
-    let written = "Je vis près de Genève et je peux être frontalier. Je postule chez Lumen.";
+    let information = vec!["Lyon".to_string()];
+    let written = "J'habite à Lyon et je peux déménager. Je postule chez Lumen.";
     let violations = fixed_zone_violations(&guidance(), &[field("paragraphs[0]", written)], &information);
     assert_eq!(violations.len(), 1);
-    assert!(violations[0].message.contains("[FIXE]") && violations[0].message.contains("\"quarantaine\""));
+    assert!(violations[0].message.contains("[FIXE]") && violations[0].message.contains("\"proximité\""));
 }
 
 #[test]
