@@ -19,7 +19,7 @@ La référence déposée par les tests (`test_state::reference_source`) est le t
 
 `cv_template.typ` à la racine de `fixtures/` est un autre template, utilisé par les tests unitaires de `src/docgen/tests.rs`.
 
-### `references/real/` : références réelles anonymisées et balisées
+### `references/tagged/` : références réelles anonymisées et balisées
 
 | Fichier | Source | Réduction |
 |---|---|---|
@@ -34,13 +34,13 @@ Sous-ensembles générés avec fontTools (`subset`, `varLib.instancer`) à parti
 
 | Dossier | Contenu | Utilisé pour |
 |---|---|---|
-| `arimo_reference/Arimo-{Regular,Bold,Italic,BoldItalic}.ttf` | Arimo 4 styles (TTF statiques de Google Fonts, `static/`), environ 17 à 19 Ko chacun | Police des références réelles (`references/real/`) : installée dans le dossier de polices de chaque app de test et des tests de templatisation ; `typst_fonts.rs` vérifie que les deux références se rendent sans avertissement ni glyphe de repli |
+| `arimo_reference/Arimo-{Regular,Bold,Italic,BoldItalic}.ttf` | Arimo 4 styles (TTF statiques de Google Fonts, `static/`), environ 17 à 19 Ko chacun | Police des références réelles (`references/tagged/`) : installée dans le dossier de polices de chaque app de test et des tests de templatisation ; `typst_fonts.rs` vérifie que les deux références se rendent sans avertissement ni glyphe de repli |
 | `arimo/static/Arimo-Regular.ttf` | Instance statique 400 d'Arimo (police variable de Google Fonts), sous un sous-dossier comme dans une archive | Police importée utilisée sans avertissement et présente dans le PDF ; import récursif, nom de famille « Arimo » |
 | `collection/Arimo.ttc` | Collection : Arimo Regular et Italic (instances 400) | Import d'une collection `.ttc` |
 | `libertinus/LibertinusSerif-Regular.ttf` | Libertinus Serif Regular, homonyme d'une police embarquée par Typst | Avertissement d'homonyme ; dossier `Libertinus_Serif` vs famille `Libertinus Serif` |
 | `web/Exemple-Regular.woff2` | Fichier texte factice : seule l'extension compte | Refus des formats WOFF/WOFF2 |
 
-`arimo_reference/` couvre Latin-1 (U+0020–U+00FF), `Œ œ Ÿ` (U+0152–U+0153, U+0178), `– —` (U+2013–U+2014), `‘ ’ “ ”` (U+2018–U+2019, U+201C–U+201D), `•` (U+2022), `…` (U+2026), l'espace fine insécable U+202F et `€` (U+20AC). La liste vient d'un relevé des caractères non ASCII des fixtures rendues en Arimo (`references/real/`, `llm/`, profil de `test_state.rs`), complété des signes typographiques français courants ; les emojis de `llm/scraped_offer.json` ne sont jamais rendus. Si une fixture gagne un caractère hors de cette liste, `typst_fonts::references_reelles_entierement_rendues_en_arimo` échoue : regénérer le sous-ensemble depuis les TTF statiques d'origine (Google Fonts, archive Arimo, dossier `static/`), avec `OFL.txt` (Copyright 2026 The Arimo Project Authors) :
+`arimo_reference/` couvre Latin-1 (U+0020–U+00FF), `Œ œ Ÿ` (U+0152–U+0153, U+0178), `– —` (U+2013–U+2014), `‘ ’ “ ”` (U+2018–U+2019, U+201C–U+201D), `•` (U+2022), `…` (U+2026), l'espace fine insécable U+202F et `€` (U+20AC). La liste vient d'un relevé des caractères non ASCII des fixtures rendues en Arimo (`references/tagged/`, `llm/`, profil de `test_state.rs`), complété des signes typographiques français courants ; les emojis de `llm/scraped_offer.json` ne sont jamais rendus. Si une fixture gagne un caractère hors de cette liste, `typst_fonts::references_balisees_entierement_rendues_en_arimo` échoue : regénérer le sous-ensemble depuis les TTF statiques d'origine (Google Fonts, archive Arimo, dossier `static/`), avec `OFL.txt` (Copyright 2026 The Arimo Project Authors) :
 
 ```bash
 for s in Regular Bold Italic BoldItalic; do

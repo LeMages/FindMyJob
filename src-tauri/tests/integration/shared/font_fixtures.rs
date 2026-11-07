@@ -18,7 +18,7 @@ pub fn copy_font_fixture(name: &str, dest: &Path) {
     copy_dir(&fixtures_dir().join("fonts").join(name), dest);
 }
 
-/// Copie la police Arimo des références réelles (`fonts/arimo_reference/`,
+/// Copie la police Arimo des références balisées (`fonts/arimo_reference/`,
 /// quatre styles) dans un dossier de polices, comme une police importée par
 /// l'utilisateur. Sans elle, les références qui demandent Arimo ne compilent
 /// pas : une famille introuvable est une erreur bloquante.

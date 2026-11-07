@@ -16,17 +16,17 @@ use findmyjob_lib::llm::client::TEMPLATIZE_MODEL;
 use findmyjob_lib::llm::{ApiKey, ClaudeTarget};
 use findmyjob_lib::models::ReferenceTexts;
 
-/// Données d'exemple correctes de la lettre réelle.
-const LM_EXAMPLE: &str = "references/real/lm_balisee_example_data.json";
-/// Template correct de la lettre réelle.
-const LM_TEMPLATE: &str = "references/real/lm_balisee_template.typ";
+/// Données d'exemple correctes de la lettre balisée.
+const LM_EXAMPLE: &str = "references/tagged/lm_balisee_example_data.json";
+/// Template correct de la lettre balisée.
+const LM_TEMPLATE: &str = "references/tagged/lm_balisee_template.typ";
 
-/// Templatise une référence réelle avec les réponses données.
+/// Templatise une référence balisée avec les réponses données.
 async fn run(reference: &str, doc_type: &str, llm: Arc<FakeLlm>) -> Result<ValidatedTemplate, AppError> {
     let root = unique_temp_dir("templatize-retries");
     let fonts = root.join("polices");
     install_reference_font(&fonts);
-    let source = read_reference(&format!("real/{reference}"));
+    let source = read_reference(&format!("tagged/{reference}"));
     let rendered = compile_document(source.clone(), root.clone(), fonts.clone()).expect("la référence compile");
     // Le modèle des paramètres (Haiku) doit être remplacé par le modèle imposé.
     let target = ClaudeTarget {
@@ -84,7 +84,7 @@ async fn meilleur_essai_conserve_sans_regression() {
     // Essai 1 : seul un séparateur orphelin (non bloquant) ; essais 2 et 3 :
     // erreurs de compilation. Le premier reste le meilleur et est accepté.
     let llm = Arc::new(FakeLlm::default());
-    llm.respond_with(Step::ExampleCv, Reply::Files(&["references/real/cv_balise_example_data.json"]));
+    llm.respond_with(Step::ExampleCv, Reply::Files(&["references/tagged/cv_balise_example_data.json"]));
     llm.respond_with(
         Step::TemplateCv,
         Reply::Files(&[
