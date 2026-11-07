@@ -1,27 +1,27 @@
 {
   "identity": {
-    "prenom": "Camille",
-    "nom": "Exemple",
-    "title": "Étudiant Ingénieur Data Engineering & Machine Learning",
-    "email": "camille@exemple.invalid",
+    "prenom": "Antoine",
+    "nom": "Dupont",
+    "title": "Étudiant Ingénieur Informatique, spécialité Data & Cloud",
+    "email": "antoine.dupont@exemple.fr",
     "telephone": "+33 6 00 00 00 00",
-    "ville": "Thyez",
-    "zip_code": "74300",
-    "linkedin": "linkedin.com/in/camille-exemple",
-    "github": "github.com/camille-exemple",
-    "portfolio": "camille-exemple.invalid",
+    "ville": "Lyon",
+    "zip_code": "69003",
+    "linkedin": "linkedin.com/in/antoine-dupont-exemple",
+    "github": "github.com/adupont-exemple",
+    "portfolio": "antoine-dupont.exemple.fr",
     "permis": true
   },
   "lang": "fr",
-  "summary": "Étudiant ingénieur en dernière année à l'Efrei Paris (niveau Master), spécialisé en Data Engineering et Machine Learning. 6 mois d'expérience en entreprise sur le forecasting de séries temporelles à grande échelle et des systèmes RAG en production, de la donnée brute jusqu'à l'API.",
+  "summary": "Étudiant ingénieur en dernière année à l'École Supérieure du Numérique de Lyon (niveau Master), spécialisé en Data et Cloud. 6 mois d'expérience en entreprise sur des pipelines de données logistiques et des tableaux de bord de pilotage, de l'ingestion jusqu'à la restitution.",
   "skills_groups": [
     {
       "category": "Langages",
       "skills": [
         "Python",
         "SQL",
-        "Rust",
-        "JavaScript (Vue.js, Node.js)"
+        "Java",
+        "TypeScript (React, Node.js)"
       ]
     },
     {
@@ -29,99 +29,95 @@
       "skills": [
         "Pandas",
         "NumPy",
-        "Polars",
         "Scikit-learn",
-        "PyTorch",
-        "Darts",
-        "LangChain",
-        "RAG",
-        "LLM",
+        "XGBoost",
+        "Prophet",
+        "Hugging Face",
         "OpenCV",
-        "YOLO"
+        "Power BI"
       ]
     },
     {
       "category": "Data Engineering",
       "skills": [
         "ETL",
+        "Airflow",
+        "dbt",
         "PostgreSQL",
-        "pgvector",
-        "MySQL",
-        "SQLite",
+        "MongoDB",
+        "Snowflake",
         "Spark",
-        "Kafka",
-        "SAP Business Objects"
+        "Kafka"
       ]
     },
     {
       "category": "Cloud & DevOps",
       "skills": [
-        "AWS (EC2, S3)",
+        "Azure (Data Factory, Blob Storage)",
         "Docker",
         "Git",
-        "GitHub Actions",
-        "CI/CD",
-        "Linux/Bash"
+        "GitLab CI",
+        "Terraform",
+        "Linux"
       ]
     },
     {
       "category": "Développement",
       "skills": [
-        "Flask",
-        "Axum",
-        "Tauri",
+        "FastAPI",
+        "Spring Boot",
         "API REST"
       ]
     }
   ],
   "experiences": [
     {
-      "poste": "Stage Ingénieur Data & IA",
-      "entreprise": "Need4Viz",
-      "lieu": "Paris",
-      "period": "11.2025 – 04.2026",
+      "poste": "Stage Data Engineer",
+      "entreprise": "Transvia Logistique",
+      "lieu": "Lyon",
+      "period": "09.2025 – 02.2026",
       "bullets": [
-        "Déploiement d'un pipeline de forecasting sur 2 000+ séries temporelles SAP : R² de 0.70, Directional Accuracy de 80% (Transformer, Darts)",
-        "Intégration d'un RAG dans l'outil de dataviz : 80% de réponses correctes sur le corpus client",
-        "Conception des API REST et de l'interface web (Flask) intégrant les modèles en production"
+        "Refonte du pipeline d'ingestion de 300+ entrepôts : traitement 40% plus rapide, < 1% d'erreurs (Airflow, dbt)",
+        "Création de tableaux de bord de suivi des livraisons : adoptés par 5 équipes opérationnelles",
+        "Développement d'API REST (FastAPI) exposant les indicateurs aux outils internes de planification"
       ]
     }
   ],
   "projects": [
     {
-      "titre": "RAG Juridique – Question-réponse sur textes de loi",
-      "pour_qui": "Efrei Paris",
+      "titre": "Prévision de fréquentation – Vélos en libre-service",
+      "pour_qui": "École Supérieure du Numérique",
       "period": "2025 – 2026",
       "bullets": [
-        "Mise en place d'un RAG interrogeant le CESEDA en langage naturel, livré à un client externe",
-        "Construction du pipeline d'ingestion et de vectorisation des textes (Python, LangChain, PostgreSQL/pgvector)"
+        "Modélisation de la demande horaire sur 400 stations à partir de données ouvertes et météo, livrée à une collectivité",
+        "Mise en place du pipeline de collecte et d'entraînement des modèles (Python, XGBoost, PostgreSQL, Airflow)"
       ]
     },
     {
-      "titre": "FindMyJob – Application de suivi de candidatures",
+      "titre": "DocFinder – Recherche sémantique dans des notices",
       "pour_qui": "Projet personnel open source",
       "period": "2026",
       "bullets": [
-        "Création d'une app desktop (Rust, Tauri, SQLite) : extraction d'offres par LLM, génération de CV et lettres",
-        "Migration de l'architecture Axum/PostgreSQL/Docker vers une app autonome, avec CI/CD GitHub Actions"
+        "Conception d'une application web (TypeScript, FastAPI) : recherche en langage naturel dans des notices techniques",
+        "Déploiement conteneurisé sur Azure avec Terraform, tests automatisés et CI/CD GitLab"
       ]
     },
     {
-      "titre": "Wild Dump Prevention – Détection par Computer Vision",
-      "pour_qui": "Efrei Paris",
+      "titre": "QualiVision – Détection de défauts par vision",
+      "pour_qui": "École Supérieure du Numérique",
       "period": "2024 – 2025",
       "bullets": [
-        "Entraînement d'un modèle YOLO/OpenCV (90% de précision sur 3 000 images) et dashboard web Flask"
+        "Entraînement d'un modèle de classification OpenCV (92% de précision sur 2 500 images) et interface de contrôle"
       ]
     }
   ],
   "formations": [
     {
-      "titre": "Diplôme d'ingénieur (niveau Master, CTI) – Data Engineering",
-      "ecole": "Efrei Paris",
+      "titre": "Diplôme d'ingénieur (niveau Master, CTI) – Data & Cloud",
+      "ecole": "École Supérieure du Numérique",
       "period": "2022 – 2027",
       "details": [
-        "Échange universitaire – Université Concordia, Montréal, Canada (08.2024 – 12.2024)"
+        "Semestre d'échange – Université de Lisbonne, Portugal (09.2024 – 01.2025)"
       ]
     }
   ],
@@ -132,13 +128,13 @@
     },
     {
       "nom": "Anglais",
-      "level": "B2, TOEIC 840/990 (échange universitaire au Canada)"
+      "level": "C1, TOEIC 905/990 (semestre d'échange au Portugal)"
     }
   ],
   "interets": [
-    "Handball",
-    "Formule 1",
-    "Projets personnels en Machine Learning et Intelligence Artificielle"
+    "Course à pied",
+    "Photographie",
+    "Contributions à des projets open source en data"
   ],
   "labels": {
     "section_profile": "Profil",

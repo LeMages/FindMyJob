@@ -49,12 +49,12 @@ fn lettre_balisee_redonne_les_zones_de_la_reference() {
 fn cv_balise_decoupe_titre_et_resume() {
     let markup = parse_markup(&read_reference("tagged/cv_balise.typ")).expect("balisage valide");
     let fields = vec![
-        ProseField { path: "identity.title".into(), text: "Étudiant Ingénieur Data Engineering & Machine Learning".into() },
+        ProseField { path: "identity.title".into(), text: "Étudiant Ingénieur Informatique, spécialité Data & Cloud".into() },
         ProseField {
             path: "summary".into(),
-            text: "Étudiant ingénieur en dernière année à l'Efrei Paris (niveau Master), spécialisé en Data \
-                   Engineering et Machine Learning. 6 mois d'expérience en entreprise sur le forecasting de séries \
-                   temporelles à grande échelle et des systèmes RAG en production, de la donnée brute jusqu'à l'API."
+            text: "Étudiant ingénieur en dernière année à l'École Supérieure du Numérique de Lyon (niveau Master), \
+                   spécialisé en Data et Cloud. 6 mois d'expérience en entreprise sur des pipelines de données \
+                   logistiques et des tableaux de bord de pilotage, de l'ingestion jusqu'à la restitution."
                 .into(),
         },
     ];

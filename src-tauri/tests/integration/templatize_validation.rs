@@ -136,8 +136,7 @@ async fn cv_balise_template_conforme_accepte() {
     let cv = reference("cv_balise.typ", "cv");
     let verdict = verdict(&cv, "cv_balise_example_data.json", &template("cv_balise_template.typ")).await;
     assert!(verdict.problems.is_empty(), "problèmes :\n- {}", verdict.problems.join("\n- "));
-    assert_eq!(verdict.page_count, Some(cv.rendered.page_count));
-}
+    assert_eq!(verdict.page_count, Some(cv.rendered.page_count));}
 
 #[tokio::test]
 async fn lettre_balisee_template_conforme_acceptee() {
@@ -173,9 +172,9 @@ async fn texte_retire_situe_dans_sa_phrase() {
 async fn nom_en_dur_refuse() {
     let cv = reference("cv_balise.typ", "cv");
     let template = template("cv_balise_template.typ")
-        .replace("upper(joined((data.identity.prenom, data.identity.nom), \" \"))", "\"CAMILLE EXEMPLE\"");
+        .replace("upper(joined((data.identity.prenom, data.identity.nom), \" \"))", "\"ANTOINE DUPONT\"");
     let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
-    let expected = |p: &String| p.contains("écrites en dur") && p.contains("« Camille »");
+    let expected = |p: &String| p.contains("écrites en dur") && p.contains("« Antoine »");
     assert!(verdict.problems.iter().any(expected), "{:?}", verdict.problems);
 }
 
