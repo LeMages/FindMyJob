@@ -1,1 +1,1 @@
-Rendu avec example_data, le texte diffère de la référence. Rien de la référence n'est retiré : un texte sans champ dans le schéma reste écrit en dur dans le template. Mots de la référence absents du rendu : aucun. Mots du rendu absents de la référence : "74300,".
+Rendu avec example_data, le texte diffère de la référence. Rien de la référence n'est retiré : un texte sans champ dans le schéma reste écrit en dur dans le template. Mots de la référence absents du rendu : aucun. Mots du rendu absents de la référence : "69003,".

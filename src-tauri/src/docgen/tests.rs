@@ -248,7 +248,7 @@ fn lm_layout<'a>(document: &'a LmData, labels: &'a LmLabels) -> LmLayout<'a> {
 fn le_document_complete_l_identite_que_le_profil_n_a_pas() {
     let mut profile = profile();
     profile.user.telephone = None;
-    profile.user.ville = Some("Thyez".to_string());
+    profile.user.ville = Some("Lyon".to_string());
     let document = CvData {
         identity: Identity {
             telephone: "+41 00 000 00 00".to_string(),
@@ -261,7 +261,7 @@ fn le_document_complete_l_identite_que_le_profil_n_a_pas() {
 
     let data = cv_data(&profile, &select(&profile, &[]), &document);
 
-    assert_eq!(data.identity.ville, "Thyez", "le profil prime sur le document");
+    assert_eq!(data.identity.ville, "Lyon", "le profil prime sur le document");
     assert_eq!(data.identity.telephone, "+41 00 000 00 00", "profil vide : valeur du document");
     assert_eq!(data.identity.portfolio, "exemple.invalid");
 }
@@ -410,18 +410,18 @@ fn lm_text(ville: &str, zip_code: &str) -> String {
 
 #[test]
 fn lettre_ville_et_code_postal_dans_l_en_tete_ville_seule_dans_la_date() {
-    let text = lm_text("Thyez", "74300");
-    assert!(text.contains("Thyez, 74300"), "{text}");
-    assert!(text.contains("Thyez, le 9 octobre 2026"), "{text}");
-    assert!(!text.contains("74300, le"), "le code postal n'est pas dans la ligne de date : {text}");
+    let text = lm_text("Lyon", "69003");
+    assert!(text.contains("Lyon, 69003"), "{text}");
+    assert!(text.contains("Lyon, le 9 octobre 2026"), "{text}");
+    assert!(!text.contains("69003, le"), "le code postal n'est pas dans la ligne de date : {text}");
 }
 
 #[test]
 fn lettre_sans_ville_ni_separateur_orphelin() {
-    let text = lm_text("", "74300");
+    let text = lm_text("", "69003");
     assert!(text.contains("le 9 octobre 2026"), "{text}");
     assert!(!text.contains(", le"), "pas de virgule orpheline devant la date : {text}");
-    assert!(!text.contains(", 74300"), "pas de virgule orpheline devant le code postal : {text}");
+    assert!(!text.contains(", 69003"), "pas de virgule orpheline devant le code postal : {text}");
 }
 
 #[test]

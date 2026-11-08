@@ -154,7 +154,7 @@ fn normalisation_des_incises_en_paragraphe() {
 #[test]
 fn normalisation_des_champs_courts() {
     let s = |text: &str| normalize_dashes(text, DashContext::Short);
-    assert_eq!(s("Fondateur — Framework de forecasting"), "Fondateur - Framework de forecasting");
+    assert_eq!(s("Fondateur — Plateforme de covoiturage"), "Fondateur - Plateforme de covoiturage");
     assert_eq!(s("ALGN – Autonomous Legal Graph Navigator"), "ALGN - Autonomous Legal Graph Navigator");
     assert_eq!(s("Stage -- 6 mois"), "Stage - 6 mois");
     assert_eq!(s("Stage --- 6 mois"), "Stage - 6 mois");
@@ -209,7 +209,7 @@ fn normalisation_de_toutes_les_chaines_du_data_json() {
         "identity": { "title": "Data — ML", "email": "a--b@example.com", "linkedin": "linkedin.com/in/a--b" },
         "summary": "Un profil — rigoureux — et curieux.",
         "experiences": [{ "poste": "Fondateur — Framework", "period": "2022 – 2027", "bullets": ["Un pipeline -- robuste."] }],
-        "formations": [{ "titre": "Diplôme — Spécialité", "details": ["Échange – Université Concordia"] }],
+        "formations": [{ "titre": "Diplôme — Spécialité", "details": ["Échange – Université de Lisbonne"] }],
         "skills_groups": [{ "category": "Data -- ML", "skills": ["SQL"] }],
         "paragraphs": ["Mon stage — en production — a duré six mois."],
         "subject": "Candidature – Stage",
@@ -225,7 +225,7 @@ fn normalisation_de_toutes_les_chaines_du_data_json() {
     assert_eq!(data["experiences"][0]["period"], "2022 - 2027");
     assert_eq!(data["experiences"][0]["bullets"][0], "Un pipeline, robuste.");
     assert_eq!(data["formations"][0]["titre"], "Diplôme - Spécialité");
-    assert_eq!(data["formations"][0]["details"][0], "Échange, Université Concordia");
+    assert_eq!(data["formations"][0]["details"][0], "Échange, Université de Lisbonne");
     assert_eq!(data["skills_groups"][0]["category"], "Data - ML");
     assert_eq!(data["paragraphs"][0], "Mon stage, en production, a duré six mois.");
     assert_eq!(data["subject"], "Candidature - Stage");
@@ -235,9 +235,9 @@ fn normalisation_de_toutes_les_chaines_du_data_json() {
 
 #[test]
 fn normalisation_du_message_de_candidature() {
-    let message = "Objet : Candidature stage AI Engineer — Loïc Cupif\n\nMadame, Monsieur,\nMon stage — en production — a duré six mois.";
+    let message = "Objet : Candidature stage AI Engineer — Antoine Dupont\n\nMadame, Monsieur,\nMon stage — en production — a duré six mois.";
     assert_eq!(
         normalize_application_message(message),
-        "Objet : Candidature stage AI Engineer - Loïc Cupif\n\nMadame, Monsieur,\nMon stage, en production, a duré six mois."
+        "Objet : Candidature stage AI Engineer - Antoine Dupont\n\nMadame, Monsieur,\nMon stage, en production, a duré six mois."
     );
 }

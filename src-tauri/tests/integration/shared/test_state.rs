@@ -56,7 +56,7 @@ pub struct TestApp {
 pub async fn app(name: &str) -> TestApp {
     let data_dir = unique_temp_dir(name);
     let llm = Arc::new(FakeLlm::default());
-    // Les références réelles demandent Arimo : elle est déjà importée.
+    // Les références balisées demandent Arimo : elle est déjà importée.
     let fonts_dir = storage_paths::fonts_dir(&data_dir);
     install_reference_font(&fonts_dir);
     let state = AppState {

@@ -1,7 +1,7 @@
 //! Tests : polices à la compilation Typst. Une police importée dans
 //! `fonts_dir` est utilisée sans avertissement et embarquée dans le PDF ; une
 //! famille introuvable fait échouer la compilation au lieu d'un repli
-//! silencieux sur la police par défaut ; la police des références réelles
+//! silencieux sur la police par défaut ; la police des références balisées
 //! couvre tous leurs caractères.
 
 // Importation des modules internes
@@ -40,12 +40,12 @@ fn police_importee_utilisee_sans_avertissement() {
 }
 
 /// Garde-fou du sous-ensemble `fonts/arimo_reference/` : chaque référence
-/// réelle qui demande Arimo compile sans avertissement de police, et chaque
+/// balisée qui demande Arimo compile sans avertissement de police, et chaque
 /// glyphe vient d'Arimo. Un caractère absent du sous-ensemble ferait
 /// apparaître une police de repli dans le PDF au lieu de passer en silence.
 #[test]
-fn references_reelles_entierement_rendues_en_arimo() {
-    for reference in ["real/cv_balise.typ", "real/lm_balisee.typ"] {
+fn references_balisees_entierement_rendues_en_arimo() {
+    for reference in ["tagged/cv_balise.typ", "tagged/lm_balisee.typ"] {
         let root = unique_temp_dir("typst-fonts-arimo-reference");
         let fonts = root.join("polices");
         install_reference_font(&fonts);

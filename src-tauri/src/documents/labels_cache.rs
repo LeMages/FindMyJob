@@ -135,7 +135,7 @@ fn cv_problems(example: &CvLabels, labels: &CvLabels) -> Vec<String> {
 }
 
 /// Valide des libellés de lettre traduits. `date_prefix` peut être vidé :
-/// l'anglais n'a pas d'équivalent au « le » de « Thyez, le 13 octobre ».
+/// l'anglais n'a pas d'équivalent au « le » de « Lyon, le 13 octobre ».
 fn lm_problems(example: &LmLabels, labels: &LmLabels) -> Vec<String> {
     emptied(&[
         ("subject_prefix", &example.subject_prefix, &labels.subject_prefix),

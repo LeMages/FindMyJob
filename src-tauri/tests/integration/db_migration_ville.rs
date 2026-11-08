@@ -51,7 +51,7 @@ fn expected(ville: Option<&str>, zip_code: Option<&str>) -> (Option<String>, Opt
 async fn code_postal_fr_suivi_de_la_ville() {
     assert_eq!(migrate(Some("1 rue de l'Exemple, 69000 Lyon")).await, expected(Some("Lyon"), Some("69000")));
     assert_eq!(migrate(Some("12 rue des Lilas\n69003 Lyon")).await, expected(Some("Lyon"), Some("69003")));
-    assert_eq!(migrate(Some("74300 Thyez, France")).await, expected(Some("Thyez"), Some("74300")));
+    assert_eq!(migrate(Some("69003 Lyon, France")).await, expected(Some("Lyon"), Some("69003")));
 }
 
 #[tokio::test]
@@ -61,14 +61,14 @@ async fn code_postal_ch_suivi_de_la_ville() {
 
 #[tokio::test]
 async fn ville_avant_le_code_postal() {
-    assert_eq!(migrate(Some("Thyez, 74300")).await, expected(Some("Thyez"), Some("74300")));
-    assert_eq!(migrate(Some("12 rue X, 74300")).await, expected(None, Some("74300")));
+    assert_eq!(migrate(Some("Lyon, 69003")).await, expected(Some("Lyon"), Some("69003")));
+    assert_eq!(migrate(Some("12 rue X, 69003")).await, expected(None, Some("69003")));
 }
 
 #[tokio::test]
 async fn ville_seule() {
     assert_eq!(migrate(Some("  Lyon ")).await, expected(Some("Lyon"), None));
-    assert_eq!(migrate(Some("Saint-Julien-en-Genevois")).await, expected(Some("Saint-Julien-en-Genevois"), None));
+    assert_eq!(migrate(Some("Villeurbanne")).await, expected(Some("Villeurbanne"), None));
 }
 
 #[tokio::test]

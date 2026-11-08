@@ -152,7 +152,7 @@ async fn aucun_tiret_interdit_dans_les_documents_generes() {
     // profil : la base n'est pas modifiée, seul le rendu l'est.
     app.llm.respond_with(Step::LmContent, Reply::Fixture("lm_content_double_tiret.json"));
     let pool = &app.state.pool;
-    sqlx::query("UPDATE experiences SET poste = 'Fondateur — Framework de forecasting' WHERE id = 1")
+    sqlx::query("UPDATE experiences SET poste = 'Fondateur — Plateforme de covoiturage' WHERE id = 1")
         .execute(pool)
         .await
         .expect("poste avec tiret");
@@ -171,13 +171,13 @@ async fn aucun_tiret_interdit_dans_les_documents_generes() {
     let (lm_raw, lm) = read_data(&app.state, sid, "lettre_motivation", cid);
     assert_no_dash_in_data("CV", &cv);
     assert_no_dash_in_data("lettre", &lm);
-    assert_eq!(cv["experiences"][0]["poste"], "Fondateur - Framework de forecasting");
+    assert_eq!(cv["experiences"][0]["poste"], "Fondateur - Plateforme de covoiturage");
     assert_eq!(cv["projects"][0]["titre"], "ALGN - Autonomous Legal Graph Navigator");
     assert_eq!(lm["subject"], "Candidature, stage de data engineer");
     let paragraph = lm["paragraphs"][1].as_str().expect("paragraphe");
     assert!(paragraph.contains("pipelines SQL, un travail proche"), "{paragraph}");
     let profile = db::profile::build_profile(pool).await.expect("profil");
-    assert_eq!(profile.experiences[0].poste, "Fondateur — Framework de forecasting", "base inchangée");
+    assert_eq!(profile.experiences[0].poste, "Fondateur — Plateforme de covoiturage", "base inchangée");
 
     // ------------------------------------------------------------------
     // 2. Texte rendu : aucun tiret interdit non plus
