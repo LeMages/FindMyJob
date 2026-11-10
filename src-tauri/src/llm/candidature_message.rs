@@ -18,6 +18,7 @@ const RULES_COMMUNES: &str = "Règles strictes :\n\
 - Tu ne peux que reformuler ce qui existe dans le profil, JAMAIS inventer une compétence, une expérience ou un projet\n\
 - Pas de placeholder du type [Nom] ou [Entreprise] : utilise les informations fournies\n\
 - Pas de formatage markdown (pas de **gras**, pas de listes à puces) : uniquement du texte brut\n\
+- N'écris jamais « — » (tiret cadratin), « – » (tiret demi-cadratin), « --- » ni « -- » : à leur place, mets une virgule ou des parenthèses pour une incise, un deux-points pour une précision, un point pour séparer deux idées, un trait d'union simple (-) entre deux nombres\n\
 - Ne signe qu'avec le prénom et le nom du candidat, sans coordonnées supplémentaires en signature";
 
 /// Formule d'appel quand un contact destinataire est connu : son nom tel

@@ -5,15 +5,15 @@
 
 // Importation des modules internes
 use crate::docgen::fixed_zones::{fixed_zone_violations, transform_outside_fixed, without_fixed_text};
-use crate::docgen::lint::{lint_prose, strip_forbidden_marks, Violation};
+use crate::docgen::lint::{lint_prose, strip_dashes, Violation};
 use crate::models::{ProseField, ProseGuidance};
 
 /// Ce que la revue de la prose doit savoir de la référence.
 ///
 /// # Attributes
 ///
-/// * `example_prose` - Prose de la référence : une marque ou une formule
-///   qui y figure est autorisée.
+/// * `example_prose` - Prose de la référence : une formule qui y figure
+///   est autorisée (jamais une marque).
 /// * `guidance` - Consignes de la référence, champs aux chemins du contenu
 ///   rédigé.
 /// * `information` - Informations des données d'exemple, qu'une zone fixe
@@ -54,6 +54,6 @@ impl ProseChecks {
     /// Texte nettoyé.
     pub fn clean(&self, path: &str, text: &str) -> String {
         let fixed: Vec<&str> = self.guidance.fixed_texts(path).collect();
-        transform_outside_fixed(text, &fixed, |part| strip_forbidden_marks(part, &self.example_prose))
+        transform_outside_fixed(text, &fixed, strip_dashes)
     }
 }

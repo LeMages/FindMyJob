@@ -12,7 +12,8 @@ import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { t } from '@/i18n'
 import type { ThemeSetting } from '@/types'
 
 const theme = ref<ThemeSetting>('systeme')
@@ -72,7 +73,7 @@ export async function setTheme(value: ThemeSetting): Promise<string | null> {
     await invoke('set_theme', { theme: value })
     return null
   } catch (e: unknown) {
-    return extractErrorMessage(e, "Impossible d'enregistrer le thème.")
+    return backendErrorMessage(e, t('error.fallback.save_theme'))
   }
 }
 

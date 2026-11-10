@@ -12,6 +12,7 @@ import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
+import { t } from '@/i18n'
 import { currentSession } from '@/stores/app'
 import type { DocumentsStatus } from '@/types'
 
@@ -44,13 +45,19 @@ const documentsBlocking = computed(() =>
   currentSession.value != null && documentsStatus.value !== null && !documentsStatus.value.all_ready
 )
 
-/** Liste les documents de référence manquants pour la session courante, pour affichage. */
+/**
+ * Liste les documents de référence manquants pour la session courante, pour
+ * affichage (re-traduit au changement de langue, `t` étant réactif).
+ */
 const missingDocumentsMessage = computed(() => {
-  if (!documentsStatus.value) return ''
-  const missing: string[] = []
-  if (!documentsStatus.value.cv_ready) missing.push('le CV')
-  if (!documentsStatus.value.lm_ready) missing.push('la lettre de motivation')
-  return `Document(s) de référence manquant(s) ou non analysé(s) : ${missing.join(' et ')}.`
+  const status = documentsStatus.value
+  if (!status) return ''
+  let list: string
+  if (!status.cv_ready && !status.lm_ready) list = t('documents.missing.both')
+  else if (!status.cv_ready) list = t('documents.missing.cv')
+  else if (!status.lm_ready) list = t('documents.missing.lm')
+  else list = ''
+  return t('documents.missing.message', { list })
 })
 
 /**

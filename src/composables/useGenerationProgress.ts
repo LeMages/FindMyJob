@@ -10,7 +10,8 @@ import { ref, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { t } from '@/i18n'
 import type { GenerationProgress } from '@/types'
 
 const POLL_INTERVAL_MS = 2000
@@ -44,7 +45,7 @@ export function useGenerationProgress() {
         progress.value = next
         if (next.status !== 'in_progress') stop()
       } catch (e: unknown) {
-        pollError.value = extractErrorMessage(e, 'Erreur de suivi de la génération des documents.')
+        pollError.value = backendErrorMessage(e, t('error.fallback.generation_tracking'))
         stop()
       }
     }, POLL_INTERVAL_MS)

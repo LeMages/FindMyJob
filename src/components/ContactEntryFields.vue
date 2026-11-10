@@ -8,9 +8,12 @@
 
 // Importation des modules Vue / framework
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 // Importation des modules internes
 import type { ContactDraft, ContactView } from '@/types'
+
+const { t } = useI18n()
 
 const draft = defineModel<ContactDraft>({ required: true })
 
@@ -56,18 +59,18 @@ const MODE_IDLE = 'border-neutral-300 bg-surface-2 text-neutral-900 hover:bg-sur
         type="button"
         :class="[MODE_CLASS, draft.mode === 'existing' ? MODE_ACTIVE : MODE_IDLE]"
         @click="setMode('existing')"
-      >Contact existant</button>
+      >{{ t('contact_form.existing') }}</button>
       <button
         type="button"
         :class="[MODE_CLASS, draft.mode === 'new' ? MODE_ACTIVE : MODE_IDLE]"
         @click="setMode('new')"
-      >Nouveau contact</button>
+      >{{ t('contact_form.new') }}</button>
     </div>
 
     <div v-if="showModeChoice && draft.mode === 'existing'" class="mb-[14px]">
-      <label class="text-[12px] text-neutral-600 mb-[5px] block">Contact du carnet <span class="text-red-500 font-semibold">*</span></label>
+      <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('contact_form.from_book') }} <span class="text-red-500 font-semibold">*</span></label>
       <select v-model="draft.contact_id" :class="INPUT_CLASS">
-        <option :value="null" disabled>Choisir un contact…</option>
+        <option :value="null" disabled>{{ t('contact_form.pick') }}</option>
         <option v-for="c in availableContacts" :key="c.id" :value="c.id">
           {{ c.nom }}{{ c.role ? ` — ${c.role}` : '' }}{{ c.email ? ` (${c.email})` : '' }}
         </option>
@@ -77,30 +80,30 @@ const MODE_IDLE = 'border-neutral-300 bg-surface-2 text-neutral-900 hover:bg-sur
     <template v-else>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Nom <span class="text-red-500 font-semibold">*</span></label>
-          <input v-model="draft.nom" :class="INPUT_CLASS" placeholder="Prénom Nom" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('contact_form.name') }} <span class="text-red-500 font-semibold">*</span></label>
+          <input v-model="draft.nom" :class="INPUT_CLASS" :placeholder="t('contact_form.name_placeholder')" />
         </div>
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Rôle</label>
-          <input v-model="draft.role" :class="INPUT_CLASS" placeholder="Ex. Chargé·e de recrutement" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('contact_form.role') }}</label>
+          <input v-model="draft.role" :class="INPUT_CLASS" :placeholder="t('contact_form.role_placeholder')" />
         </div>
       </div>
       <div class="flex gap-[14px]">
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Email</label>
-          <input v-model="draft.email" type="email" :class="INPUT_CLASS" placeholder="contact@entreprise.com" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('contact_form.email') }}</label>
+          <input v-model="draft.email" type="email" :class="INPUT_CLASS" :placeholder="t('contact_form.email_placeholder')" />
         </div>
         <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">Téléphone</label>
-          <input v-model="draft.telephone" type="tel" :class="INPUT_CLASS" placeholder="06 00 00 00 00" />
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('contact_form.phone') }}</label>
+          <input v-model="draft.telephone" type="tel" :class="INPUT_CLASS" :placeholder="t('contact_form.phone_placeholder')" />
         </div>
       </div>
       <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">Notes</label>
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('contact_form.notes') }}</label>
         <textarea
           v-model="draft.notes"
           class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-20"
-          placeholder="Rencontré au salon, préfère être contacté par mail..."
+          :placeholder="t('contact_form.notes_placeholder')"
         />
       </div>
     </template>

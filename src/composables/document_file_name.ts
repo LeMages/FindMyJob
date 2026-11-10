@@ -39,7 +39,7 @@ export function sanitizeFileNamePart(str: string | null | undefined): string {
  * @param firstName - Prénom de l'utilisateur.
  * @param company - Entreprise de la candidature.
  * @param jobTitle - Intitulé du poste.
- * @returns Nom de fichier, ex. `CV_Cupif_Loic_Google_Data_Engineer.pdf`.
+ * @returns Nom de fichier, ex. `CV_Dupont_Antoine_Google_Data_Engineer.pdf`.
  */
 export function buildDocumentFileName(
   docType: DownloadDocType,

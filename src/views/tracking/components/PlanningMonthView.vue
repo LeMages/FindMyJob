@@ -6,6 +6,7 @@
 
 // Importation des modules Vue / framework
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 // Importation des modules internes
 import { interviewStatusDotColor, interviewTypeColor } from '@/composables/candidature_display'
@@ -22,7 +23,12 @@ const emit = defineEmits<{ select: [interview: PlanningInterviewView] }>()
 /** Nombre maximum de chips affichées par jour avant de replier le reste sous « +N ». */
 const MAX_CHIPS_PER_DAY = 3
 
-const NOMS_JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+const { t } = useI18n()
+
+/** En-têtes de colonnes : la semaine commence toujours le lundi, quelle que soit la langue. */
+const NOMS_JOURS = computed(() =>
+  (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map((key) => t(`common.weekdays.short.${key}`)),
+)
 
 const days = computed(() => monthGridDays(props.monthAnchor))
 
@@ -90,7 +96,7 @@ function inCurrentMonth(day: Date): boolean {
             @click="emit('select', entry.interview)"
           >
             <span v-if="entry.statusDot" class="w-1.5 h-1.5 rounded-full flex-none" :class="interviewStatusDotColor(entry.statusDot)" />
-            <span class="truncate min-w-0 flex-1"><span class="font-mono">{{ formatTime(entry.date) }}</span> {{ entry.interview.entreprise ?? 'Entreprise inconnue' }}</span>
+            <span class="truncate min-w-0 flex-1"><span class="font-mono">{{ formatTime(entry.date) }}</span> {{ entry.interview.entreprise ?? t('common.unknown_company') }}</span>
           </div>
           <div v-if="itemsForDay(day).length > MAX_CHIPS_PER_DAY" class="text-[10.5px] text-neutral-500 px-[6px]">
             +{{ itemsForDay(day).length - MAX_CHIPS_PER_DAY }}

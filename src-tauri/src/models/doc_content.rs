@@ -49,12 +49,17 @@ pub struct ProseField {
 }
 
 impl CvContent {
-    /// Liste les champs de prose du CV (titre, résumé).
+    /// Liste les champs de prose du CV (titre, résumé, catégories des
+    /// groupes de compétences).
     pub fn prose_fields(&self) -> Vec<ProseField> {
-        vec![
+        let mut fields = vec![
             ProseField { path: "title".to_string(), text: self.title.clone() },
             ProseField { path: "summary".to_string(), text: self.summary.clone() },
-        ]
+        ];
+        for (i, group) in self.skills_groups.iter().enumerate() {
+            fields.push(ProseField { path: format!("skills_groups[{i}].category"), text: group.category.clone() });
+        }
+        fields
     }
 
     /// Applique une transformation à chaque champ de prose ; elle reçoit le
@@ -62,6 +67,9 @@ impl CvContent {
     pub fn map_prose(&mut self, transform: impl Fn(&str, &str) -> String) {
         self.title = transform("title", &self.title);
         self.summary = transform("summary", &self.summary);
+        for (i, group) in self.skills_groups.iter_mut().enumerate() {
+            group.category = transform(&format!("skills_groups[{i}].category"), &group.category);
+        }
     }
 }
 

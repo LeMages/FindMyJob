@@ -1,5 +1,5 @@
 //! Tests : validation des deux étapes de la templatisation sur les
-//! références réelles (anonymisées et balisées), avec des sorties écrites à
+//! références balisées (fictives), avec des sorties écrites à
 //! la main : données d'exemple (étape A) et template (étape B).
 
 // Importation des modules standard
@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 // Importation des modules internes
 use crate::shared::fake_llm::read_reference;
+use crate::shared::font_fixtures::install_reference_font;
 use crate::shared::temp_dir::unique_temp_dir;
 use findmyjob_lib::documents::example_check::{check_example, CheckedExample, ExampleContext};
 use findmyjob_lib::documents::markup::parse_markup;
@@ -14,7 +15,7 @@ use findmyjob_lib::documents::template_check::{check_template, TemplateContext, 
 use findmyjob_lib::documents::typst::{compile_document, CompiledDocument};
 use findmyjob_lib::models::ZoneMode;
 
-/// Référence réelle compilée, avec son dossier de compilation.
+/// Référence balisée compilée, avec son dossier de compilation.
 struct Reference {
     source: String,
     rendered: CompiledDocument,
@@ -23,11 +24,12 @@ struct Reference {
     fonts: PathBuf,
 }
 
-/// Compile une référence de `references/real/`.
+/// Compile une référence de `references/tagged/`.
 fn reference(name: &str, doc_type: &'static str) -> Reference {
     let root = unique_temp_dir("templatize-validation");
     let fonts = root.join("polices");
-    let source = read_reference(&format!("real/{name}"));
+    install_reference_font(&fonts);
+    let source = read_reference(&format!("tagged/{name}"));
     let rendered = compile_document(source.clone(), root.clone(), fonts.clone()).expect("la référence compile");
     Reference { source, rendered, doc_type, root, fonts }
 }
@@ -44,9 +46,9 @@ fn check(reference: &Reference, example: &serde_json::Value) -> Result<CheckedEx
     check_example(example, &context)
 }
 
-/// Données d'exemple d'une fixture réelle.
+/// Données d'exemple d'une fixture balisée.
 fn example(name: &str) -> serde_json::Value {
-    serde_json::from_str(&read_reference(&format!("real/{name}"))).expect("données d'exemple JSON")
+    serde_json::from_str(&read_reference(&format!("tagged/{name}"))).expect("données d'exemple JSON")
 }
 
 /// Valide un template (étape B) avec les données d'exemple de la fixture.
@@ -62,9 +64,9 @@ async fn verdict(reference: &Reference, example_name: &str, template: &str) -> T
     check_template(template, &checked, &context).await.expect("validation sans erreur interne")
 }
 
-/// Template d'une fixture réelle, fins de ligne normalisées.
+/// Template d'une fixture balisée, fins de ligne normalisées.
 fn template(name: &str) -> String {
-    read_reference(&format!("real/{name}")).replace("\r\n", "\n")
+    read_reference(&format!("tagged/{name}")).replace("\r\n", "\n")
 }
 
 // ======================================================================
@@ -72,7 +74,7 @@ fn template(name: &str) -> String {
 // ======================================================================
 
 #[test]
-fn lettre_reelle_donnees_textes_et_consignes() {
+fn lettre_balisee_donnees_textes_et_consignes() {
     let lm = reference("lm_balisee.typ", "lettre_motivation");
     let checked = check(&lm, &example("lm_balisee_example_data.json")).expect("données valides");
     assert_eq!(checked.lang, "fr");
@@ -84,7 +86,7 @@ fn lettre_reelle_donnees_textes_et_consignes() {
 }
 
 #[test]
-fn cv_reel_textes_en_dur_identifies() {
+fn cv_balise_textes_en_dur_identifies() {
     let cv = reference("cv_balise.typ", "cv");
     let checked = check(&cv, &example("cv_balise_example_data.json")).expect("données valides");
     let texts: Vec<&String> = checked.texts.values().collect();
@@ -130,18 +132,20 @@ fn tous_les_problemes_rapportes_ensemble() {
 // ======================================================================
 
 #[tokio::test]
-async fn cv_reel_template_conforme_accepte() {
+async fn cv_balise_template_conforme_accepte() {
     let cv = reference("cv_balise.typ", "cv");
     let verdict = verdict(&cv, "cv_balise_example_data.json", &template("cv_balise_template.typ")).await;
     assert!(verdict.problems.is_empty(), "problèmes :\n- {}", verdict.problems.join("\n- "));
-    assert_eq!(verdict.page_count, Some(cv.rendered.page_count));
-}
+    assert_eq!(verdict.page_count, Some(cv.rendered.page_count));}
 
 #[tokio::test]
-async fn lettre_reelle_template_conforme_acceptee() {
+async fn lettre_balisee_template_conforme_acceptee() {
     let lm = reference("lm_balisee.typ", "lettre_motivation");
     let verdict = verdict(&lm, "lm_balisee_example_data.json", &template("lm_balisee_template.typ")).await;
     assert!(verdict.problems.is_empty(), "problèmes :\n- {}", verdict.problems.join("\n- "));
+    // La consigne de la référence impose une lettre d'une page.
+    assert_eq!(lm.rendered.page_count, 1);
+    assert_eq!(verdict.page_count, Some(1));
 }
 
 #[tokio::test]
@@ -168,9 +172,9 @@ async fn texte_retire_situe_dans_sa_phrase() {
 async fn nom_en_dur_refuse() {
     let cv = reference("cv_balise.typ", "cv");
     let template = template("cv_balise_template.typ")
-        .replace("upper(joined((data.identity.prenom, data.identity.nom), \" \"))", "\"CAMILLE EXEMPLE\"");
+        .replace("upper(joined((data.identity.prenom, data.identity.nom), \" \"))", "\"ANTOINE DUPONT\"");
     let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
-    let expected = |p: &String| p.contains("écrites en dur") && p.contains("« Camille »");
+    let expected = |p: &String| p.contains("écrites en dur") && p.contains("« Antoine »");
     assert!(verdict.problems.iter().any(expected), "{:?}", verdict.problems);
 }
 

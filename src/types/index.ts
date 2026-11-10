@@ -483,8 +483,23 @@ export interface TestConnectionResult {
 
 // ── Polices ───────────────────────────────────────────────────────────────────
 
-/** Famille de polices importée par l'utilisateur pour la compilation Typst. */
-export interface FontFamilyView {
+/** Famille de polices lue dans les métadonnées des fichiers importés. */
+export interface FontFamilyInfo {
+  /** Nom de famille exact, à écrire dans `font:`. */
   name: string
-  file_count: number
+  /** Variantes disponibles (ex. `400`, `700 italique`, `400–700`). */
+  variants: string[]
 }
+
+/** Dossier de polices importé par l'utilisateur pour la compilation Typst. */
+export interface FontFolderView {
+  /** Nom du sous-dossier : identifiant de suppression, non affiché comme nom de police. */
+  folder: string
+  families: FontFamilyInfo[]
+  file_count: number
+  /** Familles déjà fournies par Typst ou par le système. */
+  shadowed_families: string[]
+}
+
+/** Langue de l'interface (indépendante de la langue des documents générés). */
+export type UiLanguage = 'fr' | 'en'

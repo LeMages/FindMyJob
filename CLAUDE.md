@@ -38,6 +38,7 @@ The Rust side (`src-tauri/`) is the single source of truth for business rules (s
 | Claude call traces (model, tokens, duration, request id, prompts) | `src-tauri/src/llm/call_record.rs`; generation `debug/<cid>/llm_calls.json`, DEV `templatize_debug/` |
 | Tauri commands | `src-tauri/src/commands/*.rs`, one file per domain, registered in `lib.rs` (`generate_handler!`) |
 | TypeScript types | `src/types/index.ts` (hand-mirrored from `src-tauri/src/models`, no codegen) |
+| Interface language (FR / EN) | `src/i18n.ts` (`vue-i18n` instance, `t` for non-component code, `dateLocale()`), `src/locales/fr.ts` (reference) and `en.ts`, `src/composables/useUiLanguage.ts` (setting `ui_lang`), `src/composables/backend_error_message.ts` (backend messages shown in English) |
 | Vue views and components | `src/views/<view_name>/` (one folder per view) and `src/components/` (shared) |
 
 ## Code conventions
@@ -116,8 +117,9 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
 - **Test coverage.** `cargo test` covers HTML/Markdown-to-text conversion, the offer import's pure logic, the documents pipeline's pure logic, the `db` layer on in-memory SQLite and the file-handling services. It also runs service-level tests, at the level the Tauri commands call:
   - offer import by link (real reduced pages served by a local `wiremock` server, typed failures) and by capture (`offer_import.rs`);
   - CV/LM generation with real Typst compilation, empty-prose retries and failure cleanup (`generation.rs`), asymmetric budgets, page warnings and no fallback to the reference (`generation_budgets.rs`), full translation with real marked-up references and caches (`generation_translation.rs`);
-  - reference markup (`templatize_markup.rs`), step A/B validation on real references (`templatize_validation.rs`) and the two-step templatization loop replaying real failing outputs (`templatize_retries.rs`);
+  - reference markup (`templatize_markup.rs`), step A/B validation on tagged references (`templatize_validation.rs`) and the two-step templatization loop replaying real failing outputs (`templatize_retries.rs`);
   - the size of every structured output schema against the API grammar cap (`llm_schema_size.rs`);
+  - fonts: an imported fixture font used and embedded without warning, a missing family failing the compilation (`typst_fonts.rs`), and the font import (subfolders, `.ttc`, WOFF refusal, family names, homonyms) (`font_import.rs`);
   - profile, session and application-deletion lifecycles;
   - one end-to-end scenario (`end_to_end.rs`).
 
@@ -126,6 +128,7 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
   Helpers live in `src-tauri/tests/integration/shared/` (the pure-logic tests' shared fixtures in `src-tauri/tests/integration/common/`):
   - `fake_llm.rs` is an `LlmCaller` with canned answers from `tests/fixtures/llm/`, routed by output schema (the template step, without schema, by its system prompt); `Reply::Files` replays raw files, e.g. real failing templates; it records the model of each call;
   - `offer_server.rs` is the local HTTP server;
+  - `font_fixtures.rs` copies a fixture font folder (`tests/fixtures/fonts/`) into a test's folder;
   - `temp_dir.rs` gives each test a unique temporary folder;
   - `test_state.rs` builds an `AppState` (in-memory pool, temp data folder, fake keyring, fake LLM), seeds a profile and test references, and waits for a generation.
 
@@ -144,6 +147,11 @@ The main window is declared with `"create": false` in `tauri.conf.json` and buil
 
 ## Key conventions
 
-- All user-facing text is in French.
+- **Interface language (i18n).** The frontend is bilingual (French / English), the backend is not:
+  - every visible text in `src/` goes through `t()` (`useI18n()` in components, `t` from `@/i18n` elsewhere), `<i18n-t>` when the text contains markup; never a hard-coded string;
+  - `src/locales/fr.ts` is the reference; `en.ts` is typed `satisfies typeof fr`, so a missing or extra key fails `vue-tsc`. Every new key gets its French and English text in the same change;
+  - values stored in the database stay in French (statuses, sources, language levels…): only their displayed label is translated;
+  - the Rust backend is not translated: its messages are French; in English the UI shows a generic translated message followed by the original (`backendErrorMessage`, `backendTextMessage`);
+  - the interface language (`ui_lang` setting) is independent of the documents' language: CVs and cover letters always follow the offer's language.
 - The app's data (database, documents, fonts) lives in the Tauri app data folder, never inside the project tree.
 - The Anthropic API key is read from `ANTHROPIC_API_KEY` in `.env` in DEV mode, and from the system keyring in PROD mode (set from Paramètres). It is never hardcoded, committed or stored in the database. `.env` is gitignored; `.env.example` documents it without a value.

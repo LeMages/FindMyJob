@@ -5,7 +5,7 @@
 // Importation des modules internes
 use findmyjob_lib::docgen::budgets::{lm_budget, WordRange};
 use findmyjob_lib::docgen::fixed_zones::{fixed_zone_violations, transform_outside_fixed, without_fixed_text};
-use findmyjob_lib::docgen::lint::{lint_prose, strip_dashes, strip_forbidden_marks};
+use findmyjob_lib::docgen::lint::{lint_prose, strip_dashes};
 use findmyjob_lib::docgen::words::count_words;
 use findmyjob_lib::models::{LmData, ProseField, ProseGuidance, ProseZone, ZoneMode};
 
@@ -20,7 +20,7 @@ fn zone(field: &str, mode: ZoneMode, text: &str) -> ProseZone {
 }
 
 /// Dernier paragraphe de la lettre de référence : une zone fixe.
-const FIXED: &str = "Résidant à Thyez, à une quarantaine de minutes de Genève, je peux travailler en tant que frontalier.";
+const FIXED: &str = "Résidant à Lyon, je suis mobile et prêt à m'installer à proximité de votre site.";
 
 /// Consignes : paragraphe 0 découpé en une zone fixe puis une variable.
 fn guidance() -> ProseGuidance {
@@ -39,19 +39,19 @@ fn guidance() -> ProseGuidance {
 
 #[test]
 fn zone_fixe_recopiee_avec_une_information_mise_a_jour() {
-    let information = vec!["Thyez".to_string()];
-    let written = FIXED.replace("Thyez", "Annecy") + " Je postule chez Lumen.";
+    let information = vec!["Lyon".to_string()];
+    let written = FIXED.replace("Lyon", "Nantes") + " Je postule chez Lumen.";
     let violations = fixed_zone_violations(&guidance(), &[field("paragraphs[0]", &written)], &information);
     assert!(violations.is_empty(), "{violations:?}");
 }
 
 #[test]
 fn zone_fixe_reecrite_signalee() {
-    let information = vec!["Thyez".to_string()];
-    let written = "Je vis près de Genève et je peux être frontalier. Je postule chez Lumen.";
+    let information = vec!["Lyon".to_string()];
+    let written = "J'habite à Lyon et je peux déménager. Je postule chez Lumen.";
     let violations = fixed_zone_violations(&guidance(), &[field("paragraphs[0]", written)], &information);
     assert_eq!(violations.len(), 1);
-    assert!(violations[0].message.contains("[FIXE]") && violations[0].message.contains("\"quarantaine\""));
+    assert!(violations[0].message.contains("[FIXE]") && violations[0].message.contains("\"proximité\""));
 }
 
 #[test]
@@ -63,11 +63,11 @@ fn le_linter_ignore_le_texte_recopie() {
 }
 
 #[test]
-fn une_marque_de_la_reference_est_autorisee() {
+fn une_marque_de_la_reference_reste_interdite() {
     let fields = [field("subject", "Data Engineer – Stage")];
-    assert!(lint_prose(&fields, "Objet : Stagiaire – Stage de fin d'études").is_empty());
-    assert_eq!(strip_forbidden_marks("a – b — c", "x – y"), "a – b, c");
-    assert_eq!(strip_dashes("a – b"), "a, b");
+    let violations = lint_prose(&fields, "Objet : Stagiaire – Stage de fin d'études");
+    assert_eq!(violations.len(), 1, "la référence n'exempte aucune marque : {violations:?}");
+    assert_eq!(strip_dashes("a – b — c"), "a, b, c");
 }
 
 #[test]
