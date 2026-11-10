@@ -76,17 +76,17 @@
 
 // --- Header ---
 #align(center, {
-  text(size: 18pt, weight: "bold", fill: dark, "CAMILLE EXEMPLE")
+  text(size: 18pt, weight: "bold", fill: dark, "ANTOINE DUPONT")
   v(2pt)
   // [VARIABLE] Intitulé proche du poste visé, dans le vocabulaire de l'offre.
-  text(size: 10.5pt, fill: accent, "Étudiant Ingénieur Data Engineering & Machine Learning")
+  text(size: 10.5pt, fill: accent, "Étudiant Ingénieur Informatique, spécialité Data & Cloud")
   v(2pt)
   text(size: 9.5pt, weight: "bold", fill: dark, "Stage de fin d'études de 6 mois, disponible dès mars 2027")
   v(2pt)
   {
-    text(size: 9pt, fill: gray, "Thyez, 74300")
+    text(size: 9pt, fill: gray, "Lyon, 69003")
     sep
-    text(size: 9pt, fill: gray, "camille@exemple.invalid")
+    text(size: 9pt, fill: gray, "antoine.dupont@exemple.fr")
     sep
     text(size: 9pt, fill: gray, "+33 6 00 00 00 00")
     sep
@@ -94,11 +94,11 @@
   }
   v(1pt)
   {
-    text(size: 9pt, fill: gray, "linkedin.com/in/camille-exemple")
+    text(size: 9pt, fill: gray, "linkedin.com/in/antoine-dupont-exemple")
     sep
-    text(size: 9pt, fill: gray, "github.com/camille-exemple")
+    text(size: 9pt, fill: gray, "github.com/adupont-exemple")
     sep
-    text(size: 9pt, fill: gray, "camille-exemple.invalid")
+    text(size: 9pt, fill: gray, "antoine-dupont.exemple.fr")
   }
 })
 
@@ -107,45 +107,45 @@
 #block({
   set par(leading: 0.45em, justify: false)
   // [FIXE] Formation et spécialité.
-  text(size: 9.5pt, fill: gray)[Étudiant ingénieur en dernière année à l'Efrei Paris (niveau Master), spécialisé en Data Engineering et Machine Learning.
+  text(size: 9.5pt, fill: gray)[Étudiant ingénieur en dernière année à l'École Supérieure du Numérique de Lyon (niveau Master), spécialisé en Data et Cloud.
   // [ADAPTABLE] Expérience la plus pertinente pour l'offre, chiffres du profil.
-  6 mois d'expérience en entreprise sur le forecasting de séries temporelles à grande échelle et des systèmes RAG en production, de la donnée brute jusqu'à l'API.]
+  6 mois d'expérience en entreprise sur des pipelines de données logistiques et des tableaux de bord de pilotage, de l'ingestion jusqu'à la restitution.]
 })
 
 // --- Compétences Techniques ---
 #section-header("Compétences Techniques")
-#skill-line("Langages", "Python, SQL, Rust, JavaScript (Vue.js, Node.js)")
-#skill-line("Data & ML", "Pandas, NumPy, Polars, Scikit-learn, PyTorch, Darts, LangChain, RAG, LLM, OpenCV, YOLO")
-#skill-line("Data Engineering", "ETL, PostgreSQL, pgvector, MySQL, SQLite, Spark, Kafka, SAP Business Objects")
-#skill-line("Cloud & DevOps", "AWS (EC2, S3), Docker, Git, GitHub Actions, CI/CD, Linux/Bash")
-#skill-line("Développement", "Flask, Axum, Tauri, API REST")
+#skill-line("Langages", "Python, SQL, Java, TypeScript (React, Node.js)")
+#skill-line("Data & ML", "Pandas, NumPy, Scikit-learn, XGBoost, Prophet, Hugging Face, OpenCV, Power BI")
+#skill-line("Data Engineering", "ETL, Airflow, dbt, PostgreSQL, MongoDB, Snowflake, Spark, Kafka")
+#skill-line("Cloud & DevOps", "Azure (Data Factory, Blob Storage), Docker, Git, GitLab CI, Terraform, Linux")
+#skill-line("Développement", "FastAPI, Spring Boot, API REST")
 
 // --- Expérience Professionnelle ---
 #section-header("Expérience Professionnelle")
-#entry-header("Stage Ingénieur Data & IA", "Need4Viz, Paris", "11.2025 – 04.2026")
-#bullet-item[Déploiement d'un pipeline de forecasting sur 2 000+ séries temporelles SAP : R² de 0.70, Directional Accuracy de 80% (Transformer, Darts)]
-#bullet-item[Intégration d'un RAG dans l'outil de dataviz : 80% de réponses correctes sur le corpus client]
-#bullet-item[Conception des API REST et de l'interface web (Flask) intégrant les modèles en production]
+#entry-header("Stage Data Engineer", "Transvia Logistique, Lyon", "09.2025 – 02.2026")
+#bullet-item[Refonte du pipeline d'ingestion de 300+ entrepôts : traitement 40% plus rapide, < 1% d'erreurs (Airflow, dbt)]
+#bullet-item[Création de tableaux de bord de suivi des livraisons : adoptés par 5 équipes opérationnelles]
+#bullet-item[Développement d'API REST (FastAPI) exposant les indicateurs aux outils internes de planification]
 
 // --- Projets ---
 #section-header("Projets")
 
-#entry-header("RAG Juridique – Question-réponse sur textes de loi", "Efrei Paris", "2025 – 2026")
-#bullet-item[Mise en place d'un RAG interrogeant le CESEDA en langage naturel, livré à un client externe]
-#bullet-item[Construction du pipeline d'ingestion et de vectorisation des textes (Python, LangChain, PostgreSQL/pgvector)]
+#entry-header("Prévision de fréquentation – Vélos en libre-service", "École Supérieure du Numérique", "2025 – 2026")
+#bullet-item[Modélisation de la demande horaire sur 400 stations à partir de données ouvertes et météo, livrée à une collectivité]
+#bullet-item[Mise en place du pipeline de collecte et d'entraînement des modèles (Python, XGBoost, PostgreSQL, Airflow)]
 
-#entry-header("FindMyJob – Application de suivi de candidatures", "Projet personnel open source", "2026")
-#bullet-item[Création d'une app desktop (Rust, Tauri, SQLite) : extraction d'offres par LLM, génération de CV et lettres]
-#bullet-item[Migration de l'architecture Axum/PostgreSQL/Docker vers une app autonome, avec CI/CD GitHub Actions]
+#entry-header("DocFinder – Recherche sémantique dans des notices", "Projet personnel open source", "2026")
+#bullet-item[Conception d'une application web (TypeScript, FastAPI) : recherche en langage naturel dans des notices techniques]
+#bullet-item[Déploiement conteneurisé sur Azure avec Terraform, tests automatisés et CI/CD GitLab]
 
-#entry-header("Wild Dump Prevention – Détection par Computer Vision", "Efrei Paris", "2024 – 2025")
-#bullet-item[Entraînement d'un modèle YOLO/OpenCV (90% de précision sur 3 000 images) et dashboard web Flask]
+#entry-header("QualiVision – Détection de défauts par vision", "École Supérieure du Numérique", "2024 – 2025")
+#bullet-item[Entraînement d'un modèle de classification OpenCV (92% de précision sur 2 500 images) et interface de contrôle]
 
 // --- Formation ---
 #section-header("Formation")
 
-#entry-header("Diplôme d'ingénieur (niveau Master, CTI) – Data Engineering", "Efrei Paris", "2022 – 2027")
-#bullet-item[Échange universitaire – Université Concordia, Montréal, Canada (08.2024 – 12.2024)]
+#entry-header("Diplôme d'ingénieur (niveau Master, CTI) – Data & Cloud", "École Supérieure du Numérique", "2022 – 2027")
+#bullet-item[Semestre d'échange – Université de Lisbonne, Portugal (09.2024 – 01.2025)]
 
 // --- Langues & Centres d'intérêt ---
 #section-header("Langues & Centres d'Intérêt")
@@ -154,11 +154,11 @@
   text(fill: dark, "Langue maternelle")
   text(fill: light-gray, "  |  ")
   text(weight: "bold", fill: dark, "Anglais : ")
-  text(fill: dark, "B2, TOEIC 840/990 (échange universitaire au Canada)")
+  text(fill: dark, "C1, TOEIC 905/990 (semestre d'échange au Portugal)")
 })
 #block(below: space-line, {
   text(weight: "bold", fill: dark, "Intérêts : ")
-  text(fill: dark, "Handball, Formule 1, Projets personnels en Machine Learning et Intelligence Artificielle")
+  text(fill: dark, "Course à pied, Photographie, Contributions à des projets open source en data")
 })
 
 #v(8pt)

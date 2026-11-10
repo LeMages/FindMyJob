@@ -4,7 +4,20 @@
  * composants de `views/profile/components/`.
  */
 
-export const MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc']
+// Importation des modules internes
+import { t } from '@/i18n'
+
+/** Clés des mois abrégés (`common.months.short.<clé>`), de janvier à décembre. */
+const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const
+
+/**
+ * Mois abrégés dans la langue de l'interface, de janvier à décembre.
+ *
+ * @returns Douze libellés (re-traduits à chaque appel dans un rendu).
+ */
+export function months(): string[] {
+  return MONTH_KEYS.map((key) => t(`common.months.short.${key}`))
+}
 
 /**
  * Construit la liste des années sélectionnables dans les formulaires du profil
@@ -29,7 +42,8 @@ export function fmtDate(d: string | null): string {
   if (!d) return '?'
   const parts = d.split('-')
   if (parts.length < 2) return d
-  return `${MONTHS[parseInt(parts[1], 10) - 1] ?? parts[1]} ${parts[0]}`
+  const key = MONTH_KEYS[parseInt(parts[1], 10) - 1]
+  return `${key ? t(`common.months.short.${key}`) : parts[1]} ${parts[0]}`
 }
 
 /**
@@ -40,7 +54,7 @@ export function fmtDate(d: string | null): string {
  * @returns Période formatée.
  */
 export function fmtRange(start: string | null, end: string | null): string {
-  return `${fmtDate(start)} — ${end ? fmtDate(end) : 'Présent'}`
+  return `${fmtDate(start)} — ${end ? fmtDate(end) : t('common.date.present')}`
 }
 
 /**
@@ -63,5 +77,5 @@ export function fmtYear(d: string | null): string {
  * @returns Période formatée.
  */
 export function fmtYearRange(start: string | null, end: string | null): string {
-  return `${fmtYear(start)} — ${end ? fmtYear(end) : 'Présent'}`
+  return `${fmtYear(start)} — ${end ? fmtYear(end) : t('common.date.present')}`
 }

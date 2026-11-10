@@ -46,7 +46,7 @@ fn system_prompt(from: &str, to: &str) -> String {
          Chaque ligne de `lines` est traduite en une ligne, dans le même ordre : même nombre de lignes que l'original, sans saut de ligne.\n\
          Une traduction n'est pas plus longue que l'original : au plus {LENGTH_TOLERANCE_PERCENT} % de caractères en plus (ou {SHORT_TEXT_MARGIN_CHARS} caractères pour un texte court). Plus court est accepté.\n\
          `pour_qui` est le nom de l'organisation d'un projet : traduis-le seulement s'il est un nom commun (par exemple une association décrite), garde un nom propre tel quel. Un texte vide reste vide.\n\
-         `langues` : traduis le nom de chaque langue et son niveau (« Langue maternelle » devient « Native »), en gardant les certifications et scores tels quels (TOEIC 840). `interets` : un centre d'intérêt traduit par élément, dans le même ordre.\n\
+         `langues` : traduis le nom de chaque langue et son niveau (« Langue maternelle » devient « Native »), en gardant les certifications et scores tels quels (TOEIC 905). `interets` : un centre d'intérêt traduit par élément, dans le même ordre.\n\
          Garde les mêmes identifiants, une entrée par entrée de l'original.",
         direction(from, to)
     )

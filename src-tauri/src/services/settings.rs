@@ -1,5 +1,5 @@
-//! Règles des paramètres applicatifs : modèle Claude et thème acceptés,
-//! test de connexion à l'API, gestion de la clé API.
+//! Règles des paramètres applicatifs : modèle Claude, thème et langue de
+//! l'interface acceptés, test de connexion à l'API, gestion de la clé API.
 
 // Importation des modules standard
 use std::time::Instant;
@@ -47,6 +47,23 @@ pub async fn set_theme(pool: &SqlitePool, theme: &str) -> Result<(), AppError> {
         return Err(AppError::Validation("Thème invalide.".to_string()));
     }
     db::settings::set(pool, db::settings::KEY_THEME, theme).await
+}
+
+/// Enregistre la langue de l'interface choisie, si elle est valide.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+/// * `lang` - `"fr"` ou `"en"`.
+///
+/// # Returns
+///
+/// `Ok(())`, ou `AppError::Validation` pour une langue inconnue.
+pub async fn set_ui_lang(pool: &SqlitePool, lang: &str) -> Result<(), AppError> {
+    if !db::settings::VALID_UI_LANGS.contains(&lang) {
+        return Err(AppError::Validation("Langue d'interface invalide.".to_string()));
+    }
+    db::settings::set(pool, db::settings::KEY_UI_LANG, lang).await
 }
 
 /// Teste la connexion à l'API Claude avec le modèle configuré, en mesurant

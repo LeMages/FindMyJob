@@ -4,7 +4,7 @@
 //! consignes redonnent la prose, et qu'une zone fixe est recopiée.
 //!
 //! Les mots sont comparés sans leur ponctuation de bord (`word_key`) : une
-//! virgule collée à un mot (« Thyez, » contre « Thyez ») tient à la mise en
+//! virgule collée à un mot (« Lyon, » contre « Lyon ») tient à la mise en
 //! page, pas au contenu. Les écarts citent toujours les mots d'origine.
 
 /// Nombre maximal de mots par texte comparé : borne la table de la plus

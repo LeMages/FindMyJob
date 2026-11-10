@@ -1,5 +1,5 @@
 //! Tests : langue des documents et traduction complète, avec les références
-//! réelles balisées (zones [FIXE] / [VARIABLE] / [ADAPTABLE], texte hors
+//! balisées (zones [FIXE] / [VARIABLE] / [ADAPTABLE], texte hors
 //! schéma) templatisées par le LLM factice.
 
 // Importation des modules standard
@@ -21,19 +21,19 @@ use findmyjob_lib::models::{GenerationStatus, REFERENCE_TEXTS_FILE};
 use findmyjob_lib::services::candidatures;
 use findmyjob_lib::storage_paths;
 
-/// Application avec un profil et les deux références réelles balisées.
-async fn app_with_real_references(name: &str) -> (TestApp, i64) {
+/// Application avec un profil et les deux références balisées.
+async fn app_with_tagged_references(name: &str) -> (TestApp, i64) {
     let app = test_state::app(name).await;
     test_state::seed_profile(&app.state.pool).await;
     let sid = seed::session(&app.state.pool).await;
     let llm = &app.llm;
-    llm.respond_with(Step::ExampleCv, Reply::Files(&["references/real/cv_balise_example_data.json"]));
-    llm.respond_with(Step::TemplateCv, Reply::Files(&["references/real/cv_balise_template.typ"]));
-    llm.respond_with(Step::ExampleLm, Reply::Files(&["references/real/lm_balisee_example_data.json"]));
-    llm.respond_with(Step::TemplateLm, Reply::Files(&["references/real/lm_balisee_template.typ"]));
-    let cv = read_reference("real/cv_balise.typ");
+    llm.respond_with(Step::ExampleCv, Reply::Files(&["references/tagged/cv_balise_example_data.json"]));
+    llm.respond_with(Step::TemplateCv, Reply::Files(&["references/tagged/cv_balise_template.typ"]));
+    llm.respond_with(Step::ExampleLm, Reply::Files(&["references/tagged/lm_balisee_example_data.json"]));
+    llm.respond_with(Step::TemplateLm, Reply::Files(&["references/tagged/lm_balisee_template.typ"]));
+    let cv = read_reference("tagged/cv_balise.typ");
     documents::save_reference(&app.state, sid, "cv", "cv.typ".into(), cv).await.expect("référence CV");
-    let lm = read_reference("real/lm_balisee.typ");
+    let lm = read_reference("tagged/lm_balisee.typ");
     documents::save_reference(&app.state, sid, "lettre_motivation", "lettre.typ".into(), lm)
         .await
         .expect("référence lettre");
@@ -63,7 +63,7 @@ async fn version_dir(app: &TestApp, sid: i64, doc_type: &str) -> PathBuf {
 
 #[tokio::test]
 async fn offre_anglaise_documents_entierement_en_anglais() {
-    let (app, sid) = app_with_real_references("traduction-complete").await;
+    let (app, sid) = app_with_tagged_references("traduction-complete").await;
     app.llm.respond_with(Step::OfferAnalysis, Reply::Fixture("offer_analysis_en.json"));
 
     let (cid, error, completed) = generate(&app, sid).await;
@@ -104,12 +104,12 @@ async fn offre_anglaise_documents_entierement_en_anglais() {
 
 #[tokio::test]
 async fn references_avec_tirets_documents_sans_tiret() {
-    // Les références réelles emploient des « – » (objet de la lettre,
+    // Les références balisées emploient des « – » (objet de la lettre,
     // périodes et titres du CV) : aucun ne doit rester dans les documents.
-    for reference in ["real/lm_balisee.typ", "real/cv_balise.typ"] {
+    for reference in ["tagged/lm_balisee.typ", "tagged/cv_balise.typ"] {
         assert!(read_reference(reference).contains('\u{2013}'), "{reference} doit contenir un « – »");
     }
-    let (app, sid) = app_with_real_references("references-sans-tiret").await;
+    let (app, sid) = app_with_tagged_references("references-sans-tiret").await;
 
     let (cid, error, completed) = generate(&app, sid).await;
     assert!(completed, "génération : {error:?}");
@@ -129,7 +129,7 @@ async fn references_avec_tirets_documents_sans_tiret() {
 
 #[tokio::test]
 async fn offre_francaise_aucun_appel_de_traduction() {
-    let (app, sid) = app_with_real_references("traduction-aucune").await;
+    let (app, sid) = app_with_tagged_references("traduction-aucune").await;
     let (_, error, completed) = generate(&app, sid).await;
     assert!(completed, "génération : {error:?}");
     for step in [Step::ReferenceTranslation, Step::CvLabels, Step::LmLabels, Step::ProfileTranslation] {
@@ -139,7 +139,7 @@ async fn offre_francaise_aucun_appel_de_traduction() {
 
 #[tokio::test]
 async fn langue_inconnue_documents_dans_la_langue_de_leur_reference() {
-    let (app, sid) = app_with_real_references("traduction-inconnue").await;
+    let (app, sid) = app_with_tagged_references("traduction-inconnue").await;
     app.llm.respond_with(Step::OfferAnalysis, Reply::Fixture("offer_analysis_inconnue.json"));
 
     let (cid, error, completed) = generate(&app, sid).await;
@@ -159,7 +159,7 @@ fn langue_detectee_sur_le_corps_de_l_offre() {
 
 #[tokio::test]
 async fn cache_invalide_non_reutilise() {
-    let (app, sid) = app_with_real_references("traduction-cache-invalide").await;
+    let (app, sid) = app_with_tagged_references("traduction-cache-invalide").await;
     app.llm.respond_with(Step::OfferAnalysis, Reply::Fixture("offer_analysis_en.json"));
     let (_, error, completed) = generate(&app, sid).await;
     assert!(completed, "génération : {error:?}");
@@ -177,7 +177,7 @@ async fn cache_invalide_non_reutilise() {
 
 #[tokio::test]
 async fn ancienne_version_demande_un_reimport() {
-    let (app, sid) = app_with_real_references("traduction-ancienne-version").await;
+    let (app, sid) = app_with_tagged_references("traduction-ancienne-version").await;
     let texts = version_dir(&app, sid, "cv").await.join(REFERENCE_TEXTS_FILE);
     std::fs::remove_file(&texts).expect("suppression");
 

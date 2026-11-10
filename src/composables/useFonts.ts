@@ -11,7 +11,8 @@ import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { t } from '@/i18n'
 import type { FontFolderView } from '@/types'
 
 const fonts = ref<FontFolderView[]>([])
@@ -31,7 +32,7 @@ async function loadFonts(): Promise<string | null> {
     fonts.value = await invoke<FontFolderView[]>('list_fonts')
     return null
   } catch (e: unknown) {
-    return extractErrorMessage(e, 'Impossible de charger les polices.')
+    return backendErrorMessage(e, t('error.fallback.load_fonts'))
   } finally {
     loading.value = false
   }
@@ -49,7 +50,7 @@ async function importFontFolder(sourcePath: string): Promise<FontImportResult> {
   try {
     imported = await invoke<FontFolderView>('import_font_folder', { sourcePath })
   } catch (e: unknown) {
-    return { imported: null, error: extractErrorMessage(e, "Impossible d'importer ce dossier de police.") }
+    return { imported: null, error: backendErrorMessage(e, t('error.fallback.import_font')) }
   }
   const loadError = await loadFonts()
   return loadError ? { imported: null, error: loadError } : { imported, error: null }
@@ -67,7 +68,7 @@ async function deleteFont(folder: string): Promise<string | null> {
     fonts.value = fonts.value.filter((f) => f.folder !== folder)
     return null
   } catch (e: unknown) {
-    return extractErrorMessage(e, 'Impossible de supprimer cette police.')
+    return backendErrorMessage(e, t('error.fallback.delete_font'))
   }
 }
 

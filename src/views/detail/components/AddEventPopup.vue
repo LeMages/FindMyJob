@@ -8,16 +8,19 @@
 
 // Importation des modules Vue / framework
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 // Importation des modules externes
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import { state, addTimelineEvent } from '@/stores/app'
-import { extractErrorMessage } from '@/composables/useErrorMessage'
-import { INTERVIEW_TYPE_OPTIONS, MODALITE_OPTIONS } from '@/composables/candidature_display'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { eventActionLabel, interviewTypeLabel, interviewTypeOptions, modaliteOptions } from '@/composables/candidature_display'
 import type { AvailableEvent, InterviewView, NewTimelineEvent } from '@/types'
 import TimelineEventIcon from './TimelineEventIcon.vue'
+
+const { t } = useI18n()
 
 const visible = ref(false)
 const step = ref<'select' | 'form'>('select')
@@ -27,23 +30,26 @@ const selected = ref<AvailableEvent | null>(null)
 const error = ref<string | null>(null)
 const saving = ref(false)
 
-// Regroupement visuel des événements par catégorie (étape 1).
-const EVENT_CATEGORIES: Record<string, string> = {
-  message_envoye: 'Communication',
-  message_recu: 'Communication',
-  appel: 'Communication',
-  relance: 'Communication',
-  entretien_planifie: 'Entretien',
-  entretien_passe: 'Entretien',
-  note: 'Suivi',
-  refus_recu: 'Issue',
-  ghosting: 'Issue',
-  desistement: 'Issue',
-  offre_recue: 'Issue',
-  accepter_offre: 'Issue',
-  decliner_offre: 'Issue',
+// Regroupement visuel des événements par catégorie (étape 1). Les catégories
+// sont des identifiants stables : le regroupement ne dépend pas de la langue,
+// seul le titre affiché est traduit (`event.category.<id>`).
+type EventCategory = 'communication' | 'interview' | 'follow_up' | 'outcome'
+const EVENT_CATEGORIES: Record<string, EventCategory> = {
+  message_envoye: 'communication',
+  message_recu: 'communication',
+  appel: 'communication',
+  relance: 'communication',
+  entretien_planifie: 'interview',
+  entretien_passe: 'interview',
+  note: 'follow_up',
+  refus_recu: 'outcome',
+  ghosting: 'outcome',
+  desistement: 'outcome',
+  offre_recue: 'outcome',
+  accepter_offre: 'outcome',
+  decliner_offre: 'outcome',
 }
-const ORDER_CATEGORIES = ['Communication', 'Entretien', 'Suivi', 'Issue']
+const ORDER_CATEGORIES: EventCategory[] = ['communication', 'interview', 'follow_up', 'outcome']
 
 // Champ commun à la plupart des événements (message, note, notes libres...).
 const content = ref('')
@@ -77,10 +83,10 @@ function resetFormFields() {
 
 /** Événements disponibles regroupés par catégorie, dans l'ordre `ORDER_CATEGORIES`. */
 const groupedEvents = computed(() => {
-  const groups: { category: string; items: AvailableEvent[] }[] = []
+  const groups: { category: EventCategory | 'other'; items: AvailableEvent[] }[] = []
 
   for (const cat of ORDER_CATEGORIES) {
-    const items = events.value.filter((ev) => (EVENT_CATEGORIES[ev.event_type] ?? 'Autre') === cat)
+    const items = events.value.filter((ev) => EVENT_CATEGORIES[ev.event_type] === cat)
     if (items.length > 0) {
       groups.push({ category: cat, items })
     }
@@ -90,7 +96,7 @@ const groupedEvents = computed(() => {
   const mapped = new Set(Object.keys(EVENT_CATEGORIES))
   const unmapped = events.value.filter((ev) => !mapped.has(ev.event_type))
   if (unmapped.length > 0) {
-    groups.push({ category: 'Autre', items: unmapped })
+    groups.push({ category: 'other', items: unmapped })
   }
 
   return groups
@@ -105,21 +111,21 @@ const groupedEvents = computed(() => {
 function contentLabel(eventType: string): string {
   switch (eventType) {
     case 'relance':
-      return 'Contenu du message'
+      return t('detail.add_event.content.relance')
     case 'message_envoye':
     case 'message_recu':
-      return 'Contenu'
+      return t('detail.add_event.content.message')
     case 'appel':
-      return "Notes de l'appel"
+      return t('detail.add_event.content.appel')
     case 'entretien_passe':
     case 'accepter_offre':
-      return 'Notes (optionnel)'
+      return t('detail.add_event.content.optional_notes')
     case 'decliner_offre':
-      return 'Raison du refus (optionnel)'
+      return t('detail.add_event.content.decline_reason')
     case 'note':
-      return 'Note'
+      return t('detail.add_event.content.note')
     default:
-      return 'Notes'
+      return t('detail.add_event.content.default')
   }
 }
 
@@ -138,7 +144,7 @@ async function open() {
   try {
     events.value = await invoke<AvailableEvent[]>('get_available_events', { candidatureId })
   } catch (e: unknown) {
-    error.value = extractErrorMessage(e, 'Impossible de charger les événements disponibles.')
+    error.value = backendErrorMessage(e, t('error.fallback.load_available_events'))
   } finally {
     loadingEvents.value = false
   }
@@ -168,7 +174,7 @@ async function selectEvent(event: AvailableEvent) {
     try {
       pendingInterviews.value = await invoke<InterviewView[]>('get_pending_interviews', { candidatureId })
     } catch (e: unknown) {
-      error.value = extractErrorMessage(e, 'Impossible de charger les entretiens en attente.')
+      error.value = backendErrorMessage(e, t('error.fallback.load_pending_interviews'))
     } finally {
       loadingInterviews.value = false
     }
@@ -231,16 +237,16 @@ defineExpose({ open })
       <!-- Étape 1 : choix du type d'événement -->
       <template v-if="step === 'select'">
         <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">Ajouter un événement</div>
+          <div class="text-[17px] font-semibold">{{ t('detail.add_event.title') }}</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="close">×</button>
         </div>
 
-        <div v-if="loadingEvents" class="text-[12px] text-neutral-400 font-mono py-4 text-center">Chargement…</div>
+        <div v-if="loadingEvents" class="text-[12px] text-neutral-400 font-mono py-4 text-center">{{ t('common.loading') }}</div>
         <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-10 p-3 text-[13px] text-red-600 mb-3">{{ error }}</div>
 
         <template v-else>
           <div v-for="group in groupedEvents" :key="group.category" class="mb-4">
-            <div class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider px-1 mb-2">{{ group.category }}</div>
+            <div class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider px-1 mb-2">{{ t(`event.category.${group.category}`) }}</div>
 
             <div
               v-for="ev in group.items"
@@ -251,47 +257,47 @@ defineExpose({ open })
               <div class="w-9 h-9 rounded-9 bg-surface-2 border border-neutral-200 flex items-center justify-center text-neutral-600 flex-none">
                 <TimelineEventIcon :event-type="ev.event_type" />
               </div>
-              <div class="text-[14px] font-semibold">{{ ev.label }}</div>
+              <div class="text-[14px] font-semibold">{{ eventActionLabel(ev.event_type, ev.label) }}</div>
             </div>
           </div>
-          <div v-if="events.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">Aucun événement disponible pour ce statut.</div>
+          <div v-if="events.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">{{ t('detail.add_event.empty') }}</div>
         </template>
       </template>
 
       <!-- Étape 2 : formulaire adapté au type choisi -->
       <template v-else-if="selected">
         <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ selected.label }}</div>
+          <div class="text-[17px] font-semibold">{{ eventActionLabel(selected.event_type, selected.label) }}</div>
           <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="close">×</button>
         </div>
 
         <!-- entretien_planifie -->
         <template v-if="selected.event_type === 'entretien_planifie'">
           <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">Type d'entretien</label>
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.interview_type') }}</label>
             <select v-model="interviewType" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
-              <option v-for="opt in INTERVIEW_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              <option v-for="opt in interviewTypeOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
           <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">Date et heure</label>
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.date_time') }}</label>
             <input v-model="interviewDate" type="datetime-local" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" />
           </div>
           <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">Lieu (optionnel)</label>
-            <input v-model="interviewLieu" placeholder="Visio, locaux de l'entreprise..." class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" />
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.location') }}</label>
+            <input v-model="interviewLieu" :placeholder="t('detail.add_event.location_placeholder')" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" />
           </div>
           <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">Modalité (optionnel)</label>
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.modality') }}</label>
             <select v-model="interviewModalite" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
-              <option value="">Non précisée</option>
-              <option v-for="opt in MODALITE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              <option value="">{{ t('detail.add_event.modality_unspecified') }}</option>
+              <option v-for="opt in modaliteOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
           <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">Interlocuteurs (optionnel)</label>
+            <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.contacts') }}</label>
             <div v-if="state.detailContacts.length === 0" class="text-[12px] text-neutral-400 font-mono">
-              Aucun contact lié à cette candidature.
+              {{ t('detail.add_event.no_contacts') }}
             </div>
             <label
               v-for="contact in state.detailContacts"
@@ -306,22 +312,22 @@ defineExpose({ open })
 
         <!-- entretien_passe -->
         <template v-else-if="selected.event_type === 'entretien_passe'">
-          <div v-if="loadingInterviews" class="text-[12px] text-neutral-400 font-mono py-2">Chargement…</div>
+          <div v-if="loadingInterviews" class="text-[12px] text-neutral-400 font-mono py-2">{{ t('common.loading') }}</div>
           <template v-else>
             <div class="mb-[14px]">
-              <label class="text-[12px] text-neutral-600 mb-[5px] block">Entretien</label>
+              <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.interview') }}</label>
               <select v-model="selectedInterviewId" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
-                <option value="" disabled>Choisir l'entretien passé</option>
+                <option value="" disabled>{{ t('detail.add_event.pick_interview') }}</option>
                 <option v-for="iv in pendingInterviews" :key="iv.id" :value="iv.id">
-                  {{ iv.type ?? 'Entretien' }} — {{ iv.date_entretien ?? 'Date non renseignée' }}
+                  {{ interviewTypeLabel(iv.type) }} — {{ iv.date_entretien ?? t('common.date_missing') }}
                 </option>
               </select>
             </div>
             <div class="mb-[14px]">
-              <label class="text-[12px] text-neutral-600 mb-[5px] block">Issue</label>
+              <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.issue') }}</label>
               <select v-model="interviewIssue" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
-                <option value="positif">Positif</option>
-                <option value="negatif">Négatif</option>
+                <option value="positif">{{ t('interview.issue.positif') }}</option>
+                <option value="negatif">{{ t('interview.issue.negatif') }}</option>
               </select>
             </div>
           </template>
@@ -342,17 +348,17 @@ defineExpose({ open })
           <button
             class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
             @click="back"
-          >← Retour</button>
+          >{{ t('common.back') }}</button>
           <div class="flex gap-[10px]">
             <button
               class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
               @click="close"
-            >Annuler</button>
+            >{{ t('common.cancel') }}</button>
             <button
               class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
               :class="{ 'opacity-40 pointer-events-none': saving }"
               @click="save"
-            >Enregistrer</button>
+            >{{ t('common.save') }}</button>
           </div>
         </div>
       </template>

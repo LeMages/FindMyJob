@@ -11,7 +11,8 @@ import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { t } from '@/i18n'
 import type { DuplicateCandidatureView } from '@/types'
 
 /**
@@ -46,7 +47,7 @@ export function useDuplicateOffers() {
     } catch (e: unknown) {
       if (current === lastCheck) {
         duplicates.value = []
-        checkError.value = extractErrorMessage(e, 'Vérification des doublons impossible.')
+        checkError.value = backendErrorMessage(e, t('error.fallback.check_duplicates'))
       }
     }
   }

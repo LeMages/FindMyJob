@@ -12,7 +12,8 @@ import { ref, type Ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { t } from '@/i18n'
 import type { OfferExtraction } from '@/types'
 import { classifyExtractionError, extractionErrorMessage } from './extraction_error'
 
@@ -78,7 +79,7 @@ export function useOfferImport(url: Ref<string>, onExtracted: (extraction: Offer
       await invoke('open_capture_window', { url: url.value.trim() })
       step.value = 'capture'
     } catch (e: unknown) {
-      captureError.value = extractionErrorMessage(e, "Impossible d'ouvrir la page de l'offre.")
+      captureError.value = extractionErrorMessage(e, t('error.fallback.open_offer_page'))
       step.value = 'capture'
     } finally {
       busy.value = false
@@ -92,7 +93,7 @@ export function useOfferImport(url: Ref<string>, onExtracted: (extraction: Offer
     try {
       finish(await invoke<OfferExtraction>('capture_offer_page'))
     } catch (e: unknown) {
-      captureError.value = extractionErrorMessage(e, 'La capture de la page a échoué.')
+      captureError.value = extractionErrorMessage(e, t('error.fallback.capture_failed'))
     } finally {
       busy.value = false
     }
@@ -105,7 +106,7 @@ export function useOfferImport(url: Ref<string>, onExtracted: (extraction: Offer
     try {
       finish(await invoke<OfferExtraction>('extract_offer_from_text', { text: pasteText.value.trim() }))
     } catch (e: unknown) {
-      pasteError.value = extractionErrorMessage(e, "Impossible d'extraire les informations de ce texte.")
+      pasteError.value = extractionErrorMessage(e, t('error.fallback.extract_from_text'))
     } finally {
       busy.value = false
     }
@@ -119,7 +120,7 @@ export function useOfferImport(url: Ref<string>, onExtracted: (extraction: Offer
     try {
       await invoke('close_capture_window')
     } catch (e: unknown) {
-      captureError.value = extractErrorMessage(e, 'Impossible de fermer la fenêtre de la page.')
+      captureError.value = backendErrorMessage(e, t('error.fallback.close_capture_window'))
     }
   }
 

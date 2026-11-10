@@ -34,12 +34,12 @@ fn separateurs_orphelins_detectes() {
     use findmyjob_lib::docgen::text_diff::orphan_separators;
     assert_eq!(orphan_separators("FindMyJob  |    |  2025"), vec!["| |".to_string()]);
     assert_eq!(orphan_separators("Anglais : | Français : natif"), vec![": |".to_string()]);
-    assert!(orphan_separators("Need4Viz  |  Nov. 2025 – Avr. 2026 • Lyon").is_empty());
+    assert!(orphan_separators("Transvia Logistique  |  Sept. 2025 – Févr. 2026 • Lyon").is_empty());
 }
 
 #[test]
 fn ponctuation_de_bord_ignoree() {
-    let diff = diff_words("Thyez, 74300 Thyez, le 9 octobre", "Thyez 74300 Thyez, le 9 octobre.").expect("diff");
+    let diff = diff_words("Lyon, 69003 Lyon, le 9 octobre", "Lyon 69003 Lyon, le 9 octobre.").expect("diff");
     assert_eq!(diff.distance(), 0, "écart : {diff:?}");
     let diff = diff_words("« Objet : stage »", "Objet stage").expect("diff");
     assert_eq!(diff.missing, vec!["«".to_string(), ":".to_string(), "»".to_string()], "ponctuation seule comparée telle quelle");
@@ -47,6 +47,6 @@ fn ponctuation_de_bord_ignoree() {
 
 #[test]
 fn ecarts_cites_dans_leur_forme_d_origine() {
-    let diff = diff_words("Thyez, 74300", "Lyon").expect("diff");
-    assert_eq!(diff.missing, vec!["Thyez,".to_string(), "74300".to_string()]);
+    let diff = diff_words("Lyon, 69003", "Paris").expect("diff");
+    assert_eq!(diff.missing, vec!["Lyon,".to_string(), "69003".to_string()]);
 }

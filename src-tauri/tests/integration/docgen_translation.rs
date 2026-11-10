@@ -20,7 +20,7 @@ fn original() -> CvEntryTexts {
             lines: vec!["Tableau de bord des adhésions".to_string()],
         }],
         formations: vec![EntryLines { id: 30, lines: vec!["Spécialité données".to_string()] }],
-        langues: vec![LanguageTexts { id: 40, nom: "Anglais".to_string(), level: "Courant (TOEIC 840)".to_string() }],
+        langues: vec![LanguageTexts { id: 40, nom: "Anglais".to_string(), level: "Courant (TOEIC 905)".to_string() }],
         interets: vec!["Escalade".to_string()],
     }
 }
@@ -38,7 +38,7 @@ fn translated() -> CvEntryTexts {
             lines: vec!["Membership dashboard".to_string()],
         }],
         formations: vec![EntryLines { id: 30, lines: vec!["Data major".to_string()] }],
-        langues: vec![LanguageTexts { id: 40, nom: "English".to_string(), level: "Fluent (TOEIC 840)".to_string() }],
+        langues: vec![LanguageTexts { id: 40, nom: "English".to_string(), level: "Fluent (TOEIC 905)".to_string() }],
         interets: vec!["Climbing".to_string()],
     }
 }

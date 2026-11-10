@@ -1,0 +1,169 @@
+{
+  "identity": {
+    "prenom": "Antoine",
+    "nom": "Dupont",
+    "title": "Étudiant Ingénieur Informatique, spécialité Data & Cloud",
+    "email": "antoine.dupont@exemple.fr",
+    "telephone": "+33 6 00 00 00 00",
+    "ville": "Lyon",
+    "zip_code": "69003",
+    "linkedin": "linkedin.com/in/antoine-dupont-exemple",
+    "github": "github.com/adupont-exemple",
+    "portfolio": "antoine-dupont.exemple.fr",
+    "permis": true
+  },
+  "lang": "fr",
+  "summary": "Étudiant ingénieur en dernière année à l'École Supérieure du Numérique de Lyon (niveau Master), spécialisé en Data et Cloud. 6 mois d'expérience en entreprise sur des pipelines de données logistiques et des tableaux de bord de pilotage, de l'ingestion jusqu'à la restitution.",
+  "skills_groups": [
+    {
+      "category": "Langages",
+      "skills": [
+        "Python",
+        "SQL",
+        "Java",
+        "TypeScript (React, Node.js)"
+      ]
+    },
+    {
+      "category": "Data & ML",
+      "skills": [
+        "Pandas",
+        "NumPy",
+        "Scikit-learn",
+        "XGBoost",
+        "Prophet",
+        "Hugging Face",
+        "OpenCV",
+        "Power BI"
+      ]
+    },
+    {
+      "category": "Data Engineering",
+      "skills": [
+        "ETL",
+        "Airflow",
+        "dbt",
+        "PostgreSQL",
+        "MongoDB",
+        "Snowflake",
+        "Spark",
+        "Kafka"
+      ]
+    },
+    {
+      "category": "Cloud & DevOps",
+      "skills": [
+        "Azure (Data Factory, Blob Storage)",
+        "Docker",
+        "Git",
+        "GitLab CI",
+        "Terraform",
+        "Linux"
+      ]
+    },
+    {
+      "category": "Développement",
+      "skills": [
+        "FastAPI",
+        "Spring Boot",
+        "API REST"
+      ]
+    }
+  ],
+  "experiences": [
+    {
+      "poste": "Stage Data Engineer",
+      "entreprise": "Transvia Logistique",
+      "lieu": "Lyon",
+      "period": "09.2025 – 02.2026",
+      "bullets": [
+        "Refonte du pipeline d'ingestion de 300+ entrepôts : traitement 40% plus rapide, < 1% d'erreurs (Airflow, dbt)",
+        "Création de tableaux de bord de suivi des livraisons : adoptés par 5 équipes opérationnelles",
+        "Développement d'API REST (FastAPI) exposant les indicateurs aux outils internes de planification"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "titre": "Prévision de fréquentation – Vélos en libre-service",
+      "pour_qui": "École Supérieure du Numérique",
+      "period": "2025 – 2026",
+      "bullets": [
+        "Modélisation de la demande horaire sur 400 stations à partir de données ouvertes et météo, livrée à une collectivité",
+        "Mise en place du pipeline de collecte et d'entraînement des modèles (Python, XGBoost, PostgreSQL, Airflow)"
+      ]
+    },
+    {
+      "titre": "DocFinder – Recherche sémantique dans des notices",
+      "pour_qui": "Projet personnel open source",
+      "period": "2026",
+      "bullets": [
+        "Conception d'une application web (TypeScript, FastAPI) : recherche en langage naturel dans des notices techniques",
+        "Déploiement conteneurisé sur Azure avec Terraform, tests automatisés et CI/CD GitLab"
+      ]
+    },
+    {
+      "titre": "QualiVision – Détection de défauts par vision",
+      "pour_qui": "École Supérieure du Numérique",
+      "period": "2024 – 2025",
+      "bullets": [
+        "Entraînement d'un modèle de classification OpenCV (92% de précision sur 2 500 images) et interface de contrôle"
+      ]
+    }
+  ],
+  "formations": [
+    {
+      "titre": "Diplôme d'ingénieur (niveau Master, CTI) – Data & Cloud",
+      "ecole": "École Supérieure du Numérique",
+      "period": "2022 – 2027",
+      "details": [
+        "Semestre d'échange – Université de Lisbonne, Portugal (09.2024 – 01.2025)"
+      ]
+    }
+  ],
+  "langues": [
+    {
+      "nom": "Français",
+      "level": "Langue maternelle"
+    },
+    {
+      "nom": "Anglais",
+      "level": "C1, TOEIC 905/990 (semestre d'échange au Portugal)"
+    }
+  ],
+  "interets": [
+    "Course à pied",
+    "Photographie",
+    "Contributions à des projets open source en data"
+  ],
+  "labels": {
+    "section_profile": "Profil",
+    "section_skills": "Compétences Techniques",
+    "section_experiences": "Expérience Professionnelle",
+    "section_projects": "Projets",
+    "section_formations": "Formation",
+    "section_langues": "Langues & Centres d'Intérêt",
+    "interets_label": "Intérêts :",
+    "permis": "Permis de conduire B",
+    "present": "aujourd'hui",
+    "months_short": [
+      "01",
+      "02",
+      "03",
+      "04",
+      "05",
+      "06",
+      "07",
+      "08",
+      "09",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  "period_style": {
+    "experiences": "month",
+    "projects": "year",
+    "formations": "year"
+  }
+}

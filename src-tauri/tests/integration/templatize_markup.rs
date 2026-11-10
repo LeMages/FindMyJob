@@ -6,10 +6,10 @@ use crate::shared::fake_llm::read_reference;
 use findmyjob_lib::documents::markup::{attach_zones, parse_markup, MarkupError};
 use findmyjob_lib::models::{LmExampleData, ProseField, ProseZone, ZoneMode};
 
-/// Champs de prose (objet, paragraphes) des données d'exemple de la lettre réelle.
+/// Champs de prose (objet, paragraphes) des données d'exemple de la lettre balisée.
 fn letter_fields() -> Vec<ProseField> {
     let example: LmExampleData =
-        serde_json::from_str(&read_reference("real/lm_balisee_example_data.json")).expect("données d'exemple");
+        serde_json::from_str(&read_reference("tagged/lm_balisee_example_data.json")).expect("données d'exemple");
     let mut fields = vec![ProseField { path: "subject".into(), text: example.data.subject.clone() }];
     fields.extend(
         example.data.paragraphs.iter().enumerate().map(|(i, p)| ProseField { path: format!("paragraphs[{i}]"), text: p.clone() }),
@@ -29,14 +29,14 @@ fn error_lines(source: &str) -> Vec<usize> {
 
 #[test]
 fn lettre_balisee_redonne_les_zones_de_la_reference() {
-    let markup = parse_markup(&read_reference("real/lm_balisee.typ")).expect("balisage valide");
+    let markup = parse_markup(&read_reference("tagged/lm_balisee.typ")).expect("balisage valide");
     assert!(markup.general.starts_with("- Toutes les valeurs « Exemple »"));
     assert!(markup.general.contains("La lettre doit tenir sur une page."));
     assert_eq!(markup.zones.len(), 9);
 
     let guidance = attach_zones(&markup.general, &markup.zones, &letter_fields()).expect("zones rattachées");
     let expected: Vec<ProseZone> =
-        serde_json::from_str(&read_reference("real/lm_balisee_expected_zones.json")).expect("zones attendues");
+        serde_json::from_str(&read_reference("tagged/lm_balisee_expected_zones.json")).expect("zones attendues");
     let expected: Vec<_> = expected.iter().map(shape).collect();
     assert_eq!(guidance.zones.iter().map(shape).collect::<Vec<_>>(), expected);
     // Consigne sur plusieurs lignes, recollée ligne à ligne.
@@ -47,14 +47,14 @@ fn lettre_balisee_redonne_les_zones_de_la_reference() {
 
 #[test]
 fn cv_balise_decoupe_titre_et_resume() {
-    let markup = parse_markup(&read_reference("real/cv_balise.typ")).expect("balisage valide");
+    let markup = parse_markup(&read_reference("tagged/cv_balise.typ")).expect("balisage valide");
     let fields = vec![
-        ProseField { path: "identity.title".into(), text: "Étudiant Ingénieur Data Engineering & Machine Learning".into() },
+        ProseField { path: "identity.title".into(), text: "Étudiant Ingénieur Informatique, spécialité Data & Cloud".into() },
         ProseField {
             path: "summary".into(),
-            text: "Étudiant ingénieur en dernière année à l'Efrei Paris (niveau Master), spécialisé en Data \
-                   Engineering et Machine Learning. 6 mois d'expérience en entreprise sur le forecasting de séries \
-                   temporelles à grande échelle et des systèmes RAG en production, de la donnée brute jusqu'à l'API."
+            text: "Étudiant ingénieur en dernière année à l'École Supérieure du Numérique de Lyon (niveau Master), \
+                   spécialisé en Data et Cloud. 6 mois d'expérience en entreprise sur des pipelines de données \
+                   logistiques et des tableaux de bord de pilotage, de l'ingestion jusqu'à la restitution."
                 .into(),
         },
     ];

@@ -9,12 +9,15 @@
 
 // Importation des modules Vue / framework
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
-import { extractErrorMessage } from '@/composables/useErrorMessage'
+import { backendErrorMessage } from '@/composables/backend_error_message'
 import { formatDateTime } from '@/composables/date_time_format'
 import type { DocumentReferenceView, DocumentVersionView } from '@/types/index'
+
+const { t } = useI18n()
 
 interface Props {
   docType: 'cv' | 'lettre_motivation'
@@ -39,7 +42,7 @@ const emit = defineEmits<{
   restored: [value: DocumentReferenceView]
 }>()
 
-const title = computed(() => (props.docType === 'cv' ? 'Versions – CV' : 'Versions – Lettre de motivation'))
+const title = computed(() => (props.docType === 'cv' ? t('documents.versions.title_cv') : t('documents.versions.title_lm')))
 
 // Copie triée : on ne dépend pas de l'ordre renvoyé par le backend.
 const sortedVersions = computed(() => [...props.versions].sort((a, b) => b.version - a.version))
@@ -64,7 +67,7 @@ async function restore(v: DocumentVersionView) {
     })
     emit('restored', restored)
   } catch (e: unknown) {
-    restoreError.value = extractErrorMessage(e, 'Impossible de restaurer cette version.')
+    restoreError.value = backendErrorMessage(e, t('error.fallback.restore_version'))
   } finally {
     restoringVersion.value = null
   }
@@ -92,13 +95,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         <button
           class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950"
           type="button"
-          aria-label="Fermer"
+          :aria-label="t('common.close')"
           @click="emit('close')"
         >×</button>
       </div>
 
       <div v-if="loadError" class="text-[12px] text-red-600">{{ loadError }}</div>
-      <div v-else-if="sortedVersions.length === 0" class="text-[12px] text-neutral-400 text-center py-6 font-mono">Aucune version enregistrée</div>
+      <div v-else-if="sortedVersions.length === 0" class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('documents.versions.empty') }}</div>
       <div v-else>
         <div
           v-for="(v, i) in sortedVersions"
@@ -113,7 +116,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
               <span
                 v-if="v.is_current"
                 class="inline-block flex-none font-medium text-[11px] rounded-5 px-[7px] py-px border bg-blue-50 border-blue-200 text-blue-600"
-              >actuelle</span>
+              >{{ t('documents.versions.current') }}</span>
             </div>
             <div class="text-[11px] text-neutral-500 mt-px font-mono">{{ formatDateTime(v.created_at) }}</div>
           </div>
@@ -121,8 +124,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             <button
               class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-blue-200 bg-blue-50 text-blue-500 cursor-pointer transition-colors duration-150 hover:bg-blue-100 hover:border-blue-300"
               type="button"
-              :title="`Visualiser la version ${v.version}`"
-              :aria-label="`Visualiser la version ${v.version}`"
+              :title="t('documents.versions.preview', { version: v.version })"
+              :aria-label="t('documents.versions.preview', { version: v.version })"
               @click="emit('preview', v.version)"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -134,10 +137,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
               v-if="editMode"
               class="h-[30px] px-3 rounded-7 border border-neutral-300 bg-surface-2 text-[12px] font-medium text-neutral-900 cursor-pointer whitespace-nowrap hover:bg-surface-3 disabled:opacity-60 disabled:cursor-default"
               type="button"
-              title="Utiliser cette version pour les prochaines générations"
+              :title="t('documents.versions.restore_hint')"
               :disabled="v.is_current || restoringVersion !== null"
               @click="restore(v)"
-            >{{ restoringVersion === v.version ? 'Restauration…' : 'Restaurer' }}</button>
+            >{{ restoringVersion === v.version ? t('documents.versions.restoring') : t('documents.versions.restore') }}</button>
           </div>
         </div>
       </div>

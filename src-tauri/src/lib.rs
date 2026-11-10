@@ -119,6 +119,8 @@ pub fn run() {
             commands::set_llm_model,
             commands::get_theme,
             commands::set_theme,
+            commands::get_ui_language,
+            commands::set_ui_language,
             commands::test_api_connection,
             commands::get_api_key_status,
             commands::save_api_key,
