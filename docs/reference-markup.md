@@ -9,7 +9,7 @@ User-facing summary (shown in the app, in French) is in `src/components/Referenc
 | Tag | Meaning at generation |
 |---|---|
 | `// [CONSIGNES]` | General instructions for the whole document. |
-| `// [FIXE] instruction` | The zone is copied word for word (translated faithfully if the document is generated in another language). Only profile information inside it (city, name…) is updated. |
+| `// [FIXE] instruction` | The zone is copied word for word (translated faithfully if the document is generated in another language). Only profile or session information inside it (name, city…) is updated. |
 | `// [VARIABLE] instruction` | The zone is rewritten from the job offer. |
 | `// [ADAPTABLE] instruction` | The zone is rewritten from the profile, chosen and ordered for the offer, without inventing anything. |
 
