@@ -14,7 +14,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { useI18n } from 'vue-i18n'
 
 // Importation des modules internes
-import { currentSession, updateSession } from '@/stores/app'
+import { currentSession, updateSession, updateSessionLocation } from '@/stores/app'
 import { backendErrorMessage } from '@/composables/backend_error_message'
 import type { DocumentReferenceView, SessionStatut } from '@/types'
 import EditableField from '@/components/EditableField.vue'
@@ -39,6 +39,20 @@ async function saveStatut(v: string): Promise<string | null | undefined> {
   const session = currentSession.value
   if (!session) return
   return updateSession(session.id, { statut: v as SessionStatut })
+}
+
+/** Sauvegarde la ville de l'expéditeur (le code postal est conservé). */
+async function saveVille(v: string): Promise<string | null | undefined> {
+  const session = currentSession.value
+  if (!session) return
+  return updateSessionLocation(session.id, { ville: v.trim() || null, zip_code: session.zip_code })
+}
+
+/** Sauvegarde le code postal de l'expéditeur (la ville est conservée). */
+async function saveZipCode(v: string): Promise<string | null | undefined> {
+  const session = currentSession.value
+  if (!session) return
+  return updateSessionLocation(session.id, { ville: session.ville, zip_code: v.trim() || null })
 }
 
 const sessionId = computed(() => currentSession.value?.id ?? null)
@@ -84,6 +98,27 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
           :editable="true"
           :placeholder="t('session.params.title')"
           :on-save="saveNom"
+        />
+      </div>
+
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('session.params.city') }}</label>
+        <EditableField
+          :model-value="currentSession?.ville ?? null"
+          :editable="true"
+          :placeholder="t('session.params.city_placeholder')"
+          :on-save="saveVille"
+        />
+        <div class="text-[11.5px] text-neutral-500 mt-1">{{ t('session.params.city_hint') }}</div>
+      </div>
+
+      <div class="mb-[14px]">
+        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('session.params.zip_code') }}</label>
+        <EditableField
+          :model-value="currentSession?.zip_code ?? null"
+          :editable="true"
+          :placeholder="t('session.params.zip_code_placeholder')"
+          :on-save="saveZipCode"
         />
       </div>
 

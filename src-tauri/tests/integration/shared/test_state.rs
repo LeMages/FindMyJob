@@ -87,8 +87,6 @@ pub async fn seed_profile(pool: &SqlitePool) {
         nom: None,
         email: None,
         telephone: Some("06 12 34 56 78".into()),
-        ville: None,
-        zip_code: None,
         permis: Some(true),
         linkedin: None,
         github: None,

@@ -27,12 +27,43 @@ pub fn display_url(url: Option<&String>) -> String {
     without_www.trim_end_matches('/').to_string()
 }
 
+/// Localisation de l'expéditeur, propre à la session. Elle ne se replie
+/// jamais sur la référence : une ville absente reste vide.
+///
+/// # Attributes
+///
+/// * `ville` - Ville de la session (chaîne vide si absente).
+/// * `zip_code` - Code postal de la session (chaîne vide si absent).
+#[derive(Clone, Debug, Default)]
+pub struct SenderLocation {
+    pub ville: String,
+    pub zip_code: String,
+}
+
+impl SenderLocation {
+    /// Construit la localisation depuis les champs optionnels d'une session.
+    ///
+    /// # Arguments
+    ///
+    /// * `ville` - Ville de la session.
+    /// * `zip_code` - Code postal de la session.
+    ///
+    /// # Returns
+    ///
+    /// Localisation nettoyée, chaînes vides si absente.
+    pub fn new(ville: Option<&String>, zip_code: Option<&String>) -> Self {
+        Self { ville: text(ville), zip_code: text(zip_code) }
+    }
+}
+
 /// Construit l'identité du candidat : chaque champ vient du profil, ou du
-/// document de référence quand le profil est vide sur ce champ.
+/// document de référence quand le profil est vide sur ce champ. Seule
+/// exception : le lieu vient de la session, sans repli sur la référence.
 ///
 /// # Arguments
 ///
 /// * `user` - Utilisateur du profil.
+/// * `location` - Localisation de l'expéditeur (session).
 /// * `title` - Sous-titre professionnel (rédigé avec le CV), commun aux
 ///   deux documents.
 /// * `document` - Identité des données d'exemple de la référence.
@@ -40,15 +71,15 @@ pub fn display_url(url: Option<&String>) -> String {
 /// # Returns
 ///
 /// `Identity`, chaîne vide si ni le profil ni le document n'ont la valeur.
-pub fn build_identity(user: &UserView, title: &str, document: &Identity) -> Identity {
+pub fn build_identity(user: &UserView, location: &SenderLocation, title: &str, document: &Identity) -> Identity {
     Identity {
         prenom: text_or_document(text(user.prenom.as_ref()), &document.prenom),
         nom: text_or_document(text(user.nom.as_ref()), &document.nom),
         title: text_or_document(title.trim().to_string(), &document.title),
         email: text_or_document(text(user.email.as_ref()), &document.email),
         telephone: text_or_document(text(user.telephone.as_ref()), &document.telephone),
-        ville: text_or_document(text(user.ville.as_ref()), &document.ville),
-        zip_code: text_or_document(text(user.zip_code.as_ref()), &document.zip_code),
+        ville: location.ville.clone(),
+        zip_code: location.zip_code.clone(),
         linkedin: text_or_document(display_url(user.linkedin.as_ref()), &document.linkedin),
         github: text_or_document(display_url(user.github.as_ref()), &document.github),
         portfolio: text_or_document(display_url(user.portfolio.as_ref()), &document.portfolio),

@@ -29,6 +29,7 @@ use crate::services::api_key::ApiKeyAccess;
 use crate::services::claude_target::ClaudeTargetSource;
 use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
 use crate::docgen::build_lm_data::{build_lm_data, LmLayout};
+use crate::docgen::identity::SenderLocation;
 use crate::documents::labels_cache::{resolve_cv_labels, resolve_lm_labels};
 use crate::documents::reference_texts_cache::{resolve_reference_texts, ResolvedTexts};
 use crate::documents::page_fit::{fit_to_pages, CompileTarget, FittedDocument};
@@ -177,6 +178,7 @@ struct GenerationContext {
     cv_ref: ReferenceTemplate<CvExampleData>,
     lm_ref: ReferenceTemplate<LmExampleData>,
     recipient: Recipient,
+    location: SenderLocation,
     offer_analysis: String,
     matching: MatchingResult,
     selection: Selection,
@@ -242,6 +244,9 @@ async fn prepare(
     let lm_ref: ReferenceTemplate<LmExampleData> =
         load_reference(pool, request.data_dir, request.session_id, "lettre_motivation", "lettre de motivation").await?;
     let recipient = load_recipient(pool, request.candidature_id).await?;
+    // Le lieu de l'expéditeur vient de la session, jamais de la référence.
+    let session = db::sessions::fetch_view(pool, request.session_id).await?;
+    let location = SenderLocation::new(session.ville.as_ref(), session.zip_code.as_ref());
 
     // ------------------------------------------------------------------
     // 2. Analyse de l'offre, matching et sélection
@@ -314,6 +319,7 @@ async fn prepare(
         cv_ref,
         lm_ref,
         recipient,
+        location,
         offer_analysis,
         matching,
         selection,
@@ -332,6 +338,7 @@ async fn produce_cv(
 ) -> Result<FittedDocument<CvContent>, AppError> {
     let separator = detect_separator(ctx.cv_ref.example.data.experiences.iter().map(|e| e.period.as_str()));
     let layout = CvLayout {
+        location: &ctx.location,
         document: &ctx.cv_ref.example.data,
         labels: &ctx.cv.labels,
         period_style: &ctx.cv_ref.example.period_style,
@@ -367,6 +374,7 @@ async fn produce_lm(
     fonts_dir: &Path,
 ) -> Result<FittedDocument<LmContent>, AppError> {
     let layout = LmLayout {
+        location: &ctx.location,
         document: &ctx.lm_ref.example.data,
         labels: &ctx.lm.labels,
         title,

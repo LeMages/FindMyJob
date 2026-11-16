@@ -14,8 +14,6 @@ export interface UpdateUserInfoInput {
   nom: string | null
   email: string | null
   telephone: string | null
-  ville: string | null
-  zip_code: string | null
   permis: boolean | null
   linkedin: string | null
   github: string | null
@@ -29,8 +27,6 @@ export interface CreateUserInput {
   prenom: string
   email: string
   telephone: string | null
-  ville: string | null
-  zip_code: string | null
   permis: boolean | null
   description: string | null
   linkedin: string | null
@@ -44,8 +40,6 @@ export interface UserView {
   prenom: string | null
   email: string | null
   telephone: string | null
-  ville: string | null
-  zip_code: string | null
   permis: boolean | null
   description: string | null
   linkedin: string | null
@@ -77,9 +71,24 @@ export interface Session {
   id: number
   nom: string
   statut: SessionStatut
+  /** Ville de l'expéditeur (requise pour créer une candidature). */
+  ville: string | null
+  /** Code postal de l'expéditeur (facultatif). */
+  zip_code: string | null
   candidature_count: number
   has_accepted: boolean
   created_at: string
+}
+
+export interface CreateSessionInput {
+  nom: string
+  ville: string | null
+  zip_code: string | null
+}
+
+export interface UpdateSessionLocationInput {
+  ville: string | null
+  zip_code: string | null
 }
 
 export interface UpdateSessionInput {

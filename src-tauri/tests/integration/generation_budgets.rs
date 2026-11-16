@@ -14,6 +14,7 @@ use crate::shared::test_state::{self, candidature_input, wait_generation};
 use findmyjob_lib::db;
 use findmyjob_lib::docgen::build_cv_data::{build_cv_data, CvLayout};
 use findmyjob_lib::docgen::entry_texts::source_texts;
+use findmyjob_lib::docgen::identity::SenderLocation;
 use findmyjob_lib::docgen::lint::Violation;
 use findmyjob_lib::docgen::selection::select;
 use findmyjob_lib::llm::writing_loop::{write_with_retries, Review};
@@ -96,7 +97,9 @@ fn listes_du_cv_sans_repli_sur_la_reference() {
     let texts = source_texts(&profile, &selection);
     let labels = CvLabels { months_short: vec![String::new(); 12], ..Default::default() };
     let no_texts = BTreeMap::new();
+    let location = SenderLocation::default();
     let layout = CvLayout {
+        location: &location,
         document: &document,
         labels: &labels,
         period_style: &PeriodStyle::default(),

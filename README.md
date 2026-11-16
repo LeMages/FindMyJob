@@ -26,7 +26,7 @@ The typical path, from first launch to your first tailored application.
 
 ### 1. Fill in your basic information
 
-On first launch, a short wizard asks for the interface language (English or French, changeable later in **Settings**), then your identity, contact details, location, a short description and your links (LinkedIn, GitHub, portfolio). Only your first name, last name and email are required; everything can be edited later.
+On first launch, a short wizard asks for the interface language (English or French, changeable later in **Settings**), then your identity, contact details, driving licence, a short description and your links (LinkedIn, GitHub, portfolio). Only your first name, last name and email are required; everything can be edited later.
 
 ![First-launch wizard, Identity step](docs/screenshots/01_onboarding.png)
 
@@ -58,7 +58,7 @@ If your CV or cover letter uses fonts that are not built in, import them before 
 
 ### 6. Create a session and import your documents
 
-A session groups the applications of one search (for example "Internship 2027"). Click **+ New session** in the sidebar and name it. Then open its **Settings** tab and, in the **Documents** card, import your CV and cover letter `.typ` files. Each session has its own reference documents, and they are analyzed once at import.
+A session groups the applications of one search (for example "Internship 2027"). Click **+ New session** in the sidebar and name it (you can also enter your city and postal code now). The city is the sender's location on your CV and cover letters: it belongs to the session and is required to create an application; the postal code is optional. Both can be changed in the session's **Settings** tab, where you then import, in the **Documents** card, your CV and cover letter `.typ` files. Each session has its own reference documents, and they are analyzed once at import.
 
 ![Session Settings tab, Documents card with both references imported](docs/screenshots/06_session_documents.png)
 
@@ -197,7 +197,7 @@ Le parcours type, du premier lancement à votre première candidature adaptée.
 
 ### 1. Renseigner vos informations de base
 
-Au premier lancement, un court assistant demande la langue de l'interface (français ou anglais, modifiable ensuite dans les **Paramètres**), puis votre identité, vos coordonnées, votre localisation, une courte description et vos liens (LinkedIn, GitHub, portfolio). Seuls le prénom, le nom et l'email sont obligatoires ; tout reste modifiable par la suite.
+Au premier lancement, un court assistant demande la langue de l'interface (français ou anglais, modifiable ensuite dans les **Paramètres**), puis votre identité, vos coordonnées, votre permis de conduire, une courte description et vos liens (LinkedIn, GitHub, portfolio). Seuls le prénom, le nom et l'email sont obligatoires ; tout reste modifiable par la suite.
 
 ![Assistant de premier lancement, étape Identité](docs/screenshots/01_onboarding.png)
 
@@ -229,7 +229,7 @@ Si votre CV ou votre lettre utilise des polices non intégrées, importez-les av
 
 ### 6. Créer une session et importer vos documents
 
-Une session regroupe les candidatures d'une même recherche (par exemple « Stage 2027 »). Cliquez sur **+ Nouvelle session** dans la barre latérale et donnez-lui un nom. Ouvrez ensuite son onglet **Paramètres** et, dans la carte **Documents**, importez les fichiers `.typ` de votre CV et de votre lettre. Chaque session a ses propres documents de référence, analysés une seule fois à l'import.
+Une session regroupe les candidatures d'une même recherche (par exemple « Stage 2027 »). Cliquez sur **+ Nouvelle session** dans la barre latérale et donnez-lui un nom (vous pouvez aussi saisir dès maintenant votre ville et votre code postal). La ville est le lieu d'expédition de vos CV et lettres : elle appartient à la session et est requise pour créer une candidature ; le code postal est facultatif. Les deux restent modifiables dans l'onglet **Paramètres** de la session, où vous importez ensuite, dans la carte **Documents**, les fichiers `.typ` de votre CV et de votre lettre. Chaque session a ses propres documents de référence, analysés une seule fois à l'import.
 
 ![Onglet Paramètres de la session, carte Documents avec les deux références importées](docs/screenshots/06_session_documents.png)
 

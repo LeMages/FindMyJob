@@ -15,12 +15,16 @@ import { backendErrorMessage } from '@/composables/backend_error_message'
 const { t } = useI18n()
 
 const nom = ref('')
+const ville = ref('')
+const zipCode = ref('')
 const saving = ref(false)
 const error = ref<string | null>(null)
 
 /** Réinitialise le formulaire à chaque ouverture de la popup. */
 function onOpen() {
   nom.value = ''
+  ville.value = ''
+  zipCode.value = ''
   error.value = null
   saving.value = false
 }
@@ -32,7 +36,11 @@ async function submit() {
   saving.value = true
   error.value = null
   try {
-    await confirmCreateSession(trimmed)
+    await confirmCreateSession({
+      nom: trimmed,
+      ville: ville.value.trim() || null,
+      zip_code: zipCode.value.trim() || null,
+    })
     nom.value = ''
   } catch (e: unknown) {
     error.value = backendErrorMessage(e, t('error.fallback.create_session'))
@@ -73,6 +81,27 @@ function onKeydown(e: KeyboardEvent) {
           autofocus
           @keydown="onKeydown"
         />
+      </div>
+
+      <div class="flex gap-[14px] mb-[14px]">
+        <div class="flex-1">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('session.create.city_optional') }}</label>
+          <input
+            v-model="ville"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+            :placeholder="t('session.params.city_placeholder')"
+            @keydown="onKeydown"
+          />
+        </div>
+        <div class="w-[140px]">
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('session.create.zip_code_optional') }}</label>
+          <input
+            v-model="zipCode"
+            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400"
+            :placeholder="t('session.params.zip_code_placeholder')"
+            @keydown="onKeydown"
+          />
+        </div>
       </div>
 
       <div v-if="error" class="text-red-500 text-[12px] mt-[6px]">{{ error }}</div>

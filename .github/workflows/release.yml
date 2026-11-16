@@ -94,11 +94,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # tauri.conf.json lit sa version dans ../package.json : on ne l'écrit pas.
+      # Cargo.lock n'est pas réécrit : cargo met à jour l'entrée du paquet
+      # lui-même au build (aucun --locked dans ce workflow).
       - name: Inject version
         shell: bash
         run: |
           VERSION=${{ needs.version.outputs.version }}
-          jq --arg v "$VERSION" '.version = $v' src-tauri/tauri.conf.json > tmp.json && mv tmp.json src-tauri/tauri.conf.json
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
           sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
 
       - name: Build Tauri

@@ -32,7 +32,7 @@ async fn parcours_complet_de_l_offre_a_la_suppression() {
     // ------------------------------------------------------------------
     // 2. Session et références templatisées
     // ------------------------------------------------------------------
-    let sid = db::sessions::insert(pool, "Stage 2027", seed::NOW).await.expect("session").id;
+    let sid = db::sessions::insert(pool, &seed::session_input("Stage 2027", Some("Villeurbanne"), Some("69100")), seed::NOW).await.expect("session").id;
     assert!(!db::documents::status_for_session(pool, sid).await.unwrap().all_ready);
     test_state::seed_references(&app.state, sid).await;
     assert!(db::documents::status_for_session(pool, sid).await.unwrap().all_ready);
@@ -90,6 +90,12 @@ async fn parcours_complet_de_l_offre_a_la_suppression() {
     }
     let lm = std::fs::read_to_string(artefact(&app.state, sid, "lettre_motivation", view.id, "data.json")).unwrap();
     assert!(lm.contains("Doctolib"), "destinataire de la lettre : {lm}");
+    let lm_data: serde_json::Value = serde_json::from_str(&lm).unwrap();
+    assert_eq!(lm_data["identity"]["ville"], "Villeurbanne", "ville de la session");
+    assert_eq!(lm_data["identity"]["zip_code"], "69100");
+    let cv = std::fs::read_to_string(artefact(&app.state, sid, "cv", view.id, "data.json")).unwrap();
+    let cv_data: serde_json::Value = serde_json::from_str(&cv).unwrap();
+    assert_eq!(cv_data["identity"]["ville"], "Villeurbanne");
 
     // ------------------------------------------------------------------
     // 6. Passage à « postulé »

@@ -54,7 +54,7 @@ pub use matching::{MatchedSkill, MatchingResult};
 pub use offer_extraction::{ExtractionStage, OfferExtraction};
 pub use profile::ProfileDto;
 pub use projet::{CreateProjetInput, ProjetView};
-pub use session::{CreateSessionInput, SessionView, UpdateSessionInput};
+pub use session::{CreateSessionInput, SessionView, UpdateSessionInput, UpdateSessionLocationInput};
 pub use skill::{CreateSkillInput, SkillView};
 pub use status_history::StatusHistoryView;
 pub use timeline_event::{AvailableEvent, NewInterviewData, NewTimelineEvent};

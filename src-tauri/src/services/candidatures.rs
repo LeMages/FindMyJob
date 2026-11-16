@@ -52,6 +52,14 @@ async fn references_ready(pool: &SqlitePool, session_id: i64) -> Result<bool, Ap
 /// `CandidatureView` créée, ou `AppError::Validation`.
 pub async fn create(state: &AppState, input: &CreateCandidatureInput) -> Result<CandidatureView, AppError> {
     if let Some(session_id) = input.session_id {
+        // La ville de l'expéditeur est celle de la session : sans elle, le
+        // document généré n'aurait pas de lieu.
+        if db::sessions::fetch_view(&state.pool, session_id).await?.ville.is_none() {
+            return Err(AppError::Validation(
+                "La ville de la session est requise avant de pouvoir postuler : renseigne-la dans les paramètres de la session."
+                    .to_string(),
+            ));
+        }
         if !references_ready(&state.pool, session_id).await? {
             return Err(AppError::Validation(
                 "Les documents de référence (CV et lettre de motivation) doivent être uploadés \

@@ -12,7 +12,7 @@ import { invoke } from '@tauri-apps/api/core'
 // Importation des modules internes
 import type {
   Screen, PopupKey,
-  BoardCard, Session, UpdateSessionInput,
+  BoardCard, Session, CreateSessionInput, UpdateSessionInput, UpdateSessionLocationInput,
   CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
   ContactDraft, ContactInput, NewTimelineEvent,
   UpdateCandidatureInput,
@@ -188,6 +188,24 @@ export async function updateSession(id: number, patch: Partial<UpdateSessionInpu
 }
 
 /**
+ * Modifie la ville et le code postal d'une session.
+ *
+ * @param id - Identifiant de la session.
+ * @param input - Nouvelle localisation (vide = effacée).
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function updateSessionLocation(id: number, input: UpdateSessionLocationInput): Promise<string | null> {
+  try {
+    const updated = await invoke<Session>('update_session_location', { id, input })
+    const idx = backendSessions.value.findIndex(s => s.id === id)
+    if (idx !== -1) backendSessions.value[idx] = updated
+    return null
+  } catch (e: unknown) {
+    return backendErrorMessage(e, t('error.fallback.update_session'))
+  }
+}
+
+/**
  * Sélectionne une session et retourne à l'écran de suivi.
  *
  * @param id - Identifiant de la session à sélectionner.
@@ -211,10 +229,10 @@ export function cancelCreateSession() {
 /**
  * Crée une session via le backend, la sélectionne et ferme la popup.
  *
- * @param nom - Nom de la session à créer.
+ * @param input - Nom et localisation (facultative) de la session à créer.
  */
-export async function confirmCreateSession(nom: string) {
-  const session = await invoke<Session>('create_session', { input: { nom } })
+export async function confirmCreateSession(input: CreateSessionInput) {
+  const session = await invoke<Session>('create_session', { input })
   backendSessions.value.unshift(session)
   state.sessionId = session.id
   state.createSessionPopup = false

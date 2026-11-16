@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 // Importation des modules internes
 use crate::docgen::entry_texts::CvEntryTexts;
-use crate::docgen::identity::{build_identity, display_url, text};
+use crate::docgen::identity::{build_identity, display_url, text, SenderLocation};
 use crate::docgen::period_format::{format_period, PeriodStyleText};
 use crate::docgen::selection::Selection;
 use crate::models::{
@@ -26,11 +26,13 @@ use crate::models::{
 /// * `separator` - Séparateur de période de la référence.
 /// * `lang` - Langue du CV.
 /// * `texts` - Textes en dur de la référence, dans la langue du CV.
+/// * `location` - Localisation de l'expéditeur (session), sans repli sur la référence.
 /// * `document` - Données d'exemple de la référence, reprises seulement
 ///   quand le profil est vide sur une information d'identité. Compétences,
 ///   langues, centres d'intérêt, expériences, projets et formations ne
 ///   viennent que du profil : vide dans le profil, la section est vide.
 pub struct CvLayout<'a> {
+    pub location: &'a SenderLocation,
     pub document: &'a CvData,
     pub labels: &'a CvLabels,
     pub period_style: &'a PeriodStyle,
@@ -114,7 +116,7 @@ pub fn build_cv_data(
 
     let document = layout.document;
     CvData {
-        identity: build_identity(&profile.user, &content.title, &document.identity),
+        identity: build_identity(&profile.user, layout.location, &content.title, &document.identity),
         lang: layout.lang.to_string(),
         summary: content.summary.clone(),
         skills_groups: content.skills_groups.clone(),
