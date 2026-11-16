@@ -41,8 +41,6 @@ fn no_change() -> UpdateUserInfoInput {
         nom: None,
         email: None,
         telephone: None,
-        ville: None,
-        zip_code: None,
         permis: None,
         linkedin: None,
         github: None,
@@ -52,17 +50,13 @@ fn no_change() -> UpdateUserInfoInput {
 }
 
 #[tokio::test]
-async fn identite_et_lieu() {
+async fn identite_et_coordonnees() {
     let pool = pool_with_user().await;
-    assert_eq!(read(&pool).await.user.ville.as_deref(), Some("Lyon"));
-
-    // Modification : identité, coordonnées, ville et code postal.
+    // Modification : identité et coordonnées.
     let input = UpdateUserInfoInput {
         prenom: Some("Alexandra".into()),
         email: Some("alexandra@example.com".into()),
         telephone: Some("06 00 00 00 01".into()),
-        ville: Some("Lyon".into()),
-        zip_code: Some("69003".into()),
         interets: Some("Escalade\nPhotographie".into()),
         ..no_change()
     };
@@ -73,23 +67,17 @@ async fn identite_et_lieu() {
     assert_eq!(user.nom.as_deref(), Some("Martin"));
     assert_eq!(user.email.as_deref(), Some("alexandra@example.com"));
     assert_eq!(user.telephone.as_deref(), Some("06 00 00 00 01"));
-    assert_eq!(user.ville.as_deref(), Some("Lyon"));
-    assert_eq!(user.zip_code.as_deref(), Some("69003"));
     assert_eq!(user.interets.as_deref(), Some("Escalade\nPhotographie"));
     assert_eq!(user.description.as_deref(), Some("Étudiante en data."));
 
     // Suppression des champs facultatifs.
     let input = UpdateUserInfoInput {
         telephone: Some(String::new()),
-        ville: Some(String::new()),
-        zip_code: Some(String::new()),
         ..no_change()
     };
     users::update_user_info(&pool, input).await.expect("effacement");
     users::update_description(&pool, None).await.expect("effacement de la description");
     let user = read(&pool).await.user;
-    assert_eq!(user.ville, None);
-    assert_eq!(user.zip_code, None);
     assert_eq!(user.telephone, None);
     assert_eq!(user.description, None);
 

@@ -137,8 +137,6 @@ mod tests {
                 prenom: None,
                 email: None,
                 telephone: None,
-                ville: None,
-                zip_code: None,
                 permis: None,
                 description: None,
                 linkedin: None,

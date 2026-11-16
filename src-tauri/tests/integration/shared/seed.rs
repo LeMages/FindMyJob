@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 // Importation des modules internes
-use findmyjob_lib::models::{CreateUserInput, TemplateArtifacts};
+use findmyjob_lib::models::{CreateSessionInput, CreateUserInput, TemplateArtifacts};
 use findmyjob_lib::db::candidatures::{self, CandidatureFields};
 use findmyjob_lib::db::document_versions::{self, NewVersion};
 use findmyjob_lib::db::transaction::begin_write;
@@ -27,8 +27,6 @@ pub fn user_input() -> CreateUserInput {
         prenom: "Alex".into(),
         email: "alex@example.com".into(),
         telephone: None,
-        ville: Some("Lyon".into()),
-        zip_code: None,
         permis: None,
         description: None,
         linkedin: None,
@@ -42,9 +40,15 @@ pub async fn user(pool: &SqlitePool) {
     users::insert_user(pool, user_input(), NOW).await.expect("utilisateur");
 }
 
-/// Crée une session et retourne son identifiant.
+/// Données de création d'une session, avec ou sans localisation.
+pub fn session_input(nom: &str, ville: Option<&str>, zip_code: Option<&str>) -> CreateSessionInput {
+    CreateSessionInput { nom: nom.into(), ville: ville.map(str::to_string), zip_code: zip_code.map(str::to_string) }
+}
+
+/// Crée une session localisée à Lyon (la ville est requise pour créer une
+/// candidature) et retourne son identifiant.
 pub async fn session(pool: &SqlitePool) -> i64 {
-    sessions::insert(pool, "Stage M2", NOW).await.expect("session").id
+    sessions::insert(pool, &session_input("Stage M2", Some("Lyon"), None), NOW).await.expect("session").id
 }
 
 /// Fichiers de templatisation factices.

@@ -84,14 +84,14 @@ async fn generation_remplit_data_json_depuis_le_profil() {
     assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
 
     // ------------------------------------------------------------------
-    // 1. data.json : faits du profil ; ce que le profil n'a pas (ville et
-    //    code postal, vidés par `seed_profile`) vient du document
+    // 1. data.json : faits du profil, lieu de la session (« Lyon », sans
+    //    code postal) ; le code postal absent ne vient jamais du document
     // ------------------------------------------------------------------
     let (cv_raw, cv) = read_data(&app.state, sid, "cv", view.id);
     let (_, lm) = read_data(&app.state, sid, "lettre_motivation", view.id);
     for data in [&cv, &lm] {
-        assert_eq!(data["identity"]["ville"], "Exempleville", "profil vide : ville du document");
-        assert_eq!(data["identity"]["zip_code"], "00000", "profil vide : code postal du document");
+        assert_eq!(data["identity"]["ville"], "Lyon", "ville de la session");
+        assert_eq!(data["identity"]["zip_code"], "", "code postal absent : pas de repli sur le document");
     }
     assert_eq!(cv["identity"]["prenom"], "Alex");
     assert_eq!(cv["identity"]["nom"], "Martin");
@@ -246,6 +246,64 @@ async fn creation_refusee_sans_references() {
     }
     assert_eq!(count(&app.state.pool, "candidatures").await, 0);
     assert_eq!(app.llm.total_calls(), 0);
+}
+
+#[tokio::test]
+async fn creation_refusee_sans_ville_de_session() {
+    let app = test_state::app("generation-sans-ville").await;
+    test_state::seed_profile(&app.state.pool).await;
+    let session = db::sessions::insert(&app.state.pool, &seed::session_input("Sans lieu", None, Some("69000")), seed::NOW)
+        .await
+        .expect("session");
+    test_state::seed_references(&app.state, session.id).await;
+
+    let calls_before = app.llm.total_calls();
+    let result = candidatures::create(&app.state, &candidature_input(session.id, OFFRE, None)).await;
+
+    match result {
+        Err(AppError::Validation(message)) => assert!(message.contains("ville de la session"), "{message}"),
+        other => panic!("validation attendue, obtenu {:?}", other.map(|v| v.id)),
+    }
+    assert_eq!(count(&app.state.pool, "candidatures").await, 0);
+    assert_eq!(app.llm.total_calls(), calls_before, "aucun appel LLM après le refus");
+
+    // Avec la ville seule (code postal facultatif), la candidature est acceptée.
+    let location = findmyjob_lib::models::UpdateSessionLocationInput { ville: Some("Lyon".into()), zip_code: None };
+    db::sessions::update_location(&app.state.pool, session.id, &location).await.expect("lieu");
+    let view = candidatures::create(&app.state, &candidature_input(session.id, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+}
+
+#[tokio::test]
+async fn session_sans_ville_ne_retombe_jamais_sur_la_reference() {
+    let (app, sid) = ready_app("generation-lieu-sans-repli").await;
+    // La création est refusée sans ville : on contourne le garde-fou pour
+    // atteindre la génération elle-même.
+    let input = candidature_input(sid, OFFRE, None);
+    let new = findmyjob_lib::services::candidature_validation::validate_create(&input).expect("validation");
+    let view = db::candidatures::insert(
+        &app.state.pool,
+        new.session_id,
+        &new.fields,
+        &new.description_offre,
+        &new.contacts,
+        seed::NOW,
+    )
+    .await
+    .expect("candidature");
+    let clear = findmyjob_lib::models::UpdateSessionLocationInput { ville: None, zip_code: None };
+    db::sessions::update_location(&app.state.pool, sid, &clear).await.expect("effacement du lieu");
+    findmyjob_lib::services::generation::start(&app.state, view.id, sid, new.description_offre);
+
+    let progress = wait_generation(&app.state, view.id).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+    for doc_type in ["cv", "lettre_motivation"] {
+        let (_, data) = read_data(&app.state, sid, doc_type, view.id);
+        assert_eq!(data["identity"]["ville"], "", "{doc_type} : jamais la ville de la référence");
+        assert_eq!(data["identity"]["zip_code"], "", "{doc_type} : jamais le code postal de la référence");
+    }
 }
 
 /// Lance une génération et attend sa fin.
