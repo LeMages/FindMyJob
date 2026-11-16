@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use chrono::NaiveDate;
 
 // Importation des modules internes
-use crate::docgen::identity::build_identity;
+use crate::docgen::identity::{build_identity, SenderLocation};
 use crate::docgen::date_format::format_long_date;
 use crate::models::{LmContent, LmData, LmLabels, ProfileDto, Recipient};
 
@@ -26,7 +26,9 @@ use crate::models::{LmContent, LmData, LmLabels, ProfileDto, Recipient};
 /// * `date` - Date de la lettre.
 /// * `lang` - Langue de la lettre.
 /// * `texts` - Textes en dur de la référence, dans la langue de la lettre.
+/// * `location` - Localisation de l'expéditeur (session), sans repli sur la référence.
 pub struct LmLayout<'a> {
+    pub location: &'a SenderLocation,
     pub document: &'a LmData,
     pub labels: &'a LmLabels,
     pub title: &'a str,
@@ -49,7 +51,7 @@ pub struct LmLayout<'a> {
 /// `LmData` prêt à être sérialisé en `data.json`.
 pub fn build_lm_data(profile: &ProfileDto, recipient: &Recipient, content: &LmContent, layout: &LmLayout<'_>) -> LmData {
     LmData {
-        identity: build_identity(&profile.user, layout.title, &layout.document.identity),
+        identity: build_identity(&profile.user, layout.location, layout.title, &layout.document.identity),
         lang: layout.lang.to_string(),
         recipient: recipient.clone(),
         date: format_long_date(layout.date, layout.lang),

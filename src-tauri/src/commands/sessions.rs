@@ -5,7 +5,7 @@ use crate::app_state::AppContext;
 use crate::clock;
 use crate::db;
 use crate::error::AppError;
-use crate::models::{CreateSessionInput, SessionView, UpdateSessionInput};
+use crate::models::{CreateSessionInput, SessionView, UpdateSessionInput, UpdateSessionLocationInput};
 use crate::services;
 
 /// Crée une session de candidature.
@@ -13,7 +13,7 @@ use crate::services;
 /// # Arguments
 ///
 /// * `ctx` - Contexte de l'application.
-/// * `input` - Nom de la session.
+/// * `input` - Nom et localisation facultative de la session.
 ///
 /// # Returns
 ///
@@ -23,7 +23,7 @@ pub async fn create_session(
     ctx: tauri::State<'_, AppContext>,
     input: CreateSessionInput,
 ) -> Result<SessionView, AppError> {
-    db::sessions::insert(&ctx.state()?.pool, &input.nom, &clock::now_utc()).await
+    db::sessions::insert(&ctx.state()?.pool, &input, &clock::now_utc()).await
 }
 
 /// Liste les sessions avec leurs statistiques.
@@ -58,6 +58,26 @@ pub async fn update_session(
     input: UpdateSessionInput,
 ) -> Result<SessionView, AppError> {
     db::sessions::update(&ctx.state()?.pool, id, &input).await
+}
+
+/// Modifie la localisation de l'expéditeur d'une session (ni nom ni statut).
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de la session.
+/// * `input` - Ville et code postal.
+///
+/// # Returns
+///
+/// `SessionView` mise à jour.
+#[tauri::command]
+pub async fn update_session_location(
+    ctx: tauri::State<'_, AppContext>,
+    id: i64,
+    input: UpdateSessionLocationInput,
+) -> Result<SessionView, AppError> {
+    db::sessions::update_location(&ctx.state()?.pool, id, &input).await
 }
 
 /// Supprime une session, ses données et son dossier de documents.
