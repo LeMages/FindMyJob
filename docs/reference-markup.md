@@ -55,6 +55,13 @@ Reported at import with their line, before any AI call when possible:
 - a `[VARIABLE]` or `[ADAPTABLE]` zone whose text is not written prose (recipient address, contact details…): only `[FIXE]` can stand there;
 - two zones covering the same text.
 
+## Classification of each unit
+
+Every visible unit (a line, a row, a paragraph) of the reference is classified one by one:
+
+- it belongs to a **profile category** (identity, experiences, projects, formations, skills, languages, driving licence): its content is replaced by the profile's, and the unit is removed (with a warning, never filled from the reference) when the profile has nothing for it;
+- it belongs to **no category** (an « Intérêts » line, a hobbies row, a tagline…): it is a hard-coded text of the reference, kept word for word and translated when the document is generated in another language. There is no tag for it and no extra zone type.
+
 ## Hard-coded text
 
 Visible text that is neither profile data, nor a label, nor written prose (e.g. « Références disponibles sur demande », « P.J. : CV ») needs no tag: the app stores it as a reference text and translates it when the document is generated in another language. Official names (job title, company, degree, school, project title) are never translated.
