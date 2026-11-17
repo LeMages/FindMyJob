@@ -30,7 +30,7 @@ use crate::llm::client::TEMPLATIZE_MODEL;
 use crate::llm::templatize_example::{extract_example_data, ExampleFeedback};
 use crate::llm::templatize_template::{write_template, TemplateFeedback, TemplateReply, TemplateRequest};
 use crate::llm::{CallRecorder, ClaudeTarget};
-use crate::models::{ReferenceTexts, TemplateArtifacts, REFERENCE_FORMAT_VERSION, REFERENCE_TEXTS_FILE};
+use crate::models::{expected_format_version, ReferenceTexts, TemplateArtifacts, REFERENCE_TEXTS_FILE};
 use crate::storage_paths;
 use crate::trace_log;
 
@@ -117,7 +117,7 @@ pub async fn templatize(
         AppError::Validation("Le template accepté ne compile pas avec ses données d'exemple.".to_string())
     })?;
     let texts = ReferenceTexts {
-        format_version: REFERENCE_FORMAT_VERSION,
+        format_version: expected_format_version(input.doc_type),
         lang: checked.lang.clone(),
         texts: checked.texts.clone(),
         guidance: checked.guidance.clone(),

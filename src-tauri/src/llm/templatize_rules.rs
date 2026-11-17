@@ -30,19 +30,6 @@ pub const EXAMPLE_DATA_RULES: &str = "Règles de example_data :
 pub const ADDRESS_DATA_RULE: &str = "Lieu de l'expéditeur :
 - Le lieu du candidat tient en deux champs : `identity.ville` et `identity.zip_code`, repris exactement tels qu'affichés dans l'original (chaîne vide si absent). Une rue, un numéro ou un pays de l'expéditeur n'ont pas de champ.";
 
-/// Sens des champs du CV, pour les données d'exemple.
-pub const CV_DATA_FIELDS: &str = "Champs du CV :
-- identity : coordonnées du candidat affichées dans l'original. identity.title : sous-titre professionnel affiché sous le nom, chaîne vide si l'original n'en a pas.
-- summary : texte de la section profil.
-- skills_groups : une entrée par ligne de compétences, la catégorie puis les compétences.
-- experiences, projects : une entrée par expérience ou projet, avec ses bullets. `pour_qui` est l'organisation affichée pour un projet. projects.stack et projects.url : technologies et lien affichés pour un projet, chaîne vide si l'original ne les affiche pas.
-- formations : une entrée par formation ; `details` reçoit ses lignes de détail (spécialité, cours, échange).
-- langues : nom et niveau de chaque langue.
-- period : la période telle qu'affichée. period_style indique pour chaque section si les périodes affichent le mois (\"month\") ou seulement l'année (\"year\") ; \"month\" pour une section absente.
-- labels.section_* : titres des sections, tels qu'écrits dans le code source de l'original. labels.permis : le texte affiché pour le permis.
-- labels.months_short : les 12 abréviations de mois, de janvier à décembre, dans la langue et le style de l'original (\"01\"…\"12\" si l'original écrit les mois en chiffres).
-- labels.present : le mot qui termine une période en cours dans la langue de l'original (par exemple \"aujourd'hui\"), même s'il n'apparaît pas.";
-
 /// Sens des champs de la lettre, pour les données d'exemple.
 pub const LM_DATA_FIELDS: &str = "Champs de la lettre :
 - identity : coordonnées de l'expéditeur affichées dans l'original. identity.title : sous-titre professionnel affiché sous le nom, chaîne vide si absent.

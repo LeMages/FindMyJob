@@ -13,7 +13,7 @@ use crate::shared::fake_llm::Step;
 use crate::shared::seed;
 use crate::shared::test_state::{self, artefact, candidature_input, wait_generation, TestApp};
 use findmyjob_lib::db;
-use findmyjob_lib::docgen::profile_categories::{missing_categories, ProfileCategory};
+use findmyjob_lib::docgen::profile_categories::{cv_data_fields_prompt, missing_categories, ProfileCategory};
 use findmyjob_lib::llm::cv_writing::cv_content_schema_for;
 use findmyjob_lib::models::{CvData, CvLangue, GenerationStatus, Identity, SkillsGroup};
 use findmyjob_lib::services::candidatures;
@@ -67,6 +67,17 @@ fn permis_non_renseigne_signale_permis_non_ne_l_est_pas() {
     profile.user.permis = Some(false);
     let missing = missing_categories(&full_example(), &profile);
     assert!(!missing.contains(&ProfileCategory::Permis), "un « non » est une vraie réponse : {missing:?}");
+}
+
+#[test]
+fn prompt_etape_a_liste_fermee_generee_depuis_les_categories() {
+    let prompt = cv_data_fields_prompt();
+    for category in ProfileCategory::all() {
+        assert!(prompt.contains(category.schema_paths()[0]), "{category:?} absente : {prompt}");
+    }
+    assert!(prompt.contains("liste fermée"), "{prompt}");
+    assert!(prompt.contains("ne la range dans aucun champ"), "{prompt}");
+    assert!(!prompt.contains("interets"), "les intérêts ne sont plus un champ : {prompt}");
 }
 
 #[test]

@@ -16,9 +16,32 @@ use serde::{Deserialize, Serialize};
 // Importation des modules internes
 use crate::models::prose_guidance::ProseGuidance;
 
-/// Version du format des fichiers d'une référence templatisée. Une version
-/// convertie avec un autre format doit être réimportée.
+/// Version du format des fichiers d'une référence de lettre de motivation.
+/// Une version convertie avec un autre format doit être réimportée.
 pub const REFERENCE_FORMAT_VERSION: u32 = 2;
+
+/// Version du format des fichiers d'une référence de CV. Elle est distincte
+/// de celle de la lettre : le retrait des centres d'intérêt du profil (une
+/// ligne « Intérêts » devient un texte en dur) invalide les anciens CV de
+/// référence, pas les lettres.
+pub const CV_REFERENCE_FORMAT_VERSION: u32 = 3;
+
+/// Version du format attendue pour un type de document.
+///
+/// # Arguments
+///
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
+///
+/// # Returns
+///
+/// La version courante du format de ce type de document.
+pub fn expected_format_version(doc_type: &str) -> u32 {
+    if doc_type == "cv" {
+        CV_REFERENCE_FORMAT_VERSION
+    } else {
+        REFERENCE_FORMAT_VERSION
+    }
+}
 
 /// Nom du fichier des textes de la référence, dans le dossier de la version.
 pub const REFERENCE_TEXTS_FILE: &str = "reference_texts.json";

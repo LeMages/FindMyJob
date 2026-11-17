@@ -476,16 +476,22 @@ fn reference_d_une_version_precedente_a_reimporter() {
     let dir = std::env::temp_dir().join(format!("findmyjob-reference-texts-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("dossier temporaire");
     let missing = dir.join("absent.json");
-    assert!(matches!(load_texts(&missing, "CV"), Err(AppError::OutdatedReference(_))), "fichier absent : à réimporter");
+    assert!(matches!(load_texts(&missing, "cv", "CV"), Err(AppError::OutdatedReference(_))), "fichier absent : à réimporter");
 
     let old = dir.join("ancien.json");
     std::fs::write(&old, r#"{"format_version": 1, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
         .expect("écriture");
-    assert!(matches!(load_texts(&old, "CV"), Err(AppError::OutdatedReference(_))), "autre format : à réimporter");
+    assert!(matches!(load_texts(&old, "cv", "CV"), Err(AppError::OutdatedReference(_))), "autre format : à réimporter");
 
     let current = dir.join("courant.json");
-    std::fs::write(&current, r#"{"format_version": 2, "lang": "fr", "texts": {"t1": "P.J."}, "guidance": {"general": "", "zones": []}}"#)
+    std::fs::write(&current, r#"{"format_version": 3, "lang": "fr", "texts": {"t1": "P.J."}, "guidance": {"general": "", "zones": []}}"#)
         .expect("écriture");
-    assert_eq!(load_texts(&current, "CV").expect("format courant").texts["t1"], "P.J.");
+    assert_eq!(load_texts(&current, "cv", "CV").expect("format courant").texts["t1"], "P.J.");
+    // Un CV au format de la lettre (2) est refusé, une lettre au format 2 est acceptée.
+    let letter_format = dir.join("lettre.json");
+    std::fs::write(&letter_format, r#"{"format_version": 2, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
+        .expect("écriture");
+    assert!(matches!(load_texts(&letter_format, "cv", "CV"), Err(AppError::OutdatedReference(_))), "ancien CV refusé");
+    assert!(load_texts(&letter_format, "lettre_motivation", "lettre de motivation").is_ok(), "lettre inchangée");
     std::fs::remove_dir_all(&dir).expect("nettoyage");
 }

@@ -12,7 +12,7 @@ use sqlx::SqlitePool;
 use crate::db;
 use crate::storage_paths;
 use crate::error::AppError;
-use crate::models::{ReferenceTexts, REFERENCE_FORMAT_VERSION, REFERENCE_TEXTS_FILE};
+use crate::models::{expected_format_version, ReferenceTexts, REFERENCE_TEXTS_FILE};
 
 /// Référence prête pour la génération.
 ///
@@ -68,7 +68,7 @@ pub async fn load_reference<E: DeserializeOwned>(
         .parent()
         .map(Path::to_path_buf)
         .ok_or_else(|| AppError::Validation(format!("Chemin de template invalide : {}", artifacts.template_path)))?;
-    let texts = load_texts(&dir.join(REFERENCE_TEXTS_FILE), label)?;
+    let texts = load_texts(&dir.join(REFERENCE_TEXTS_FILE), doc_type, label)?;
     let template = read(&template_file)?;
     let example_json = read(&storage_paths::to_absolute(data_dir, &artifacts.example_data_path))?;
     let example = serde_json::from_str(&example_json).map_err(|_| outdated(label))?;
@@ -85,15 +85,16 @@ pub async fn load_reference<E: DeserializeOwned>(
 /// # Arguments
 ///
 /// * `path` - Chemin de `reference_texts.json`.
+/// * `doc_type` - `"cv"` ou `"lettre_motivation"` : chaque type a sa version de format.
 /// * `label` - Libellé lisible du document, pour le message.
 ///
 /// # Returns
 ///
 /// `ReferenceTexts`, ou `AppError::OutdatedReference`.
-pub fn load_texts(path: &Path, label: &str) -> Result<ReferenceTexts, AppError> {
+pub fn load_texts(path: &Path, doc_type: &str, label: &str) -> Result<ReferenceTexts, AppError> {
     let content = std::fs::read_to_string(path).map_err(|_| outdated(label))?;
     let texts: ReferenceTexts = serde_json::from_str(&content).map_err(|_| outdated(label))?;
-    if texts.format_version != REFERENCE_FORMAT_VERSION {
+    if texts.format_version != expected_format_version(doc_type) {
         return Err(outdated(label));
     }
     Ok(texts)

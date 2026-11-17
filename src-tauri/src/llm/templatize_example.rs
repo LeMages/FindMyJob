@@ -9,12 +9,13 @@
 use serde_json::Value;
 
 // Importation des modules internes
+use crate::docgen::profile_categories::cv_data_fields_prompt;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
 use crate::llm::doc_data_schema::{cv_example_data_schema, lm_example_data_schema};
 use crate::llm::target::ClaudeTarget;
 use crate::llm::templatize_rules::{
-    doc_type_label, ADDRESS_DATA_RULE, CV_DATA_FIELDS, EXAMPLE_DATA_RULES, LM_DATA_FIELDS,
+    doc_type_label, ADDRESS_DATA_RULE, EXAMPLE_DATA_RULES, LM_DATA_FIELDS,
 };
 
 /// Retour de validation des données d'exemple précédentes.
@@ -65,7 +66,8 @@ pub async fn extract_example_data(
 ) -> Result<Value, AppError> {
     let schema = example_output_schema(doc_type)
         .ok_or_else(|| AppError::Validation(format!("Type de document inconnu : {doc_type}")))?;
-    let fields = if doc_type == "cv" { CV_DATA_FIELDS } else { LM_DATA_FIELDS };
+    // Pour le CV, la liste des champs est fermée : générée depuis les catégories du profil.
+    let fields = if doc_type == "cv" { cv_data_fields_prompt() } else { LM_DATA_FIELDS.to_string() };
     let label = doc_type_label(doc_type);
     let system = format!(
         "Tu lis un document Typst ({label}) et tu ranges son contenu dans le schéma JSON imposé (example_data). \
