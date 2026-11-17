@@ -8,6 +8,8 @@
 //! - compile avec des données vides ;
 //! - compilé avec les champs secondaires vides, ne laisse aucun séparateur
 //!   orphelin ;
+//! - (CV) compilé avec des listes vides, libellés et textes de la référence
+//!   présents, n'affiche aucun titre de section vide ;
 //! - compilé avec un marqueur unique dans chaque chaîne (rendu sentinelle),
 //!   n'affiche plus aucun texte écrit en dur : tout texte visible vient d'un
 //!   champ, d'un libellé ou d'un texte de la référence (`data.texts`).
@@ -27,6 +29,7 @@ use crate::docgen::sentinel_data::{hardcoded_runs, hardcoded_values, is_month_wo
 use crate::docgen::text_diff::{diff_hunks, normalize_quotes, DiffHunk};
 use crate::documents::example_check::CheckedExample;
 use crate::documents::markup::hard_texts::add_text;
+use crate::documents::orphan_title_check::{empty_lists_data, orphan_title_problems};
 use crate::documents::paragraph_check::paragraph_problems;
 use crate::documents::sparse_check::{cleared_data, sparse_problems, SPARSE_FIELDS};
 use crate::documents::template_problems::{code_rendered_as_text, compile_problems, describe_hunks, NamedRender};
@@ -61,7 +64,7 @@ pub struct TemplateContext<'a> {
 ///
 /// * `problems` - Tous les problèmes relevés (vide si accepté).
 /// * `blocking` - Nombre de problèmes bloquants (tous sauf les séparateurs
-///   orphelins, tolérés au dernier essai).
+///   et les titres orphelins, tolérés au dernier essai).
 /// * `page_count` - Pages du rendu avec les données d'exemple, s'il compile.
 /// * `texts` - Textes en dur, complétés de ceux découverts dans le rendu
 ///   sentinelle (pour l'essai suivant).
@@ -100,24 +103,48 @@ pub async fn check_template(
     //    sentinelles (compilation bloquante, hors du runtime async)
     // ------------------------------------------------------------------
     let example = example_for_rendering(checked, context)?;
-    let data_sets = [example.clone(), blank_data(checked, context.doc_type)?, cleared_data(&example, &SPARSE_FIELDS)?, sentinel_data(checked, context.doc_type)?];
+    let mut data_sets = vec![
+        example.clone(),
+        blank_data(checked, context.doc_type)?,
+        cleared_data(&example, &SPARSE_FIELDS)?,
+        sentinel_data(checked, context.doc_type)?,
+    ];
+    // Le contrôle des titres orphelins ne concerne que le CV (la lettre n'a pas de sections).
+    let is_cv = context.doc_type == "cv";
+    if is_cv {
+        data_sets.push(empty_lists_data(&example)?);
+    }
     let (owned, root, fonts_dir) = (template.to_string(), context.root.to_path_buf(), context.fonts_dir.to_path_buf());
-    let [with_example, with_blank, with_sparse, with_sentinel] = tokio::task::spawn_blocking(move || {
-        data_sets.map(|data| compile_template(owned.clone(), data, root.clone(), fonts_dir.clone()))
+    let mut renders = tokio::task::spawn_blocking(move || {
+        data_sets
+            .into_iter()
+            .map(|data| compile_template(owned.clone(), data, root.clone(), fonts_dir.clone()))
+            .collect::<Vec<_>>()
     })
     .await
-    .map_err(|e| AppError::Validation(format!("Erreur interne de compilation Typst : {e}")))?;
+    .map_err(|e| AppError::Validation(format!("Erreur interne de compilation Typst : {e}")))?
+    .into_iter();
+    let (Some(with_example), Some(with_blank), Some(with_sparse), Some(with_sentinel)) =
+        (renders.next(), renders.next(), renders.next(), renders.next())
+    else {
+        return Err(AppError::Validation("Rendus de validation manquants.".to_string()));
+    };
+    let with_empty_lists = renders.next();
 
     // ------------------------------------------------------------------
     // 2. Contrôles statiques et erreurs de compilation, dédoublonnées
     // ------------------------------------------------------------------
     let mut problems = static_problems(template);
     let texts_of = |r: &Result<CompiledDocument, String>| r.as_ref().map(|d| d.text.clone()).map_err(Clone::clone);
-    let results = [texts_of(&with_example), texts_of(&with_blank), texts_of(&with_sparse), texts_of(&with_sentinel)];
-    let names = ["exemple", "vides", "champs secondaires vides", "un marqueur par champ"];
-    let renders: Vec<NamedRender> =
+    let mut results = vec![texts_of(&with_example), texts_of(&with_blank), texts_of(&with_sparse), texts_of(&with_sentinel)];
+    let mut names = vec!["exemple", "vides", "champs secondaires vides", "un marqueur par champ"];
+    if let Some(rendered) = &with_empty_lists {
+        results.push(texts_of(rendered));
+        names.push("listes vides, libellés et textes de la référence présents");
+    }
+    let named: Vec<NamedRender> =
         names.iter().zip(&results).map(|(name, result)| NamedRender { name, result }).collect();
-    problems.extend(compile_problems(&renders));
+    problems.extend(compile_problems(&named));
 
     // ------------------------------------------------------------------
     // 3. Fidélité à la référence, puis texte resté en dur
@@ -133,9 +160,12 @@ pub async fn check_template(
     }
 
     // ------------------------------------------------------------------
-    // 4. Séparateurs orphelins (seul défaut toléré en dernier recours)
+    // 4. Séparateurs et titres orphelins (seuls défauts tolérés en dernier recours)
     // ------------------------------------------------------------------
     let blocking = problems.len();
+    if let Some(Ok(rendered)) = &with_empty_lists {
+        problems.extend(orphan_title_problems(&rendered.text, &checked.example, &texts));
+    }
     if with_sparse.is_ok() {
         let (root, fonts_dir) = (context.root.to_path_buf(), context.fonts_dir.to_path_buf());
         problems.extend(sparse_problems(with_sparse, template, &example, root, fonts_dir).await?);

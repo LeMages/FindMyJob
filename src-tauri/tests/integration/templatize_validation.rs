@@ -229,6 +229,29 @@ async fn separateur_orphelin_designe_et_non_bloquant() {
     assert_eq!(verdict.blocking, 0, "seuls des orphelins : template utilisable en dernier recours");
 }
 
+#[tokio::test]
+async fn section_entierement_vide_titre_refuse() {
+    let cv = reference("cv_balise.typ", "cv");
+    let template = template("cv_balise_template.typ").replace(
+        "#if data.labels.section_formations != \"\" and data.formations.len() > 0 {",
+        "#if data.labels.section_formations != \"\" {",
+    );
+    let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
+    let expected = |p: &String| p.contains("le titre « Formation »") && p.contains("section est vide");
+    assert!(verdict.problems.iter().any(expected), "{:?}", verdict.problems);
+    assert_eq!(verdict.blocking, 0, "toléré en dernier recours, comme les séparateurs orphelins");
+}
+
+#[tokio::test]
+async fn section_avec_unite_fixe_restante_titre_garde() {
+    // La section « Langues & Centres d'Intérêt » garde sa ligne « Intérêts » (texte en
+    // dur de la référence) quand les langues sont vides : son titre reste affiché.
+    let cv = reference("cv_balise.typ", "cv");
+    let verdict = verdict(&cv, "cv_balise_example_data.json", &template("cv_balise_template.typ")).await;
+    let titles: Vec<&String> = verdict.problems.iter().filter(|p| p.contains("section est vide")).collect();
+    assert!(titles.is_empty(), "{titles:?}");
+}
+
 #[test]
 fn saut_de_ligne_du_source_normalise_dans_les_valeurs() {
     // Sortie réelle de l'étape A : la ligne de commentaire au milieu d'un

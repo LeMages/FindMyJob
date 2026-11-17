@@ -149,7 +149,7 @@
 }
 
 // --- Langues & Centres d'intérêt ---
-#if data.labels.section_langues != "" and data.langues.len() > 0 {
+#if data.labels.section_langues != "" {
   section-header(data.labels.section_langues)
   if data.langues.len() > 0 {
     block(below: space-line, data.langues.map(l => {
