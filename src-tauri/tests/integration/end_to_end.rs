@@ -6,7 +6,7 @@
 
 // Importation des modules internes
 use crate::shared::{fake_llm, offer_server, seed, test_state};
-use fake_llm::Step;
+use fake_llm::{Reply, Step};
 use findmyjob_lib::error::AppError;
 use findmyjob_lib::models::{CreateCandidatureInput, ExtractionStage, GenerationStatus};
 use findmyjob_lib::scraping::fetch::fetch_html_allowing_loopback;
@@ -42,6 +42,8 @@ async fn parcours_complet_de_l_offre_a_la_suppression() {
     // ------------------------------------------------------------------
     // 3. Import de l'offre par son lien
     // ------------------------------------------------------------------
+    // L'objet de la lettre doit citer l'intitulé exact de l'offre importée.
+    app.llm.respond_with(Step::LmContent, Reply::Fixture("lm_content_stage_assistant.json"));
     let server = OfferServer::start().await;
     let url = server.serve("/doctolib/stage", "ashby_json_ld.html", 200, HTML).await;
     let offre = scraping::scrape_offer_with(app.state.claude(), &url, fetch_html_allowing_loopback)

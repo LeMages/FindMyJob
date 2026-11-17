@@ -107,10 +107,11 @@ pub struct GenerationRequest<'a> {
     pub llm: &'a Arc<dyn LlmCaller>,
 }
 
-/// Construit le destinataire de la lettre depuis la candidature.
-async fn load_recipient(pool: &SqlitePool, candidature_id: i64) -> Result<Recipient, AppError> {
+/// Construit le destinataire de la lettre depuis la candidature, avec
+/// l'intitulé exact du poste.
+async fn load_recipient(pool: &SqlitePool, candidature_id: i64) -> Result<(Recipient, String), AppError> {
     let candidature = db::candidatures::fetch_detail(pool, candidature_id).await?;
-    Ok(build_recipient(&candidature))
+    Ok((build_recipient(&candidature), candidature.poste.trim().to_string()))
 }
 
 /// Langue d'un document : celle du corps de l'offre si elle est prise en
@@ -170,6 +171,7 @@ struct DocumentLanguage<L> {
 /// * `target` - Clé API et modèle Claude configuré.
 /// * `cv_ref`, `lm_ref` - Références templatisées.
 /// * `recipient` - Destinataire de la lettre.
+/// * `job_title` - Intitulé exact du poste de la candidature.
 /// * `offer_analysis` - Analyse de l'offre (JSON).
 /// * `matching`, `selection` - Matching et entrées retenues.
 /// * `cv_budget`, `lm_budget` - Budgets initiaux.
@@ -182,6 +184,7 @@ struct GenerationContext {
     cv_ref: ReferenceTemplate<CvExampleData>,
     lm_ref: ReferenceTemplate<LmExampleData>,
     recipient: Recipient,
+    job_title: String,
     location: SenderLocation,
     offer_analysis: String,
     matching: MatchingResult,
@@ -223,6 +226,7 @@ impl GenerationContext {
             guidance: &self.lm.texts.texts.guidance,
             budget,
             company: &self.recipient.company,
+            job_title: &self.job_title,
             target_lang: &self.lm.lang,
             example_lang: &self.lm_ref.example.data.lang,
         }
@@ -251,7 +255,7 @@ async fn prepare(
         load_reference(pool, request.data_dir, request.session_id, "cv", "CV").await?;
     let lm_ref: ReferenceTemplate<LmExampleData> =
         load_reference(pool, request.data_dir, request.session_id, "lettre_motivation", "lettre de motivation").await?;
-    let recipient = load_recipient(pool, request.candidature_id).await?;
+    let (recipient, job_title) = load_recipient(pool, request.candidature_id).await?;
     // Le lieu de l'expéditeur vient de la session, jamais de la référence.
     let session = db::sessions::fetch_view(pool, request.session_id).await?;
     let location = SenderLocation::new(session.ville.as_ref(), session.zip_code.as_ref());
@@ -332,6 +336,7 @@ async fn prepare(
         cv_ref,
         lm_ref,
         recipient,
+        job_title,
         location,
         offer_analysis,
         matching,

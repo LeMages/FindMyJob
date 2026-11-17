@@ -104,6 +104,37 @@ async fn coordonnee_vide_du_profil_retiree_sans_valeur_d_exemple() {
 }
 
 #[tokio::test]
+async fn objet_de_la_lettre_cite_l_intitule_exact_du_poste() {
+    let (app, sid) = ready_app("generation-intitule").await;
+    let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+
+    let (_, lm) = read_data(&app.state, sid, "lettre_motivation", view.id);
+    assert!(lm["subject"].as_str().is_some_and(|s| s.contains("Data engineer stagiaire")), "{}", lm["subject"]);
+    let messages = app.llm.messages_for(Step::LmContent);
+    assert!(messages[0].contains("INTITULÉ EXACT DU POSTE : Data engineer stagiaire"), "{}", messages[0]);
+}
+
+#[tokio::test]
+async fn intitule_reformule_relance_puis_succes() {
+    let (app, sid) = ready_app("generation-intitule-relance").await;
+    app.llm.respond_with(
+        Step::LmContent,
+        Reply::Sequence(&["lm_content_intitule_reformule.json", "lm_content.json"]),
+    );
+    let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+
+    assert!(app.llm.calls_for(Step::LmContent) >= 2, "au moins une relance");
+    let retry = &app.llm.messages_for(Step::LmContent)[1];
+    assert!(retry.contains("intitulé exact du poste « Data engineer stagiaire »"), "{retry}");
+    let (_, lm) = read_data(&app.state, sid, "lettre_motivation", view.id);
+    assert!(lm["subject"].as_str().is_some_and(|s| s.contains("Data engineer stagiaire")));
+}
+
+#[tokio::test]
 async fn prenom_vide_refuse_la_generation_avant_tout_appel_llm() {
     let (app, sid) = ready_app("generation-sans-prenom").await;
     sqlx::query("UPDATE users SET prenom = ''").execute(&app.state.pool).await.expect("prénom vidé");
@@ -220,7 +251,7 @@ async fn aucun_tiret_interdit_dans_les_documents_generes() {
     assert_no_dash_in_data("lettre", &lm);
     assert_eq!(cv["experiences"][0]["poste"], "Fondateur - Plateforme de covoiturage");
     assert_eq!(cv["projects"][0]["titre"], "ALGN - Autonomous Legal Graph Navigator");
-    assert_eq!(lm["subject"], "Candidature, stage de data engineer");
+    assert_eq!(lm["subject"], "Candidature, Data engineer stagiaire");
     let paragraph = lm["paragraphs"][1].as_str().expect("paragraphe");
     assert!(paragraph.contains("pipelines SQL, un travail proche"), "{paragraph}");
     let profile = db::profile::build_profile(pool).await.expect("profil");

@@ -32,6 +32,7 @@ pub mod reference_texts_translation;
 pub mod selection;
 pub mod sentinel_data;
 pub mod text_diff;
+pub mod title_match;
 pub mod translation_check;
 pub mod words;
 
