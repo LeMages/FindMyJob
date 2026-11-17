@@ -20,6 +20,7 @@ use crate::models::doc_data::SkillsGroup;
 pub struct CvContent {
     pub title: String,
     pub summary: String,
+    #[serde(default)]
     pub skills_groups: Vec<SkillsGroup>,
 }
 

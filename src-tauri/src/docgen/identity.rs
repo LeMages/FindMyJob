@@ -83,7 +83,8 @@ pub fn build_identity(user: &UserView, location: &SenderLocation, title: &str, d
         linkedin: text_or_document(display_url(user.linkedin.as_ref()), &document.linkedin),
         github: text_or_document(display_url(user.github.as_ref()), &document.github),
         portfolio: text_or_document(display_url(user.portfolio.as_ref()), &document.portfolio),
-        permis: user.permis.unwrap_or(document.permis),
+        // Permis non renseigné : ligne retirée (avertissement), jamais reprise de la référence.
+        permis: user.permis.unwrap_or(false),
     }
 }
 

@@ -33,6 +33,7 @@ mod end_to_end;
 mod font_import;
 mod generation;
 mod generation_budgets;
+mod generation_missing_categories;
 mod generation_translation;
 mod llm_schema_size;
 mod offer_import;

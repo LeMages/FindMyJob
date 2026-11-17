@@ -39,6 +39,7 @@ use crate::documents::generation_trace::{DocumentTrace, GenerationTrace};
 use crate::docgen::budgets::{cv_budget, lm_budget, CvBudget, LmBudget};
 use crate::docgen::entry_texts::{source_texts, CvEntryTexts};
 use crate::docgen::period_format::detect_separator;
+use crate::docgen::profile_categories::{missing_categories, ProfileCategory};
 use crate::docgen::selection::{expected_project_count, select, Selection};
 use crate::error::AppError;
 use crate::llm::cv_writing::{write_cv, CvWritingInput};
@@ -171,6 +172,7 @@ struct DocumentLanguage<L> {
 /// * `offer_analysis` - Analyse de l'offre (JSON).
 /// * `matching`, `selection` - Matching et entrées retenues.
 /// * `cv_budget`, `lm_budget` - Budgets initiaux.
+/// * `missing` - Catégories du CV retirées car vides dans le profil.
 /// * `cv`, `lm` - Langue de chaque document et textes dans cette langue.
 struct GenerationContext {
     profile: ProfileDto,
@@ -184,6 +186,7 @@ struct GenerationContext {
     selection: Selection,
     cv_budget: CvBudget,
     lm_budget: LmBudget,
+    missing: Vec<ProfileCategory>,
     cv: DocumentLanguage<CvLabels>,
     lm: DocumentLanguage<LmLabels>,
 }
@@ -298,6 +301,8 @@ async fn prepare(
     domains.dedup();
     cv_budget.skills_group_count = cv_budget.skills_group_count.min(domains.len());
     let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count).with_fixed_words(&lm_texts.texts.guidance);
+    // Calcul déterministe : l'unité du CV est retirée et signalée, jamais reprise de la référence.
+    let missing = missing_categories(&cv_ref.example.data, &profile);
 
     let cv = DocumentLanguage {
         lang: cv_lang,
@@ -325,6 +330,7 @@ async fn prepare(
         selection,
         cv_budget,
         lm_budget,
+        missing,
         cv,
         lm,
     })
@@ -418,11 +424,13 @@ fn into_result(
         matching: ctx.matching,
         cv_budget: ctx.cv_budget,
         lm_budget: ctx.lm_budget,
+        missing_categories: ctx.missing.iter().map(|c| c.french_name().to_string()).collect(),
         cv: cv_trace,
         lm: lm_trace,
         llm_calls: ctx.target.recorder.as_ref().map(|r| r.snapshot()).unwrap_or_default(),
     };
-    let warnings = [&trace.cv.warning, &trace.lm.warning].into_iter().flatten().cloned().collect();
+    let mut warnings: Vec<String> = ctx.missing.iter().map(|c| c.warning()).collect();
+    warnings.extend([&trace.cv.warning, &trace.lm.warning].into_iter().flatten().cloned());
     GeneratedDocuments { cv, lm, warnings, trace }
 }
 

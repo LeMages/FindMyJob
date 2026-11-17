@@ -26,6 +26,7 @@ pub mod forbidden_phrases;
 pub mod identity;
 pub mod lint;
 pub mod period_format;
+pub mod profile_categories;
 pub mod recipient;
 pub mod reference_texts_translation;
 pub mod selection;
