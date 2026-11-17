@@ -17,8 +17,10 @@ use serde::{Deserialize, Serialize};
 use crate::models::prose_guidance::ProseGuidance;
 
 /// Version du format des fichiers d'une référence de lettre de motivation.
-/// Une version convertie avec un autre format doit être réimportée.
-pub const REFERENCE_FORMAT_VERSION: u32 = 2;
+/// Une version convertie avec un autre format doit être réimportée. La
+/// version 3 impose le bloc destinataire à la largeur de son contenu, calé à
+/// droite (les lettres templatisées avant gardent une largeur fixe).
+pub const REFERENCE_FORMAT_VERSION: u32 = 3;
 
 /// Version du format des fichiers d'une référence de CV. Elle est distincte
 /// de celle de la lettre : le retrait des centres d'intérêt du profil (une

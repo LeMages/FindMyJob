@@ -61,7 +61,7 @@
 // --- Destinataire (droite, fenêtre d'enveloppe suisse) ---
 // [VARIABLE] Nom de l'entreprise et adresse tirés de l'offre. Si le service
 // ou l'adresse sont inconnus, garder seulement le nom de l'entreprise et la ville.
-#align(right, block(width: 7cm, {
+#align(right, box({
   set align(left)
   set par(justify: false, leading: 0.35em)
   let lines = ()

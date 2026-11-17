@@ -75,3 +75,5 @@ Les réponses de templatisation par défaut sont construites à partir de `refer
 | `llm/templatize/lm_diese_en_mode_code.typ`, `lm_correction_ciblee.txt` | Un `#` en trop puis sa correction sous forme de remplacement ciblé |
 | `llm/templatize/cv_separateur_orphelin.typ` | Template dont le seul défaut est un séparateur orphelin (non bloquant) |
 | `llm/templatize/lm_exemple_ville_inventee.json` | Données d'exemple avec une ville absente de l'original |
+
+`tagged/lm_balisee_template.typ` rend le destinataire dans un `box` (largeur du contenu, calé à droite) ; `tagged/lm_balisee_template_largeur_fixe.typ` le garde dans un `block(width: 7cm)` comme la référence : il sert aux tests du contrôle du bloc destinataire (`recipient_check.rs`, `templatize_validation.rs`, `templatize_retries.rs`), qui le compilent pour de vrai.

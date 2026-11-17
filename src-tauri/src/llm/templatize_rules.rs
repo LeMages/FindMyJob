@@ -63,7 +63,7 @@ pub const CV_TEMPLATE_FIELDS: &str = "Rendu du CV :
 /// Rendu propre à la lettre.
 pub const LM_TEMPLATE_FIELDS: &str = "Rendu de la lettre :
 - La signature affiche `data.identity.prenom` et `data.identity.nom`.
-- Destinataire : `data.recipient.company`, puis une boucle sur `data.recipient.extra_lines`, puis `data.recipient.location` ; chaque ligne n'apparaît que si elle est non vide.
+- Destinataire : `data.recipient.company`, puis une boucle sur `data.recipient.extra_lines`, puis `data.recipient.location` ; chaque ligne n'apparaît que si elle est non vide. Par exception à la règle 1 (recopie des espacements), si l'original place ce bloc contre la marge droite : le bloc a la largeur de son contenu (sa ligne la plus longue), reste calé contre la marge droite, et son texte est aligné à gauche à l'intérieur. Remplace toute largeur fixe (`block(width: 7cm, …)`) par `#align(right, box({ set align(left); … }))` en gardant le `set par(…)` de l'original (un `block` ne rétrécit pas à son contenu, un `box` si).
 - Ligne de date : `data.identity.ville` suivi de la ponctuation de l'original (seulement si la ville est non vide), `data.labels.date_prefix`, puis `data.date`. Jamais le code postal.
 - Objet : `data.labels.subject_prefix` puis `data.subject`.
 - Corps : `data.labels.salutation`, puis une boucle sur `data.paragraphs` où chaque entrée devient un paragraphe distinct, séparé du précédent comme dans l'original (par exemple `#for p in data.paragraphs [#p #parbreak()]`), puis `data.labels.closing`. Jamais `.join()` ni `.at(i)` sur paragraphs.";

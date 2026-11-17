@@ -38,6 +38,7 @@ mod generation_translation;
 mod llm_schema_size;
 mod offer_import;
 mod profile_lifecycle;
+mod recipient_check;
 mod scraping_contract_type;
 mod scraping_fetch_rules;
 mod scraping_finalize;

@@ -10,6 +10,9 @@
 //!   orphelin ;
 //! - (CV) compilé avec des listes vides, libellés et textes de la référence
 //!   présents, n'affiche aucun titre de section vide ;
+//! - (lettre) compilé avec l'entreprise et la ville seulement, garde son bloc
+//!   destinataire calé à droite quand celui de la référence l'est (toléré
+//!   au dernier essai) ;
 //! - compilé avec un marqueur unique dans chaque chaîne (rendu sentinelle),
 //!   n'affiche plus aucun texte écrit en dur : tout texte visible vient d'un
 //!   champ, d'un libellé ou d'un texte de la référence (`data.texts`).
@@ -31,6 +34,7 @@ use crate::documents::example_check::CheckedExample;
 use crate::documents::markup::hard_texts::add_text;
 use crate::documents::orphan_title_check::{empty_lists_data, orphan_title_problems};
 use crate::documents::paragraph_check::paragraph_problems;
+use crate::documents::recipient_check::{recipient_problems, sparse_recipient_data};
 use crate::documents::sparse_check::{cleared_data, sparse_problems, SPARSE_FIELDS};
 use crate::documents::template_problems::{code_rendered_as_text, compile_problems, describe_hunks, NamedRender};
 use crate::documents::typst::{compile_template, CompiledDocument};
@@ -113,6 +117,9 @@ pub async fn check_template(
     let is_cv = context.doc_type == "cv";
     if is_cv {
         data_sets.push(empty_lists_data(&example)?);
+    } else {
+        // Seule la lettre a un destinataire : rendu avec entreprise et ville seulement.
+        data_sets.push(sparse_recipient_data(&example)?);
     }
     let (owned, root, fonts_dir) = (template.to_string(), context.root.to_path_buf(), context.fonts_dir.to_path_buf());
     let mut renders = tokio::task::spawn_blocking(move || {
@@ -129,7 +136,8 @@ pub async fn check_template(
     else {
         return Err(AppError::Validation("Rendus de validation manquants.".to_string()));
     };
-    let with_empty_lists = renders.next();
+    let fifth = renders.next();
+    let (with_empty_lists, with_sparse_recipient) = if is_cv { (fifth, None) } else { (None, fifth) };
 
     // ------------------------------------------------------------------
     // 2. Contrôles statiques et erreurs de compilation, dédoublonnées
@@ -165,6 +173,11 @@ pub async fn check_template(
     let blocking = problems.len();
     if let Some(Ok(rendered)) = &with_empty_lists {
         problems.extend(orphan_title_problems(&rendered.text, &checked.example, &texts));
+    }
+    if let Some(sparse_recipient) = &with_sparse_recipient {
+        if let Ok(rendered) = &with_example {
+            problems.extend(recipient_problems(rendered, &checked.example, sparse_recipient));
+        }
     }
     if with_sparse.is_ok() {
         let (root, fonts_dir) = (context.root.to_path_buf(), context.fonts_dir.to_path_buf());

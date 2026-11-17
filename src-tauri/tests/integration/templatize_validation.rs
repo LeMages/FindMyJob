@@ -158,6 +158,16 @@ async fn lettre_balisee_template_conforme_acceptee() {
 }
 
 #[tokio::test]
+async fn destinataire_a_largeur_fixe_tolere_mais_signale() {
+    let lm = reference("lm_balisee.typ", "lettre_motivation");
+    let verdict = verdict(&lm, "lm_balisee_example_data.json", &template("lm_balisee_template_largeur_fixe.typ")).await;
+    assert!(verdict.problems.iter().any(|p| p.contains("marge droite")), "{:?}", verdict.problems);
+    // Hors des problèmes bloquants : toléré au dernier essai seulement.
+    assert_eq!(verdict.blocking, 0, "{:?}", verdict.problems);
+    assert_eq!(verdict.problems.len(), 1, "{:?}", verdict.problems);
+}
+
+#[tokio::test]
 async fn texte_de_la_reference_ecrit_en_dur_refuse() {
     let cv = reference("cv_balise.typ", "cv");
     let template = template("cv_balise_template.typ").replace("data.texts.t4", "\"Références disponibles sur demande\"");

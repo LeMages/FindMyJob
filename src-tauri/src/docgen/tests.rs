@@ -15,7 +15,7 @@ use crate::docgen::build_lm_data::{build_lm_data, LmLayout};
 use crate::docgen::contact_fields::{missing_contacts, ContactField};
 use crate::docgen::entry_texts::source_texts;
 use crate::docgen::identity::{display_url, lines, validate_sender_name, SenderLocation};
-use crate::docgen::recipient::build_recipient;
+use crate::docgen::recipient::{build_recipient, split_location};
 use crate::documents::typst::compile_template;
 use crate::docgen::selection::{select, Selection};
 use crate::models::{
@@ -196,6 +196,28 @@ fn destinataire_depuis_la_candidature_sans_contact() {
     assert_eq!(recipient.contact_role, "");
 }
 
+#[test]
+fn destinataire_adresse_decoupee_et_localisation_absente_sans_ligne_vide() {
+    let candidature = |localisation: serde_json::Value| -> CandidatureDetail {
+        serde_json::from_value(serde_json::json!({
+            "id": 1, "session_id": 1, "poste": "Stage", "entreprise": "Société Exemple", "localisation": localisation,
+            "status": "a_postuler", "source": null, "type_contrat": null, "remuneration": null, "url_offre": null,
+            "description_offre": null, "notes": null, "date_candidature": null, "cv_path": null,
+            "lettre_motivation_path": null, "cv_reference_version": null, "lm_reference_version": null,
+            "generation_warnings": [],
+            "created_at": "2026-01-01T00:00:00Z"
+        }))
+        .expect("candidature de fixture")
+    };
+
+    let recipient = build_recipient(&candidature(serde_json::json!("12 rue de la Paix, 75002 Paris")));
+    assert_eq!(recipient.extra_lines, vec!["12 rue de la Paix".to_string()]);
+    assert_eq!(recipient.location, "75002 Paris");
+
+    let recipient = build_recipient(&candidature(serde_json::Value::Null));
+    assert!(recipient.extra_lines.is_empty() && recipient.location.is_empty(), "{recipient:?}");
+}
+
 // ======================================================================
 // build_cv_data / build_lm_data
 // ======================================================================
@@ -225,6 +247,22 @@ fn cv_data_fusionne_profil_contenu_et_libelles() {
     assert_eq!(data.formations[0].period, "2022 - 2027");
     assert_eq!(data.formations[0].details, vec!["Spécialité data".to_string(), "Échange à l'étranger".to_string()]);
     assert_eq!(data.lang, "fr");
+}
+
+#[test]
+fn localisation_decoupee_en_lignes_d_adresse() {
+    let cases: [(&str, &[&str], &str); 6] = [
+        ("Paris", &[], "Paris"),
+        ("12 rue de la Paix, 75002 Paris", &["12 rue de la Paix"], "75002 Paris"),
+        ("Paris, France", &["Paris"], "France"),
+        ("", &[], ""),
+        (" , Paris ,, ", &[], "Paris"),
+        ("Rue A,  Bât. B , 69003 Lyon", &["Rue A", "Bât. B"], "69003 Lyon"),
+    ];
+    for (input, extra, location) in cases {
+        let (lines, last) = split_location(input);
+        assert_eq!((lines, last.as_str()), (extra.iter().map(|s| s.to_string()).collect::<Vec<_>>(), location), "{input:?}");
+    }
 }
 
 #[test]
@@ -535,11 +573,18 @@ fn reference_d_une_version_precedente_a_reimporter() {
     std::fs::write(&current, r#"{"format_version": 3, "lang": "fr", "texts": {"t1": "P.J."}, "guidance": {"general": "", "zones": []}}"#)
         .expect("écriture");
     assert_eq!(load_texts(&current, "cv", "CV").expect("format courant").texts["t1"], "P.J.");
-    // Un CV au format de la lettre (2) est refusé, une lettre au format 2 est acceptée.
+    // Le format de la lettre (3) est refusé pour un CV ; une lettre au format 2 est refusée (bloc destinataire).
     let letter_format = dir.join("lettre.json");
-    std::fs::write(&letter_format, r#"{"format_version": 2, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
+    std::fs::write(&letter_format, r#"{"format_version": 3, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
         .expect("écriture");
-    assert!(matches!(load_texts(&letter_format, "cv", "CV"), Err(AppError::OutdatedReference(_))), "ancien CV refusé");
-    assert!(load_texts(&letter_format, "lettre_motivation", "lettre de motivation").is_ok(), "lettre inchangée");
+    assert!(load_texts(&letter_format, "lettre_motivation", "lettre de motivation").is_ok(), "lettre au format courant");
+    let old_letter = dir.join("ancienne_lettre.json");
+    std::fs::write(&old_letter, r#"{"format_version": 2, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
+        .expect("écriture");
+    assert!(
+        matches!(load_texts(&old_letter, "lettre_motivation", "lettre de motivation"), Err(AppError::OutdatedReference(_))),
+        "ancienne lettre refusée"
+    );
+    assert!(matches!(load_texts(&old_letter, "cv", "CV"), Err(AppError::OutdatedReference(_))), "format 2 refusé pour un CV");
     std::fs::remove_dir_all(&dir).expect("nettoyage");
 }

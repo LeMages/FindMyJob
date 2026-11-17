@@ -16,6 +16,7 @@ pub mod orphan_title_check;
 pub mod page_fit;
 pub mod paragraph_check;
 pub mod reference_template;
+pub mod recipient_check;
 pub mod reference_texts_cache;
 pub mod reference_versions;
 pub mod sparse_check;
