@@ -70,7 +70,6 @@ interface UserInfoDraft {
   linkedin: string
   github: string
   portfolio: string
-  interets: string
   langue_profil: string
 }
 
@@ -83,7 +82,6 @@ const draftUserInfo = ref<UserInfoDraft>({
   linkedin: '',
   github: '',
   portfolio: '',
-  interets: '',
   langue_profil: 'fr',
 })
 
@@ -95,7 +93,6 @@ function isUserInfoDirty(): boolean {
     draftUserInfo.value.nom !== (u.nom ?? '') ||
     draftUserInfo.value.email !== (u.email ?? '') ||
     draftUserInfo.value.telephone !== (u.telephone ?? '') ||
-    draftUserInfo.value.interets !== (u.interets ?? '') ||
     draftUserInfo.value.permis !== (u.permis ?? false) ||
     draftUserInfo.value.linkedin !== (u.linkedin ?? '') ||
     draftUserInfo.value.github !== (u.github ?? '') ||
@@ -133,7 +130,6 @@ function enterEditMode() {
     linkedin: u?.linkedin ?? '',
     github: u?.github ?? '',
     portfolio: u?.portfolio ?? '',
-    interets: u?.interets ?? '',
     langue_profil: u?.langue_profil ?? 'fr',
   }
   draftDescription.value = u?.description ?? ''
@@ -200,7 +196,6 @@ async function saveUserInfo(): Promise<void> {
     linkedin: linkedin || null,
     github: github || null,
     portfolio: portfolio || null,
-    interets: d.interets.trim() || null,
   }
   const updated = await invoke<UserView>('update_user_info', { input })
   profile.value!.user = updated
@@ -388,10 +383,6 @@ const initials = computed(() => {
           <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.phone') }}</label>
           <input v-model="draftUserInfo.telephone" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.placeholders.phone')" />
         </div>
-      </div>
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.interests') }}</label>
-        <textarea v-model="draftUserInfo.interets" rows="3" class="w-full border border-neutral-300 rounded-lg px-3 py-2 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 resize-y" :placeholder="t('profile.placeholders.interests')"></textarea>
       </div>
       <div class="mb-[14px] w-[260px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.info.profile_language') }}</label>

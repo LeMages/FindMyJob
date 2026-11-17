@@ -116,7 +116,6 @@ pub struct CvLangue {
 /// # Attributes
 ///
 /// * `section_*` - Titres des sections, tels qu'écrits dans la référence.
-/// * `interets_label` - Préfixe de la ligne des centres d'intérêt.
 /// * `permis` - Texte affiché quand `identity.permis` est vrai (ex. « Permis B »).
 /// * `present` - Borne de fin d'une période en cours (ex. « aujourd'hui »).
 /// * `months_short` - Les 12 abréviations de mois utilisées dans les périodes.
@@ -128,7 +127,6 @@ pub struct CvLabels {
     pub section_projects: String,
     pub section_formations: String,
     pub section_langues: String,
-    pub interets_label: String,
     pub permis: String,
     pub present: String,
     pub months_short: Vec<String>,
@@ -147,7 +145,6 @@ pub struct CvData {
     pub projects: Vec<CvProject>,
     pub formations: Vec<CvFormation>,
     pub langues: Vec<CvLangue>,
-    pub interets: Vec<String>,
     pub labels: CvLabels,
     #[serde(default)]
     pub texts: BTreeMap<String, String>,

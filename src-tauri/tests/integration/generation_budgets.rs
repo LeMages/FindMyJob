@@ -83,13 +83,11 @@ async fn meilleur_essai_conserve_et_relance_avec_rappel_de_langue() {
 
 #[test]
 fn listes_du_cv_sans_repli_sur_la_reference() {
-    // Profil sans langue ni centre d'intérêt, rédaction sans compétence :
+    // Profil sans langue, rédaction sans compétence :
     // les sections restent vides au lieu de reprendre celles de la référence.
-    let mut profile = common::profile();
-    profile.user.interets = None;
+    let profile = common::profile();
     let document = CvData {
         langues: vec![CvLangue { nom: "Allemand".into(), level: "C1".into() }],
-        interets: vec!["Voile".into()],
         skills_groups: vec![SkillsGroup { category: "Référence".into(), skills: vec!["Fortran".into()] }],
         ..Default::default()
     };
@@ -108,7 +106,7 @@ fn listes_du_cv_sans_repli_sur_la_reference() {
         texts: &no_texts,
     };
     let data = build_cv_data(&profile, &selection, &texts, &CvContent::default(), &layout);
-    assert!(data.langues.is_empty() && data.interets.is_empty() && data.skills_groups.is_empty(), "{data:?}");
+    assert!(data.langues.is_empty() && data.skills_groups.is_empty(), "{data:?}");
 }
 
 #[tokio::test]

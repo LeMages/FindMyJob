@@ -149,7 +149,7 @@
 }
 
 // --- Langues & Centres d'intérêt ---
-#if data.labels.section_langues != "" and (data.langues.len() > 0 or data.interets.len() > 0) {
+#if data.labels.section_langues != "" and data.langues.len() > 0 {
   section-header(data.labels.section_langues)
   if data.langues.len() > 0 {
     block(below: space-line, data.langues.map(l => {
@@ -157,13 +157,11 @@
       text(fill: dark, l.level)
     }).join(text(fill: light-gray, "  |  ")))
   }
-  if data.interets.len() > 0 {
-    block(below: space-line, {
-      if data.labels.interets_label != "" { text(weight: "bold", fill: dark, data.labels.interets_label + " ") }
-      text(fill: dark, data.interets.join(", "))
-    })
-  }
+  block(below: space-line, {
+    text(weight: "bold", fill: dark, data.texts.t2 + " ")
+    text(fill: dark, data.texts.t3)
+  })
 }
 
 #v(8pt)
-#text(size: 9pt, fill: gray, style: "italic", data.texts.t2)
+#text(size: 9pt, fill: gray, style: "italic", data.texts.t4)

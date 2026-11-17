@@ -54,7 +54,6 @@ async fn met_a_jour_les_infos_avec_coalesce() {
         linkedin: None,
         github: None,
         portfolio: None,
-        interets: Some("Escalade".into()),
     };
     let user = users::update_user_info(&pool, input).await.unwrap();
     assert_eq!(user.nom.as_deref(), Some("Durand"));

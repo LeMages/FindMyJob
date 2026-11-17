@@ -16,7 +16,7 @@ const USER_ID: i64 = 1;
 
 /// Colonnes lues pour reconstruire un `UserView`.
 const USER_COLUMNS: &str = "id, nom, prenom, email, telephone, permis, \
-     description, linkedin, github, portfolio, interets, langue_profil, created_at";
+     description, linkedin, github, portfolio, langue_profil, created_at";
 
 /// Construit un `UserView` à partir d'une ligne SQL brute.
 ///
@@ -39,7 +39,6 @@ fn row_to_user(row: &SqliteRow) -> Result<UserView, sqlx::Error> {
         linkedin: row.try_get("linkedin")?,
         github: row.try_get("github")?,
         portfolio: row.try_get("portfolio")?,
-        interets: row.try_get("interets")?,
         langue_profil: row.try_get("langue_profil")?,
         created_at: row.try_get("created_at")?,
     })
@@ -207,7 +206,7 @@ pub async fn update_profile_language(pool: &SqlitePool, lang: &str) -> Result<Us
 /// Met à jour les informations de contact du profil.
 ///
 /// Les champs `None` conservent leur valeur existante (`COALESCE`), à
-/// l'exception de `telephone`, `interets` et `permis` qui sont toujours
+/// l'exception de `telephone` et `permis` qui sont toujours
 /// remplacés (y compris par `None`).
 /// `linkedin`, `github` et `portfolio` suivent le même comportement
 /// `COALESCE` que `prenom`/`nom`/`email` : un champ vidé côté client
@@ -239,9 +238,8 @@ pub async fn update_user_info(pool: &SqlitePool, input: UpdateUserInfoInput) -> 
            permis    = $5, \
            linkedin  = COALESCE($6, linkedin), \
            github    = COALESCE($7, github), \
-           portfolio = COALESCE($8, portfolio), \
-           interets  = $9 \
-         WHERE id = $10",
+           portfolio = COALESCE($8, portfolio) \
+         WHERE id = $9",
     )
     .bind(normalize(input.prenom))
     .bind(normalize(input.nom))
@@ -251,7 +249,6 @@ pub async fn update_user_info(pool: &SqlitePool, input: UpdateUserInfoInput) -> 
     .bind(normalize(input.linkedin))
     .bind(normalize(input.github))
     .bind(normalize(input.portfolio))
-    .bind(normalize(input.interets))
     .bind(USER_ID)
     .execute(&mut *tx)
     .await

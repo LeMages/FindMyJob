@@ -92,7 +92,7 @@ pub fn build_identity(user: &UserView, location: &SenderLocation, title: &str, d
 ///
 /// # Arguments
 ///
-/// * `value` - Texte du profil (détails de formation, centres d'intérêt).
+/// * `value` - Texte du profil (détails de formation).
 ///
 /// # Returns
 ///

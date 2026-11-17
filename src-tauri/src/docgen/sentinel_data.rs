@@ -63,7 +63,6 @@ pub fn sentinel_cv_data(lang: &str, text_ids: &[String]) -> Result<Value, serde_
         projects: vec![CvProject { bullets: vec![String::new()], ..Default::default() }],
         formations: vec![CvFormation { details: vec![String::new()], ..Default::default() }],
         langues: vec![CvLangue::default()],
-        interets: vec![String::new()],
         labels: CvLabels { months_short: vec![String::new(); 12], ..Default::default() },
         texts: empty_texts(text_ids),
         ..Default::default()

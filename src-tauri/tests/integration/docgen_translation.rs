@@ -21,7 +21,6 @@ fn original() -> CvEntryTexts {
         }],
         formations: vec![EntryLines { id: 30, lines: vec!["Spécialité données".to_string()] }],
         langues: vec![LanguageTexts { id: 40, nom: "Anglais".to_string(), level: "Courant (TOEIC 905)".to_string() }],
-        interets: vec!["Escalade".to_string()],
     }
 }
 
@@ -39,7 +38,6 @@ fn translated() -> CvEntryTexts {
         }],
         formations: vec![EntryLines { id: 30, lines: vec!["Data major".to_string()] }],
         langues: vec![LanguageTexts { id: 40, nom: "English".to_string(), level: "Fluent (TOEIC 905)".to_string() }],
-        interets: vec!["Climbing".to_string()],
     }
 }
 
@@ -124,19 +122,9 @@ fn identifiants_inconnus_manquants_ou_en_double() {
 }
 
 #[test]
-fn langues_et_interets_traduits_valides() {
+fn langues_traduites_valides() {
     let mut bad = translated();
     bad.langues[0].level = String::new();
-    bad.interets.push("Chess".to_string());
     let problems = translation_problems(&original(), &bad);
     assert!(problems.iter().any(|p| p.contains("langues id 40.level")), "{problems:?}");
-    assert!(problems.iter().any(|p| p.contains("interets contient 2")), "{problems:?}");
-}
-
-#[test]
-fn textes_source_avec_langues_et_interets_du_profil() {
-    let mut profile = common::profile();
-    profile.user.interets = Some("Escalade\nPhotographie".to_string());
-    let texts = source_texts(&profile, &select(&profile, &[]));
-    assert_eq!(texts.interets, ["Escalade", "Photographie"]);
 }

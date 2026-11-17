@@ -3,7 +3,7 @@
 //! quand il est vide sur cette information, la valeur du document (données
 //! d'exemple) est gardée, sauf le lieu (ville, code postal), qui vient de la
 //! session et ne se replie jamais sur la référence. Les listes (compétences,
-//! langues, intérêts…) ne se replient jamais sur la référence : le profil est leur seule source.
+//! langues…) ne se replient jamais sur la référence : le profil est leur seule source.
 
 /// Valeur du profil si elle n'est pas vide, sinon celle du document.
 ///

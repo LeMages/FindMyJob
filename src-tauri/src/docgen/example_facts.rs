@@ -35,7 +35,7 @@ fn identity_values(identity: &Identity) -> Vec<&str> {
 }
 
 /// Informations d'un CV : identité, puis intitulés, organisations, lieux,
-/// détails, compétences, langues et centres d'intérêt. Les périodes sont
+/// détails, compétences, langues. Les périodes sont
 /// exclues : faites de nombres, elles se confondent avec du texte daté
 /// ordinaire.
 ///
@@ -62,7 +62,6 @@ pub fn cv_information_values(data: &CvData) -> Vec<String> {
     for langue in &data.langues {
         values.extend([langue.nom.as_str(), &langue.level]);
     }
-    values.extend(data.interets.iter().map(String::as_str));
     retained(values)
 }
 

@@ -29,7 +29,7 @@ use crate::models::{
 /// * `location` - Localisation de l'expéditeur (session), sans repli sur la référence.
 /// * `document` - Données d'exemple de la référence, reprises seulement
 ///   quand le profil est vide sur une information d'identité. Compétences,
-///   langues, centres d'intérêt, expériences, projets et formations ne
+///   langues, expériences, projets et formations ne
 ///   viennent que du profil : vide dans le profil, la section est vide.
 pub struct CvLayout<'a> {
     pub location: &'a SenderLocation,
@@ -124,7 +124,6 @@ pub fn build_cv_data(
         projects,
         formations,
         langues,
-        interets: texts.interets.clone(),
         labels: layout.labels.clone(),
         texts: layout.texts.clone(),
     }

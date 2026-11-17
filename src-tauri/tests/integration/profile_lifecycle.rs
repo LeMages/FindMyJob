@@ -45,7 +45,6 @@ fn no_change() -> UpdateUserInfoInput {
         linkedin: None,
         github: None,
         portfolio: None,
-        interets: None,
     }
 }
 
@@ -57,7 +56,6 @@ async fn identite_et_coordonnees() {
         prenom: Some("Alexandra".into()),
         email: Some("alexandra@example.com".into()),
         telephone: Some("06 00 00 00 01".into()),
-        interets: Some("Escalade\nPhotographie".into()),
         ..no_change()
     };
     users::update_user_info(&pool, input).await.expect("mise à jour");
@@ -67,7 +65,6 @@ async fn identite_et_coordonnees() {
     assert_eq!(user.nom.as_deref(), Some("Martin"));
     assert_eq!(user.email.as_deref(), Some("alexandra@example.com"));
     assert_eq!(user.telephone.as_deref(), Some("06 00 00 00 01"));
-    assert_eq!(user.interets.as_deref(), Some("Escalade\nPhotographie"));
     assert_eq!(user.description.as_deref(), Some("Étudiante en data."));
 
     // Suppression des champs facultatifs.

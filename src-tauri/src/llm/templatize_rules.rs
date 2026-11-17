@@ -37,9 +37,9 @@ pub const CV_DATA_FIELDS: &str = "Champs du CV :
 - skills_groups : une entrée par ligne de compétences, la catégorie puis les compétences.
 - experiences, projects : une entrée par expérience ou projet, avec ses bullets. `pour_qui` est l'organisation affichée pour un projet. projects.stack et projects.url : technologies et lien affichés pour un projet, chaîne vide si l'original ne les affiche pas.
 - formations : une entrée par formation ; `details` reçoit ses lignes de détail (spécialité, cours, échange).
-- langues : nom et niveau de chaque langue. interets : un centre d'intérêt par élément.
+- langues : nom et niveau de chaque langue.
 - period : la période telle qu'affichée. period_style indique pour chaque section si les périodes affichent le mois (\"month\") ou seulement l'année (\"year\") ; \"month\" pour une section absente.
-- labels.section_* : titres des sections, tels qu'écrits dans le code source de l'original. labels.interets_label : le préfixe de la ligne des centres d'intérêt (par exemple \"Intérêts :\"). labels.permis : le texte affiché pour le permis.
+- labels.section_* : titres des sections, tels qu'écrits dans le code source de l'original. labels.permis : le texte affiché pour le permis.
 - labels.months_short : les 12 abréviations de mois, de janvier à décembre, dans la langue et le style de l'original (\"01\"…\"12\" si l'original écrit les mois en chiffres).
 - labels.present : le mot qui termine une période en cours dans la langue de l'original (par exemple \"aujourd'hui\"), même s'il n'apparaît pas.";
 
@@ -71,7 +71,7 @@ pub const CV_TEMPLATE_FIELDS: &str = "Rendu du CV :
 - Le lieu se compose de `data.identity.ville` et `data.identity.zip_code` dans l'ordre et avec la ponctuation de l'original ; le séparateur n'apparaît que si les deux sont non vides.
 - skills_groups : une ligne par groupe, la catégorie puis `g.skills.join(\", \")`.
 - experiences, projects, formations : une boucle par section, chaque entrée avec ses bullets (ou details). Un élément affiché avec une mise en page différente des autres se choisit dans la boucle d'après ses données.
-- langues : le séparateur entre le nom et le niveau ne s'affiche que si le niveau n'est pas vide. interets : joints par \", \" après `data.labels.interets_label`.";
+- langues : le séparateur entre le nom et le niveau ne s'affiche que si le niveau n'est pas vide.";
 
 /// Rendu propre à la lettre.
 pub const LM_TEMPLATE_FIELDS: &str = "Rendu de la lettre :

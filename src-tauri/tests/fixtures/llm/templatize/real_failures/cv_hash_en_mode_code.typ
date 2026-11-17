@@ -161,8 +161,8 @@
   }
 })
 #block(below: space-line, {
-  text(weight: "bold", fill: dark, data.labels.interets_label + " : ")
-  text(fill: dark, data.interets.join(", "))
+  text(weight: "bold", fill: dark, data.texts.t2 + " ")
+  text(fill: dark, data.texts.t3)
 })
 
 #v(8pt)

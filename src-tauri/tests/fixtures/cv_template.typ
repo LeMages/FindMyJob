@@ -35,7 +35,3 @@
     list(..p.bullets)
   }
 }
-
-#if data.interets.len() > 0 {
-  text(data.labels.interets_label + " : " + data.interets.join(", "))
-}

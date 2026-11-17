@@ -90,7 +90,16 @@ fn cv_balise_textes_en_dur_identifies() {
     let cv = reference("cv_balise.typ", "cv");
     let checked = check(&cv, &example("cv_balise_example_data.json")).expect("données valides");
     let texts: Vec<&String> = checked.texts.values().collect();
-    assert_eq!(texts, ["Stage de fin d'études de 6 mois, disponible dès mars 2027", "Références disponibles sur demande"]);
+    // Les intérêts ne sont plus une donnée du profil : leur ligne est un texte en dur.
+    assert_eq!(
+        texts,
+        [
+            "Stage de fin d'études de 6 mois, disponible dès mars 2027",
+            "Intérêts :",
+            "Course à pied, Photographie, Contributions à des logiciels libres en data",
+            "Références disponibles sur demande"
+        ]
+    );
 }
 
 #[test]
@@ -151,9 +160,9 @@ async fn lettre_balisee_template_conforme_acceptee() {
 #[tokio::test]
 async fn texte_de_la_reference_ecrit_en_dur_refuse() {
     let cv = reference("cv_balise.typ", "cv");
-    let template = template("cv_balise_template.typ").replace("data.texts.t2", "\"Références disponibles sur demande\"");
+    let template = template("cv_balise_template.typ").replace("data.texts.t4", "\"Références disponibles sur demande\"");
     let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
-    let expected = |p: &String| p.contains("« Références disponibles sur demande »") && p.contains("data.texts.t2");
+    let expected = |p: &String| p.contains("« Références disponibles sur demande »") && p.contains("data.texts.t4");
     assert!(verdict.problems.iter().any(expected), "{:?}", verdict.problems);
 }
 
@@ -161,7 +170,7 @@ async fn texte_de_la_reference_ecrit_en_dur_refuse() {
 async fn texte_retire_situe_dans_sa_phrase() {
     let cv = reference("cv_balise.typ", "cv");
     let template = template("cv_balise_template.typ")
-        .replace("#text(size: 9pt, fill: gray, style: \"italic\", data.texts.t2)", "");
+        .replace("#text(size: 9pt, fill: gray, style: \"italic\", data.texts.t4)", "");
     let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
     let diff = verdict.problems.iter().find(|p| p.contains("diffère de l'original")).expect("écart signalé");
     assert!(diff.contains("absent du rendu : « Références disponibles sur demande »"), "{diff}");

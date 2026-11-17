@@ -13,6 +13,7 @@ mod db_candidatures;
 mod db_contacts;
 mod db_init;
 mod db_migration_adresse;
+mod db_migration_retrait_interets;
 mod db_migration_session_location;
 mod db_migration_ville;
 mod db_profile_entries;

@@ -55,7 +55,6 @@ fn user() -> UserView {
         linkedin: Some("https://www.linkedin.com/in/camille-martin/".to_string()),
         github: None,
         portfolio: None,
-        interets: Some("• Escalade\n\nPhotographie".to_string()),
         langue_profil: "fr".to_string(),
         created_at: now,
     }
@@ -131,7 +130,6 @@ fn cv_labels() -> CvLabels {
         section_profile: "Profil".to_string(),
         section_experiences: "Expérience".to_string(),
         section_projects: "Projets".to_string(),
-        interets_label: "Intérêts".to_string(),
         permis: "Permis B".to_string(),
         present: "aujourd'hui".to_string(),
         months_short: ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."]
@@ -226,7 +224,6 @@ fn cv_data_fusionne_profil_contenu_et_libelles() {
     assert_eq!(data.projects[0].url, "github.com/camille/projet-a");
     assert_eq!(data.formations[0].period, "2022 - 2027");
     assert_eq!(data.formations[0].details, vec!["Spécialité data".to_string(), "Échange à l'étranger".to_string()]);
-    assert_eq!(data.interets, vec!["Escalade".to_string(), "Photographie".to_string()]);
     assert_eq!(data.lang, "fr");
 }
 
@@ -422,7 +419,6 @@ fn template_compile_sans_champs_optionnels() {
     profile.user.email = None;
     profile.user.linkedin = None;
     profile.user.permis = Some(false);
-    profile.user.interets = None;
     let data = cv_data(&profile, &select(&profile, &[]), &CvData::default());
 
     let doc = compile_cv(&data);
@@ -430,7 +426,6 @@ fn template_compile_sans_champs_optionnels() {
     assert!(doc.text.contains("Lyon"), "{}", doc.text);
     assert!(!doc.text.contains("Permis"), "{}", doc.text);
     assert!(!doc.text.contains("Projets"), "section vide masquée : {}", doc.text);
-    assert!(!doc.text.contains("Intérêts"), "{}", doc.text);
     assert!(!doc.text.trim_end().ends_with('•'), "pas de séparateur orphelin : {}", doc.text);
 }
 
