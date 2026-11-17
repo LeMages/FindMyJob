@@ -203,6 +203,23 @@ pub async fn update_profile_language(pool: &SqlitePool, lang: &str) -> Result<Us
     Ok(user)
 }
 
+/// Refuse une valeur fournie mais blanche.
+///
+/// # Arguments
+///
+/// * `value` - Valeur reçue (`None` = champ inchangé).
+/// * `message` - Message d'erreur français.
+///
+/// # Returns
+///
+/// `Ok(())`, ou `AppError::Validation(message)`.
+fn reject_blank(value: Option<&str>, message: &str) -> Result<(), AppError> {
+    match value {
+        Some(v) if v.trim().is_empty() => Err(AppError::Validation(message.to_string())),
+        _ => Ok(()),
+    }
+}
+
 /// Met à jour les informations de contact du profil.
 ///
 /// Les champs `None` conservent leur valeur existante (`COALESCE`), à
@@ -221,6 +238,9 @@ pub async fn update_profile_language(pool: &SqlitePool, lang: &str) -> Result<Us
 ///
 /// `UserView` mis à jour, ou `AppError::NotFound` si le profil n'existe pas.
 pub async fn update_user_info(pool: &SqlitePool, input: UpdateUserInfoInput) -> Result<UserView, AppError> {
+    // Un prénom ou un nom blanc est refusé : `COALESCE` l'ignorerait en silence.
+    reject_blank(input.prenom.as_deref(), "Le prénom est requis.")?;
+    reject_blank(input.nom.as_deref(), "Le nom est requis.")?;
     let email = normalize(input.email);
     if let Some(ref e) = email {
         if !e.contains('@') {

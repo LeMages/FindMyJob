@@ -312,6 +312,8 @@ export const en = {
     info: {
       section: 'INFORMATION',
       first_name: 'First name',
+      first_name_required: 'The first name is required.',
+      last_name_required: 'The last name is required.',
       last_name: 'Last name',
       email: 'Email address',
       phone: 'Phone',

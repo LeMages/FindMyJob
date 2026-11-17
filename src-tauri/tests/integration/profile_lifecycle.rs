@@ -88,6 +88,22 @@ async fn identite_et_coordonnees() {
 }
 
 #[tokio::test]
+async fn prenom_ou_nom_vide_refuse_a_l_enregistrement() {
+    let pool = pool_with_user().await;
+    for (input, message) in [
+        (UpdateUserInfoInput { prenom: Some("  ".into()), ..no_change() }, "Le prénom est requis."),
+        (UpdateUserInfoInput { nom: Some(String::new()), ..no_change() }, "Le nom est requis."),
+    ] {
+        match users::update_user_info(&pool, input).await {
+            Err(AppError::Validation(m)) => assert_eq!(m, message),
+            other => panic!("validation attendue, obtenu {:?}", other.map(|u| u.nom)),
+        }
+    }
+    let user = read(&pool).await.user;
+    assert_eq!((user.prenom.as_deref(), user.nom.as_deref()), (Some("Alex"), Some("Martin")), "rien modifié");
+}
+
+#[tokio::test]
 async fn experiences_relues_par_le_profil() {
     let pool = pool_with_user().await;
     let input = |poste: &str| CreateExperienceInput {

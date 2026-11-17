@@ -27,13 +27,11 @@ use crate::models::{
 /// * `lang` - Langue du CV.
 /// * `texts` - Textes en dur de la référence, dans la langue du CV.
 /// * `location` - Localisation de l'expéditeur (session), sans repli sur la référence.
-/// * `document` - Données d'exemple de la référence, reprises seulement
-///   quand le profil est vide sur une information d'identité. Compétences,
-///   langues, expériences, projets et formations ne
-///   viennent que du profil : vide dans le profil, la section est vide.
+///
+/// Identité, compétences, langues, expériences, projets et formations ne
+/// viennent que du profil : vide dans le profil, la ligne ou la section est vide.
 pub struct CvLayout<'a> {
     pub location: &'a SenderLocation,
-    pub document: &'a CvData,
     pub labels: &'a CvLabels,
     pub period_style: &'a PeriodStyle,
     pub separator: &'a str,
@@ -114,9 +112,8 @@ pub fn build_cv_data(
 
     let langues = texts.langues.iter().map(|l| CvLangue { nom: l.nom.clone(), level: l.level.clone() }).collect();
 
-    let document = layout.document;
     CvData {
-        identity: build_identity(&profile.user, layout.location, &content.title, &document.identity),
+        identity: build_identity(&profile.user, layout.location, &content.title),
         lang: layout.lang.to_string(),
         summary: content.summary.clone(),
         skills_groups: content.skills_groups.clone(),

@@ -315,6 +315,8 @@ export const fr = {
     info: {
       section: 'INFORMATIONS',
       first_name: 'Prénom',
+      first_name_required: 'Le prénom est requis.',
+      last_name_required: 'Le nom est requis.',
       last_name: 'Nom',
       email: 'Adresse e-mail',
       phone: 'Téléphone',

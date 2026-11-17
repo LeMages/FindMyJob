@@ -29,7 +29,8 @@ use crate::services::api_key::ApiKeyAccess;
 use crate::services::claude_target::ClaudeTargetSource;
 use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
 use crate::docgen::build_lm_data::{build_lm_data, LmLayout};
-use crate::docgen::identity::SenderLocation;
+use crate::docgen::contact_fields::{missing_contacts, ContactField};
+use crate::docgen::identity::{validate_sender_name, SenderLocation};
 use crate::documents::labels_cache::{resolve_cv_labels, resolve_lm_labels};
 use crate::documents::reference_texts_cache::{resolve_reference_texts, ResolvedTexts};
 use crate::documents::page_fit::{fit_to_pages, CompileTarget, FittedDocument};
@@ -173,6 +174,7 @@ struct DocumentLanguage<L> {
 /// * `matching`, `selection` - Matching et entrées retenues.
 /// * `cv_budget`, `lm_budget` - Budgets initiaux.
 /// * `missing` - Catégories du CV retirées car vides dans le profil.
+/// * `missing_contacts` - Coordonnées affichées par une référence mais vides dans le profil.
 /// * `cv`, `lm` - Langue de chaque document et textes dans cette langue.
 struct GenerationContext {
     profile: ProfileDto,
@@ -187,6 +189,7 @@ struct GenerationContext {
     cv_budget: CvBudget,
     lm_budget: LmBudget,
     missing: Vec<ProfileCategory>,
+    missing_contacts: Vec<ContactField>,
     cv: DocumentLanguage<CvLabels>,
     lm: DocumentLanguage<LmLabels>,
 }
@@ -237,6 +240,8 @@ async fn prepare(
     // 1. Profil, modèle, références templatisées, destinataire
     // ------------------------------------------------------------------
     let profile = db::profile::build_profile(pool).await?;
+    // Avant tout appel LLM : sans prénom ni nom, aucun document valable ne peut être produit.
+    validate_sender_name(&profile.user)?;
     // Tous les appels de la génération sont journalisés pour `llm_calls.json`.
     let target = ClaudeTargetSource { pool, api_key: request.api_key, llm: request.llm }
         .resolve()
@@ -303,6 +308,9 @@ async fn prepare(
     let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count).with_fixed_words(&lm_texts.texts.guidance);
     // Calcul déterministe : l'unité du CV est retirée et signalée, jamais reprise de la référence.
     let missing = missing_categories(&cv_ref.example.data, &profile);
+    // Coordonnées vides : ligne retirée et signalée une seule fois pour les deux documents.
+    let missing_contacts =
+        missing_contacts(&[&cv_ref.example.data.identity, &lm_ref.example.data.identity], &profile.user);
 
     let cv = DocumentLanguage {
         lang: cv_lang,
@@ -331,6 +339,7 @@ async fn prepare(
         cv_budget,
         lm_budget,
         missing,
+        missing_contacts,
         cv,
         lm,
     })
@@ -345,7 +354,6 @@ async fn produce_cv(
     let separator = detect_separator(ctx.cv_ref.example.data.experiences.iter().map(|e| e.period.as_str()));
     let layout = CvLayout {
         location: &ctx.location,
-        document: &ctx.cv_ref.example.data,
         labels: &ctx.cv.labels,
         period_style: &ctx.cv_ref.example.period_style,
         separator: &separator,
@@ -381,7 +389,6 @@ async fn produce_lm(
 ) -> Result<FittedDocument<LmContent>, AppError> {
     let layout = LmLayout {
         location: &ctx.location,
-        document: &ctx.lm_ref.example.data,
         labels: &ctx.lm.labels,
         title,
         date: clock::today_local(),
@@ -430,6 +437,7 @@ fn into_result(
         llm_calls: ctx.target.recorder.as_ref().map(|r| r.snapshot()).unwrap_or_default(),
     };
     let mut warnings: Vec<String> = ctx.missing.iter().map(|c| c.warning()).collect();
+    warnings.extend(ctx.missing_contacts.iter().map(|c| c.warning()));
     warnings.extend([&trace.cv.warning, &trace.lm.warning].into_iter().flatten().cloned());
     GeneratedDocuments { cv, lm, warnings, trace }
 }

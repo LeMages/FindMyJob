@@ -183,13 +183,15 @@ async function saveUserInfo(): Promise<void> {
   const github = d.github.trim()
   const portfolio = d.portfolio.trim()
 
+  if (!d.prenom.trim()) throw new Error(t('profile.info.first_name_required'))
+  if (!d.nom.trim()) throw new Error(t('profile.info.last_name_required'))
   if (!isValidUrlOrEmpty(linkedin)) throw new Error(t('profile.links.invalid_linkedin'))
   if (!isValidUrlOrEmpty(github)) throw new Error(t('profile.links.invalid_github'))
   if (!isValidUrlOrEmpty(portfolio)) throw new Error(t('profile.links.invalid_portfolio'))
 
   const input: UpdateUserInfoInput = {
-    prenom: d.prenom.trim() || null,
-    nom: d.nom.trim() || null,
+    prenom: d.prenom.trim(),
+    nom: d.nom.trim(),
     email: d.email.trim() || null,
     telephone: d.telephone.trim() || null,
     permis: d.permis,

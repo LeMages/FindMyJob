@@ -1,6 +1,5 @@
 //! Assemblage déterministe des données d'une lettre (`LmData`) : identité
-//! du profil (ou du document de référence quand le profil est vide sur un
-//! champ), destinataire, date formatée, contenu rédigé et libellés. Aucun
+//! du profil (sans repli sur le document de référence), destinataire, date formatée, contenu rédigé et libellés. Aucun
 //! appel LLM.
 
 // Importation des modules standard
@@ -14,12 +13,10 @@ use crate::docgen::identity::{build_identity, SenderLocation};
 use crate::docgen::date_format::format_long_date;
 use crate::models::{LmContent, LmData, LmLabels, ProfileDto, Recipient};
 
-/// Ce que l'assemblage de la lettre reprend de la référence et du CV.
+/// Ce que l'assemblage de la lettre reprend de la session, de la référence et du CV.
 ///
 /// # Attributes
 ///
-/// * `document` - Données d'exemple de la référence, reprises quand le
-///   profil est vide sur une information.
 /// * `labels` - Libellés dans la langue de la lettre.
 /// * `title` - Sous-titre professionnel, repris du CV final : les deux
 ///   documents affichent le même.
@@ -29,7 +26,6 @@ use crate::models::{LmContent, LmData, LmLabels, ProfileDto, Recipient};
 /// * `location` - Localisation de l'expéditeur (session), sans repli sur la référence.
 pub struct LmLayout<'a> {
     pub location: &'a SenderLocation,
-    pub document: &'a LmData,
     pub labels: &'a LmLabels,
     pub title: &'a str,
     pub date: NaiveDate,
@@ -51,7 +47,7 @@ pub struct LmLayout<'a> {
 /// `LmData` prêt à être sérialisé en `data.json`.
 pub fn build_lm_data(profile: &ProfileDto, recipient: &Recipient, content: &LmContent, layout: &LmLayout<'_>) -> LmData {
     LmData {
-        identity: build_identity(&profile.user, layout.location, layout.title, &layout.document.identity),
+        identity: build_identity(&profile.user, layout.location, layout.title),
         lang: layout.lang.to_string(),
         recipient: recipient.clone(),
         date: format_long_date(layout.date, layout.lang),

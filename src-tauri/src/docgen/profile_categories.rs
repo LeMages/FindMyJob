@@ -89,7 +89,7 @@ impl ProfileCategory {
     /// Indique si le profil n'a aucune information pour cette catégorie.
     ///
     /// L'identité n'est jamais « vide » ici : son repli sur la référence
-    /// relève d'une règle à part (`docgen::document_fallback`).
+    /// relève d'une règle à part (`docgen::contact_fields`, sans repli).
     ///
     /// # Arguments
     ///

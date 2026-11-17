@@ -71,6 +71,53 @@ fn assert_no_generated_files(state: &AppState, sid: i64, cid: i64) {
 }
 
 #[tokio::test]
+async fn coordonnee_vide_du_profil_retiree_sans_valeur_d_exemple() {
+    let (app, sid) = ready_app("generation-sans-telephone").await;
+    let info = findmyjob_lib::models::UpdateUserInfoInput {
+        prenom: None,
+        nom: None,
+        email: None,
+        telephone: None,
+        permis: Some(true),
+        linkedin: None,
+        github: None,
+        portfolio: None,
+    };
+    db::users::update_user_info(&app.state.pool, info).await.expect("téléphone effacé");
+
+    let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+
+    let (cv_raw, cv) = read_data(&app.state, sid, "cv", view.id);
+    let (lm_raw, lm) = read_data(&app.state, sid, "lettre_motivation", view.id);
+    for data in [&cv, &lm] {
+        assert_eq!(data["identity"]["telephone"], "", "ligne retirée, pas de repli");
+    }
+    for raw in [&cv_raw, &lm_raw] {
+        assert!(!raw.contains("00 00 00 00 00") && !raw.contains("camille@exemple.invalid"), "valeur d'exemple : {raw}");
+    }
+    // Un seul avertissement, bien que les deux références affichent le téléphone.
+    let detail = db::candidatures::fetch_detail(&app.state.pool, view.id).await.expect("fiche");
+    let phone_warnings = detail.generation_warnings.iter().filter(|w| w.contains("téléphone")).count();
+    assert_eq!(phone_warnings, 1, "{:?}", detail.generation_warnings);
+}
+
+#[tokio::test]
+async fn prenom_vide_refuse_la_generation_avant_tout_appel_llm() {
+    let (app, sid) = ready_app("generation-sans-prenom").await;
+    sqlx::query("UPDATE users SET prenom = ''").execute(&app.state.pool).await.expect("prénom vidé");
+
+    let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Failed), "{:?}", progress.status);
+    assert!(progress.error.as_deref().is_some_and(|e| e.contains("prénom")), "{:?}", progress.error);
+    assert_eq!(app.llm.calls_for(Step::Matching), 0, "aucun appel LLM");
+    assert_eq!(app.llm.calls_for(Step::CvContent), 0);
+}
+
+#[tokio::test]
 async fn generation_remplit_data_json_depuis_le_profil() {
     let (app, sid) = ready_app("generation-ok").await;
     // Les références de test passent la validation dès le premier essai,
