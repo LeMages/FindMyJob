@@ -55,6 +55,10 @@ Reported at import with their line, before any AI call when possible:
 - a `[VARIABLE]` or `[ADAPTABLE]` zone whose text is not written prose (recipient address, contact details…): only `[FIXE]` can stand there;
 - two zones covering the same text.
 
+## Recipient block
+
+The recipient block is built from the application, not from the reference: the company, then the location split on commas (the last part is the city line, the previous ones, such as a street, are extra lines). When the reference places the block against the right margin (for example `block(width: 7cm)`), the generated template makes it as wide as its longest line and keeps it flush right with left-aligned text (`box`), at the same vertical position, so a block with fewer lines than the reference stays against the margin. Nothing from the reference's example identity (email, phone, links, name) is ever kept: a contact the profile lacks is removed from the document.
+
 ## Classification of each unit
 
 Every visible unit (a line, a row, a paragraph) of the reference is classified one by one:
