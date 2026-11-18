@@ -95,6 +95,26 @@ async fn donnees_inventees_corrigees_au_second_essai() {
 }
 
 #[tokio::test]
+async fn stack_tire_des_puces_vide_au_second_essai() {
+    // Essai 1 : sortie réelle (anonymisée) qui range les technologies des
+    // puces dans stack ; essai 2 : même exemple, stack vide.
+    let llm = Arc::new(FakeLlm::default());
+    llm.respond_with(
+        Step::ExampleCv,
+        Reply::Files(&[
+            "llm/templatize/real_failures/cv_stack_depuis_les_puces.json",
+            "references/tagged/cv_balise_example_data.json",
+        ]),
+    );
+    llm.respond_with(Step::TemplateCv, Reply::Files(&["references/tagged/cv_balise_template.typ"]));
+    let validated = run("cv_balise.typ", "cv", Arc::clone(&llm)).await.expect("acceptée");
+    assert_eq!(validated.example_attempts, 2);
+    let feedback = &llm.messages_for(Step::ExampleCv)[1];
+    assert!(feedback.contains("projects[0].stack"), "le retour nomme le champ : {feedback}");
+    assert!(feedback.contains("laisse la chaîne vide"), "le retour propose la chaîne vide : {feedback}");
+}
+
+#[tokio::test]
 async fn meilleur_essai_conserve_sans_regression() {
     // Essai 1 : seul un séparateur orphelin (non bloquant) ; essais 2 et 3 :
     // erreurs de compilation. Le premier reste le meilleur et est accepté.

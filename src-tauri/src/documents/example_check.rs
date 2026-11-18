@@ -16,6 +16,7 @@ use serde_json::Value;
 use crate::docgen::example_facts::{
     cv_information_values, cv_prose_values, lm_information_values, lm_prose_values, word_keys,
 };
+use crate::docgen::profile_categories::is_optional_field;
 use crate::documents::markup::hard_texts::hard_texts;
 use crate::documents::markup::{attach_zones, ReferenceMarkup};
 use crate::models::doc_lang::is_supported;
@@ -220,10 +221,21 @@ fn absent_values(raw: &Value, context: &ExampleContext<'_>) -> Vec<String> {
             let keys = word_keys(value);
             !keys.is_empty() && keys.len() <= MAX_CHECKED_VALUE_WORDS && !rendered.windows(keys.len()).any(|window| window == keys.as_slice())
         })
-        .map(|(path, value)| {
-            format!("{path} vaut « {value} », qui n'apparaît pas tel quel dans l'original : recopie la valeur affichée.")
-        })
+        .map(|(path, value)| absent_value_message(&path, &value))
         .collect()
+}
+
+/// Retour d'une valeur absente de l'original. Pour un champ optionnel, la
+/// chaîne vide est proposée : sans elle, le LLM cherche une valeur à
+/// recopier (par exemple des technologies tirées d'une puce) au lieu de
+/// vider le champ, et l'essai suivant échoue de nouveau.
+fn absent_value_message(path: &str, value: &str) -> String {
+    let advice = if is_optional_field(path) {
+        "recopie la valeur affichée, ou laisse la chaîne vide si l'original ne l'affiche pas dans un champ distinct."
+    } else {
+        "recopie la valeur affichée."
+    };
+    format!("{path} vaut « {value} », qui n'apparaît pas tel quel dans l'original : {advice}")
 }
 
 /// Données dont chaque chaîne a ses espaces normalisés (un espace entre
