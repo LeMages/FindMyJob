@@ -203,3 +203,55 @@ Toute ligne de l'original qui ne relève d'aucune de ces catégories (par exempl
         categories.join("\n")
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prompt_champs_optionnels_vides_s_ils_ne_sont_pas_affiches_a_part() {
+        // Garde-fou : ces clauses ont déjà disparu une fois du prompt sans
+        // qu'aucun test ne le voie (le faux LLM ignore le texte du prompt).
+        let prompt = cv_data_fields_prompt();
+        for clause in [
+            "projects.stack et projects.url : technologies et lien affichés dans une ligne ou un champ distinct du projet ; chaîne vide si l'original n'en affiche pas.",
+            "Les technologies citées dans les bullets restent dans les bullets : ne les recopie jamais dans stack.",
+            "`pour_qui` est l'organisation affichée pour un projet, chaîne vide si l'original ne l'affiche pas dans un champ distinct.",
+            "experiences.lieu : lieu affiché dans un champ distinct de l'entreprise, chaîne vide si l'original ne l'affiche pas dans un champ distinct.",
+            "identity.title : sous-titre professionnel affiché sous le nom, chaîne vide si l'original n'en a pas.",
+        ] {
+            assert!(prompt.contains(clause), "clause absente : {clause}\n{prompt}");
+        }
+        for name in OPTIONAL_FIELD_NAMES {
+            assert!(prompt.contains(name), "champ optionnel absent du prompt : {name}");
+        }
+    }
+
+    #[test]
+    fn prompt_garde_les_consignes_de_l_ancienne_liste() {
+        let prompt = cv_data_fields_prompt();
+        for clause in [
+            "une entrée par ligne de compétences, la catégorie puis les compétences.",
+            "`details` reçoit ses lignes de détail (spécialité, cours, échange).",
+            "nom et niveau de chaque langue",
+            "- summary : texte de la section profil.",
+            "- period : la période telle qu'affichée.",
+            "\"month\" pour une section absente.",
+            "labels.section_* : titres des sections, tels qu'écrits dans le code source de l'original.",
+            "labels.permis : le texte affiché pour le permis.",
+            "labels.months_short : les 12 abréviations de mois",
+            "labels.present : le mot qui termine une période en cours",
+        ] {
+            assert!(prompt.contains(clause), "consigne absente : {clause}\n{prompt}");
+        }
+    }
+
+    #[test]
+    fn champ_optionnel_reconnu_par_le_dernier_segment() {
+        assert!(is_optional_field("projects[0].stack"));
+        assert!(is_optional_field("experiences[2].lieu"));
+        assert!(is_optional_field("identity.title"));
+        assert!(!is_optional_field("projects[0].titre"));
+        assert!(!is_optional_field("identity.telephone"));
+    }
+}

@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 // Importation des modules internes
-use crate::shared::fake_llm::read_reference;
+use crate::shared::fake_llm::{fixtures_dir, read_reference};
 use crate::shared::font_fixtures::install_reference_font;
 use crate::shared::temp_dir::unique_temp_dir;
 use findmyjob_lib::documents::example_check::{check_example, CheckedExample, ExampleContext};
@@ -26,10 +26,14 @@ struct Reference {
 
 /// Compile une référence de `references/tagged/`.
 fn reference(name: &str, doc_type: &'static str) -> Reference {
+    reference_from_source(read_reference(&format!("tagged/{name}")), doc_type)
+}
+
+/// Compile une référence donnée par sa source (variante d'une fixture).
+fn reference_from_source(source: String, doc_type: &'static str) -> Reference {
     let root = unique_temp_dir("templatize-validation");
     let fonts = root.join("polices");
     install_reference_font(&fonts);
-    let source = read_reference(&format!("tagged/{name}"));
     let rendered = compile_document(source.clone(), root.clone(), fonts.clone()).expect("la référence compile");
     Reference { source, rendered, doc_type, root, fonts }
 }
@@ -134,6 +138,61 @@ fn tous_les_problemes_rapportes_ensemble() {
     assert!(problems.iter().any(|p| p.starts_with("lang")), "{problems:?}");
     assert!(problems.iter().any(|p| p.contains("months_short")), "{problems:?}");
     assert!(problems.iter().any(|p| p.contains("identity.telephone")), "{problems:?}");
+}
+
+/// Consigne de retour propre aux champs optionnels.
+const EMPTY_ADVICE: &str = "laisse la chaîne vide si l'original ne l'affiche pas dans un champ distinct";
+
+#[test]
+fn stack_tire_des_puces_refuse_avec_consigne_chaine_vide() {
+    // Sortie réelle (anonymisée) : les technologies des puces rangées dans stack.
+    let cv = reference("cv_balise.typ", "cv");
+    let path = fixtures_dir().join("llm/templatize/real_failures/cv_stack_depuis_les_puces.json");
+    let raw = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("fixture {} illisible : {e}", path.display()));
+    let data: serde_json::Value = serde_json::from_str(&raw).expect("données d'exemple JSON");
+    let problems = check(&cv, &data).err().expect("stack tiré des puces refusé");
+    for i in 0..3 {
+        let path = format!("projects[{i}].stack");
+        let problem = problems.iter().find(|p| p.starts_with(&path)).unwrap_or_else(|| panic!("{path} : {problems:?}"));
+        assert!(problem.contains(EMPTY_ADVICE), "{problem}");
+    }
+    assert_eq!(problems.len(), 3, "seuls les stack sont refusés : {problems:?}");
+}
+
+#[test]
+fn stack_reconstruit_refuse() {
+    // Technologies de deux endroits différents, jointes par le LLM.
+    let cv = reference("cv_balise.typ", "cv");
+    let mut data = example("cv_balise_example_data.json");
+    data["projects"][2]["stack"] = "OpenCV, Flask".into();
+    let problems = check(&cv, &data).err().expect("valeur reconstruite refusée");
+    assert!(problems.iter().any(|p| p.starts_with("projects[2].stack") && p.contains(EMPTY_ADVICE)), "{problems:?}");
+}
+
+#[test]
+fn champ_obligatoire_garde_le_message_de_recopie() {
+    let cv = reference("cv_balise.typ", "cv");
+    let mut data = example("cv_balise_example_data.json");
+    data["identity"]["telephone"] = "+41 00 000 00 00".into();
+    let problems = check(&cv, &data).err().expect("valeur inventée refusée");
+    let problem = problems.iter().find(|p| p.starts_with("identity.telephone")).expect("téléphone signalé");
+    assert!(problem.ends_with("recopie la valeur affichée."), "{problem}");
+    assert!(!problem.contains("chaîne vide"), "{problem}");
+}
+
+#[test]
+fn stack_affiche_a_part_accepte() {
+    // Variante de la référence : le premier projet affiche ses technologies
+    // sur une ligne distincte, que stack recopie.
+    let header = "#entry-header(\"Prévision de fréquentation – Vélos en libre-service\", \"École Supérieure du Numérique\", \"2025 – 2026\")";
+    let source = read_reference("tagged/cv_balise.typ");
+    assert!(source.contains(header), "en-tête du projet introuvable dans la fixture");
+    let source = source.replace(header, &format!("{header}\n#text(size: 9pt, fill: gray)[Stack : Python, XGBoost, Airflow]"));
+    let cv = reference_from_source(source, "cv");
+    let mut data = example("cv_balise_example_data.json");
+    data["projects"][0]["stack"] = "Python, XGBoost, Airflow".into();
+    let checked = check(&cv, &data).expect("stack affiché à part accepté");
+    assert_eq!(checked.example["projects"][0]["stack"], "Python, XGBoost, Airflow");
 }
 
 // ======================================================================
