@@ -10,6 +10,26 @@
 // Importation des modules internes
 use crate::models::{CvData, ProfileDto};
 
+/// Champs optionnels des données d'exemple : vides quand l'original ne les
+/// affiche pas dans un champ distinct (jamais extraits d'une puce ou d'une
+/// autre ligne). Le prompt de l'étape A le dit pour chacun, et le retour
+/// d'une valeur absente de l'original propose alors la chaîne vide.
+pub const OPTIONAL_FIELD_NAMES: [&str; 5] = ["stack", "url", "lieu", "pour_qui", "title"];
+
+/// Indique si un chemin de données d'exemple désigne un champ optionnel.
+///
+/// # Arguments
+///
+/// * `path` - Chemin du champ (`projects[0].stack`, `identity.title`…).
+///
+/// # Returns
+///
+/// Vrai si le dernier segment du chemin est dans `OPTIONAL_FIELD_NAMES`.
+pub fn is_optional_field(path: &str) -> bool {
+    let last = path.rsplit('.').next().unwrap_or(path);
+    OPTIONAL_FIELD_NAMES.contains(&last)
+}
+
 /// Catégorie d'information du profil affichée par le CV : une variante par
 /// catégorie, dans l'ordre des champs du schéma canonique (`all()`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,10 +90,10 @@ impl ProfileCategory {
                 "coordonnées du candidat affichées dans l'original. identity.title : sous-titre professionnel affiché sous le nom, chaîne vide si l'original n'en a pas."
             }
             ProfileCategory::Experiences => {
-                "une entrée par expérience professionnelle, avec ses bullets (`bullets`)."
+                "une entrée par expérience professionnelle, avec ses bullets (`bullets`). experiences.lieu : lieu affiché dans un champ distinct de l'entreprise, chaîne vide si l'original ne l'affiche pas dans un champ distinct."
             }
             ProfileCategory::Projets => {
-                "une entrée par projet, avec ses bullets. `pour_qui` est l'organisation affichée pour un projet. projects.stack et projects.url : technologies et lien affichés."
+                "une entrée par projet, avec ses bullets. `pour_qui` est l'organisation affichée pour un projet, chaîne vide si l'original ne l'affiche pas dans un champ distinct. projects.stack et projects.url : technologies et lien affichés dans une ligne ou un champ distinct du projet ; chaîne vide si l'original n'en affiche pas. Les technologies citées dans les bullets restent dans les bullets : ne les recopie jamais dans stack."
             }
             ProfileCategory::Formations => {
                 "une entrée par formation ; `details` reçoit ses lignes de détail (spécialité, cours, échange)."
