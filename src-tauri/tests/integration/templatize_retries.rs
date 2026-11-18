@@ -64,6 +64,21 @@ async fn sortie_reelle_defaillante_puis_correcte_acceptee_au_second_essai() {
 }
 
 #[tokio::test]
+async fn largeur_fixe_refusee_aux_premiers_essais_toleree_au_dernier() {
+    const FIXED: &str = "references/tagged/lm_balisee_template_largeur_fixe.typ";
+    let llm = letter_llm(&[LM_EXAMPLE], &[FIXED]);
+    let validated = run("lm_balisee.typ", "lettre_motivation", Arc::clone(&llm)).await.expect("toléré au dernier essai");
+    assert!(validated.template_attempts > 1, "refusé avant le dernier essai : {}", validated.template_attempts);
+    assert_eq!(llm.calls_for(Step::TemplateLm), usize::from(validated.template_attempts));
+    assert!(llm.messages_for(Step::TemplateLm)[1].contains("marge droite"));
+
+    // Une sortie conforme au second essai est acceptée sans attendre le dernier.
+    let llm = letter_llm(&[LM_EXAMPLE], &[FIXED, LM_TEMPLATE]);
+    let validated = run("lm_balisee.typ", "lettre_motivation", llm).await.expect("acceptée");
+    assert_eq!(validated.template_attempts, 2);
+}
+
+#[tokio::test]
 async fn correction_ciblee_appliquee_au_template_precedent() {
     let llm = letter_llm(&[LM_EXAMPLE], &["llm/templatize/lm_diese_en_mode_code.typ", "llm/templatize/lm_correction_ciblee.txt"]);
     let validated = run("lm_balisee.typ", "lettre_motivation", llm).await.expect("acceptée après correction");

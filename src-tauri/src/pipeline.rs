@@ -29,7 +29,8 @@ use crate::services::api_key::ApiKeyAccess;
 use crate::services::claude_target::ClaudeTargetSource;
 use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
 use crate::docgen::build_lm_data::{build_lm_data, LmLayout};
-use crate::docgen::identity::SenderLocation;
+use crate::docgen::contact_fields::{missing_contacts, ContactField};
+use crate::docgen::identity::{validate_sender_name, SenderLocation};
 use crate::documents::labels_cache::{resolve_cv_labels, resolve_lm_labels};
 use crate::documents::reference_texts_cache::{resolve_reference_texts, ResolvedTexts};
 use crate::documents::page_fit::{fit_to_pages, CompileTarget, FittedDocument};
@@ -39,6 +40,7 @@ use crate::documents::generation_trace::{DocumentTrace, GenerationTrace};
 use crate::docgen::budgets::{cv_budget, lm_budget, CvBudget, LmBudget};
 use crate::docgen::entry_texts::{source_texts, CvEntryTexts};
 use crate::docgen::period_format::detect_separator;
+use crate::docgen::profile_categories::{missing_categories, ProfileCategory};
 use crate::docgen::selection::{expected_project_count, select, Selection};
 use crate::error::AppError;
 use crate::llm::cv_writing::{write_cv, CvWritingInput};
@@ -105,10 +107,11 @@ pub struct GenerationRequest<'a> {
     pub llm: &'a Arc<dyn LlmCaller>,
 }
 
-/// Construit le destinataire de la lettre depuis la candidature.
-async fn load_recipient(pool: &SqlitePool, candidature_id: i64) -> Result<Recipient, AppError> {
+/// Construit le destinataire de la lettre depuis la candidature, avec
+/// l'intitulé exact du poste.
+async fn load_recipient(pool: &SqlitePool, candidature_id: i64) -> Result<(Recipient, String), AppError> {
     let candidature = db::candidatures::fetch_detail(pool, candidature_id).await?;
-    Ok(build_recipient(&candidature))
+    Ok((build_recipient(&candidature), candidature.poste.trim().to_string()))
 }
 
 /// Langue d'un document : celle du corps de l'offre si elle est prise en
@@ -168,9 +171,12 @@ struct DocumentLanguage<L> {
 /// * `target` - Clé API et modèle Claude configuré.
 /// * `cv_ref`, `lm_ref` - Références templatisées.
 /// * `recipient` - Destinataire de la lettre.
+/// * `job_title` - Intitulé exact du poste de la candidature.
 /// * `offer_analysis` - Analyse de l'offre (JSON).
 /// * `matching`, `selection` - Matching et entrées retenues.
 /// * `cv_budget`, `lm_budget` - Budgets initiaux.
+/// * `missing` - Catégories du CV retirées car vides dans le profil.
+/// * `missing_contacts` - Coordonnées affichées par une référence mais vides dans le profil.
 /// * `cv`, `lm` - Langue de chaque document et textes dans cette langue.
 struct GenerationContext {
     profile: ProfileDto,
@@ -178,12 +184,15 @@ struct GenerationContext {
     cv_ref: ReferenceTemplate<CvExampleData>,
     lm_ref: ReferenceTemplate<LmExampleData>,
     recipient: Recipient,
+    job_title: String,
     location: SenderLocation,
     offer_analysis: String,
     matching: MatchingResult,
     selection: Selection,
     cv_budget: CvBudget,
     lm_budget: LmBudget,
+    missing: Vec<ProfileCategory>,
+    missing_contacts: Vec<ContactField>,
     cv: DocumentLanguage<CvLabels>,
     lm: DocumentLanguage<LmLabels>,
 }
@@ -217,6 +226,7 @@ impl GenerationContext {
             guidance: &self.lm.texts.texts.guidance,
             budget,
             company: &self.recipient.company,
+            job_title: &self.job_title,
             target_lang: &self.lm.lang,
             example_lang: &self.lm_ref.example.data.lang,
         }
@@ -234,6 +244,8 @@ async fn prepare(
     // 1. Profil, modèle, références templatisées, destinataire
     // ------------------------------------------------------------------
     let profile = db::profile::build_profile(pool).await?;
+    // Avant tout appel LLM : sans prénom ni nom, aucun document valable ne peut être produit.
+    validate_sender_name(&profile.user)?;
     // Tous les appels de la génération sont journalisés pour `llm_calls.json`.
     let target = ClaudeTargetSource { pool, api_key: request.api_key, llm: request.llm }
         .resolve()
@@ -243,7 +255,7 @@ async fn prepare(
         load_reference(pool, request.data_dir, request.session_id, "cv", "CV").await?;
     let lm_ref: ReferenceTemplate<LmExampleData> =
         load_reference(pool, request.data_dir, request.session_id, "lettre_motivation", "lettre de motivation").await?;
-    let recipient = load_recipient(pool, request.candidature_id).await?;
+    let (recipient, job_title) = load_recipient(pool, request.candidature_id).await?;
     // Le lieu de l'expéditeur vient de la session, jamais de la référence.
     let session = db::sessions::fetch_view(pool, request.session_id).await?;
     let location = SenderLocation::new(session.ville.as_ref(), session.zip_code.as_ref());
@@ -298,6 +310,11 @@ async fn prepare(
     domains.dedup();
     cv_budget.skills_group_count = cv_budget.skills_group_count.min(domains.len());
     let lm_budget = lm_budget(&lm_ref.example.data, lm_ref.page_count).with_fixed_words(&lm_texts.texts.guidance);
+    // Calcul déterministe : l'unité du CV est retirée et signalée, jamais reprise de la référence.
+    let missing = missing_categories(&cv_ref.example.data, &profile);
+    // Coordonnées vides : ligne retirée et signalée une seule fois pour les deux documents.
+    let missing_contacts =
+        missing_contacts(&[&cv_ref.example.data.identity, &lm_ref.example.data.identity], &profile.user);
 
     let cv = DocumentLanguage {
         lang: cv_lang,
@@ -319,12 +336,15 @@ async fn prepare(
         cv_ref,
         lm_ref,
         recipient,
+        job_title,
         location,
         offer_analysis,
         matching,
         selection,
         cv_budget,
         lm_budget,
+        missing,
+        missing_contacts,
         cv,
         lm,
     })
@@ -339,7 +359,6 @@ async fn produce_cv(
     let separator = detect_separator(ctx.cv_ref.example.data.experiences.iter().map(|e| e.period.as_str()));
     let layout = CvLayout {
         location: &ctx.location,
-        document: &ctx.cv_ref.example.data,
         labels: &ctx.cv.labels,
         period_style: &ctx.cv_ref.example.period_style,
         separator: &separator,
@@ -375,7 +394,6 @@ async fn produce_lm(
 ) -> Result<FittedDocument<LmContent>, AppError> {
     let layout = LmLayout {
         location: &ctx.location,
-        document: &ctx.lm_ref.example.data,
         labels: &ctx.lm.labels,
         title,
         date: clock::today_local(),
@@ -418,11 +436,14 @@ fn into_result(
         matching: ctx.matching,
         cv_budget: ctx.cv_budget,
         lm_budget: ctx.lm_budget,
+        missing_categories: ctx.missing.iter().map(|c| c.french_name().to_string()).collect(),
         cv: cv_trace,
         lm: lm_trace,
         llm_calls: ctx.target.recorder.as_ref().map(|r| r.snapshot()).unwrap_or_default(),
     };
-    let warnings = [&trace.cv.warning, &trace.lm.warning].into_iter().flatten().cloned().collect();
+    let mut warnings: Vec<String> = ctx.missing.iter().map(|c| c.warning()).collect();
+    warnings.extend(ctx.missing_contacts.iter().map(|c| c.warning()));
+    warnings.extend([&trace.cv.warning, &trace.lm.warning].into_iter().flatten().cloned());
     GeneratedDocuments { cv, lm, warnings, trace }
 }
 

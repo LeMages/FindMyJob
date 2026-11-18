@@ -84,7 +84,6 @@ pub fn cv_labels_schema() -> Value {
         ("section_projects", string()),
         ("section_formations", string()),
         ("section_langues", string()),
-        ("interets_label", string()),
         ("permis", string()),
         ("present", string()),
         ("months_short", string_list()),
@@ -146,7 +145,6 @@ pub fn cv_example_data_schema() -> Value {
             ])),
         ),
         ("langues", list_of(object(&[("nom", string()), ("level", string())]))),
-        ("interets", string_list()),
         ("labels", cv_labels_schema()),
         (
             "period_style",

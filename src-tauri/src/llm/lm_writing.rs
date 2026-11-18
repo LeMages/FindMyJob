@@ -14,6 +14,7 @@ use crate::docgen::example_facts::lm_information_values;
 use crate::docgen::lint::lint_lm_budget;
 use crate::docgen::entry_texts::CvEntryTexts;
 use crate::docgen::selection::Selection;
+use crate::docgen::title_match::contains_title;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
 use crate::llm::doc_data_schema::object;
@@ -28,7 +29,8 @@ use crate::llm::target::ClaudeTarget;
 
 /// Consignes propres à la lettre.
 const LM_RULES: &str = "Un paragraphe ne commence pas par une phrase nominale qui annonce son argument : il entre directement dans le propos, comme le paragraphe de même rang du modèle.
-Les paragraphes ne contiennent ni la formule d'appel ni la formule de politesse finale : elles sont ajoutées à part.";
+Les paragraphes ne contiennent ni la formule d'appel ni la formule de politesse finale : elles sont ajoutées à part.
+L'objet contient l'intitulé exact du poste (ligne « INTITULÉ EXACT DU POSTE »), recopié sans le modifier, sans le reformuler ni le traduire.";
 
 /// Entrées de la rédaction de la lettre.
 ///
@@ -43,6 +45,7 @@ Les paragraphes ne contiennent ni la formule d'appel ni la formule de politesse 
 /// * `guidance` - Consignes de la référence (`subject`, `paragraphs[i]`).
 /// * `budget` - Budget de longueur.
 /// * `company` - Entreprise destinataire (vide si inconnue).
+/// * `job_title` - Intitulé exact du poste (`candidatures.poste`).
 /// * `target_lang` - Langue de la lettre (celle de l'offre).
 /// * `example_lang` - Langue de la référence.
 pub struct LmWritingInput<'a> {
@@ -55,6 +58,7 @@ pub struct LmWritingInput<'a> {
     pub guidance: &'a ProseGuidance,
     pub budget: LmBudget,
     pub company: &'a str,
+    pub job_title: &'a str,
     pub target_lang: &'a str,
     pub example_lang: &'a str,
 }
@@ -113,6 +117,7 @@ fn user_message(input: &LmWritingInput<'_>) -> String {
     let company = if input.company.trim().is_empty() { "non renseignée" } else { input.company };
     let mut blocks = vec![
         format!("ENTREPRISE DESTINATAIRE : {company}"),
+        format!("INTITULÉ EXACT DU POSTE : {} (cite-le tel quel dans l'objet, sans le modifier)", input.job_title.trim()),
         format!("ANALYSE DE L'OFFRE :\n{}", input.offer_analysis),
         profile_facts_block(input.profile, input.selection, input.matching, input.entry_texts),
         style_model_block(&example_prose(input.example)),
@@ -123,9 +128,17 @@ fn user_message(input: &LmWritingInput<'_>) -> String {
 }
 
 /// Revue complète d'un contenu de lettre.
-fn review(content: &LmContent, budget: &LmBudget, checks: &ProseChecks) -> Review {
+fn review(content: &LmContent, budget: &LmBudget, checks: &ProseChecks, job_title: &str) -> Review {
     let fields = content.prose_fields();
-    let blocking = fields.iter().filter(|f| f.text.trim().is_empty()).map(|f| format!("{} est vide.", f.path)).collect();
+    let mut blocking: Vec<String> =
+        fields.iter().filter(|f| f.text.trim().is_empty()).map(|f| format!("{} est vide.", f.path)).collect();
+    // L'objet doit citer l'intitulé exact de l'offre, pas une reformulation.
+    if !content.subject.trim().is_empty() && !contains_title(&content.subject, job_title) {
+        blocking.push(format!(
+            "subject doit contenir l'intitulé exact du poste « {} », sans le modifier.",
+            job_title.trim()
+        ));
+    }
     let mut violations = checks.violations(&fields);
     violations.extend(lint_lm_budget(content, budget));
     Review { blocking, violations }
@@ -165,7 +178,7 @@ pub async fn write_lm(input: &LmWritingInput<'_>, target: &ClaudeTarget) -> Resu
         "lettre",
         &language_reminder(input.target_lang),
         |feedback| call_once(input, feedback, target),
-        |content| review(content, &input.budget, &checks),
+        |content| review(content, &input.budget, &checks, input.job_title),
         |content| content.map_prose(|path, text| checks.clean(path, text)),
     )
     .await

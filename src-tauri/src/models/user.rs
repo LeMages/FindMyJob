@@ -27,8 +27,6 @@ pub struct UserView {
     pub linkedin: Option<String>,
     pub github: Option<String>,
     pub portfolio: Option<String>,
-    /// Centres d'intérêt, une ligne = un item.
-    pub interets: Option<String>,
     /// Langue dans laquelle le profil est rédigé (`"fr"` ou `"en"`).
     pub langue_profil: String,
     pub created_at: DateTime<Utc>,
@@ -44,7 +42,4 @@ pub struct UpdateUserInfoInput {
     pub linkedin: Option<String>,
     pub github: Option<String>,
     pub portfolio: Option<String>,
-    /// Centres d'intérêt, une ligne = un item.
-    #[serde(default)]
-    pub interets: Option<String>,
 }

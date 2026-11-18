@@ -64,13 +64,24 @@ fn list(items: Value) -> Value {
     json!({ "type": "array", "items": items, "minItems": 1 })
 }
 
-/// Schéma de sortie de la rédaction du CV.
+/// Schéma de sortie de la rédaction du CV, avec compétences.
 pub fn cv_content_schema() -> Value {
-    object(&[
-        ("title", text()),
-        ("summary", text()),
-        ("skills_groups", list(object(&[("category", text()), ("skills", list(text()))]))),
-    ])
+    cv_content_schema_for(true)
+}
+
+/// Schéma de sortie de la rédaction du CV.
+///
+/// # Arguments
+///
+/// * `with_skills` - Faux quand le profil n'a aucune compétence : le champ
+///   `skills_groups` est omis, sinon `minItems: 1` forcerait un groupe
+///   ensuite jeté.
+pub fn cv_content_schema_for(with_skills: bool) -> Value {
+    let mut fields = vec![("title", text()), ("summary", text())];
+    if with_skills {
+        fields.push(("skills_groups", list(object(&[("category", text()), ("skills", list(text()))]))));
+    }
+    object(&fields)
 }
 
 /// Consignes de la référence ramenées aux chemins du contenu rédigé : le
@@ -99,10 +110,14 @@ fn budget_block(input: &CvWritingInput<'_>) -> String {
         "BUDGETS".to_string(),
         format!("summary : environ {} mots, au plus {} mots.", b.summary_words.target, b.summary_words.max),
     ];
-    lines.push(format!(
-        "skills_groups : exactement {} groupes. Chaque compétence est recopiée telle qu'elle est écrite dans la liste des compétences du profil, sans en ajouter.",
-        b.skills_group_count
-    ));
+    if b.skills_group_count > 0 {
+        lines.push(format!(
+            "skills_groups : exactement {} groupes. Chaque compétence est recopiée telle qu'elle est écrite dans la liste des compétences du profil, sans en ajouter.",
+            b.skills_group_count
+        ));
+    } else {
+        lines.push("skills_groups : le profil n'a aucune compétence, ne produis pas ce champ.".to_string());
+    }
     lines.join("\n")
 }
 
@@ -218,7 +233,7 @@ async fn call_once(
     target: &ClaudeTarget,
 ) -> Result<CvContent, AppError> {
     let message = with_feedback(user_message(input), feedback.as_ref());
-    let raw = call_claude("rédaction:cv", &system_prompt(input), &message, Some(cv_content_schema()), target).await?;
+    let raw = call_claude("rédaction:cv", &system_prompt(input), &message, Some(cv_content_schema_for(input.budget.skills_group_count > 0)), target).await?;
     let mut content: CvContent = serde_json::from_str(raw.trim()).map_err(|e| {
         AppError::Llm(format!("La rédaction du CV n'a pas retourné le JSON attendu : {e}\nRéponse brute : {raw}"))
     })?;
@@ -285,7 +300,6 @@ mod tests {
                 linkedin: None,
                 github: None,
                 portfolio: None,
-                interets: None,
                 langue_profil: "fr".to_string(),
                 created_at: now,
             },

@@ -61,9 +61,6 @@
       "level": "courant"
     }
   ],
-  "interets": [
-    "Exemple de loisir"
-  ],
   "labels": {
     "section_profile": "Profil",
     "section_skills": "Compétences",
@@ -71,7 +68,6 @@
     "section_projects": "Projets",
     "section_formations": "Formations",
     "section_langues": "Langues",
-    "interets_label": "Intérêts :",
     "permis": "Permis B",
     "present": "aujourd'hui",
     "months_short": [

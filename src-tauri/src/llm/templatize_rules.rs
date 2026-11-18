@@ -30,19 +30,6 @@ pub const EXAMPLE_DATA_RULES: &str = "Règles de example_data :
 pub const ADDRESS_DATA_RULE: &str = "Lieu de l'expéditeur :
 - Le lieu du candidat tient en deux champs : `identity.ville` et `identity.zip_code`, repris exactement tels qu'affichés dans l'original (chaîne vide si absent). Une rue, un numéro ou un pays de l'expéditeur n'ont pas de champ.";
 
-/// Sens des champs du CV, pour les données d'exemple.
-pub const CV_DATA_FIELDS: &str = "Champs du CV :
-- identity : coordonnées du candidat affichées dans l'original. identity.title : sous-titre professionnel affiché sous le nom, chaîne vide si l'original n'en a pas.
-- summary : texte de la section profil.
-- skills_groups : une entrée par ligne de compétences, la catégorie puis les compétences.
-- experiences, projects : une entrée par expérience ou projet, avec ses bullets. `pour_qui` est l'organisation affichée pour un projet. projects.stack et projects.url : technologies et lien affichés pour un projet, chaîne vide si l'original ne les affiche pas.
-- formations : une entrée par formation ; `details` reçoit ses lignes de détail (spécialité, cours, échange).
-- langues : nom et niveau de chaque langue. interets : un centre d'intérêt par élément.
-- period : la période telle qu'affichée. period_style indique pour chaque section si les périodes affichent le mois (\"month\") ou seulement l'année (\"year\") ; \"month\" pour une section absente.
-- labels.section_* : titres des sections, tels qu'écrits dans le code source de l'original. labels.interets_label : le préfixe de la ligne des centres d'intérêt (par exemple \"Intérêts :\"). labels.permis : le texte affiché pour le permis.
-- labels.months_short : les 12 abréviations de mois, de janvier à décembre, dans la langue et le style de l'original (\"01\"…\"12\" si l'original écrit les mois en chiffres).
-- labels.present : le mot qui termine une période en cours dans la langue de l'original (par exemple \"aujourd'hui\"), même s'il n'apparaît pas.";
-
 /// Sens des champs de la lettre, pour les données d'exemple.
 pub const LM_DATA_FIELDS: &str = "Champs de la lettre :
 - identity : coordonnées de l'expéditeur affichées dans l'original. identity.title : sous-titre professionnel affiché sous le nom, chaîne vide si absent.
@@ -71,12 +58,12 @@ pub const CV_TEMPLATE_FIELDS: &str = "Rendu du CV :
 - Le lieu se compose de `data.identity.ville` et `data.identity.zip_code` dans l'ordre et avec la ponctuation de l'original ; le séparateur n'apparaît que si les deux sont non vides.
 - skills_groups : une ligne par groupe, la catégorie puis `g.skills.join(\", \")`.
 - experiences, projects, formations : une boucle par section, chaque entrée avec ses bullets (ou details). Un élément affiché avec une mise en page différente des autres se choisit dans la boucle d'après ses données.
-- langues : le séparateur entre le nom et le niveau ne s'affiche que si le niveau n'est pas vide. interets : joints par \", \" après `data.labels.interets_label`.";
+- langues : le séparateur entre le nom et le niveau ne s'affiche que si le niveau n'est pas vide.";
 
 /// Rendu propre à la lettre.
 pub const LM_TEMPLATE_FIELDS: &str = "Rendu de la lettre :
 - La signature affiche `data.identity.prenom` et `data.identity.nom`.
-- Destinataire : `data.recipient.company`, puis une boucle sur `data.recipient.extra_lines`, puis `data.recipient.location` ; chaque ligne n'apparaît que si elle est non vide.
+- Destinataire : `data.recipient.company`, puis une boucle sur `data.recipient.extra_lines`, puis `data.recipient.location` ; chaque ligne n'apparaît que si elle est non vide. Par exception à la règle 1 (recopie des espacements), si l'original place ce bloc contre la marge droite : le bloc a la largeur de son contenu (sa ligne la plus longue), reste calé contre la marge droite, et son texte est aligné à gauche à l'intérieur. Remplace toute largeur fixe (`block(width: 7cm, …)`) par `#align(right, box({ set align(left); … }))` en gardant le `set par(…)` de l'original (un `block` ne rétrécit pas à son contenu, un `box` si).
 - Ligne de date : `data.identity.ville` suivi de la ponctuation de l'original (seulement si la ville est non vide), `data.labels.date_prefix`, puis `data.date`. Jamais le code postal.
 - Objet : `data.labels.subject_prefix` puis `data.subject`.
 - Corps : `data.labels.salutation`, puis une boucle sur `data.paragraphs` où chaque entrée devient un paragraphe distinct, séparé du précédent comme dans l'original (par exemple `#for p in data.paragraphs [#p #parbreak()]`), puis `data.labels.closing`. Jamais `.join()` ni `.at(i)` sur paragraphs.";

@@ -158,7 +158,7 @@
 })
 #block(below: space-line, {
   text(weight: "bold", fill: dark, "Intérêts : ")
-  text(fill: dark, "Course à pied, Photographie, Contributions à des projets open source en data")
+  text(fill: dark, "Course à pied, Photographie, Contributions à des logiciels libres en data")
 })
 
 #v(8pt)

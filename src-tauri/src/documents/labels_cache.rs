@@ -124,7 +124,6 @@ fn cv_problems(example: &CvLabels, labels: &CvLabels) -> Vec<String> {
         ("section_projects", &example.section_projects, &labels.section_projects),
         ("section_formations", &example.section_formations, &labels.section_formations),
         ("section_langues", &example.section_langues, &labels.section_langues),
-        ("interets_label", &example.interets_label, &labels.interets_label),
         ("permis", &example.permis, &labels.permis),
         ("present", &example.present, &labels.present),
     ]);

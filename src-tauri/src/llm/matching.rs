@@ -142,7 +142,6 @@ mod tests {
                 linkedin: None,
                 github: None,
                 portfolio: None,
-                interets: None,
                 langue_profil: "fr".to_string(),
                 created_at: chrono::Utc::now(),
             },

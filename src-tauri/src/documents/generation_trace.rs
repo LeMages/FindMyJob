@@ -54,6 +54,7 @@ pub struct DocumentTrace<C> {
 /// * `matching` - Résultat du matching.
 /// * `experience_ids`, `project_ids` - Entrées retenues, dans l'ordre d'affichage.
 /// * `cv_budget`, `lm_budget` - Budgets initiaux.
+/// * `missing_categories` - Catégories du CV retirées car vides dans le profil.
 /// * `cv`, `lm` - Trace de chaque document.
 /// * `llm_calls` - Appels à Claude (modèle, tokens, durée, prompts, réponses).
 pub struct GenerationTrace {
@@ -63,6 +64,7 @@ pub struct GenerationTrace {
     pub project_ids: Vec<i64>,
     pub cv_budget: CvBudget,
     pub lm_budget: LmBudget,
+    pub missing_categories: Vec<String>,
     pub cv: DocumentTrace<CvContent>,
     pub lm: DocumentTrace<LmContent>,
     pub llm_calls: Vec<LlmCallRecord>,
@@ -95,6 +97,7 @@ impl GenerationTrace {
             ("matching.json", to_value(&self.matching)?),
             ("selection.json", json!({ "experience_ids": self.experience_ids, "project_ids": self.project_ids })),
             ("budgets.json", json!({ "cv": to_value(&self.cv_budget)?, "lm": to_value(&self.lm_budget)? })),
+            ("missing_categories.json", to_value(&self.missing_categories)?),
             ("cv_content.json", to_value(&self.cv.content)?),
             ("lm_content.json", to_value(&self.lm.content)?),
             (

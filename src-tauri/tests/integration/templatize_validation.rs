@@ -90,7 +90,16 @@ fn cv_balise_textes_en_dur_identifies() {
     let cv = reference("cv_balise.typ", "cv");
     let checked = check(&cv, &example("cv_balise_example_data.json")).expect("données valides");
     let texts: Vec<&String> = checked.texts.values().collect();
-    assert_eq!(texts, ["Stage de fin d'études de 6 mois, disponible dès mars 2027", "Références disponibles sur demande"]);
+    // Les intérêts ne sont plus une donnée du profil : leur ligne est un texte en dur.
+    assert_eq!(
+        texts,
+        [
+            "Stage de fin d'études de 6 mois, disponible dès mars 2027",
+            "Intérêts :",
+            "Course à pied, Photographie, Contributions à des logiciels libres en data",
+            "Références disponibles sur demande"
+        ]
+    );
 }
 
 #[test]
@@ -149,11 +158,21 @@ async fn lettre_balisee_template_conforme_acceptee() {
 }
 
 #[tokio::test]
+async fn destinataire_a_largeur_fixe_tolere_mais_signale() {
+    let lm = reference("lm_balisee.typ", "lettre_motivation");
+    let verdict = verdict(&lm, "lm_balisee_example_data.json", &template("lm_balisee_template_largeur_fixe.typ")).await;
+    assert!(verdict.problems.iter().any(|p| p.contains("marge droite")), "{:?}", verdict.problems);
+    // Hors des problèmes bloquants : toléré au dernier essai seulement.
+    assert_eq!(verdict.blocking, 0, "{:?}", verdict.problems);
+    assert_eq!(verdict.problems.len(), 1, "{:?}", verdict.problems);
+}
+
+#[tokio::test]
 async fn texte_de_la_reference_ecrit_en_dur_refuse() {
     let cv = reference("cv_balise.typ", "cv");
-    let template = template("cv_balise_template.typ").replace("data.texts.t2", "\"Références disponibles sur demande\"");
+    let template = template("cv_balise_template.typ").replace("data.texts.t4", "\"Références disponibles sur demande\"");
     let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
-    let expected = |p: &String| p.contains("« Références disponibles sur demande »") && p.contains("data.texts.t2");
+    let expected = |p: &String| p.contains("« Références disponibles sur demande »") && p.contains("data.texts.t4");
     assert!(verdict.problems.iter().any(expected), "{:?}", verdict.problems);
 }
 
@@ -161,7 +180,7 @@ async fn texte_de_la_reference_ecrit_en_dur_refuse() {
 async fn texte_retire_situe_dans_sa_phrase() {
     let cv = reference("cv_balise.typ", "cv");
     let template = template("cv_balise_template.typ")
-        .replace("#text(size: 9pt, fill: gray, style: \"italic\", data.texts.t2)", "");
+        .replace("#text(size: 9pt, fill: gray, style: \"italic\", data.texts.t4)", "");
     let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
     let diff = verdict.problems.iter().find(|p| p.contains("diffère de l'original")).expect("écart signalé");
     assert!(diff.contains("absent du rendu : « Références disponibles sur demande »"), "{diff}");
@@ -218,6 +237,29 @@ async fn separateur_orphelin_designe_et_non_bloquant() {
     let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
     assert!(verdict.problems.iter().any(|p| p.contains("`level`")), "{:?}", verdict.problems);
     assert_eq!(verdict.blocking, 0, "seuls des orphelins : template utilisable en dernier recours");
+}
+
+#[tokio::test]
+async fn section_entierement_vide_titre_refuse() {
+    let cv = reference("cv_balise.typ", "cv");
+    let template = template("cv_balise_template.typ").replace(
+        "#if data.labels.section_formations != \"\" and data.formations.len() > 0 {",
+        "#if data.labels.section_formations != \"\" {",
+    );
+    let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
+    let expected = |p: &String| p.contains("le titre « Formation »") && p.contains("section est vide");
+    assert!(verdict.problems.iter().any(expected), "{:?}", verdict.problems);
+    assert_eq!(verdict.blocking, 0, "toléré en dernier recours, comme les séparateurs orphelins");
+}
+
+#[tokio::test]
+async fn section_avec_unite_fixe_restante_titre_garde() {
+    // La section « Langues & Centres d'Intérêt » garde sa ligne « Intérêts » (texte en
+    // dur de la référence) quand les langues sont vides : son titre reste affiché.
+    let cv = reference("cv_balise.typ", "cv");
+    let verdict = verdict(&cv, "cv_balise_example_data.json", &template("cv_balise_template.typ")).await;
+    let titles: Vec<&String> = verdict.problems.iter().filter(|p| p.contains("section est vide")).collect();
+    assert!(titles.is_empty(), "{titles:?}");
 }
 
 #[test]

@@ -28,7 +28,6 @@ pub fn user() -> UserView {
         linkedin: Some("https://www.linkedin.com/in/camille-martin/".to_string()),
         github: None,
         portfolio: None,
-        interets: Some("• Escalade\n\nPhotographie\n- Échecs".to_string()),
         langue_profil: "fr".to_string(),
         created_at: now,
     }

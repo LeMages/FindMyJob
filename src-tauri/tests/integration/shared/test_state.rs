@@ -91,7 +91,6 @@ pub async fn seed_profile(pool: &SqlitePool) {
         linkedin: None,
         github: None,
         portfolio: None,
-        interets: Some("Escalade".into()),
     };
     db::users::update_user_info(pool, info).await.expect("infos utilisateur");
     let experience = CreateExperienceInput {

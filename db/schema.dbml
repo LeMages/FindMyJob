@@ -34,7 +34,6 @@ Table users {
   linkedin text
   github text
   portfolio text
-  interets text       // une ligne = un centre d'intérêt
   langue_profil text [not null, default: 'fr', note: "CHECK IN ('fr', 'en') ; langue dans laquelle le profil est rédigé"]
   created_at timestamp [not null]
 }

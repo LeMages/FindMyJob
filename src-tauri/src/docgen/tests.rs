@@ -12,14 +12,15 @@ use chrono::{NaiveDate, Utc};
 // Importation des modules internes
 use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
 use crate::docgen::build_lm_data::{build_lm_data, LmLayout};
+use crate::docgen::contact_fields::{missing_contacts, ContactField};
 use crate::docgen::entry_texts::source_texts;
-use crate::docgen::identity::{display_url, lines, SenderLocation};
-use crate::docgen::recipient::build_recipient;
+use crate::docgen::identity::{display_url, lines, validate_sender_name, SenderLocation};
+use crate::docgen::recipient::{build_recipient, split_location};
 use crate::documents::typst::compile_template;
 use crate::docgen::selection::{select, Selection};
 use crate::models::{
-    CandidatureDetail, CvContent, CvData, CvExperience, CvFormation, CvLabels, CvProject, ExperienceView,
-    FormationView, Identity, LmContent, LmData, LmLabels, PeriodGranularity, PeriodStyle, ProfileDto, ProjetView,
+    CandidatureDetail, CvContent, CvData, CvLabels, ExperienceView,
+    FormationView, Identity, LmContent, LmLabels, PeriodGranularity, PeriodStyle, ProfileDto, ProjetView,
     Recipient, SkillsGroup, UserView,
 };
 
@@ -55,7 +56,6 @@ fn user() -> UserView {
         linkedin: Some("https://www.linkedin.com/in/camille-martin/".to_string()),
         github: None,
         portfolio: None,
-        interets: Some("• Escalade\n\nPhotographie".to_string()),
         langue_profil: "fr".to_string(),
         created_at: now,
     }
@@ -111,12 +111,11 @@ fn profile() -> ProfileDto {
 }
 
 /// Assemble le CV d'un profil, textes des entrées tirés du profil.
-fn cv_data(profile: &ProfileDto, selection: &Selection, document: &CvData) -> CvData {
+fn cv_data(profile: &ProfileDto, selection: &Selection) -> CvData {
     let (labels, style) = (cv_labels(), period_style());
     let location = sender();
     let layout = CvLayout {
         location: &location,
-        document,
         labels: &labels,
         period_style: &style,
         separator: " - ",
@@ -131,7 +130,6 @@ fn cv_labels() -> CvLabels {
         section_profile: "Profil".to_string(),
         section_experiences: "Expérience".to_string(),
         section_projects: "Projets".to_string(),
-        interets_label: "Intérêts".to_string(),
         permis: "Permis B".to_string(),
         present: "aujourd'hui".to_string(),
         months_short: ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."]
@@ -198,6 +196,28 @@ fn destinataire_depuis_la_candidature_sans_contact() {
     assert_eq!(recipient.contact_role, "");
 }
 
+#[test]
+fn destinataire_adresse_decoupee_et_localisation_absente_sans_ligne_vide() {
+    let candidature = |localisation: serde_json::Value| -> CandidatureDetail {
+        serde_json::from_value(serde_json::json!({
+            "id": 1, "session_id": 1, "poste": "Stage", "entreprise": "Société Exemple", "localisation": localisation,
+            "status": "a_postuler", "source": null, "type_contrat": null, "remuneration": null, "url_offre": null,
+            "description_offre": null, "notes": null, "date_candidature": null, "cv_path": null,
+            "lettre_motivation_path": null, "cv_reference_version": null, "lm_reference_version": null,
+            "generation_warnings": [],
+            "created_at": "2026-01-01T00:00:00Z"
+        }))
+        .expect("candidature de fixture")
+    };
+
+    let recipient = build_recipient(&candidature(serde_json::json!("12 rue de la Paix, 75002 Paris")));
+    assert_eq!(recipient.extra_lines, vec!["12 rue de la Paix".to_string()]);
+    assert_eq!(recipient.location, "75002 Paris");
+
+    let recipient = build_recipient(&candidature(serde_json::Value::Null));
+    assert!(recipient.extra_lines.is_empty() && recipient.location.is_empty(), "{recipient:?}");
+}
+
 // ======================================================================
 // build_cv_data / build_lm_data
 // ======================================================================
@@ -207,7 +227,7 @@ fn cv_data_fusionne_profil_contenu_et_libelles() {
     let profile = profile();
     let selection = select(&profile, &[20]);
 
-    let data = cv_data(&profile, &selection, &CvData::default());
+    let data = cv_data(&profile, &selection);
 
     assert_eq!(data.identity.linkedin, "linkedin.com/in/camille-martin");
     assert_eq!(data.experiences[0].poste, "Stage data");
@@ -226,8 +246,23 @@ fn cv_data_fusionne_profil_contenu_et_libelles() {
     assert_eq!(data.projects[0].url, "github.com/camille/projet-a");
     assert_eq!(data.formations[0].period, "2022 - 2027");
     assert_eq!(data.formations[0].details, vec!["Spécialité data".to_string(), "Échange à l'étranger".to_string()]);
-    assert_eq!(data.interets, vec!["Escalade".to_string(), "Photographie".to_string()]);
     assert_eq!(data.lang, "fr");
+}
+
+#[test]
+fn localisation_decoupee_en_lignes_d_adresse() {
+    let cases: [(&str, &[&str], &str); 6] = [
+        ("Paris", &[], "Paris"),
+        ("12 rue de la Paix, 75002 Paris", &["12 rue de la Paix"], "75002 Paris"),
+        ("Paris, France", &["Paris"], "France"),
+        ("", &[], ""),
+        (" , Paris ,, ", &[], "Paris"),
+        ("Rue A,  Bât. B , 69003 Lyon", &["Rue A", "Bât. B"], "69003 Lyon"),
+    ];
+    for (input, extra, location) in cases {
+        let (lines, last) = split_location(input);
+        assert_eq!((lines, last.as_str()), (extra.iter().map(|s| s.to_string()).collect::<Vec<_>>(), location), "{input:?}");
+    }
 }
 
 #[test]
@@ -236,9 +271,8 @@ fn lm_data_date_et_destinataire() {
     let content = LmContent { subject: "Candidature".to_string(), paragraphs: vec!["Paragraphe.".to_string()] };
     let labels = LmLabels { date_prefix: "le ".to_string(), ..Default::default() };
 
-    let document = LmData::default();
     let location = sender();
-    let data = build_lm_data(&profile(), &recipient, &content, &lm_layout(&location, &document, &labels));
+    let data = build_lm_data(&profile(), &recipient, &content, &lm_layout(&location, &labels));
 
     assert_eq!(data.date, "9 octobre 2026");
     assert_eq!(data.recipient.company, "Société Exemple");
@@ -251,48 +285,110 @@ fn lm_data_date_et_destinataire() {
 /// Mise en page de la lettre de test : sous-titre du CV, 9 octobre 2026.
 fn lm_layout<'a>(
     location: &'a SenderLocation,
-    document: &'a LmData,
     labels: &'a LmLabels,
 ) -> LmLayout<'a> {
-    LmLayout { location, document, labels, title: "Ingénieure data", date: date(2026, 10, 9), lang: "fr", texts: &NO_TEXTS }
+    LmLayout { location, labels, title: "Ingénieure data", date: date(2026, 10, 9), lang: "fr", texts: &NO_TEXTS }
 }
 
 // ======================================================================
-// Repli sur le document de référence
+// Identité sans repli sur le document de référence
 // ======================================================================
 
+/// Identité d'exemple d'une référence : toutes les coordonnées affichées.
+fn example_identity() -> Identity {
+    Identity {
+        prenom: "Camille".to_string(),
+        nom: "Exemple".to_string(),
+        email: "camille@exemple.invalid".to_string(),
+        telephone: "00 00 00 00 00".to_string(),
+        linkedin: "linkedin.com/in/exemple".to_string(),
+        github: "github.com/exemple".to_string(),
+        portfolio: "exemple.invalid".to_string(),
+        ..Default::default()
+    }
+}
+
 #[test]
-fn le_document_complete_l_identite_que_le_profil_n_a_pas() {
+fn les_coordonnees_vides_du_profil_restent_vides_dans_le_cv_et_la_lettre() {
     let mut profile = profile();
     profile.user.telephone = None;
-    let document = CvData {
-        identity: Identity {
-            telephone: "+41 00 000 00 00".to_string(),
-            portfolio: "exemple.invalid".to_string(),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    profile.user.email = None;
 
-    let data = cv_data(&profile, &select(&profile, &[]), &document);
+    let cv = cv_data(&profile, &select(&profile, &[]));
+    let labels = LmLabels::default();
+    let content = LmContent { subject: "Objet".to_string(), paragraphs: vec!["P.".to_string()] };
+    let location = sender();
+    let lm = build_lm_data(&profile, &Recipient::default(), &content, &lm_layout(&location, &labels));
 
-    assert_eq!(data.identity.prenom, "Camille", "le profil prime sur le document");
-    assert_eq!(data.identity.telephone, "+41 00 000 00 00", "profil vide : valeur du document");
-    assert_eq!(data.identity.portfolio, "exemple.invalid");
+    for identity in [&cv.identity, &lm.identity] {
+        assert_eq!(identity.prenom, "Camille", "le profil fournit le prénom");
+        assert_eq!((identity.telephone.as_str(), identity.email.as_str()), ("", ""));
+        assert_eq!((identity.github.as_str(), identity.portfolio.as_str()), ("", ""));
+    }
+    let json = serde_json::to_string(&(&cv, &lm)).expect("données sérialisables");
+    assert!(!json.contains("00 00 00 00 00") && !json.contains("exemple.invalid"), "valeur d'exemple : {json}");
 }
 
 #[test]
-fn le_lieu_vient_de_la_session_sans_repli_sur_le_document() {
+fn avertissement_seulement_si_la_reference_affiche_la_coordonnee() {
+    let mut user = user();
+    user.telephone = None;
+    user.portfolio = None;
+    let affiche = example_identity();
+    let sans_telephone = Identity { telephone: String::new(), ..example_identity() };
+
+    let missing = missing_contacts(&[&affiche], &user);
+    assert_eq!(missing, vec![ContactField::Telephone, ContactField::Github, ContactField::Portfolio]);
+
+    let missing = missing_contacts(&[&sans_telephone], &user);
+    assert_eq!(missing, vec![ContactField::Github, ContactField::Portfolio], "téléphone non affiché : pas d'avertissement");
+    assert!(missing_contacts(&[&Identity::default()], &user).is_empty(), "référence sans coordonnée");
+}
+
+#[test]
+fn un_seul_avertissement_par_coordonnee_pour_le_cv_et_la_lettre() {
+    let mut user = user();
+    user.telephone = None;
+    let cv = example_identity();
+    let lm = example_identity();
+
+    let missing = missing_contacts(&[&cv, &lm], &user);
+
+    assert_eq!(missing.iter().filter(|f| **f == ContactField::Telephone).count(), 1);
+    assert!(!ContactField::Telephone.warning().to_lowercase().contains("lettre"), "ne nomme pas le document");
+}
+
+#[test]
+fn prenom_ou_nom_vide_refuse_la_generation() {
+    let mut user = user();
+    assert!(validate_sender_name(&user).is_ok());
+    user.prenom = Some("  ".to_string());
+    let error = validate_sender_name(&user).expect_err("prénom vide");
+    assert!(error.to_string().contains("prénom"), "{error}");
+    user.prenom = Some("Camille".to_string());
+    user.nom = None;
+    let error = validate_sender_name(&user).expect_err("nom absent");
+    assert!(error.to_string().contains("nom"), "{error}");
+}
+
+#[test]
+fn permis_non_renseigne_retire_sans_repli_et_faux_retire_en_silence() {
+    let mut profile = profile();
+    profile.user.permis = None;
+    assert!(!cv_data(&profile, &select(&profile, &[])).identity.permis, "NULL : jamais repris de la référence");
+    profile.user.permis = Some(false);
+    assert!(!cv_data(&profile, &select(&profile, &[])).identity.permis);
+    profile.user.permis = Some(true);
+    assert!(cv_data(&profile, &select(&profile, &[])).identity.permis);
+}
+
+#[test]
+fn le_lieu_vient_de_la_session() {
     let profile = profile();
-    let document = CvData {
-        identity: Identity { ville: "Genève".to_string(), zip_code: "1200".to_string(), ..Default::default() },
-        ..Default::default()
-    };
     let (labels, style) = (cv_labels(), period_style());
     let build = |location: &SenderLocation| {
         let layout = CvLayout {
             location,
-            document: &document,
             labels: &labels,
             period_style: &style,
             separator: " - ",
@@ -305,7 +401,7 @@ fn le_lieu_vient_de_la_session_sans_repli_sur_le_document() {
     let avec_lieu = build(&sender());
     assert_eq!((avec_lieu.identity.ville.as_str(), avec_lieu.identity.zip_code.as_str()), ("Lyon", "69000"));
     let sans_lieu = build(&SenderLocation::default());
-    assert_eq!((sans_lieu.identity.ville.as_str(), sans_lieu.identity.zip_code.as_str()), ("", ""), "jamais « Genève »");
+    assert_eq!((sans_lieu.identity.ville.as_str(), sans_lieu.identity.zip_code.as_str()), ("", ""), "pas de lieu inventé");
 }
 
 #[test]
@@ -314,30 +410,18 @@ fn sections_vides_sans_contenu_de_la_reference() {
     profile.experiences.clear();
     profile.projets.clear();
     profile.formations.clear();
-    let document = CvData {
-        experiences: vec![CvExperience {
-            poste: "Poste du document".to_string(),
-            bullets: vec!["Bullet du document".to_string()],
-            ..Default::default()
-        }],
-        projects: vec![CvProject { titre: "Projet du document".to_string(), ..Default::default() }],
-        formations: vec![CvFormation { titre: "Formation du document".to_string(), ..Default::default() }],
-        ..Default::default()
-    };
 
-    let data = cv_data(&profile, &select(&profile, &[]), &document);
+    let data = cv_data(&profile, &select(&profile, &[]));
 
     assert!(data.experiences.is_empty(), "profil sans expérience : section vide");
     assert!(data.projects.is_empty(), "profil sans projet : section vide");
     assert!(data.formations.is_empty(), "profil sans formation : section vide");
-    let json = serde_json::to_string(&data).expect("données sérialisables");
-    assert!(!json.contains("du document"), "aucun contenu d'entrée de la référence : {json}");
 }
 
 #[test]
 fn entree_sans_description_reste_sans_bullet() {
     let profile = profile();
-    let data = cv_data(&profile, &select(&profile, &[21]), &CvData::default());
+    let data = cv_data(&profile, &select(&profile, &[21]));
     assert_eq!(data.projects[0].titre, "Projet B");
     assert!(data.projects[0].bullets.is_empty(), "rien de rédigé à la place d'une description vide");
     assert_eq!((data.projects[0].stack.as_str(), data.projects[0].url.as_str()), ("", ""));
@@ -356,7 +440,6 @@ fn textes_traduits_injectes_sans_toucher_aux_noms() {
     let location = sender();
     let layout = CvLayout {
         location: &location,
-        document: &CvData::default(),
         labels: &labels,
         period_style: &style,
         separator: " - ",
@@ -385,7 +468,7 @@ fn textes_traduits_injectes_sans_toucher_aux_noms() {
 #[test]
 fn template_compile_avec_donnees_completes() {
     let profile = profile();
-    let data = cv_data(&profile, &select(&profile, &[20, 21]), &CvData::default());
+    let data = cv_data(&profile, &select(&profile, &[20, 21]));
 
     let doc = compile_cv(&data);
 
@@ -400,7 +483,7 @@ fn template_compile_avec_donnees_completes() {
 #[test]
 fn stack_et_url_affiches_seulement_si_le_template_les_lit() {
     let profile = profile();
-    let data = cv_data(&profile, &select(&profile, &[20]), &CvData::default());
+    let data = cv_data(&profile, &select(&profile, &[20]));
 
     // Le template de fixture ne lit ni stack ni url : rien n'est ajouté.
     let without = compile_cv(&data);
@@ -422,15 +505,13 @@ fn template_compile_sans_champs_optionnels() {
     profile.user.email = None;
     profile.user.linkedin = None;
     profile.user.permis = Some(false);
-    profile.user.interets = None;
-    let data = cv_data(&profile, &select(&profile, &[]), &CvData::default());
+    let data = cv_data(&profile, &select(&profile, &[]));
 
     let doc = compile_cv(&data);
 
     assert!(doc.text.contains("Lyon"), "{}", doc.text);
     assert!(!doc.text.contains("Permis"), "{}", doc.text);
     assert!(!doc.text.contains("Projets"), "section vide masquée : {}", doc.text);
-    assert!(!doc.text.contains("Intérêts"), "{}", doc.text);
     assert!(!doc.text.trim_end().ends_with('•'), "pas de séparateur orphelin : {}", doc.text);
 }
 
@@ -449,7 +530,7 @@ fn lm_text(ville: &str, zip_code: &str) -> String {
     let recipient = Recipient { company: "Société Exemple".to_string(), ..Default::default() };
     let content = LmContent { subject: "Candidature".to_string(), paragraphs: vec!["Paragraphe.".to_string()] };
     let labels = LmLabels { date_prefix: "le".to_string(), ..Default::default() };
-    let data = build_lm_data(&profile, &recipient, &content, &lm_layout(&location, &LmData::default(), &labels));
+    let data = build_lm_data(&profile, &recipient, &content, &lm_layout(&location, &labels));
 
     let json = serde_json::to_vec(&data).expect("données sérialisables");
     let doc = compile_template(LM_TEMPLATE.to_string(), json, std::env::temp_dir(), PathBuf::from("introuvable"))
@@ -481,16 +562,29 @@ fn reference_d_une_version_precedente_a_reimporter() {
     let dir = std::env::temp_dir().join(format!("findmyjob-reference-texts-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("dossier temporaire");
     let missing = dir.join("absent.json");
-    assert!(matches!(load_texts(&missing, "CV"), Err(AppError::OutdatedReference(_))), "fichier absent : à réimporter");
+    assert!(matches!(load_texts(&missing, "cv", "CV"), Err(AppError::OutdatedReference(_))), "fichier absent : à réimporter");
 
     let old = dir.join("ancien.json");
     std::fs::write(&old, r#"{"format_version": 1, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
         .expect("écriture");
-    assert!(matches!(load_texts(&old, "CV"), Err(AppError::OutdatedReference(_))), "autre format : à réimporter");
+    assert!(matches!(load_texts(&old, "cv", "CV"), Err(AppError::OutdatedReference(_))), "autre format : à réimporter");
 
     let current = dir.join("courant.json");
-    std::fs::write(&current, r#"{"format_version": 2, "lang": "fr", "texts": {"t1": "P.J."}, "guidance": {"general": "", "zones": []}}"#)
+    std::fs::write(&current, r#"{"format_version": 3, "lang": "fr", "texts": {"t1": "P.J."}, "guidance": {"general": "", "zones": []}}"#)
         .expect("écriture");
-    assert_eq!(load_texts(&current, "CV").expect("format courant").texts["t1"], "P.J.");
+    assert_eq!(load_texts(&current, "cv", "CV").expect("format courant").texts["t1"], "P.J.");
+    // Le format de la lettre (3) est refusé pour un CV ; une lettre au format 2 est refusée (bloc destinataire).
+    let letter_format = dir.join("lettre.json");
+    std::fs::write(&letter_format, r#"{"format_version": 3, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
+        .expect("écriture");
+    assert!(load_texts(&letter_format, "lettre_motivation", "lettre de motivation").is_ok(), "lettre au format courant");
+    let old_letter = dir.join("ancienne_lettre.json");
+    std::fs::write(&old_letter, r#"{"format_version": 2, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
+        .expect("écriture");
+    assert!(
+        matches!(load_texts(&old_letter, "lettre_motivation", "lettre de motivation"), Err(AppError::OutdatedReference(_))),
+        "ancienne lettre refusée"
+    );
+    assert!(matches!(load_texts(&old_letter, "cv", "CV"), Err(AppError::OutdatedReference(_))), "format 2 refusé pour un CV");
     std::fs::remove_dir_all(&dir).expect("nettoyage");
 }

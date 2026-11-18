@@ -18,7 +18,7 @@ use findmyjob_lib::docgen::identity::SenderLocation;
 use findmyjob_lib::docgen::lint::Violation;
 use findmyjob_lib::docgen::selection::select;
 use findmyjob_lib::llm::writing_loop::{write_with_retries, Review};
-use findmyjob_lib::models::{CvContent, CvData, CvLabels, CvLangue, GenerationStatus, PeriodStyle, SkillsGroup};
+use findmyjob_lib::models::{CvContent, CvLabels, GenerationStatus, PeriodStyle};
 use findmyjob_lib::services::candidatures;
 
 /// Violation d'un texte trop court (signalée sans relance).
@@ -83,16 +83,9 @@ async fn meilleur_essai_conserve_et_relance_avec_rappel_de_langue() {
 
 #[test]
 fn listes_du_cv_sans_repli_sur_la_reference() {
-    // Profil sans langue ni centre d'intérêt, rédaction sans compétence :
+    // Profil sans langue, rédaction sans compétence :
     // les sections restent vides au lieu de reprendre celles de la référence.
-    let mut profile = common::profile();
-    profile.user.interets = None;
-    let document = CvData {
-        langues: vec![CvLangue { nom: "Allemand".into(), level: "C1".into() }],
-        interets: vec!["Voile".into()],
-        skills_groups: vec![SkillsGroup { category: "Référence".into(), skills: vec!["Fortran".into()] }],
-        ..Default::default()
-    };
+    let profile = common::profile();
     let selection = select(&profile, &[]);
     let texts = source_texts(&profile, &selection);
     let labels = CvLabels { months_short: vec![String::new(); 12], ..Default::default() };
@@ -100,7 +93,6 @@ fn listes_du_cv_sans_repli_sur_la_reference() {
     let location = SenderLocation::default();
     let layout = CvLayout {
         location: &location,
-        document: &document,
         labels: &labels,
         period_style: &PeriodStyle::default(),
         separator: " – ",
@@ -108,7 +100,7 @@ fn listes_du_cv_sans_repli_sur_la_reference() {
         texts: &no_texts,
     };
     let data = build_cv_data(&profile, &selection, &texts, &CvContent::default(), &layout);
-    assert!(data.langues.is_empty() && data.interets.is_empty() && data.skills_groups.is_empty(), "{data:?}");
+    assert!(data.langues.is_empty() && data.skills_groups.is_empty(), "{data:?}");
 }
 
 #[tokio::test]

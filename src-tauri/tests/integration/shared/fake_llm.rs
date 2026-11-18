@@ -169,6 +169,8 @@ fn step_of(system: &str, schema: Option<&Value>) -> Step {
         ("subject_prefix", Step::LmLabels),
         ("skills_groups", Step::CvContent),
         ("paragraphs", Step::LmContent),
+        // Profil sans compétence : la rédaction du CV omet `skills_groups`.
+        ("summary", Step::CvContent),
         ("formations", Step::ProfileTranslation),
         ("poste", Step::ScrapedOffer),
     ];

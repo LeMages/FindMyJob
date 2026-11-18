@@ -18,8 +18,6 @@ export interface UpdateUserInfoInput {
   linkedin: string | null
   github: string | null
   portfolio: string | null
-  /** Centres d'intérêt, une ligne = un item. */
-  interets: string | null
 }
 
 export interface CreateUserInput {
@@ -45,8 +43,6 @@ export interface UserView {
   linkedin: string | null
   github: string | null
   portfolio: string | null
-  /** Centres d'intérêt, une ligne = un item. */
-  interets: string | null
   /** Langue dans laquelle le profil est rédigé (`fr` ou `en`). */
   langue_profil: string
   created_at: string

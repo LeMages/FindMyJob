@@ -59,7 +59,3 @@
     block(joined((l.nom, l.level), " : "))
   }
 }
-
-#if data.interets.len() > 0 and data.labels.interets_label != "" {
-  text(data.labels.interets_label + " " + data.interets.join(", "))
-}

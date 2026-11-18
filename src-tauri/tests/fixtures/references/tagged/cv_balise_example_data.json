@@ -131,11 +131,6 @@
       "level": "C1, TOEIC 905/990 (semestre d'échange au Portugal)"
     }
   ],
-  "interets": [
-    "Course à pied",
-    "Photographie",
-    "Contributions à des projets open source en data"
-  ],
   "labels": {
     "section_profile": "Profil",
     "section_skills": "Compétences Techniques",
@@ -143,7 +138,6 @@
     "section_projects": "Projets",
     "section_formations": "Formation",
     "section_langues": "Langues & Centres d'Intérêt",
-    "interets_label": "Intérêts :",
     "permis": "Permis de conduire B",
     "present": "aujourd'hui",
     "months_short": [

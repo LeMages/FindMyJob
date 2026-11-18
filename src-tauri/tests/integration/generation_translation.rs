@@ -79,7 +79,6 @@ async fn offre_anglaise_documents_entierement_en_anglais() {
     for id in ["t1", "t2"] {
         assert!(cv["texts"][id].as_str().is_some_and(|t| t.starts_with("[en] ")), "{}", cv["texts"]);
     }
-    assert_eq!(cv["interets"][0], "Climbing", "centres d'intérêt traduits");
     assert_eq!(cv["langues"][0]["nom"], "English", "langues traduites");
 
     // Zones [FIXE], consignes et langue cible transmises à la rédaction.

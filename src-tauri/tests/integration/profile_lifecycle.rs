@@ -45,7 +45,6 @@ fn no_change() -> UpdateUserInfoInput {
         linkedin: None,
         github: None,
         portfolio: None,
-        interets: None,
     }
 }
 
@@ -57,7 +56,6 @@ async fn identite_et_coordonnees() {
         prenom: Some("Alexandra".into()),
         email: Some("alexandra@example.com".into()),
         telephone: Some("06 00 00 00 01".into()),
-        interets: Some("Escalade\nPhotographie".into()),
         ..no_change()
     };
     users::update_user_info(&pool, input).await.expect("mise à jour");
@@ -67,7 +65,6 @@ async fn identite_et_coordonnees() {
     assert_eq!(user.nom.as_deref(), Some("Martin"));
     assert_eq!(user.email.as_deref(), Some("alexandra@example.com"));
     assert_eq!(user.telephone.as_deref(), Some("06 00 00 00 01"));
-    assert_eq!(user.interets.as_deref(), Some("Escalade\nPhotographie"));
     assert_eq!(user.description.as_deref(), Some("Étudiante en data."));
 
     // Suppression des champs facultatifs.
@@ -88,6 +85,22 @@ async fn identite_et_coordonnees() {
         other => panic!("validation attendue, obtenu {:?}", other.map(|u| u.email)),
     }
     assert_eq!(read(&pool).await.user.email.as_deref(), Some("alexandra@example.com"));
+}
+
+#[tokio::test]
+async fn prenom_ou_nom_vide_refuse_a_l_enregistrement() {
+    let pool = pool_with_user().await;
+    for (input, message) in [
+        (UpdateUserInfoInput { prenom: Some("  ".into()), ..no_change() }, "Le prénom est requis."),
+        (UpdateUserInfoInput { nom: Some(String::new()), ..no_change() }, "Le nom est requis."),
+    ] {
+        match users::update_user_info(&pool, input).await {
+            Err(AppError::Validation(m)) => assert_eq!(m, message),
+            other => panic!("validation attendue, obtenu {:?}", other.map(|u| u.nom)),
+        }
+    }
+    let user = read(&pool).await.user;
+    assert_eq!((user.prenom.as_deref(), user.nom.as_deref()), (Some("Alex"), Some("Martin")), "rien modifié");
 }
 
 #[tokio::test]

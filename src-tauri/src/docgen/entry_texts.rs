@@ -1,6 +1,6 @@
 //! Textes du profil tels qu'affichés par le CV : lignes de la description
 //! des expériences, projets et formations, organisation d'un projet
-//! (`pour_qui`), nom et niveau des langues, centres d'intérêt. Ce sont les
+//! (`pour_qui`), nom et niveau des langues. Ce sont les
 //! seuls textes du profil qu'une traduction peut modifier ; intitulés,
 //! entreprises, écoles, lieux, stack et liens (noms officiels) sont
 //! toujours lus tels quels dans le profil.
@@ -61,14 +61,12 @@ pub struct LanguageTexts {
 /// * `projects` - Les projets retenus.
 /// * `formations` - Toutes les formations du profil.
 /// * `langues` - Les langues parlées du profil (nom non vide).
-/// * `interets` - Les centres d'intérêt du profil, un par élément.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct CvEntryTexts {
     pub experiences: Vec<EntryLines>,
     pub projects: Vec<ProjectTexts>,
     pub formations: Vec<EntryLines>,
     pub langues: Vec<LanguageTexts>,
-    pub interets: Vec<String>,
 }
 
 impl CvEntryTexts {
@@ -92,7 +90,6 @@ impl CvEntryTexts {
         self.experiences.iter().chain(&self.formations).all(|e| e.lines.is_empty())
             && self.projects.iter().all(|p| p.lines.is_empty() && p.pour_qui.is_empty())
             && self.langues.is_empty()
-            && self.interets.is_empty()
     }
 }
 
@@ -130,6 +127,5 @@ pub fn source_texts(profile: &ProfileDto, selection: &Selection) -> CvEntryTexts
             .filter(|l| !text(l.nom.as_ref()).is_empty())
             .map(|l| LanguageTexts { id: l.id, nom: text(l.nom.as_ref()), level: text(l.level.as_ref()) })
             .collect(),
-        interets: lines(profile.user.interets.as_ref()),
     }
 }

@@ -2,7 +2,7 @@
 //! au CV et à la lettre.
 
 // Importation des modules internes
-use crate::docgen::document_fallback::text_or_document;
+use crate::error::AppError;
 use crate::models::{Identity, UserView};
 
 /// Valeur d'un champ optionnel du profil, nettoyée (chaîne vide si absent).
@@ -56,9 +56,9 @@ impl SenderLocation {
     }
 }
 
-/// Construit l'identité du candidat : chaque champ vient du profil, ou du
-/// document de référence quand le profil est vide sur ce champ. Seule
-/// exception : le lieu vient de la session, sans repli sur la référence.
+/// Construit l'identité du candidat : chaque champ vient du profil (le
+/// sous-titre, de la rédaction du CV), le lieu de la session. Jamais de
+/// repli sur la référence : un champ vide reste vide et sa ligne disparaît.
 ///
 /// # Arguments
 ///
@@ -66,25 +66,49 @@ impl SenderLocation {
 /// * `location` - Localisation de l'expéditeur (session).
 /// * `title` - Sous-titre professionnel (rédigé avec le CV), commun aux
 ///   deux documents.
-/// * `document` - Identité des données d'exemple de la référence.
 ///
 /// # Returns
 ///
-/// `Identity`, chaîne vide si ni le profil ni le document n'ont la valeur.
-pub fn build_identity(user: &UserView, location: &SenderLocation, title: &str, document: &Identity) -> Identity {
+/// `Identity`, chaîne vide quand la valeur est absente.
+pub fn build_identity(user: &UserView, location: &SenderLocation, title: &str) -> Identity {
     Identity {
-        prenom: text_or_document(text(user.prenom.as_ref()), &document.prenom),
-        nom: text_or_document(text(user.nom.as_ref()), &document.nom),
-        title: text_or_document(title.trim().to_string(), &document.title),
-        email: text_or_document(text(user.email.as_ref()), &document.email),
-        telephone: text_or_document(text(user.telephone.as_ref()), &document.telephone),
+        prenom: text(user.prenom.as_ref()),
+        nom: text(user.nom.as_ref()),
+        title: title.trim().to_string(),
+        email: text(user.email.as_ref()),
+        telephone: text(user.telephone.as_ref()),
         ville: location.ville.clone(),
         zip_code: location.zip_code.clone(),
-        linkedin: text_or_document(display_url(user.linkedin.as_ref()), &document.linkedin),
-        github: text_or_document(display_url(user.github.as_ref()), &document.github),
-        portfolio: text_or_document(display_url(user.portfolio.as_ref()), &document.portfolio),
-        permis: user.permis.unwrap_or(document.permis),
+        linkedin: display_url(user.linkedin.as_ref()),
+        github: display_url(user.github.as_ref()),
+        portfolio: display_url(user.portfolio.as_ref()),
+        // Permis non renseigné : ligne retirée (avertissement), jamais reprise de la référence.
+        permis: user.permis.unwrap_or(false),
     }
+}
+
+/// Vérifie que le profil porte un prénom et un nom : ils signent la lettre
+/// et ouvrent le CV, aucune valeur d'exemple ne peut les remplacer.
+///
+/// # Arguments
+///
+/// * `user` - Utilisateur du profil.
+///
+/// # Returns
+///
+/// `Ok(())`, ou `AppError::Validation` nommant le champ du profil à compléter.
+pub fn validate_sender_name(user: &UserView) -> Result<(), AppError> {
+    if text(user.prenom.as_ref()).is_empty() {
+        return Err(AppError::Validation(
+            "Le prénom du profil est vide : renseigne-le dans le profil avant de générer des documents.".to_string(),
+        ));
+    }
+    if text(user.nom.as_ref()).is_empty() {
+        return Err(AppError::Validation(
+            "Le nom du profil est vide : renseigne-le dans le profil avant de générer des documents.".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// Découpe un texte multiligne du profil en éléments (une ligne = un
@@ -92,7 +116,7 @@ pub fn build_identity(user: &UserView, location: &SenderLocation, title: &str, d
 ///
 /// # Arguments
 ///
-/// * `value` - Texte du profil (détails de formation, centres d'intérêt).
+/// * `value` - Texte du profil (détails de formation).
 ///
 /// # Returns
 ///

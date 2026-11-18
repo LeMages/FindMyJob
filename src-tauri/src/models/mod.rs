@@ -39,7 +39,9 @@ pub use doc_data::{
     LmExampleData, LmLabels, PeriodGranularity, PeriodStyle, Recipient, SkillsGroup,
 };
 pub use prose_guidance::{ProseGuidance, ProseZone, ZoneMode};
-pub use reference_texts::{ReferenceTexts, REFERENCE_FORMAT_VERSION, REFERENCE_TEXTS_FILE};
+pub use reference_texts::{
+    expected_format_version, ReferenceTexts, CV_REFERENCE_FORMAT_VERSION, REFERENCE_FORMAT_VERSION, REFERENCE_TEXTS_FILE,
+};
 pub use document::{
     Document, DocumentFileInfo, DocumentReferenceView, DocumentVersionView, DocumentsStatus, TemplateArtifacts,
 };
