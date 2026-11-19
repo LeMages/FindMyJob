@@ -2,8 +2,8 @@
 /**
  * Section « Polices » des Paramètres : familles de polices importées par
  * l'utilisateur pour la compilation Typst (nom exact à écrire dans `font:`,
- * variantes, homonymes), import depuis un dossier Google Fonts décompressé,
- * suppression.
+ * variantes, homonymes), import depuis un dossier Google Fonts décompressé
+ * (bouton dans l'en-tête), une ligne par police, aide en pied de carte.
  */
 
 // Importation des modules Vue / framework
@@ -13,6 +13,10 @@ import { useI18n } from 'vue-i18n'
 // Importation des modules externes
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
+
+// Importation des composants
+import SettingsSection from '@/views/settings/components/SettingsSection.vue'
+import TrashIcon from '@/views/settings/components/TrashIcon.vue'
 
 // Importation des modules internes
 import { useFonts } from '@/composables/useFonts'
@@ -73,81 +77,72 @@ async function openFontsGoogle() {
 </script>
 
 <template>
-  <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-    <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('settings.fonts.section') }}</div>
-
-    <div v-if="loading" class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('common.loading') }}</div>
-    <template v-else>
-      <div v-if="fonts.length" class="mb-[14px]">
-        <div
-          v-for="font in fonts"
-          :key="font.folder"
-          class="flex items-start gap-2 py-[7px] border-b border-neutral-50 last:border-b-0"
-        >
-          <div class="flex-1 min-w-0">
-            <div v-for="family in font.families" :key="family.name" class="py-[2px]">
-              <div class="flex items-baseline gap-2 flex-wrap">
-                <span class="font-mono text-[13px] text-neutral-950 select-all" :title="t('settings.fonts.name_hint')">{{ family.name }}</span>
-                <span class="font-mono text-[11px] text-neutral-500">{{ family.variants.join(' · ') }}</span>
-              </div>
-              <div
-                v-if="font.shadowed_families.includes(family.name)"
-                class="mt-1 text-[12px] leading-[1.45] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-[10px] py-[6px]"
-              >
-                {{ t('settings.fonts.shadowed_warning') }}
-              </div>
-            </div>
-          </div>
-          <span class="font-mono text-[11px] text-neutral-500 flex-none pt-[2px]">{{ t('settings.fonts.file_count', { n: font.file_count }, font.file_count) }}</span>
-          <button
-            class="w-[30px] h-[30px] rounded-7 flex items-center justify-center cursor-pointer flex-none text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
-            type="button"
-            :title="t('common.delete')"
-            @click="confirmDeleteFont = font"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <path d="M10 11v6M14 11v6"/>
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-      <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('settings.fonts.empty') }}</div>
-    </template>
-
-    <div class="flex items-center justify-between gap-5 pt-2">
-      <div>
-        <div v-if="importFeedback" class="text-[12.5px] font-mono mb-[3px]" :class="importFeedback.type === 'success' ? 'text-green-600' : 'text-red-500'">
-          {{ importFeedback.text }}
-        </div>
-        <div class="text-[12px] text-neutral-400 max-w-[520px] leading-[1.45]">
-          <i18n-t keypath="settings.fonts.help" tag="span" scope="global">
-            <template #link>
-              <button type="button" class="text-blue-500 bg-transparent border-none p-0 cursor-pointer hover:underline" @click="openFontsGoogle">fonts.google.com</button>
-            </template>
-            <template #font>
-              <code class="font-mono">font:</code>
-            </template>
-          </i18n-t>
-        </div>
-      </div>
+  <SettingsSection :title="t('settings.fonts.section')" :description="t('settings.fonts.description')">
+    <template #action>
       <button
-        class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-50 disabled:cursor-not-allowed"
+        type="button"
+        class="h-8 px-3 rounded-lg border border-neutral-300 bg-surface-2 text-[12.5px] font-medium text-neutral-900 inline-flex items-center gap-[6px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="importing"
         @click="pickAndImportFolder"
       >{{ importing ? t('settings.fonts.importing') : t('settings.fonts.add') }}</button>
+    </template>
+
+    <div
+      v-if="importFeedback"
+      class="mx-5 mt-3 px-3 py-2 rounded-lg text-[12.5px]"
+      :class="importFeedback.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+    >{{ importFeedback.text }}</div>
+
+    <div v-if="loading" class="text-[12px] text-neutral-400 text-center py-6 font-mono border-b border-neutral-100">{{ t('common.loading') }}</div>
+    <div v-else-if="!fonts.length" class="px-5 py-[22px] text-[12.5px] text-neutral-500 border-b border-neutral-100">{{ t('settings.fonts.empty') }}</div>
+    <div
+      v-for="font in fonts"
+      v-else
+      :key="font.folder"
+      class="flex items-center gap-[14px] px-5 py-3 border-b border-neutral-100"
+    >
+      <div class="w-[38px] h-[38px] rounded-lg bg-neutral-100 flex items-center justify-center text-[16px] font-semibold text-neutral-700 flex-none font-[Georgia,serif]">Aa</div>
+      <div class="flex-1 min-w-0">
+        <div v-for="family in font.families" :key="family.name" class="flex items-baseline gap-x-[10px] flex-wrap">
+          <span class="text-[13.5px] font-medium text-neutral-950 select-all" :title="t('settings.fonts.name_hint')">{{ family.name }}</span>
+          <span class="font-mono text-[11px] text-neutral-500">{{ family.variants.join(' · ') }}</span>
+          <div v-if="font.shadowed_families.includes(family.name)" class="basis-full flex items-center gap-[6px] text-[12px] text-amber-700 mt-[3px]">
+            <svg class="w-[13px] h-[13px] flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>{{ t('settings.fonts.shadowed_warning') }}</span>
+          </div>
+        </div>
+      </div>
+      <span class="text-[11.5px] text-neutral-500 flex-none font-mono">{{ t('settings.fonts.file_count', { n: font.file_count }, font.file_count) }}</span>
+      <button
+        type="button"
+        class="w-8 h-8 rounded-lg border border-transparent bg-transparent text-neutral-400 flex items-center justify-center cursor-pointer flex-none hover:text-red-600 hover:bg-red-50 hover:border-red-200"
+        :title="t('common.delete')"
+        :aria-label="t('common.delete')"
+        @click="confirmDeleteFont = font"
+      ><TrashIcon /></button>
     </div>
-  </div>
+
+    <div class="px-5 py-3 text-[12px] text-neutral-500 leading-normal bg-neutral-50 rounded-b-xl">
+      <i18n-t keypath="settings.fonts.help" tag="span" scope="global">
+        <template #link>
+          <button type="button" class="text-blue-500 bg-transparent border-none p-0 cursor-pointer hover:underline font-sans text-[12px]" @click="openFontsGoogle">fonts.google.com</button>
+        </template>
+        <template #font>
+          <code class="font-mono">font:</code>
+        </template>
+      </i18n-t>
+    </div>
+  </SettingsSection>
 
   <!-- Confirmation de suppression -->
   <div
     v-if="confirmDeleteFont"
-    class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]"
+    class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100] p-4"
     @click="confirmDeleteFont = null"
   >
-    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[440px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
+    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[440px] max-w-full max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
       <div class="flex items-center justify-between mb-5">
         <div class="text-[17px] font-semibold">{{ t('settings.fonts.delete_title') }}</div>
         <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" type="button" @click="confirmDeleteFont = null">×</button>
