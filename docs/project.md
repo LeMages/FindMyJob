@@ -65,7 +65,7 @@ src-tauri/
     storage_paths.rs                 builds every path of the data folder and resolves paths received from the frontend
     secrets/                         SecretStore trait (swappable in tests) and its system-keyring implementation
     db/                              one file per table + joins.rs, profile.rs, init.rs (pool, migrations), transaction.rs
-    services/                        business logic beyond a DB call: applications, generation, settings, API key, Claude target, offer import, sessions
+    services/                        business logic beyond a DB call: applications, generation, settings, API key, Claude target, offer import, sessions, session statistics
     documents/                       reference markup (markup/), two-step templatization and its validation, reference loading, translation caches, page fitting, generation trace, Typst compilation, versions, on-disk document storage, fonts
     docgen/                          pure pipeline logic, no LLM/DB/files/Typst (cv_data/lm_data builders, budgets, linter, dash normalization of the rendered data, fixed zones, selection, entry texts and translation checks, reference-text translation items, sentinel data, period/date formatting, text diff)
     pipeline.rs, progress.rs         generation orchestration, in-memory progress store
@@ -154,7 +154,7 @@ Deleting a session cascades to everything that depends on it in the database, an
 
 `a_postuler`, `postule`, `relance`, `entretien`, `entretien_passe`, `offre`, `refus`, `abandon`, `ghosting`, `accepte`, `offre_refusee`.
 
-`entretien_passe` distinguishes an upcoming interview from one already completed but with no response from the company yet. `offre` is an intermediate status: receiving an offer is not terminal, it can still be accepted (`accepte`) or declined (`offre_refusee`). The negative terminal statuses (`abandon`, `refus`, `ghosting`, `offre_refusee`) move the application to the trash view on the frontend (`TRASHED_STATUSES` in `src/composables/candidature_display.ts`); `accepte` is terminal but stays visible since it's a positive outcome.
+`entretien_passe` distinguishes an upcoming interview from one already completed but with no response from the company yet. `offre` is an intermediate status: receiving an offer is not terminal, it can still be accepted (`accepte`) or declined (`offre_refusee`). The negative terminal statuses (`abandon`, `refus`, `ghosting`, `offre_refusee`, `TRASHED_STATUSES` in `src/composables/candidature_display.ts`) are « closed »: the tracking table gathers them in a collapsible « Clôturées » group and a « Clôturées » quick filter (`src/views/tracking/components/pipeline_groups.ts`); `accepte` is terminal but stays among the open applications since it's a positive outcome.
 
 ### Timeline event types (15 values, `src-tauri/src/models/event_type.rs`)
 
@@ -243,23 +243,40 @@ Two functions (`generate_application_email`, `generate_application_message`), pl
 
 ## 9. Tauri commands (`src-tauri/src/commands/`)
 
-79 commands are registered in `lib.rs` (`generate_handler!`). Each takes the managed `AppContext` and calls one service or `db` function; if startup failed, every command returns that error (`AppError::Config`), which `App.vue` shows on its startup error screen.
+86 commands are registered in `lib.rs` (`generate_handler!`). Each takes the managed `AppContext` and calls one service or `db` function; if startup failed, every command returns that error (`AppError::Config`), which `App.vue` shows on its startup error screen.
 
 | Module | Commands (summary) |
 |---|---|
 | `users` | user existence check, create, get, aggregated profile, update description/info |
 | `experiences` / `formations` / `langues` / `projets` / `skills` | add / update / delete per sub-entity |
 | `sessions` | list / create / update / delete (with its documents folder) |
-| `candidatures` | list by session, create (+ background generation), generation progress, get, update, delete (à postuler only), apply (no message / by mail / by message), find by normalized offer URL |
+| `candidatures` | list by session (with the send date `date_envoi`, from the `candidature_envoyee` event), create (+ background generation), generation progress, get, update, delete (à postuler only), apply (no message / by mail / by message), find by normalized offer URL |
 | `contacts` | contact book, contacts of an application, create (optionally linked to an application), update, delete (all its links go with it), link to / unlink from an application |
 | `status_history` | history for an application |
 | `timeline_events` | list available events, add an event |
 | `interviews` | pending interviews for an application, all interviews for a session |
+| `session_stats` | statistics of a session (`get_session_stats`, see « Session statistics » below) |
 | `scraping`, `capture` | offer extraction from a URL, from the capture window, or from pasted text; see « Offer import by link » below |
 | `documents`, `document_versions` | reference CV & cover letter (get, import, compile), status, versions (list, preview, restore), attached PDFs (info, preview, export), downloads folder, text export |
 | `fonts` | list / import / delete an imported font folder (families and variants read from the files) |
 | `settings` | LLM model, theme, interface language, connection test |
 | `system` | open a URL with the OS |
+
+### Session statistics
+
+The « Statistiques » tab of a session shows figures computed in Rust from the existing history, with no dedicated table or migration. `db::session_stats::load` reads three raw lists (applications with their CV/letter reference version number, source and whether a contact is linked; `status_history` events; interviews) and `services::session_stats::compute::compute` turns them into a `SessionStats` DTO. The computation is pure: the current time and the local date are parameters (`services::session_stats::load` reads them from `clock.rs`), so it is tested on hand-built histories.
+
+Rules (one file per part of `services/session_stats/`):
+
+- **Sent** (`timeline.rs`): an application counts once it has a `candidature_envoyee` event (the latest one is the send date). Only events at or after the send count.
+- **Response**: the first event after the send among `message_recu`, `appel`, `entretien_planifie`, `offre_recue`, `refus_recu` (`RESPONSE_EVENTS`); `ghosting` is not a response. **Interview**: an interview row, or an `entretien_planifie` / `entretien_passe` event. **Offer**: an `offre_recue` event or the status `offre`, `accepte` or `offre_refusee`.
+- **Funnel and outcomes** (`funnel.rs`): sent → response → interview → offer, average delay to the first response; outcomes group the current statuses into in progress, offer, rejected, ghosted, withdrawn, offer declined.
+- **Weekly activity** (`activity.rs`): sends and interviews over the last `WEEK_COUNT` (9) weeks, Monday to Sunday; interviews by type, « passed » meaning dated in the past.
+- **What works** (`comparisons.rs`): response rate and interviews per CV version, letter version (`candidatures.cv_reference_version_id` / `lm_reference_version_id`, `unknown` when the version was deleted), `candidatures.source` and recruiter contact (with / without). A row with fewer than `MIN_SENT_PER_ROW` (5) sends is marked `low_sample` and never chosen as `best`.
+- **Durations and follow-ups** (`durations.rs`): median days from the send to an offer, a rejection and ghosting; follow-ups (`relance` events) sent, followed by a response, and average delay before the first one.
+- Below `MIN_SENT_FOR_STATS` (3) sends, `enough_data` is false and the tab shows an empty state. Both thresholds are sent in the DTO so the frontend never hard-codes them.
+
+`candidatures.source` stores the French label of the platform; the frontend translates it with `sourceLabel` (`src/composables/candidature_display.ts`). The frontend only formats (percentages, rounding): `src/views/tracking/components/stats/`.
 
 Paths received from the frontend (`get_document_info`, `get_document_pdf`, `download_document`) are relative paths resolved under the data folder by `storage_paths::resolve_untrusted`: absolute paths and `..` are refused, and an existing file is canonicalized before the containment check.
 
@@ -312,6 +329,7 @@ The result is managed as `AppContext`: either the `AppState`, or the initializat
 - Apply flow: no message / by mail / by message, all exporting documents to disk.
 - Offer import from a link (JSON-LD, then page text + LLM), from a page captured in the FindMyJob window, or from pasted text, prefilling the new-application form; choice screen on failure, non-blocking duplicate warning.
 - Interview planning (week/month views).
+- Session statistics: funnel, outcomes, weekly activity, what works (CV/letter version, source, contact), interviews, durations and follow-ups, computed in Rust from the history (no migration).
 - Settings: LLM model selection, Anthropic API key (system keyring in PROD with save/delete, read-only `.env` state in DEV), connection test (run again after a key is saved), fonts, theme, interface language (French / English).
 - CI/CD: lint, clippy and tests (Linux + Windows) on every PR to `dev`, full Tauri build check on PRs to `staging`/`main`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
 
@@ -350,6 +368,7 @@ Everything runs on the user's machine, in one process; there is no server and no
 - CI's `rust` job runs `cargo test --workspace` on every PR. Coverage: HTML/Markdown-to-text conversion, the offer import's pure logic (synthetic HTML, no network), the documents pipeline's pure logic (including template compilation on a fixture), the whole `db` layer on an in-memory SQLite database (CRUD, cascades, constraints, duplicates, timestamp ordering, one timestamp per transaction) and the file-handling services (path resolution, interrupted-generation cleanup, session folder removal), and the API key rules on an in-memory fake keyring (source per mode, missing key, save/delete, DEV refusal, masking); no test touches the real keyring. Service-level tests, at the level the Tauri commands call, add the following:
   - offer import by link and by capture: real reduced pages served by a local `wiremock` server (127.0.0.1, random port), finalized fields, typed failures;
   - CV/LM generation: profile-sourced `data.json`, real Typst compilation, one-page CV, prose lint, empty-prose retries, failure cleanup;
+  - session statistics: computation on a hand-built history (funnel, outcomes, weeks, comparisons, durations, follow-ups, thresholds) and loading from the database;
   - profile, session and application-deletion lifecycles;
   - one end-to-end scenario.
 
