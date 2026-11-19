@@ -93,7 +93,7 @@ Table langues {
 }
 
 Table settings {
-  cle text [pk, note: "'llm_model', 'theme', 'ui_lang'"]
+  cle text [pk, note: "'llm_model', 'theme', 'ui_lang', 'sidebar_collapsed'"]
   valeur text
 }
 

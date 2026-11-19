@@ -216,6 +216,15 @@ export function selectSession(id: number) {
   state.selectedCard = null
 }
 
+/**
+ * Ouvre l'entrée « Candidatures » de la barre latérale : le suivi de la
+ * dernière session ouverte (`state.sessionId`, ramené à la première session
+ * par `loadSessions` si elle n'existe plus).
+ */
+export function openApplications() {
+  selectSession(state.sessionId)
+}
+
 /** Ouvre la popup de création de session. */
 export function addSession() {
   state.createSessionPopup = true

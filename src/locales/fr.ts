@@ -757,10 +757,13 @@ export const fr = {
     double_click_to_edit: 'Double-cliquer pour modifier',
   },
   sidebar: {
-    sessions: 'MES SESSIONS',
-    new_session: '+ Nouvelle session',
-    view_profile: 'Voir le profil',
+    applications: 'Candidatures',
+    new_session: 'Nouvelle session',
+    profile: 'Profil',
     settings: 'Paramètres',
+    collapse: 'Réduire',
+    expand: 'Déplier',
+    save_error: "Impossible d'enregistrer l'état de la barre latérale.",
   },
   startup: {
     failed: 'Impossible de démarrer',

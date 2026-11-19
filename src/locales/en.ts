@@ -746,10 +746,13 @@ export const en = {
     double_click_to_edit: 'Double-click to edit',
   },
   sidebar: {
-    sessions: 'MY SESSIONS',
-    new_session: '+ New session',
-    view_profile: 'View profile',
+    applications: 'Applications',
+    new_session: 'New session',
+    profile: 'Profile',
     settings: 'Settings',
+    collapse: 'Collapse',
+    expand: 'Expand',
+    save_error: 'Could not save the sidebar state.',
   },
   startup: {
     failed: 'Could not start',

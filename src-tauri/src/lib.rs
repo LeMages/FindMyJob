@@ -122,6 +122,8 @@ pub fn run() {
             commands::set_theme,
             commands::get_ui_language,
             commands::set_ui_language,
+            commands::get_sidebar_collapsed,
+            commands::set_sidebar_collapsed,
             commands::test_api_connection,
             commands::get_api_key_status,
             commands::save_api_key,

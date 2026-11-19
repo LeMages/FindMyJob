@@ -121,6 +121,16 @@ async fn reglages_upsert_par_cle() {
 }
 
 #[tokio::test]
+async fn barre_laterale_depliee_par_defaut_puis_persistee() {
+    let pool = seed::pool().await;
+    assert!(!settings::resolve_sidebar_collapsed(&pool).await.unwrap(), "dépliée sans valeur enregistrée");
+    services::settings::set_sidebar_collapsed(&pool, true).await.unwrap();
+    assert!(settings::resolve_sidebar_collapsed(&pool).await.unwrap());
+    services::settings::set_sidebar_collapsed(&pool, false).await.unwrap();
+    assert!(!settings::resolve_sidebar_collapsed(&pool).await.unwrap());
+}
+
+#[tokio::test]
 async fn langue_interface_defaut_ecriture_et_refus() {
     let pool = seed::pool().await;
     assert_eq!(settings::resolve_ui_lang(&pool).await.unwrap(), "fr");

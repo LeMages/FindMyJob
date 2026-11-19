@@ -66,6 +66,21 @@ pub async fn set_ui_lang(pool: &SqlitePool, lang: &str) -> Result<(), AppError> 
     db::settings::set(pool, db::settings::KEY_UI_LANG, lang).await
 }
 
+/// Enregistre l'état replié ou déplié de la barre latérale.
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+/// * `collapsed` - `true` si la barre latérale est repliée.
+///
+/// # Returns
+///
+/// `Ok(())` si l'écriture a réussi.
+pub async fn set_sidebar_collapsed(pool: &SqlitePool, collapsed: bool) -> Result<(), AppError> {
+    let value = if collapsed { "1" } else { "0" };
+    db::settings::set(pool, db::settings::KEY_SIDEBAR_COLLAPSED, value).await
+}
+
 /// Teste la connexion à l'API Claude avec le modèle configuré, en mesurant
 /// la latence. Un échec d'appel n'est pas une erreur de la commande : il est
 /// rapporté dans le résultat.
