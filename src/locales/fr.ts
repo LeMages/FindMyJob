@@ -316,7 +316,19 @@ export const fr = {
       label: 'Contexte détaillé',
       help: "Jamais affiché sur le CV. Sert à l'IA pour la lettre et le choix des projets.",
       provided: 'Contexte renseigné',
+      missing: 'Contexte détaillé à compléter (utile pour la lettre et le choix des projets)',
       counter: '{count} / {max}',
+    },
+    identity: {
+      written_in_fr: 'Profil rédigé en français',
+      written_in_en: 'Profil rédigé en anglais',
+      add_email: 'Ajouter un e-mail',
+      add_phone: 'Ajouter un téléphone',
+      add_linkedin: 'Ajouter LinkedIn',
+      add_github: 'Ajouter GitHub',
+      add_portfolio: 'Ajouter un portfolio',
+      no_licence: 'Pas de permis',
+      licence_unknown: 'Permis non renseigné',
     },
     info: {
       section: 'INFORMATIONS',
@@ -339,7 +351,6 @@ export const fr = {
       about: 'Décris ton parcours, tes objectifs…',
     },
     links: {
-      section: 'LIENS',
       invalid_linkedin: "Le lien LinkedIn n'est pas une URL valide.",
       invalid_github: "Le lien GitHub n'est pas une URL valide.",
       invalid_portfolio: "Le lien portfolio n'est pas une URL valide.",

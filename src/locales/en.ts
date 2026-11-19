@@ -313,7 +313,19 @@ export const en = {
       label: 'Detailed context',
       help: 'Never shown on the CV. Used by the AI for the cover letter and project selection.',
       provided: 'Context provided',
+      missing: 'Detailed context to fill in (useful for the cover letter and project selection)',
       counter: '{count} / {max}',
+    },
+    identity: {
+      written_in_fr: 'Profile written in French',
+      written_in_en: 'Profile written in English',
+      add_email: 'Add an email',
+      add_phone: 'Add a phone number',
+      add_linkedin: 'Add LinkedIn',
+      add_github: 'Add GitHub',
+      add_portfolio: 'Add a portfolio',
+      no_licence: 'No driving licence',
+      licence_unknown: 'Driving licence not specified',
     },
     info: {
       section: 'INFORMATION',
@@ -336,7 +348,6 @@ export const en = {
       about: 'Describe your background and goals…',
     },
     links: {
-      section: 'LINKS',
       invalid_linkedin: 'The LinkedIn link is not a valid URL.',
       invalid_github: 'The GitHub link is not a valid URL.',
       invalid_portfolio: 'The portfolio link is not a valid URL.',
