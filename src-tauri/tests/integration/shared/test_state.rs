@@ -101,6 +101,7 @@ pub async fn seed_profile(pool: &SqlitePool) {
         date_debut: Some(date(2024, 9, 1)),
         date_fin: Some(date(2025, 8, 31)),
         type_contrat: Some("alternance".into()),
+        contexte: None,
     };
     db::experiences::insert(pool, experience, seed::NOW).await.expect("expérience");
     let projet = CreateProjetInput {
@@ -111,6 +112,7 @@ pub async fn seed_profile(pool: &SqlitePool) {
         pour_qui: Some("Association Escalade Lyon".into()),
         date_debut: Some(date(2023, 1, 1)),
         date_fin: Some(date(2023, 6, 30)),
+        contexte: None,
     };
     db::projets::insert(pool, projet, seed::NOW).await.expect("projet");
     let formation = CreateFormationInput {

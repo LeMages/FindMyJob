@@ -3,7 +3,9 @@
 //! (`llm::writing_loop`). Expéditeur, destinataire, date, formule d'appel
 //! et formule de politesse sont remplis par Rust. Les consignes de la
 //! référence (zones `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]` de l'objet et des
-//! paragraphes) sont transmises au LLM et vérifiées.
+//! paragraphes) sont transmises au LLM et vérifiées. Le contexte détaillé des
+//! entrées retenues est fourni comme matière de fond, et sa recopie mot pour
+//! mot est relevée à la revue (`docgen::verbatim_check`).
 
 // Importation des crates externes
 use serde_json::{json, Value};
@@ -15,8 +17,10 @@ use crate::docgen::lint::lint_lm_budget;
 use crate::docgen::entry_texts::CvEntryTexts;
 use crate::docgen::selection::Selection;
 use crate::docgen::title_match::contains_title;
+use crate::docgen::verbatim_check::verbatim_violations;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
+use crate::llm::detailed_context_block::{detailed_context_block, letter_contexts};
 use crate::llm::doc_data_schema::object;
 use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::prose_checks::ProseChecks;
@@ -120,15 +124,33 @@ fn user_message(input: &LmWritingInput<'_>) -> String {
         format!("INTITULÉ EXACT DU POSTE : {} (cite-le tel quel dans l'objet, sans le modifier)", input.job_title.trim()),
         format!("ANALYSE DE L'OFFRE :\n{}", input.offer_analysis),
         profile_facts_block(input.profile, input.selection, input.matching, input.entry_texts),
-        style_model_block(&example_prose(input.example)),
     ];
+    // Absent sans contexte renseigné : le message reste alors celui d'avant le contexte détaillé.
+    blocks.extend(detailed_context_block(&letter_contexts(input.selection), input.target_lang));
+    blocks.push(style_model_block(&example_prose(input.example)));
     blocks.extend(guidance_block(input.guidance));
     blocks.push(budget_block(&input.budget));
     blocks.join("\n\n")
 }
 
+/// Ce qu'une revue de lettre vérifie, au-delà du contenu.
+///
+/// # Attributes
+///
+/// * `budget` - Budget de longueur.
+/// * `checks` - Contrôles de prose partagés avec le CV.
+/// * `job_title` - Intitulé exact du poste.
+/// * `contexts` - Contextes détaillés transmis, à ne pas recopier.
+struct LmReview<'a> {
+    budget: &'a LmBudget,
+    checks: &'a ProseChecks,
+    job_title: &'a str,
+    contexts: &'a [String],
+}
+
 /// Revue complète d'un contenu de lettre.
-fn review(content: &LmContent, budget: &LmBudget, checks: &ProseChecks, job_title: &str) -> Review {
+fn review(content: &LmContent, rules: &LmReview<'_>) -> Review {
+    let (budget, checks, job_title) = (rules.budget, rules.checks, rules.job_title);
     let fields = content.prose_fields();
     let mut blocking: Vec<String> =
         fields.iter().filter(|f| f.text.trim().is_empty()).map(|f| format!("{} est vide.", f.path)).collect();
@@ -141,6 +163,8 @@ fn review(content: &LmContent, budget: &LmBudget, checks: &ProseChecks, job_titl
     }
     let mut violations = checks.violations(&fields);
     violations.extend(lint_lm_budget(content, budget));
+    // Recopie du contexte : relance, mais jamais bloquante après le dernier essai.
+    violations.extend(verbatim_violations(&content.paragraphs, rules.contexts));
     Review { blocking, violations }
 }
 
@@ -174,11 +198,13 @@ pub async fn write_lm(input: &LmWritingInput<'_>, target: &ClaudeTarget) -> Resu
         guidance: input.guidance.clone(),
         information: lm_information_values(input.example),
     };
+    let contexts: Vec<String> = letter_contexts(input.selection).into_iter().map(|c| c.text).collect();
+    let rules = LmReview { budget: &input.budget, checks: &checks, job_title: input.job_title, contexts: &contexts };
     write_with_retries(
         "lettre",
         &language_reminder(input.target_lang),
         |feedback| call_once(input, feedback, target),
-        |content| review(content, &input.budget, &checks, input.job_title),
+        |content| review(content, &rules),
         |content| content.map_prose(|path, text| checks.clean(path, text)),
     )
     .await

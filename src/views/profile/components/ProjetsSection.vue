@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
+import DetailedContextField from './DetailedContextField.vue'
 import { useEditableList } from '@/composables/useEditableList'
 import { insertBullet } from '@/composables/insertBullet'
 import { parseBulletDescription } from '@/composables/parseBulletDescription'
@@ -33,6 +34,7 @@ interface ProjetDraft {
   debut_annee: number
   fin_annee: number
   en_cours: boolean
+  contexte: string
 }
 
 type ProjetDisplayItem = ProjetView & { isPending?: true; pendingKind?: 'new' | 'edited' }
@@ -53,6 +55,7 @@ function defaultProjetDraft(): ProjetDraft {
     debut_annee: new Date().getFullYear(),
     fin_annee: new Date().getFullYear(),
     en_cours: false,
+    contexte: '',
   }
 }
 
@@ -68,6 +71,7 @@ function draftFromView(p: ProjetView): ProjetDraft {
     debut_annee: parseYear(p.date_debut),
     fin_annee: parseYear(p.date_fin),
     en_cours: p.date_fin === null,
+    contexte: p.contexte ?? '',
   }
 }
 
@@ -81,6 +85,7 @@ function displayFromDraft(d: ProjetDraft, id: number, pendingKind: 'new' | 'edit
     pour_qui: d.pour_qui || null,
     date_debut: toDateStr(d.debut_annee),
     date_fin: d.en_cours ? null : toDateStr(d.fin_annee),
+    contexte: d.contexte.trim() || null,
     isPending: true,
     pendingKind,
   }
@@ -95,6 +100,7 @@ function draftToInput(d: ProjetDraft): CreateProjetInput {
     pour_qui: d.pour_qui.trim() || null,
     date_debut: toDateStr(d.debut_annee),
     date_fin: d.en_cours ? null : toDateStr(d.fin_annee),
+    contexte: d.contexte.trim() || null,
   }
 }
 
@@ -181,6 +187,7 @@ defineExpose({ hasChanges, reset, save })
           <div class="flex items-center gap-2 flex-wrap">
             <div class="text-[14px] font-semibold">{{ proj.titre }}</div>
             <span v-if="proj.pour_qui" class="inline-block font-mono text-[10.5px] border border-neutral-300 rounded-5 px-[7px] py-0.5 text-neutral-700">{{ proj.pour_qui }}</span>
+            <span v-if="proj.contexte" class="inline-block font-mono text-[10.5px] rounded-5 px-[7px] py-0.5 border border-neutral-200 text-neutral-500">{{ t('profile.detailed_context.provided') }}</span>
             <span v-if="proj.isPending" class="inline-block font-mono text-[10.5px] rounded-5 px-[7px] py-0.5 border border-amber-300 text-amber-700 bg-amber-50">
               {{ proj.pendingKind === 'edited' ? t('profile.pending.edited') : t('profile.pending.new') }}
             </span>
@@ -306,6 +313,7 @@ defineExpose({ hasChanges, reset, save })
           rows="3"
           :placeholder="t('profile.projects.description_placeholder')"
         ></textarea>
+        <DetailedContextField v-model="draft.contexte" />
       </div>
 
       <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">

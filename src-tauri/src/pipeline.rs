@@ -42,7 +42,9 @@ use crate::docgen::entry_texts::{source_texts, CvEntryTexts};
 use crate::docgen::period_format::detect_separator;
 use crate::docgen::profile_categories::{missing_categories, ProfileCategory};
 use crate::docgen::selection::{expected_project_count, select, Selection};
+use crate::docgen::verbatim_check::verbatim_violations;
 use crate::error::AppError;
+use crate::llm::detailed_context_block::letter_contexts;
 use crate::llm::cv_writing::{write_cv, CvWritingInput};
 use crate::llm::lm_writing::{write_lm, LmWritingInput};
 use crate::llm::matching::match_profile;
@@ -51,6 +53,7 @@ use crate::llm::profile_translation::translate_entry_texts;
 use crate::llm::writing_loop::WritingOutcome;
 use crate::llm::{CallRecorder, ClaudeTarget, LlmCaller};
 use crate::models::doc_lang::is_supported;
+use crate::trace_log;
 use crate::models::{
     CvContent, CvExampleData, CvLabels, LmContent, LmExampleData, LmLabels, MatchingResult, ProfileDto,
     Recipient,
@@ -419,6 +422,21 @@ async fn produce_lm(
     .await
 }
 
+/// Avertissement si la lettre finale recopie encore un passage du contexte
+/// détaillé : la revue relance la rédaction, mais ne bloque jamais pour ce
+/// motif. Contrôle fait sur la lettre retenue, après les relances de pages.
+fn copied_context_warning(lm: &LmContent, selection: &Selection) -> Option<String> {
+    let contexts: Vec<String> = letter_contexts(selection).into_iter().map(|c| c.text).collect();
+    if verbatim_violations(&lm.paragraphs, &contexts).is_empty() {
+        return None;
+    }
+    trace_log::log("[pipeline] lettre : passage du contexte détaillé recopié après le dernier essai");
+    Some(
+        "La lettre reprend mot pour mot un passage de votre contexte détaillé. Relisez-la avant de l'envoyer."
+            .to_string(),
+    )
+}
+
 /// Construit le résultat et sa trace.
 fn into_result(
     ctx: GenerationContext,
@@ -444,6 +462,7 @@ fn into_result(
     let mut warnings: Vec<String> = ctx.missing.iter().map(|c| c.warning()).collect();
     warnings.extend(ctx.missing_contacts.iter().map(|c| c.warning()));
     warnings.extend([&trace.cv.warning, &trace.lm.warning].into_iter().flatten().cloned());
+    warnings.extend(copied_context_warning(&trace.lm.content, &ctx.selection));
     GeneratedDocuments { cv, lm, warnings, trace }
 }
 

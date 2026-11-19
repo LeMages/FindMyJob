@@ -3,7 +3,8 @@
 //! depuis le profil et l'offre, budgets de longueur, sélection des entrées
 //! du profil, textes des entrées et validation de leur traduction,
 //! traduction des textes de la référence (découpage et validation),
-//! linter de la prose et zones [FIXE], normalisation des tirets du texte
+//! linter de la prose et zones [FIXE], contrôle de recopie du contexte
+//! détaillé dans la lettre, normalisation des tirets du texte
 //! rendu, données sentinelles, formatage des périodes et des dates,
 //! comparaison de textes rendus.
 //!
@@ -34,6 +35,7 @@ pub mod sentinel_data;
 pub mod text_diff;
 pub mod title_match;
 pub mod translation_check;
+pub mod verbatim_check;
 pub mod words;
 
 #[cfg(test)]

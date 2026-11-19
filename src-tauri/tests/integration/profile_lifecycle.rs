@@ -114,6 +114,7 @@ async fn experiences_relues_par_le_profil() {
         date_debut: date(2024, 9, 1),
         date_fin: None,
         type_contrat: Some("alternance".into()),
+        contexte: None,
     };
 
     let id = experiences::insert(&pool, input("Alternant data"), seed::NOW).await.unwrap().id;
@@ -170,6 +171,7 @@ async fn projets_ajout_modification_suppression() {
         pour_qui: Some("Association".into()),
         date_debut: date(2023, 1, 1),
         date_fin: date(2023, 6, 30),
+        contexte: None,
     };
 
     let id = projets::insert(&pool, input("Tableau de bord", "Python"), seed::NOW).await.unwrap().id;
@@ -184,6 +186,37 @@ async fn projets_ajout_modification_suppression() {
 
     projets::delete(&pool, id).await.unwrap();
     assert!(read(&pool).await.projets.is_empty());
+}
+
+#[tokio::test]
+async fn contexte_detaille_remonte_dans_le_profil() {
+    let pool = pool_with_user().await;
+    let experience = CreateExperienceInput {
+        poste: "Alternant data engineer".into(),
+        entreprise: None,
+        lieu: None,
+        description: None,
+        date_debut: None,
+        date_fin: None,
+        type_contrat: None,
+        contexte: Some("Équipe de quatre personnes.".into()),
+    };
+    let projet = CreateProjetInput {
+        titre: "Tableau de bord".into(),
+        description: None,
+        stack: None,
+        url: None,
+        pour_qui: None,
+        date_debut: None,
+        date_fin: None,
+        contexte: Some("Demandé par le bureau du club.".into()),
+    };
+    experiences::insert(&pool, experience, seed::NOW).await.unwrap();
+    projets::insert(&pool, projet, seed::NOW).await.unwrap();
+
+    let profil = read(&pool).await;
+    assert_eq!(profil.experiences[0].contexte.as_deref(), Some("Équipe de quatre personnes."));
+    assert_eq!(profil.projets[0].contexte.as_deref(), Some("Demandé par le bureau du club."));
 }
 
 #[tokio::test]

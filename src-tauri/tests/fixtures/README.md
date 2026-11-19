@@ -64,6 +64,9 @@ Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l
 | `profile_translation_lignes.json` | Traduction du profil | Deux lignes pour une description d'une ligne, pour déclencher les relances puis l'échec |
 | `lm_content.json` | Rédaction de la lettre | Un tiret cadratin volontaire |
 | `lm_content_double_tiret.json` | Rédaction de la lettre | « --- » dans l'objet et « -- » dans un paragraphe (tirets ASCII), que la normalisation doit remplacer |
+| `lm_content_recopie_contexte.json` | Rédaction de la lettre | Le paragraphe 2 recopie plus de 8 mots du contexte détaillé de l'expérience 1 posé par `generation_detailed_context.rs`, pour déclencher la relance (puis l'avertissement si elle persiste) |
+| `lm_content_contexte_reformule.json` | Rédaction de la lettre | Même lettre, fait du contexte reformulé et sans tiret : essai corrigé après la recopie |
+| `lm_prompt_sans_contexte.txt` | Rédaction de la lettre (message envoyé) | Message utilisateur de la lettre capturé avant l'ajout du contexte détaillé, avec le profil de `test_state::seed_profile` : sans contexte, le prompt doit lui rester identique. À régénérer si le prompt de la lettre change volontairement |
 | `cv_labels.json`, `lm_labels.json` | Traduction des libellés | Utilisées seulement si la langue de l'offre diffère de celle de la référence |
 | `scraped_offer.json` | Extraction d'offre (étape LLM) | Balises HTML, emojis, contrat en majuscules et `mailto:`, que `finalize_fields` doit nettoyer |
 

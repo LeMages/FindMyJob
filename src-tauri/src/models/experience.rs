@@ -12,6 +12,8 @@ pub struct ExperienceView {
     pub date_debut: Option<NaiveDate>,
     pub date_fin: Option<NaiveDate>,
     pub type_contrat: Option<String>,
+    /// Contexte détaillé : jamais rendu, fourni au LLM pour la lettre.
+    pub contexte: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -23,4 +25,5 @@ pub struct CreateExperienceInput {
     pub date_debut: Option<NaiveDate>,
     pub date_fin: Option<NaiveDate>,
     pub type_contrat: Option<String>,
+    pub contexte: Option<String>,
 }

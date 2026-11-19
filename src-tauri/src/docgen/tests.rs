@@ -74,6 +74,7 @@ fn profile() -> ProfileDto {
             date_debut: Some(date(2025, 11, 1)),
             date_fin: Some(date(2026, 4, 30)),
             type_contrat: None,
+            contexte: None,
         }],
         formations: vec![FormationView {
             id: 30,
@@ -93,6 +94,7 @@ fn profile() -> ProfileDto {
                 pour_qui: Some("École".to_string()),
                 date_debut: Some(date(2025, 1, 1)),
                 date_fin: Some(date(2025, 6, 1)),
+                contexte: None,
             },
             ProjetView {
                 id: 21,
@@ -103,6 +105,7 @@ fn profile() -> ProfileDto {
                 pour_qui: None,
                 date_debut: None,
                 date_fin: None,
+                contexte: None,
             },
         ],
         skills: Vec::new(),

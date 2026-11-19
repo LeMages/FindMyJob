@@ -103,6 +103,8 @@ export interface ExperienceView {
   date_debut: string | null
   date_fin: string | null
   type_contrat: string | null
+  /** Contexte détaillé : jamais affiché sur le CV, fourni à l'IA. */
+  contexte: string | null
 }
 
 export interface CreateExperienceInput {
@@ -113,6 +115,7 @@ export interface CreateExperienceInput {
   date_debut: string | null
   date_fin: string | null
   type_contrat: string | null
+  contexte: string | null
 }
 
 export interface SkillView {
@@ -165,6 +168,8 @@ export interface ProjetView {
   pour_qui: string | null
   date_debut: string | null
   date_fin: string | null
+  /** Contexte détaillé : jamais affiché sur le CV, fourni à l'IA. */
+  contexte: string | null
 }
 
 export interface CreateProjetInput {
@@ -175,6 +180,7 @@ export interface CreateProjetInput {
   pour_qui: string | null
   date_debut: string | null
   date_fin: string | null
+  contexte: string | null
 }
 
 // ── Documents (CV / lettre de motivation) ────────────────────────────────────

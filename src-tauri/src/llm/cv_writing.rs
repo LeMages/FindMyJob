@@ -287,6 +287,7 @@ mod tests {
             pour_qui: None,
             date_debut: None,
             date_fin: None,
+            contexte: None,
         };
         ProfileDto {
             user: UserView {
