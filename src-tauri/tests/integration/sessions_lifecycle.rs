@@ -59,13 +59,14 @@ async fn localisation_a_la_creation_et_modification_dediee() {
     let vide = sessions::insert(&pool, &seed::session_input("Vide", Some("   "), Some("")), seed::NOW).await.unwrap();
     assert_eq!((vide.ville, vide.zip_code), (None, None));
 
-    // Modification dédiée : ni nom ni statut ne bougent.
-    let update = UpdateSessionInput { nom: "Renommée".into(), statut: "pause".into() };
+    // Modification dédiée : ni nom ni statut ne bougent (session active, la
+    // seule dont la localisation est modifiable).
+    let update = UpdateSessionInput { nom: "Renommée".into(), statut: "active".into() };
     sessions::update(&pool, sans.id, &update).await.unwrap();
     let input = UpdateSessionLocationInput { ville: Some("  Paris ".into()), zip_code: Some("75001".into()) };
     let updated = sessions::update_location(&pool, sans.id, &input).await.unwrap();
     assert_eq!((updated.ville.as_deref(), updated.zip_code.as_deref()), (Some("Paris"), Some("75001")));
-    assert_eq!((updated.nom.as_str(), updated.statut.as_str()), ("Renommée", "pause"));
+    assert_eq!((updated.nom.as_str(), updated.statut.as_str()), ("Renommée", "active"));
 
     // La modification du nom ou du statut conserve le lieu.
     let update = UpdateSessionInput { nom: "Encore".into(), statut: "active".into() };

@@ -168,6 +168,9 @@ async fn persist_version(
 ) -> Result<DocumentReferenceView, AppError> {
     let now = clock::now_utc();
     let mut tx = begin_write(pool).await?;
+    // Re-vérifié ici : la session a pu passer en pause pendant la
+    // templatisation (appel LLM hors transaction).
+    db::sessions::ensure_active(&mut *tx, pending.session_id).await?;
 
     // ------------------------------------------------------------------
     // 1. Identifiant (nomme le dossier), chemins et ligne de version
@@ -229,7 +232,8 @@ async fn persist_version(
 ///
 /// # Returns
 ///
-/// `DocumentReferenceView` pointant vers les fichiers `.typ` et `.pdf` sauvegardés.
+/// `DocumentReferenceView` pointant vers les fichiers `.typ` et `.pdf`
+/// sauvegardés, ou `AppError::SessionLocked` si la session n'est pas active.
 pub async fn save_reference(
     state: &AppState,
     session_id: i64,
@@ -244,6 +248,8 @@ pub async fn save_reference(
         return Err(AppError::Validation("Seuls les fichiers .typ sont acceptés.".to_string()));
     }
     let (pool, data_dir, fonts_dir) = (&state.pool, state.data_dir.as_path(), state.fonts_dir.as_path());
+    // Refus avant la compilation et l'appel LLM, plutôt qu'après.
+    db::sessions::ensure_active(pool, session_id).await?;
 
     // ------------------------------------------------------------------
     // 2. Compilation en PDF, en mémoire (racine = dossier du type de

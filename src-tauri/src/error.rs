@@ -23,6 +23,10 @@ pub enum AppError {
     /// compile plus avec le schéma actuel : elle doit être réimportée. Le
     /// message est la phrase française affichée à l'utilisateur.
     OutdatedReference(String),
+    /// Modification refusée parce que la session est en pause ou terminée
+    /// (lecture seule tant qu'elle n'est pas repassée « active »). Le
+    /// message est la phrase française affichée à l'utilisateur.
+    SessionLocked(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -34,7 +38,8 @@ impl std::fmt::Display for AppError {
             | AppError::NotFound(m)
             | AppError::Config(m)
             | AppError::Llm(m)
-            | AppError::OutdatedReference(m) => write!(f, "{}", m),
+            | AppError::OutdatedReference(m)
+            | AppError::SessionLocked(m) => write!(f, "{}", m),
             AppError::Scraping(failure) => write!(f, "Échec de l'extraction de l'offre ({failure})"),
         }
     }

@@ -11,8 +11,8 @@ pub struct SessionView {
     pub ville: Option<String>,
     /// Code postal de l'expéditeur (facultatif).
     pub zip_code: Option<String>,
+    /// Candidatures non clôturées (tout sauf refus, offre déclinée, abandon, ghosting).
     pub candidature_count: i64,
-    pub has_accepted: bool,
     pub created_at: DateTime<Utc>,
 }
 

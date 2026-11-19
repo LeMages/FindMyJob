@@ -19,16 +19,18 @@ async fn sessions_statistiques_et_mise_a_jour() {
     let pool = seed::pool().await;
     let sid = seed::session(&pool).await;
     let c1 = seed::candidature(&pool, sid, seed::NOW).await;
+    let c2 = seed::candidature(&pool, sid, seed::NOW).await;
     seed::candidature(&pool, sid, seed::NOW).await;
     sqlx::query("UPDATE candidatures SET status = 'refus' WHERE id = $1").bind(c1).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE candidatures SET status = 'accepte' WHERE id = $1").bind(c2).execute(&pool).await.unwrap();
 
     let liste = sessions::list_all(&pool).await.unwrap();
-    assert_eq!(liste[0].candidature_count, 1, "les candidatures refusées ne comptent pas");
-    assert!(liste[0].has_accepted, "un refus compte comme issue");
+    assert_eq!(liste[0].candidature_count, 2, "un refus ne compte pas, une candidature acceptée compte");
+    assert_eq!(liste[0].statut, "active");
 
     let input = UpdateSessionInput { nom: " Alternance ".into(), statut: "pause".into() };
     let maj = sessions::update(&pool, sid, &input).await.unwrap();
-    assert_eq!((maj.nom.as_str(), maj.statut.as_str(), maj.candidature_count), ("Alternance", "pause", 1));
+    assert_eq!((maj.nom.as_str(), maj.statut.as_str(), maj.candidature_count), ("Alternance", "pause", 2));
 
     let invalide = UpdateSessionInput { nom: "X".into(), statut: "archivee".into() };
     assert!(matches!(sessions::update(&pool, sid, &invalide).await, Err(AppError::Validation(_))));

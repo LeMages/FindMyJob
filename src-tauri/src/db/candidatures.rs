@@ -10,6 +10,8 @@ use sqlx::{Row, SqliteConnection, SqliteExecutor, SqlitePool};
 // Importation des modules internes
 use crate::db::common::map_db_err;
 use crate::db::contacts::{self, ContactToLink};
+use crate::db::joins::ensure_candidature_session_active;
+use crate::db::sessions;
 use crate::db::status_history::{self, NewHistoryEntry};
 use crate::db::transaction::begin_write;
 use crate::error::AppError;
@@ -166,8 +168,9 @@ async fn ensure_a_postuler(conn: &mut SqliteConnection, id: i64, conflict_messag
 ///
 /// # Returns
 ///
-/// `CandidatureView` fraîchement créée (chemins de documents à `None`), ou
-/// `AppError::NotFound` si un contact du carnet n'existe plus.
+/// `CandidatureView` fraîchement créée (chemins de documents à `None`),
+/// `AppError::NotFound` si la session ou un contact du carnet n'existe plus,
+/// ou `AppError::SessionLocked` si la session n'est pas active.
 pub async fn insert(
     pool: &SqlitePool,
     session_id: i64,
@@ -177,6 +180,7 @@ pub async fn insert(
     now: &str,
 ) -> Result<CandidatureView, AppError> {
     let mut tx = begin_write(pool).await?;
+    sessions::ensure_active(&mut *tx, session_id).await?;
 
     let row = sqlx::query(
         "INSERT INTO candidatures \
@@ -233,9 +237,11 @@ pub async fn insert(
 /// # Returns
 ///
 /// `CandidatureDetail` mise à jour, `AppError::NotFound` si la candidature
-/// n'existe pas, ou `AppError::Conflict` si son statut ne permet plus l'édition.
+/// n'existe pas, `AppError::SessionLocked` si sa session n'est pas active, ou
+/// `AppError::Conflict` si son statut ne permet plus l'édition.
 pub async fn update(pool: &SqlitePool, id: i64, fields: &CandidatureFields) -> Result<CandidatureDetail, AppError> {
     let mut tx = begin_write(pool).await?;
+    ensure_candidature_session_active(&mut *tx, id).await?;
     ensure_a_postuler(&mut tx, id, "Seule une candidature au statut « À postuler » peut être modifiée.").await?;
 
     sqlx::query(
@@ -344,9 +350,11 @@ pub async fn delete(pool: &SqlitePool, id: i64) -> Result<Option<i64>, AppError>
 ///
 /// Identifiant de la session de la candidature supprimée (pour le nettoyage
 /// de ses documents sur disque), `AppError::NotFound` si elle n'existe pas,
-/// ou `AppError::Conflict` si elle n'est plus au statut « à postuler ».
+/// `AppError::SessionLocked` si sa session n'est pas active, ou
+/// `AppError::Conflict` si elle n'est plus au statut « à postuler ».
 pub async fn delete_a_postuler(pool: &SqlitePool, id: i64) -> Result<i64, AppError> {
     let mut tx = begin_write(pool).await?;
+    ensure_candidature_session_active(&mut *tx, id).await?;
     ensure_a_postuler(&mut tx, id, "Seule une candidature au statut « À postuler » peut être supprimée.").await?;
 
     let session_id: i64 = sqlx::query_scalar("DELETE FROM candidatures WHERE id = $1 RETURNING session_id")
@@ -373,10 +381,11 @@ pub async fn delete_a_postuler(pool: &SqlitePool, id: i64) -> Result<i64, AppErr
 /// # Returns
 ///
 /// `Ok(())` une fois le changement effectué, `AppError::NotFound` si la
-/// candidature n'existe pas, ou `AppError::Conflict` si elle n'est plus au
-/// statut « à postuler ».
+/// candidature n'existe pas, `AppError::SessionLocked` si sa session n'est
+/// pas active, ou `AppError::Conflict` si elle n'est plus au statut « à postuler ».
 pub async fn mark_postule(pool: &SqlitePool, id: i64, content: Option<&str>, now: &str) -> Result<(), AppError> {
     let mut tx = begin_write(pool).await?;
+    ensure_candidature_session_active(&mut *tx, id).await?;
     let ancien_status = ensure_a_postuler(
         &mut tx,
         id,
