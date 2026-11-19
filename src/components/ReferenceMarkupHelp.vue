@@ -9,11 +9,16 @@
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+
+defineProps<{
+  /** Libellé du résumé repliable, à la place du libellé par défaut. */
+  summary?: string
+}>()
 </script>
 
 <template>
-  <details class="mt-[10px] text-[12px] text-neutral-600">
-    <summary class="cursor-pointer select-none text-neutral-500 hover:text-neutral-700">{{ t('documents.markup.summary') }}</summary>
+  <details class="text-[12px] text-neutral-600">
+    <summary class="cursor-pointer select-none text-neutral-500 hover:text-neutral-700">{{ summary ?? t('documents.markup.summary') }}</summary>
     <div class="mt-2 flex flex-col gap-[6px] leading-[1.45]">
       <!-- Les balises ([CONSIGNES], [FIXE]…) sont la syntaxe du format : jamais traduites. -->
       <i18n-t keypath="documents.markup.intro" tag="p" scope="global">

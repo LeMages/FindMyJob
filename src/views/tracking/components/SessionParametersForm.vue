@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * Formulaire de paramètres de la session courante (onglet Paramètres de la
- * page Candidatures). Titre et statut sont reliés au backend (`sessions`),
- * édités au double-clic (même mécanique que la page détail d'une
- * candidature). Le CV et la lettre de motivation de référence
- * sont propres à cette session (`documents/sessions/<id>/`) et affichés dans
- * la card « Documents », une `DocumentReferenceRow` par document.
+ * Paramètres de la session courante (onglet Paramètres de la page
+ * Candidatures). Section « Session » : nom, ville + code postal (édités d'un
+ * simple clic) et statut (sélecteur segmenté), reliés au backend
+ * (`sessions`). Section « Modèles de documents » : le CV et la lettre de
+ * référence propres à cette session (`documents/sessions/<id>/`), une
+ * `DocumentReferenceCard` par document, puis une aide au balisage repliable.
  */
 
 // Importation des modules Vue / framework
@@ -17,8 +17,11 @@ import { useI18n } from 'vue-i18n'
 import { currentSession, updateSession, updateSessionLocation } from '@/stores/app'
 import { backendErrorMessage } from '@/composables/backend_error_message'
 import type { DocumentReferenceView, SessionStatut } from '@/types'
+import DocumentReferenceCard from '@/components/DocumentReferenceCard.vue'
 import EditableField from '@/components/EditableField.vue'
-import DocumentReferenceRow from '@/components/DocumentReferenceRow.vue'
+import ReferenceMarkupHelp from '@/components/ReferenceMarkupHelp.vue'
+import SettingsRow from '@/components/SettingsRow.vue'
+import SettingsSection from '@/components/SettingsSection.vue'
 
 const { t } = useI18n()
 
@@ -34,12 +37,17 @@ async function saveNom(v: string): Promise<string | null | undefined> {
   return updateSession(session.id, { nom: v })
 }
 
-/** Sauvegarde le statut de la session. */
-async function saveStatut(v: string): Promise<string | null | undefined> {
+const statusError = ref<string | null>(null)
+
+/** Sauvegarde le statut de la session choisi dans le sélecteur segmenté. */
+async function saveStatut(v: SessionStatut) {
   const session = currentSession.value
-  if (!session) return
-  return updateSession(session.id, { statut: v as SessionStatut })
+  if (!session || session.statut === v) return
+  statusError.value = (await updateSession(session.id, { statut: v })) ?? null
 }
+
+/** La ville est requise pour créer une candidature : l'aide le rappelle. */
+const missingCity = computed(() => !(currentSession.value?.ville ?? '').trim())
 
 /** Sauvegarde la ville de l'expéditeur (le code postal est conservé). */
 async function saveVille(v: string): Promise<string | null | undefined> {
@@ -86,71 +94,87 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
 </script>
 
 <template>
-  <div class="px-[30px] pt-[18px] pb-[30px]">
-    <!-- Informations générales -->
-    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('session.params.section') }}</div>
+  <div class="px-5 sm:px-[30px] pt-6 pb-12">
+    <SettingsSection :title="t('session.params.section')">
+      <SettingsRow :label="t('session.params.name')" :help="t('session.params.name_help')">
+        <div class="w-[340px] max-w-full">
+          <EditableField
+            :model-value="currentSession?.nom ?? null"
+            :editable="true"
+            single-click
+            :placeholder="t('session.params.name')"
+            :on-save="saveNom"
+          />
+        </div>
+      </SettingsRow>
 
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('session.params.title') }}</label>
-        <EditableField
-          :model-value="currentSession?.nom ?? null"
-          :editable="true"
-          :placeholder="t('session.params.title')"
-          :on-save="saveNom"
+      <SettingsRow :label="t('session.params.city')">
+        <div class="w-[220px] max-w-full">
+          <EditableField
+            :model-value="currentSession?.ville ?? null"
+            :editable="true"
+            single-click
+            :placeholder="t('session.params.city_placeholder')"
+            :on-save="saveVille"
+          />
+        </div>
+        <div class="w-[110px]">
+          <EditableField
+            :model-value="currentSession?.zip_code ?? null"
+            :editable="true"
+            single-click
+            :placeholder="t('session.params.zip_code')"
+            :on-save="saveZipCode"
+          />
+        </div>
+        <template #help>
+          <span v-if="missingCity" class="text-red-600">{{ t('session.params.city_required') }}</span>
+          <template v-else>{{ t('session.params.city_help') }}</template>
+        </template>
+      </SettingsRow>
+
+      <SettingsRow :label="t('session.params.status')" :help="t('session.params.status_help')">
+        <div class="inline-flex p-[3px] rounded-9 bg-neutral-100 gap-0.5">
+          <button
+            v-for="opt in statusOptions"
+            :key="opt.value"
+            type="button"
+            class="border-0 px-[14px] py-[5px] rounded-7 text-[12.5px] font-sans cursor-pointer"
+            :class="currentSession?.statut === opt.value
+              ? 'bg-white text-neutral-950 font-medium shadow-[0_1px_2px_rgba(0,0,0,.08)]'
+              : 'bg-transparent text-neutral-600'"
+            @click="saveStatut(opt.value)"
+          >{{ opt.label }}</button>
+        </div>
+        <template #below>
+          <div v-if="statusError" class="text-[12px] font-mono mt-2 text-red-500">{{ statusError }}</div>
+        </template>
+      </SettingsRow>
+    </SettingsSection>
+
+    <section class="mb-[30px]">
+      <div class="mb-[10px]">
+        <h2 class="text-[15px] font-semibold text-neutral-950 m-0">{{ t('session.params.documents_title') }}</h2>
+        <p class="text-[12.5px] text-neutral-500 mt-[3px] mb-0">{{ t('session.params.documents_description') }}</p>
+      </div>
+      <div v-if="documentsLoadError" class="font-mono text-[12px] text-red-500 mb-[10px]">{{ documentsLoadError }}</div>
+      <div class="grid grid-cols-1 min-[900px]:grid-cols-2 gap-4">
+        <DocumentReferenceCard
+          doc-type="cv"
+          :session-id="sessionId"
+          :reference="cvReference"
+          @update:reference="v => (cvReference = v)"
+        />
+        <DocumentReferenceCard
+          doc-type="lettre_motivation"
+          :session-id="sessionId"
+          :reference="lettreReference"
+          @update:reference="v => (lettreReference = v)"
         />
       </div>
-
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('session.params.city') }}</label>
-        <EditableField
-          :model-value="currentSession?.ville ?? null"
-          :editable="true"
-          :placeholder="t('session.params.city_placeholder')"
-          :on-save="saveVille"
-        />
-        <div class="text-[11.5px] text-neutral-500 mt-1">{{ t('session.params.city_hint') }}</div>
+      <div class="mt-3 px-5 py-3 border border-neutral-200 rounded-xl bg-white">
+        <ReferenceMarkupHelp :summary="t('session.params.markup_summary')" />
       </div>
-
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('session.params.zip_code') }}</label>
-        <EditableField
-          :model-value="currentSession?.zip_code ?? null"
-          :editable="true"
-          :placeholder="t('session.params.zip_code_placeholder')"
-          :on-save="saveZipCode"
-        />
-      </div>
-
-      <div>
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('session.params.status') }}</label>
-        <EditableField
-          type="select"
-          :options="statusOptions"
-          :model-value="currentSession?.statut ?? null"
-          :editable="true"
-          :on-save="saveStatut"
-        />
-      </div>
-    </div>
-
-    <!-- Documents -->
-    <div v-if="documentsLoadError" class="font-mono text-[12px] text-red-500 mb-[18px]">{{ documentsLoadError }}</div>
-    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] pt-5 pb-2 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[4px] font-mono tracking-[.06em] text-neutral-500">{{ t('detail.documents.section') }}</div>
-      <DocumentReferenceRow
-        doc-type="cv"
-        :session-id="sessionId"
-        :reference="cvReference"
-        @update:reference="v => (cvReference = v)"
-      />
-      <div class="border-t border-neutral-200" />
-      <DocumentReferenceRow
-        doc-type="lettre_motivation"
-        :session-id="sessionId"
-        :reference="lettreReference"
-        @update:reference="v => (lettreReference = v)"
-      />
-    </div>
+    </section>
   </div>
 </template>

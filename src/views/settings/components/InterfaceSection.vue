@@ -11,8 +11,8 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 // Importation des composants
-import SettingsRow from '@/views/settings/components/SettingsRow.vue'
-import SettingsSection from '@/views/settings/components/SettingsSection.vue'
+import SettingsRow from '@/components/SettingsRow.vue'
+import SettingsSection from '@/components/SettingsSection.vue'
 import ThemeThumbnail from '@/views/settings/components/ThemeThumbnail.vue'
 
 // Importation des modules internes

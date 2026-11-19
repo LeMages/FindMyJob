@@ -28,12 +28,15 @@ interface Props {
   type?: 'text' | 'select' | 'textarea'
   options?: EditableFieldOption[]
   placeholder?: string
+  /** Un simple clic suffit pour éditer un champ texte (au lieu du double-clic). */
+  singleClick?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   type: 'text',
   options: () => [],
   placeholder: '',
+  singleClick: false,
 })
 
 const ERROR_DISPLAY_MS = 5000
@@ -82,8 +85,13 @@ const { t } = useI18n()
 // accidentelles au simple clic (sélection, focus de lecture...).
 const editHint = computed(() => {
   if (!props.editable) return t('editable_field.locked')
-  return props.type === 'select' ? t('editable_field.click_to_edit') : t('editable_field.double_click_to_edit')
+  return props.type === 'select' || props.singleClick ? t('editable_field.click_to_edit') : t('editable_field.double_click_to_edit')
 })
+
+/** Entre en édition au clic quand `singleClick` est actif. */
+function onClick() {
+  if (props.singleClick) startEdit()
+}
 
 /** Affiche un message d'erreur sous le champ pendant `ERROR_DISPLAY_MS`. */
 function showError(message: string) {
@@ -171,6 +179,7 @@ onUnmounted(() => clearTimeout(errorTimeoutId))
       :class="emptyInputClass"
       :placeholder="placeholder"
       :title="editHint"
+      @click="onClick"
       @dblclick="startEdit"
     />
     <textarea
@@ -180,6 +189,7 @@ onUnmounted(() => clearTimeout(errorTimeoutId))
       :class="emptyTextareaClass"
       :placeholder="placeholder"
       :title="editHint"
+      @click="onClick"
       @dblclick="startEdit"
     />
     <div
@@ -192,6 +202,7 @@ onUnmounted(() => clearTimeout(errorTimeoutId))
       v-else
       :class="displayClass"
       :title="editHint"
+      @click="onClick"
       @dblclick="startEdit"
     >{{ displayLabel }}</div>
 

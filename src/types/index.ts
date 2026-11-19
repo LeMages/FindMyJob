@@ -232,6 +232,8 @@ export interface CandidatureView {
   source: string | null
   type_contrat: string | null
   derniere_maj_statut: string
+  /** Date d'envoi (événement `candidature_envoyee`), `null` avant l'envoi. */
+  date_envoi: string | null
   cv_path: string | null
   lettre_motivation_path: string | null
   created_at: string

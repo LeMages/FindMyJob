@@ -14,8 +14,8 @@ import { invoke } from '@tauri-apps/api/core'
 // Importation des composants
 import StatusPill from '@/components/StatusPill.vue'
 import ApiKeySection from '@/views/settings/components/ApiKeySection.vue'
-import SettingsRow from '@/views/settings/components/SettingsRow.vue'
-import SettingsSection from '@/views/settings/components/SettingsSection.vue'
+import SettingsRow from '@/components/SettingsRow.vue'
+import SettingsSection from '@/components/SettingsSection.vue'
 
 // Importation des modules internes
 import { backendErrorMessage, backendTextMessage } from '@/composables/backend_error_message'

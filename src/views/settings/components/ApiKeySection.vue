@@ -16,7 +16,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 // Importation des composants
 import StatusPill from '@/components/StatusPill.vue'
-import SettingsRow from '@/views/settings/components/SettingsRow.vue'
+import SettingsRow from '@/components/SettingsRow.vue'
 import TrashIcon from '@/views/settings/components/TrashIcon.vue'
 
 // Importation des modules internes

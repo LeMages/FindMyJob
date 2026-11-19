@@ -17,6 +17,9 @@ pub struct CandidatureView {
     /// Horodatage du dernier changement de statut (issu de `status_history`),
     /// utilisé pour calculer l'inactivité affichée dans la vue pipeline.
     pub derniere_maj_statut: DateTime<Utc>,
+    /// Horodatage de l'envoi (événement `candidature_envoyee` le plus récent),
+    /// `None` tant que la candidature n'a pas été envoyée.
+    pub date_envoi: Option<DateTime<Utc>>,
     pub cv_path: Option<String>,
     pub lettre_motivation_path: Option<String>,
     pub created_at: DateTime<Utc>,

@@ -15,7 +15,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 
 // Importation des composants
-import SettingsSection from '@/views/settings/components/SettingsSection.vue'
+import SettingsSection from '@/components/SettingsSection.vue'
 import TrashIcon from '@/views/settings/components/TrashIcon.vue'
 
 // Importation des modules internes

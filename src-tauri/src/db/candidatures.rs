@@ -103,6 +103,7 @@ fn row_to_view(row: &SqliteRow) -> Result<CandidatureView, sqlx::Error> {
         source: row.try_get("source")?,
         type_contrat: row.try_get("type_contrat")?,
         derniere_maj_statut: row.try_get("derniere_maj_statut")?,
+        date_envoi: row.try_get("date_envoi")?,
         cv_path: row.try_get("cv_path")?,
         lettre_motivation_path: row.try_get("lettre_motivation_path")?,
         created_at: row.try_get("created_at")?,
@@ -183,7 +184,8 @@ pub async fn insert(
             url_offre, description_offre, notes, session_id, created_at) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
          RETURNING id, session_id, poste, entreprise, localisation, status, source, type_contrat, \
-                   created_at AS derniere_maj_statut, cv_path, lettre_motivation_path, created_at",
+                   created_at AS derniere_maj_statut, NULL AS date_envoi, \
+                   cv_path, lettre_motivation_path, created_at",
     )
     .bind(&fields.poste)
     .bind(&fields.entreprise)
@@ -420,6 +422,9 @@ pub async fn list_for_session(pool: &SqlitePool, session_id: i64) -> Result<Vec<
                      WHERE status_history.candidature_id = candidatures.id), \
                     created_at \
                 ) AS derniere_maj_statut, \
+                (SELECT MAX(changed_at) FROM status_history \
+                 WHERE status_history.candidature_id = candidatures.id \
+                   AND event_type = 'candidature_envoyee') AS date_envoi, \
                 cv_path, lettre_motivation_path, created_at \
          FROM candidatures \
          WHERE session_id = $1 \

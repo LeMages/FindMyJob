@@ -259,14 +259,20 @@ export const fr = {
   // ======================================================================
   session: {
     params: {
-      section: 'INFORMATIONS GÉNÉRALES',
-      title: 'Titre de la session',
-      status: 'Statut de la session',
+      section: 'Session',
+      name: 'Nom',
+      name_help: 'Affiché dans la barre latérale.',
+      status: 'Statut',
+      status_help: 'Une session terminée reste consultable.',
       city: 'Ville',
       zip_code: 'Code postal',
       city_placeholder: 'Lyon',
       zip_code_placeholder: '69000',
-      city_hint: 'Ville de l’expéditeur, requise pour créer une candidature.',
+      city_help: "Ville de l'expéditeur, reprise dans le CV et la lettre.",
+      city_required: 'Obligatoire pour créer une candidature.',
+      documents_title: 'Modèles de documents',
+      documents_description: 'Modèles Typst à partir desquels le CV et la lettre sont générés pour chaque candidature.',
+      markup_summary: 'Comment baliser un modèle (consignes, zones fixes et variables)',
     },
     create: {
       title: 'Nouvelle session',
@@ -646,9 +652,11 @@ export const fr = {
   // ======================================================================
   tracking: {
     create_first_session: '+ Créer ma première session',
-    summary:
-      '{n} candidature · dernière mise à jour {date} | {n} candidatures · dernière mise à jour {date}',
-    trash: 'Corbeille',
+    summary: {
+      total: '{n} candidature | {n} candidatures',
+      open: '{n} en cours',
+      closed: '{n} clôturée | {n} clôturées',
+    },
     documents_blocking_hint: "{message} Complète-les dans l'onglet Paramètres.",
     new_application: '+ Nouvelle candidature',
     columns: {
@@ -657,18 +665,28 @@ export const fr = {
       status: 'STATUT',
       applied: 'CANDIDATÉ',
       inactivity: 'INACTIVITÉ',
+      closed_on: 'CLÔTURÉE LE',
     },
     inactivity_days: '{n} j',
     empty: 'Aucune candidature',
+    filters: {
+      all: 'Toutes',
+      todo: 'À postuler',
+      active: 'En cours',
+      offer: 'Offres',
+      closed: 'Clôturées',
+    },
+    closed_outcome: {
+      refus: '{n} refus | {n} refus',
+      abandon: '{n} abandon | {n} abandons',
+      ghosting: '{n} ghosté | {n} ghostés',
+      offre_refusee: '{n} offre déclinée | {n} offres déclinées',
+    },
+    filter_empty: 'Aucune candidature dans ce filtre.',
     tabs: {
       applications: 'Candidatures',
       planning: 'Planning',
       settings: 'Paramètres',
-    },
-    trash_popup: {
-      intro: 'Candidatures abandonnées pour cette session.',
-      abandoned_on: 'Abandon le {date}',
-      empty: 'Aucune candidature dans la corbeille.',
     },
   },
   planning: {
@@ -686,21 +704,20 @@ export const fr = {
   // ======================================================================
   documents: {
     reference: {
-      empty_cv: 'Aucun CV renseigné',
-      empty_lm: 'Aucune lettre de motivation renseignée',
-      saved_cv: 'Enregistré le {date}',
-      saved_lm: 'Enregistrée le {date}',
-      preview_cv: 'Visualiser le CV compilé',
-      preview_lm: 'Visualiser la lettre compilée',
-      add_cv: 'Ajouter un CV',
-      replace_cv: 'Remplacer le CV',
-      add_lm: 'Ajouter une lettre',
-      replace_lm: 'Remplacer la lettre',
+      none_cv: 'Aucun modèle importé. Il est nécessaire pour générer le CV.',
+      none_lm: 'Aucun modèle importé. Il est nécessaire pour générer la lettre.',
+      ready: 'Prêt',
+      missing: 'Manquant',
+      imported_on: 'Importé le {date}',
+      importing: 'Import en cours…',
+      preview: 'Aperçu',
+      replace: 'Remplacer',
+      history: 'Historique',
+      import: 'Importer un modèle .typ',
       iframe_cv: 'Aperçu PDF du CV',
       iframe_lm: 'Aperçu PDF de la lettre de motivation',
       with_version: '{title} — version {version}',
       only_typ: 'Seuls les fichiers .typ sont acceptés.',
-      versions: 'Versions',
       compiling: 'Compilation en cours…',
     },
     versions: {

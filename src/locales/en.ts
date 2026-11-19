@@ -256,14 +256,20 @@ export const en = {
   // ======================================================================
   session: {
     params: {
-      section: 'GENERAL INFORMATION',
-      title: 'Session title',
-      status: 'Session status',
+      section: 'Session',
+      name: 'Name',
+      name_help: 'Shown in the sidebar.',
+      status: 'Status',
+      status_help: 'A finished session stays available.',
       city: 'City',
       zip_code: 'Postcode',
       city_placeholder: 'London',
       zip_code_placeholder: 'SW1A 1AA',
-      city_hint: 'Sender’s city, required to create an application.',
+      city_help: 'Sender’s city, used in the CV and the letter.',
+      city_required: 'Required to create an application.',
+      documents_title: 'Document templates',
+      documents_description: 'Typst templates from which the CV and the letter are generated for each application.',
+      markup_summary: 'How to mark up a template (instructions, fixed and variable zones)',
     },
     create: {
       title: 'New session',
@@ -637,8 +643,11 @@ export const en = {
   // ======================================================================
   tracking: {
     create_first_session: '+ Create my first session',
-    summary: '{n} application · last updated {date} | {n} applications · last updated {date}',
-    trash: 'Trash',
+    summary: {
+      total: '{n} application | {n} applications',
+      open: '{n} in progress',
+      closed: '{n} closed | {n} closed',
+    },
     documents_blocking_hint: '{message} Add them in the Settings tab.',
     new_application: '+ New application',
     columns: {
@@ -647,18 +656,28 @@ export const en = {
       status: 'STATUS',
       applied: 'APPLIED',
       inactivity: 'INACTIVITY',
+      closed_on: 'CLOSED ON',
     },
     inactivity_days: '{n} d',
     empty: 'No applications',
+    filters: {
+      all: 'All',
+      todo: 'To apply',
+      active: 'In progress',
+      offer: 'Offers',
+      closed: 'Closed',
+    },
+    closed_outcome: {
+      refus: '{n} rejection | {n} rejections',
+      abandon: '{n} withdrawn | {n} withdrawn',
+      ghosting: '{n} ghosted | {n} ghosted',
+      offre_refusee: '{n} offer declined | {n} offers declined',
+    },
+    filter_empty: 'No application in this filter.',
     tabs: {
       applications: 'Applications',
       planning: 'Planning',
       settings: 'Settings',
-    },
-    trash_popup: {
-      intro: 'Withdrawn applications for this session.',
-      abandoned_on: 'Withdrawn on {date}',
-      empty: 'No applications in the trash.',
     },
   },
   planning: {
@@ -676,21 +695,20 @@ export const en = {
   // ======================================================================
   documents: {
     reference: {
-      empty_cv: 'No CV provided',
-      empty_lm: 'No cover letter provided',
-      saved_cv: 'Saved on {date}',
-      saved_lm: 'Saved on {date}',
-      preview_cv: 'View the compiled CV',
-      preview_lm: 'View the compiled cover letter',
-      add_cv: 'Add a CV',
-      replace_cv: 'Replace the CV',
-      add_lm: 'Add a cover letter',
-      replace_lm: 'Replace the cover letter',
+      none_cv: 'No template imported. It is required to generate the CV.',
+      none_lm: 'No template imported. It is required to generate the letter.',
+      ready: 'Ready',
+      missing: 'Missing',
+      imported_on: 'Imported on {date}',
+      importing: 'Importing…',
+      preview: 'Preview',
+      replace: 'Replace',
+      history: 'History',
+      import: 'Import a .typ template',
       iframe_cv: 'CV PDF preview',
       iframe_lm: 'Cover letter PDF preview',
       with_version: '{title} — version {version}',
       only_typ: 'Only .typ files are accepted.',
-      versions: 'Versions',
       compiling: 'Compiling…',
     },
     versions: {

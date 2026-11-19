@@ -2,7 +2,8 @@
 /**
  * Ligne de réglage : libellé et aide à gauche, contrôle à droite, contenu
  * facultatif en dessous. Libellé et contrôle s'empilent quand la ligne est
- * trop étroite (requête de conteneur).
+ * trop étroite (requête de conteneur). L'aide vient de `help` ou du slot
+ * `help` quand elle contient de la mise en forme.
  */
 
 defineProps<{
@@ -16,9 +17,11 @@ defineProps<{
     <div class="flex flex-col items-start gap-3 @[560px]:flex-row @[560px]:items-center @[560px]:gap-6">
       <div class="flex-1 min-w-0">
         <div class="text-[13.5px] font-medium text-neutral-950">{{ label }}</div>
-        <div v-if="help" class="text-[12.5px] text-neutral-500 mt-0.5 leading-[1.45] max-w-[440px]">{{ help }}</div>
+        <div v-if="help || $slots.help" class="text-[12.5px] text-neutral-500 mt-0.5 leading-[1.45] max-w-[440px]">
+          <slot name="help">{{ help }}</slot>
+        </div>
       </div>
-      <div v-if="$slots.default" class="flex flex-wrap items-center gap-2 flex-none">
+      <div v-if="$slots.default" class="flex flex-wrap items-center gap-2 flex-none max-w-full">
         <slot />
       </div>
     </div>

@@ -68,9 +68,6 @@ const state = reactive({
   // Carnet de contacts (tous les contacts, toutes candidatures confondues)
   contactBook: [] as ContactView[],
 
-  // Trash popup
-  trashPopup: false,
-
   // Create session popup
   createSessionPopup: false,
 
@@ -564,16 +561,6 @@ export function openContactPopup(contact: ContactView | null) {
 export function openDeleteContactPopup(contact: ContactView) {
   state.detailContact = contact
   state.detailPopup = 'confirmDeleteContact'
-}
-
-/** Ouvre la corbeille de la session courante. */
-export function openTrashPopup() {
-  state.trashPopup = true
-}
-
-/** Ferme la corbeille. */
-export function closeTrashPopup() {
-  state.trashPopup = false
 }
 
 /**
