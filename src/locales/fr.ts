@@ -83,6 +83,7 @@ export const fr = {
       Llm: "Erreur de l'IA.",
       Scraping: "Échec de l'extraction de l'offre.",
       OutdatedReference: 'Document de référence obsolète : réimporte-le.',
+      SessionLocked: 'Session en lecture seule.',
     },
     fallback: {
       startup: "Impossible de démarrer l'application.",
@@ -263,7 +264,7 @@ export const fr = {
       name: 'Nom',
       name_help: 'Affiché dans la barre latérale.',
       status: 'Statut',
-      status_help: 'Une session terminée reste consultable.',
+      status_help: 'Une session en pause ou terminée reste consultable, en lecture seule : seul son statut reste modifiable.',
       city: 'Ville',
       zip_code: 'Code postal',
       city_placeholder: 'Lyon',
@@ -291,6 +292,14 @@ export const fr = {
       active: 'Active',
       pause: 'En pause',
       termine: 'Terminée',
+    },
+    locked: {
+      banner: {
+        pause: 'Session en pause : lecture seule',
+        termine: 'Session terminée : lecture seule',
+      },
+      change_status: 'Changer le statut',
+      hint: 'Session en lecture seule : repasse-la en « Active » dans Paramètres pour la modifier.',
     },
   },
   contacts: {

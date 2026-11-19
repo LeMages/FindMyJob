@@ -32,9 +32,11 @@ interface Props {
   loadError: string | null
   /** Autorise la restauration (mode édition des paramètres de session). */
   editMode: boolean
+  /** Raison pour laquelle la restauration est bloquée (session en lecture seule), sinon `null`. */
+  lockedHint?: string | null
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { lockedHint: null })
 
 const emit = defineEmits<{
   /** Demande de fermeture (croix, Échap, clic sur le fond). */
@@ -124,8 +126,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
               v-if="editMode"
               class="h-[30px] px-3 rounded-7 border border-neutral-300 bg-surface-2 text-[12px] font-medium text-neutral-900 cursor-pointer whitespace-nowrap hover:bg-surface-3 disabled:opacity-60 disabled:cursor-default"
               type="button"
-              :title="t('documents.versions.restore_hint')"
-              :disabled="v.is_current || restoringVersion !== null"
+              :title="lockedHint ?? t('documents.versions.restore_hint')"
+              :disabled="v.is_current || restoringVersion !== null || lockedHint !== null"
               @click="restore(v)"
             >{{ restoringVersion === v.version ? t('documents.versions.restoring') : t('documents.versions.restore') }}</button>
           </div>

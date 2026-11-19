@@ -13,11 +13,12 @@ import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des composants
-import CandidaturesTabs, { type TrackingTab } from '@/views/tracking/components/CandidaturesTabs.vue'
+import CandidaturesTabs from '@/views/tracking/components/CandidaturesTabs.vue'
 import PipelineTable from '@/views/tracking/components/PipelineTable.vue'
 import PlanningPanel from '@/views/tracking/components/PlanningPanel.vue'
 import SessionParametersForm from '@/views/tracking/components/SessionParametersForm.vue'
 import StatsPanel from '@/views/tracking/components/stats/StatsPanel.vue'
+import SessionLockedBanner from '@/components/SessionLockedBanner.vue'
 
 // Importation des composables
 import { backendErrorMessage } from '@/composables/backend_error_message'
@@ -25,7 +26,7 @@ import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
 
 // Importation des modules internes
 import { dateLocale } from '@/i18n'
-import { currentSession, navigate, openCard, addSession } from '@/stores/app'
+import { state, currentSession, currentSessionLocked, navigate, openCard, addSession } from '@/stores/app'
 import { isClosed } from '@/views/tracking/components/pipeline_groups'
 import type { CandidatureView } from '@/types'
 
@@ -34,15 +35,17 @@ const { t } = useI18n()
 const candidatures = ref<CandidatureView[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const activeTab = ref<TrackingTab>('candidatures')
 
 const sessionId = computed(() => currentSession.value?.id ?? null)
 
-const sessionIsAccepted = computed(() =>
-  candidatures.value.some(c => c.status === 'accepte')
-)
-
 const { documentsBlocking, missingDocumentsMessage, loadDocumentsStatus } = useDocumentsStatus()
+
+/** Raison pour laquelle « Nouvelle candidature » est désactivé (infobulle), `null` s'il est actif. */
+const newApplicationBlockedHint = computed(() => {
+  if (currentSessionLocked.value) return t('session.locked.hint')
+  if (documentsBlocking.value) return t('tracking.documents_blocking_hint', { message: missingDocumentsMessage.value })
+  return null
+})
 
 /** « N candidatures · X en cours · Y clôturées ». */
 const summary = computed(() => {
@@ -118,14 +121,11 @@ watch(sessionId, loadDocumentsStatus)
           <h1 class="text-2xl font-semibold leading-tight">{{ currentSession.nom }}</h1>
           <div class="text-[13px] text-neutral-500 mt-[5px]">{{ summary }}</div>
         </div>
-        <span
-          class="inline-block"
-          :title="documentsBlocking ? t('tracking.documents_blocking_hint', { message: missingDocumentsMessage }) : undefined"
-        >
+        <span class="inline-block" :title="newApplicationBlockedHint ?? undefined">
           <button
             class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-            :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': sessionIsAccepted || documentsBlocking }"
-            :disabled="sessionIsAccepted || documentsBlocking"
+            :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': newApplicationBlockedHint }"
+            :disabled="newApplicationBlockedHint !== null"
             @click="navigate('new')"
           >
             {{ t('tracking.new_application') }}
@@ -134,11 +134,14 @@ watch(sessionId, loadDocumentsStatus)
       </div>
     </div>
 
+    <!-- Session en pause ou terminée : lecture seule -->
+    <SessionLockedBanner :statut="currentSession.statut" class="mx-5 sm:mx-[30px] mb-4" />
+
     <!-- Onglets -->
-    <CandidaturesTabs :active="activeTab" @select="tab => (activeTab = tab)" />
+    <CandidaturesTabs :active="state.trackingTab" @select="tab => (state.trackingTab = tab)" />
 
     <!-- Onglet Candidatures -->
-    <template v-if="activeTab === 'candidatures'">
+    <template v-if="state.trackingTab === 'candidatures'">
       <!-- Loading -->
       <div v-if="loading" class="text-[12px] text-neutral-400 text-center py-6 font-mono mt-[60px]">{{ t('common.loading') }}</div>
 
@@ -149,10 +152,10 @@ watch(sessionId, loadDocumentsStatus)
     </template>
 
     <!-- Onglet Planning -->
-    <PlanningPanel v-else-if="activeTab === 'planning'" />
+    <PlanningPanel v-else-if="state.trackingTab === 'planning'" />
 
     <!-- Onglet Statistiques -->
-    <StatsPanel v-else-if="activeTab === 'stats'" :session-id="currentSession.id" />
+    <StatsPanel v-else-if="state.trackingTab === 'stats'" :session-id="currentSession.id" />
 
     <!-- Onglet Paramètres -->
     <SessionParametersForm v-else />

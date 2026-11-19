@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 // Importation des modules internes
 import {
   state,
+  allSessions,
   navigate,
   openDetailPopup,
   openContactPopup,
@@ -25,6 +26,7 @@ import DetailPopup from '@/views/detail/components/DetailPopup.vue'
 import DocumentPreviewModal from '@/views/detail/components/DocumentPreviewModal.vue'
 import StatusTimelineCard from '@/views/detail/components/StatusTimelineCard.vue'
 import EditableField from '@/components/EditableField.vue'
+import SessionLockedBanner from '@/components/SessionLockedBanner.vue'
 import type { DownloadDocType } from '@/composables/document_file_name'
 
 const { t } = useI18n()
@@ -35,6 +37,9 @@ const initials = (nom: string) =>
 /** Erreur du dernier retrait de contact (affichée dans le bloc des contacts). */
 const contactActionError = ref<string | null>(null)
 
+/** Lien d'action d'un contact (modifier, retirer, supprimer). */
+const CONTACT_ACTION = 'bg-transparent border-none p-0 text-[11.5px] text-neutral-500 cursor-pointer font-sans hover:text-neutral-950 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-neutral-500'
+
 /**
  * Retire un contact de la candidature (il reste dans le carnet).
  *
@@ -44,9 +49,20 @@ async function removeContactFromCandidature(contactId: number) {
   contactActionError.value = await unlinkContact(contactId)
 }
 
+/** Session de la candidature ouverte (statut, verrou « lecture seule »). */
+const detailSession = computed(() =>
+  allSessions.value.find(s => s.id === state.detailCandidature?.session_id) ?? null,
+)
+
+/** Infobulle des contrôles bloqués quand la session est en pause ou terminée, sinon `null`. */
+const lockedHint = computed(() =>
+  detailSession.value && detailSession.value.statut !== 'active' ? t('session.locked.hint') : null,
+)
+
 // Les détails du poste et les notes ne sont modifiables que tant que la
-// candidature n'a pas encore été engagée (statut "à postuler").
-const editable = computed(() => state.detailCandidature?.status === 'a_postuler')
+// candidature n'a pas encore été engagée (statut "à postuler") et que sa
+// session n'est pas en lecture seule.
+const editable = computed(() => state.detailCandidature?.status === 'a_postuler' && lockedHint.value === null)
 
 const cvPath = computed(() => state.detailCandidature?.cv_path ?? null)
 const cvExists = computed(() => !!cvPath.value && !!state.detailCvInfo?.exists)
@@ -77,6 +93,8 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
   <div class="px-9 pt-[26px] pb-11">
     <button class="bg-transparent border-none font-mono text-[12px] text-neutral-500 cursor-pointer py-1 mb-[14px] inline-block hover:text-neutral-950" @click="navigate('tracking')">{{ t('detail.back_to_tracking') }}</button>
 
+    <SessionLockedBanner v-if="detailSession" :statut="detailSession.statut" class="mb-4" />
+
     <div class="mb-1">
       <h1 class="text-2xl font-semibold leading-tight">{{ state.selectedCard?.role }}</h1>
       <div class="text-[13px] text-neutral-500 mt-[5px] font-mono">{{ state.selectedCard?.company }} · {{ state.selectedCard?.location }}</div>
@@ -105,6 +123,7 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
             <EditableField
               :model-value="state.detailCandidature.poste"
               :editable="editable"
+              :locked-hint="lockedHint ?? undefined"
               :placeholder="t('detail.job.title_placeholder')"
               :on-save="v => updateDetailCandidature({ poste: v })"
             />
@@ -115,6 +134,7 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
               <EditableField
                 :model-value="state.detailCandidature.entreprise"
                 :editable="editable"
+                :locked-hint="lockedHint ?? undefined"
                 :placeholder="t('detail.job.company_placeholder')"
                 :on-save="v => updateDetailCandidature({ entreprise: v })"
               />
@@ -124,6 +144,7 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
               <EditableField
                 :model-value="state.detailCandidature.localisation"
                 :editable="editable"
+                :locked-hint="lockedHint ?? undefined"
                 :placeholder="t('detail.job.location_placeholder')"
                 :on-save="v => updateDetailCandidature({ localisation: v })"
               />
@@ -137,6 +158,7 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
                 :options="typeContratOptions()"
                 :model-value="state.detailCandidature.type_contrat"
                 :editable="editable"
+                :locked-hint="lockedHint ?? undefined"
                 :on-save="v => updateDetailCandidature({ type_contrat: v })"
               />
             </div>
@@ -145,6 +167,7 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
               <EditableField
                 :model-value="state.detailCandidature.remuneration"
                 :editable="editable"
+                :locked-hint="lockedHint ?? undefined"
                 :placeholder="t('detail.job.salary_placeholder')"
                 :on-save="v => updateDetailCandidature({ remuneration: v })"
               />
@@ -157,6 +180,7 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
               :options="sourceOptions()"
               :model-value="state.detailCandidature.source"
               :editable="editable"
+              :locked-hint="lockedHint ?? undefined"
               :on-save="v => updateDetailCandidature({ source: v })"
             />
           </div>
@@ -165,6 +189,7 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
             <EditableField
               :model-value="state.detailCandidature.url_offre"
               :editable="editable"
+              :locked-hint="lockedHint ?? undefined"
               placeholder="https://..."
               :on-save="v => updateDetailCandidature({ url_offre: v })"
             />
@@ -178,6 +203,7 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
             type="textarea"
             :model-value="state.detailCandidature.notes"
             :editable="editable"
+            :locked-hint="lockedHint ?? undefined"
             :placeholder="t('detail.notes.placeholder')"
             :on-save="v => updateDetailCandidature({ notes: v })"
           />
@@ -279,7 +305,9 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
           <div class="flex items-center justify-between mb-[14px]">
             <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500">{{ t('detail.contacts.section') }}</div>
             <button
-              class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
+              class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed"
+              :title="lockedHint ?? undefined"
+              :disabled="lockedHint !== null"
               @click="openContactPopup(null)"
             >{{ t('common.add') }}</button>
           </div>
@@ -292,9 +320,9 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
               <div v-if="contact.telephone" class="font-mono text-[11px] text-neutral-500">{{ contact.telephone }}</div>
               <div v-if="contact.notes" class="text-[12px] text-neutral-600 mt-1 whitespace-pre-wrap">{{ contact.notes }}</div>
               <div class="flex flex-wrap gap-x-3 mt-1">
-                <button class="bg-transparent border-none p-0 text-[11.5px] text-neutral-500 cursor-pointer font-sans hover:text-neutral-950" @click="openContactPopup(contact)">{{ t('common.edit') }}</button>
-                <button class="bg-transparent border-none p-0 text-[11.5px] text-neutral-500 cursor-pointer font-sans hover:text-neutral-950" @click="removeContactFromCandidature(contact.id)">{{ t('detail.contacts.unlink') }}</button>
-                <button class="bg-transparent border-none p-0 text-[11.5px] text-neutral-500 cursor-pointer font-sans hover:text-red-600" @click="openDeleteContactPopup(contact)">{{ t('detail.contacts.delete') }}</button>
+                <button :class="CONTACT_ACTION" :title="lockedHint ?? undefined" :disabled="lockedHint !== null" @click="openContactPopup(contact)">{{ t('common.edit') }}</button>
+                <button :class="CONTACT_ACTION" :title="lockedHint ?? undefined" :disabled="lockedHint !== null" @click="removeContactFromCandidature(contact.id)">{{ t('detail.contacts.unlink') }}</button>
+                <button :class="[CONTACT_ACTION, 'hover:text-red-600']" :title="lockedHint ?? undefined" :disabled="lockedHint !== null" @click="openDeleteContactPopup(contact)">{{ t('detail.contacts.delete') }}</button>
               </div>
             </div>
           </div>
@@ -317,14 +345,20 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
     </div>
   </div>
   <div v-else-if="state.detailCandidature?.status === 'a_postuler'" class="flex gap-3 px-9 pt-[18px] pb-[26px] border-t border-neutral-200 bg-neutral-50 items-center">
-    <button
-      class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-red-50 hover:border-red-300 hover:text-red-600"
-      @click="openDetailPopup('confirmDelete')"
-    >{{ t('common.delete') }}</button>
-    <button
-      class="h-9 px-4 rounded-lg border border-neutral-950 bg-neutral-950 text-[13px] font-medium text-white inline-flex items-center cursor-pointer font-sans hover:bg-neutral-800"
-      @click="openDetailPopup('apply')"
-    >{{ t('detail.footer.apply') }}</button>
+    <span class="inline-block" :title="lockedHint ?? undefined">
+      <button
+        class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-500 inline-flex items-center cursor-pointer font-sans hover:bg-red-50 hover:border-red-300 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+        :disabled="lockedHint !== null"
+        @click="openDetailPopup('confirmDelete')"
+      >{{ t('common.delete') }}</button>
+    </span>
+    <span class="inline-block" :title="lockedHint ?? undefined">
+      <button
+        class="h-9 px-4 rounded-lg border border-neutral-950 bg-neutral-950 text-[13px] font-medium text-white inline-flex items-center cursor-pointer font-sans hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+        :disabled="lockedHint !== null"
+        @click="openDetailPopup('apply')"
+      >{{ t('detail.footer.apply') }}</button>
+    </span>
   </div>
 
   <!-- Popups -->

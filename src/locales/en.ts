@@ -82,6 +82,7 @@ export const en = {
       Llm: 'AI error.',
       Scraping: 'Could not extract the job offer.',
       OutdatedReference: 'Outdated reference document: please re-import it.',
+      SessionLocked: 'Read-only session: set it back to Active in its settings to edit it.',
     },
     fallback: {
       startup: 'Could not start the app.',
@@ -260,7 +261,7 @@ export const en = {
       name: 'Name',
       name_help: 'Shown in the sidebar.',
       status: 'Status',
-      status_help: 'A finished session stays available.',
+      status_help: 'A paused or finished session stays available, read-only: only its status can be changed.',
       city: 'City',
       zip_code: 'Postcode',
       city_placeholder: 'London',
@@ -288,6 +289,14 @@ export const en = {
       active: 'Active',
       pause: 'Paused',
       termine: 'Finished',
+    },
+    locked: {
+      banner: {
+        pause: 'Session paused: read-only',
+        termine: 'Session finished: read-only',
+      },
+      change_status: 'Change status',
+      hint: 'Read-only session: set it back to Active in Settings to edit it.',
     },
   },
   contacts: {

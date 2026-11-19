@@ -1,13 +1,16 @@
 <script setup lang="ts">
 /**
- * Liste des sessions de la barre latérale (pastille, nom, compteur, croix de
- * suppression au survol) suivie de « Nouvelle session ». Utilisée sous
+ * Liste des sessions de la barre latérale (pastille de statut, nom, compteur
+ * des candidatures non clôturées, croix de suppression au survol) suivie de « Nouvelle session ». Utilisée sous
  * l'entrée Candidatures (barre dépliée) et dans le panneau survolé du rail
  * (barre repliée, sans croix de suppression).
  */
 
 // Importation des modules Vue / framework
 import { useI18n } from 'vue-i18n'
+
+// Importation des composables
+import { SESSION_STATUS_DOT_CLASS } from '@/composables/session_status_dot'
 
 // Importation des modules internes
 import { state, allSessions, selectSession, addSession, openDeleteSessionPopup } from '@/stores/app'
@@ -32,7 +35,12 @@ const { t } = useI18n()
       : 'text-neutral-600 hover:bg-neutral-200 hover:text-neutral-950'"
     @click="selectSession(s.id)"
   >
-    <span class="w-[6px] h-[6px] rounded-sm flex-none" :class="s.hasAccepted ? 'bg-green-400' : 'bg-neutral-300'" />
+    <span
+      class="w-[6px] h-[6px] rounded-sm flex-none"
+      :class="SESSION_STATUS_DOT_CLASS[s.statut]"
+      :title="t(`session.status.${s.statut}`)"
+      data-testid="session-status-dot"
+    />
     <span class="flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">{{ s.nom }}</span>
     <span class="font-mono text-[10.5px] text-neutral-500 flex-none" :class="!compact && 'group-hover:hidden'">{{ s.count }}</span>
     <button

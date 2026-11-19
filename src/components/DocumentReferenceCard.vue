@@ -31,12 +31,15 @@ interface Props {
   editMode?: boolean
   /** Référence actuellement sauvegardée. */
   reference?: DocumentReferenceView | null
+  /** Raison pour laquelle import, remplacement et restauration sont bloqués (session en lecture seule), sinon `null`. */
+  lockedHint?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
   sessionId: null,
   editMode: true,
   reference: null,
+  lockedHint: null,
 })
 
 const emit = defineEmits<{
@@ -266,7 +269,14 @@ defineExpose({ hasChanges, reset })
     <div class="flex flex-wrap gap-2 mt-4 pt-[14px] border-t border-neutral-100">
       <template v-if="reference">
         <button type="button" :class="SM_BUTTON" @click="preview">{{ t('documents.reference.preview') }}</button>
-        <button v-if="editMode" type="button" :class="SM_BUTTON" :disabled="saving" @click="triggerPicker">{{ t('documents.reference.replace') }}</button>
+        <button
+          v-if="editMode"
+          type="button"
+          :class="SM_BUTTON"
+          :title="lockedHint ?? undefined"
+          :disabled="saving || lockedHint !== null"
+          @click="triggerPicker"
+        >{{ t('documents.reference.replace') }}</button>
         <button v-if="versions.length > 1" type="button" :class="SM_BUTTON" @click="versionsOpen = true">
           {{ t('documents.reference.history') }}
           <span class="font-mono text-[10.5px] text-neutral-500">{{ versions.length }}</span>
@@ -276,7 +286,8 @@ defineExpose({ hasChanges, reset })
         v-else-if="editMode"
         type="button"
         class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed"
-        :disabled="saving"
+        :title="lockedHint ?? undefined"
+        :disabled="saving || lockedHint !== null"
         @click="triggerPicker"
       >{{ t('documents.reference.import') }}</button>
     </div>
@@ -289,6 +300,7 @@ defineExpose({ hasChanges, reset })
     :versions="versions"
     :load-error="versionsLoadError"
     :edit-mode="editMode"
+    :locked-hint="lockedHint"
     @close="onVersionsClose"
     @preview="previewVersion"
     @restored="emit('update:reference', $event)"

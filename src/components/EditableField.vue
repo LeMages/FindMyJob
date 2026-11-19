@@ -30,6 +30,8 @@ interface Props {
   placeholder?: string
   /** Un simple clic suffit pour éditer un champ texte (au lieu du double-clic). */
   singleClick?: boolean
+  /** Infobulle d'un champ non modifiable (défaut : réservé au statut « À postuler »). */
+  lockedHint?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -84,7 +86,7 @@ const { t } = useI18n()
 // champs texte attendent un double-clic pour éviter les entrées en édition
 // accidentelles au simple clic (sélection, focus de lecture...).
 const editHint = computed(() => {
-  if (!props.editable) return t('editable_field.locked')
+  if (!props.editable) return props.lockedHint ?? t('editable_field.locked')
   return props.type === 'select' || props.singleClick ? t('editable_field.click_to_edit') : t('editable_field.double_click_to_edit')
 })
 

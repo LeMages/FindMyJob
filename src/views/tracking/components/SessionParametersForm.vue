@@ -14,7 +14,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { useI18n } from 'vue-i18n'
 
 // Importation des modules internes
-import { currentSession, updateSession, updateSessionLocation } from '@/stores/app'
+import { currentSession, currentSessionLocked, updateSession, updateSessionLocation } from '@/stores/app'
 import { backendErrorMessage } from '@/composables/backend_error_message'
 import type { DocumentReferenceView, SessionStatut } from '@/types'
 import DocumentReferenceCard from '@/components/DocumentReferenceCard.vue'
@@ -24,6 +24,9 @@ import SettingsRow from '@/components/SettingsRow.vue'
 import SettingsSection from '@/components/SettingsSection.vue'
 
 const { t } = useI18n()
+
+/** Infobulle des contrôles bloqués d'une session en lecture seule (seul le statut reste modifiable). */
+const lockedHint = computed(() => (currentSessionLocked.value ? t('session.locked.hint') : null))
 
 /** Statuts de session proposés : valeurs stockées inchangées, libellés traduits. */
 const statusOptions = computed<{ value: SessionStatut; label: string }[]>(() =>
@@ -100,7 +103,8 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
         <div class="w-[340px] max-w-full">
           <EditableField
             :model-value="currentSession?.nom ?? null"
-            :editable="true"
+            :editable="!currentSessionLocked"
+            :locked-hint="t('session.locked.hint')"
             single-click
             :placeholder="t('session.params.name')"
             :on-save="saveNom"
@@ -112,7 +116,8 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
         <div class="w-[220px] max-w-full">
           <EditableField
             :model-value="currentSession?.ville ?? null"
-            :editable="true"
+            :editable="!currentSessionLocked"
+            :locked-hint="t('session.locked.hint')"
             single-click
             :placeholder="t('session.params.city_placeholder')"
             :on-save="saveVille"
@@ -121,7 +126,8 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
         <div class="w-[110px]">
           <EditableField
             :model-value="currentSession?.zip_code ?? null"
-            :editable="true"
+            :editable="!currentSessionLocked"
+            :locked-hint="t('session.locked.hint')"
             single-click
             :placeholder="t('session.params.zip_code')"
             :on-save="saveZipCode"
@@ -163,12 +169,14 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
           doc-type="cv"
           :session-id="sessionId"
           :reference="cvReference"
+          :locked-hint="lockedHint"
           @update:reference="v => (cvReference = v)"
         />
         <DocumentReferenceCard
           doc-type="lettre_motivation"
           :session-id="sessionId"
           :reference="lettreReference"
+          :locked-hint="lockedHint"
           @update:reference="v => (lettreReference = v)"
         />
       </div>

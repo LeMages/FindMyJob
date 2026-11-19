@@ -7,8 +7,8 @@
 // Importation des modules Vue / framework
 import { useI18n } from 'vue-i18n'
 
-/** Onglet de la page Candidatures. */
-export type TrackingTab = 'candidatures' | 'planning' | 'stats' | 'parametres'
+// Importation des modules internes
+import type { TrackingTab } from '@/types'
 
 const { t } = useI18n()
 

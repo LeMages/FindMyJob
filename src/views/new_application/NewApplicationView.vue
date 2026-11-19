@@ -25,6 +25,7 @@ import {
   state,
   currentSession,
   navigate,
+  refreshSessions,
   addContactDraft,
   removeContactDraft,
   resetContactDrafts,
@@ -73,13 +74,16 @@ const { progress, pollError, start: startProgressPolling } = useGenerationProgre
 
 /**
  * Réagit à la fin de la génération des documents (voir `GenerationProgressModal`) :
- * en cas de succès, réinitialise le formulaire et retourne au suivi comme
- * avant le passage en asynchrone ; en cas d'échec, la modale reste ouverte
- * avec l'erreur et le formulaire est conservé (l'utilisateur ne perd pas sa saisie).
+ * recharge les sessions dans les deux cas (une génération échouée supprime
+ * la candidature, le compteur change) ; en cas de succès, réinitialise le
+ * formulaire et retourne au suivi comme avant le passage en asynchrone ; en
+ * cas d'échec, la modale reste ouverte avec l'erreur et le formulaire est
+ * conservé (l'utilisateur ne perd pas sa saisie).
  */
 watch(
   () => progress.value?.status,
   (status) => {
+    if (status === 'completed' || status === 'failed') void refreshSessions()
     if (status === 'completed') {
       showProgressModal.value = false
       resetForm()
@@ -144,6 +148,7 @@ async function submit() {
     // 2. Création de la candidature côté backend, puis suivi de la génération
     //    des documents lancée en tâche de fond (modale bloquante)
     const candidature = await invoke<CandidatureView>('create_candidature', { input })
+    void refreshSessions()
     showProgressModal.value = true
     startProgressPolling(candidature.id)
   } catch (e: unknown) {

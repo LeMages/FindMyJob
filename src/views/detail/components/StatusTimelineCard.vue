@@ -11,7 +11,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 // Importation des modules internes
-import { state, openStatusHistoryPopup } from '@/stores/app'
+import { state, isSessionLocked, openStatusHistoryPopup } from '@/stores/app'
 import { eventLabel } from '@/composables/candidature_display'
 import { dateLocale } from '@/i18n'
 import TimelineEventIcon from './TimelineEventIcon.vue'
@@ -32,6 +32,11 @@ const STATUTS_TERMINAUX = ['accepte', 'offre_refusee', 'refus', 'abandon', 'ghos
 
 const canAddEvent = computed(() =>
   !!state.detailCandidature && !STATUTS_TERMINAUX.includes(state.detailCandidature.status),
+)
+
+/** Session en pause ou terminée : l'ajout d'événement est désactivé (infobulle). */
+const lockedHint = computed(() =>
+  isSessionLocked(state.detailCandidature?.session_id) ? t('session.locked.hint') : null,
 )
 
 const addEventPopup = ref<InstanceType<typeof AddEventPopup> | null>(null)
@@ -66,7 +71,9 @@ const addEventPopup = ref<InstanceType<typeof AddEventPopup> | null>(null)
 
     <button
       v-if="canAddEvent"
-      class="w-full justify-center mt-1 h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
+      class="w-full justify-center mt-1 h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed"
+      :title="lockedHint ?? undefined"
+      :disabled="lockedHint !== null"
       @click="addEventPopup?.open()"
     >{{ t('detail.timeline.add_event') }}</button>
 

@@ -7,6 +7,9 @@
 
 export type Screen = 'tracking' | 'detail' | 'new' | 'profile' | 'settings'
 
+/** Onglet de la page Candidatures. */
+export type TrackingTab = 'candidatures' | 'planning' | 'stats' | 'parametres'
+
 // ── Utilisateur / profil ─────────────────────────────────────────────────────
 
 export interface UpdateUserInfoInput {
@@ -71,8 +74,8 @@ export interface Session {
   ville: string | null
   /** Code postal de l'expéditeur (facultatif). */
   zip_code: string | null
+  /** Candidatures non clôturées (tout sauf refus, offre déclinée, abandon, ghosting). */
   candidature_count: number
-  has_accepted: boolean
   created_at: string
 }
 

@@ -11,7 +11,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
 import type {
-  Screen, PopupKey,
+  Screen, PopupKey, TrackingTab,
   BoardCard, Session, CreateSessionInput, UpdateSessionInput, UpdateSessionLocationInput,
   CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
   ContactDraft, ContactInput, NewTimelineEvent,
@@ -35,6 +35,9 @@ const backendSessions = ref<Session[]>([])
 const state = reactive({
   // Navigation
   screen: 'tracking' as Screen,
+  // Onglet de la page Candidatures, ici pour que le bandeau « lecture seule »
+  // puisse ouvrir Paramètres depuis la fiche d'une candidature.
+  trackingTab: 'candidatures' as TrackingTab,
 
   // User identity (populated after profile load)
   userDisplayName: '',
@@ -82,11 +85,10 @@ const state = reactive({
 // Computed values (these will eventually come from backend)
 // ---------------------------------------------------------------------------
 
-export const allSessions = computed<(Session & { count: number; hasAccepted: boolean })[]>(() =>
+export const allSessions = computed<(Session & { count: number })[]>(() =>
   backendSessions.value.map(s => ({
     ...s,
     count: s.candidature_count,
-    hasAccepted: s.has_accepted,
   }))
 )
 
@@ -94,12 +96,35 @@ export const currentSession = computed(() =>
   allSessions.value.find(s => s.id === state.sessionId) ?? allSessions.value[0] ?? null,
 )
 
+/**
+ * Indique si une session est en lecture seule (en pause ou terminée) : seul
+ * son statut reste modifiable. Le backend refuse de toute façon les
+ * modifications ; l'interface s'en sert pour désactiver les contrôles.
+ *
+ * @param sessionId - Session à tester (`null` = aucune : non verrouillée).
+ * @returns `true` si la session existe et n'est pas `active`.
+ */
+export function isSessionLocked(sessionId: number | null | undefined): boolean {
+  const session = backendSessions.value.find(s => s.id === sessionId)
+  return !!session && session.statut !== 'active'
+}
+
+/** La session courante est-elle en lecture seule ? */
+export const currentSessionLocked = computed(() => isSessionLocked(currentSession.value?.id))
+
 // ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
 
-/** Charge les sessions de l'utilisateur depuis le backend. */
-export async function loadSessions() {
+/**
+ * Recharge les sessions depuis le backend (statut, compteur). Seul point de
+ * rechargement : appelé au démarrage et après chaque mutation qui peut
+ * changer le statut d'une session ou son compteur (événement de timeline,
+ * création, fin de génération, suppression, postulation, changement de
+ * statut). Échec silencieux (journalisé) : l'affichage garde la dernière
+ * liste connue et le backend reste la source de vérité.
+ */
+export async function refreshSessions() {
   try {
     backendSessions.value = await invoke<Session[]>('get_sessions')
     if (backendSessions.value.length > 0 && !backendSessions.value.find(s => s.id === state.sessionId)) {
@@ -175,9 +200,8 @@ export async function updateSession(id: number, patch: Partial<UpdateSessionInpu
   }
 
   try {
-    const updated = await invoke<Session>('update_session', { id, input })
-    const idx = backendSessions.value.findIndex(s => s.id === id)
-    if (idx !== -1) backendSessions.value[idx] = updated
+    await invoke<Session>('update_session', { id, input })
+    await refreshSessions()
     return null
   } catch (e: unknown) {
     return backendErrorMessage(e, t('error.fallback.update_session'))
@@ -214,9 +238,19 @@ export function selectSession(id: number) {
 }
 
 /**
+ * Ouvre l'onglet Paramètres de la session courante (lien du bandeau
+ * « lecture seule », où se change le statut).
+ */
+export function openSessionSettings() {
+  state.screen = 'tracking'
+  state.trackingTab = 'parametres'
+  state.selectedCard = null
+}
+
+/**
  * Ouvre l'entrée « Candidatures » de la barre latérale : le suivi de la
  * dernière session ouverte (`state.sessionId`, ramené à la première session
- * par `loadSessions` si elle n'existe plus).
+ * par `refreshSessions` si elle n'existe plus).
  */
 export function openApplications() {
   selectSession(state.sessionId)
@@ -354,7 +388,8 @@ export async function addTimelineEvent(event: NewTimelineEvent): Promise<string 
 
   try {
     await invoke<void>('add_timeline_event', { candidatureId: current.id, event })
-    await reloadDetail()
+    // Accepter une offre termine la session : pastille et verrou changent.
+    await Promise.all([reloadDetail(), refreshSessions()])
     return null
   } catch (e: unknown) {
     return backendErrorMessage(e, t('error.fallback.add_event'))
@@ -601,6 +636,7 @@ export async function deleteCandidature(): Promise<string | null> {
 
   try {
     await invoke<void>('delete_candidature', { id: current.id })
+    void refreshSessions()
     state.detailPopup = null
     state.selectedCard = null
     state.screen = 'tracking'
@@ -645,6 +681,7 @@ async function applyVia(command: string, errorFallback: string, messageFileName?
 
   try {
     const generated = await invoke<string | null>(command, { id: current.id })
+    void refreshSessions()
     const message = messageFileName && generated ? { fileName: messageFileName, content: generated } : null
     state.detailPopup = null
     state.selectedCard = null
