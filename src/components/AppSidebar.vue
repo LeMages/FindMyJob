@@ -35,7 +35,7 @@ const itemClass = (on: boolean) => on
   : 'text-neutral-700 hover:bg-neutral-200 hover:text-neutral-950 [&>svg]:text-neutral-500'
 const railClass = (on: boolean) => on
   ? 'bg-neutral-950 text-white'
-  : 'text-neutral-600 hover:bg-neutral-200 hover:text-neutral-950'
+  : 'bg-transparent text-neutral-600 hover:bg-neutral-200 hover:text-neutral-950'
 const tipClass = 'hidden group-hover/rail:block absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 z-[60] bg-neutral-950 text-white text-[12px] px-[9px] py-[5px] rounded-md whitespace-nowrap pointer-events-none'
 </script>
 
@@ -48,7 +48,7 @@ const tipClass = 'hidden group-hover/rail:block absolute left-[calc(100%+10px)] 
 
     <nav class="flex-1 flex flex-col items-center gap-[6px] pt-1">
       <div class="relative group/rail">
-        <button class="w-10 h-10 rounded-10 border-0 bg-transparent flex items-center justify-center cursor-pointer" :class="railClass(area === 'applications')" :aria-label="t('sidebar.applications')" @click="openApplications">
+        <button class="w-10 h-10 rounded-10 border-0 flex items-center justify-center cursor-pointer" :class="railClass(area === 'applications')" :aria-label="t('sidebar.applications')" @click="openApplications">
           <NavIcon name="applications" />
         </button>
         <!-- Panneau des sessions ; le pseudo-élément comble l'écart pour que le survol ne se perde pas -->
@@ -61,20 +61,20 @@ const tipClass = 'hidden group-hover/rail:block absolute left-[calc(100%+10px)] 
 
     <div class="flex-none border-t border-neutral-200 p-[10px] flex flex-col items-center gap-[6px]">
       <div class="relative group/rail">
-        <button class="w-10 h-10 rounded-10 border-0 bg-transparent flex items-center justify-center cursor-pointer" :class="railClass(area === 'profile')" :aria-label="t('sidebar.profile')" @click="navigate('profile')">
+        <button class="w-10 h-10 rounded-10 border-0 flex items-center justify-center cursor-pointer" :class="railClass(area === 'profile')" :aria-label="t('sidebar.profile')" @click="navigate('profile')">
           <NavIcon name="profile" />
         </button>
         <div :class="tipClass">{{ t('sidebar.profile') }}</div>
       </div>
       <div class="relative group/rail">
-        <button class="w-10 h-10 rounded-10 border-0 bg-transparent flex items-center justify-center cursor-pointer" :class="railClass(area === 'settings')" :aria-label="t('sidebar.settings')" @click="navigate('settings')">
+        <button class="w-10 h-10 rounded-10 border-0 flex items-center justify-center cursor-pointer" :class="railClass(area === 'settings')" :aria-label="t('sidebar.settings')" @click="navigate('settings')">
           <NavIcon name="settings" />
         </button>
         <div :class="tipClass">{{ t('sidebar.settings') }}</div>
       </div>
       <div class="h-px bg-neutral-200 my-[6px] mx-1 self-stretch" />
       <div class="relative group/rail">
-        <button class="w-10 h-10 rounded-10 border-0 bg-transparent flex items-center justify-center cursor-pointer" :class="railClass(false)" :aria-label="t('sidebar.expand')" @click="toggleSidebar">
+        <button class="w-10 h-10 rounded-10 border-0 flex items-center justify-center cursor-pointer" :class="railClass(false)" :aria-label="t('sidebar.expand')" @click="toggleSidebar">
           <NavIcon name="expand" />
         </button>
         <div :class="tipClass">{{ t('sidebar.expand') }}</div>
