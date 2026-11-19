@@ -3,11 +3,13 @@
 //! pipeline `llm::pipeline` (CV/lettre en Typst), ces messages sont du texte
 //! brut, prêt à copier-coller — un seul appel Claude, sans structured output.
 //! Quand un contact est lié à la candidature, le message lui est adressé
-//! (« Bonjour Prénom Nom », sans civilité devinée).
+//! (« Bonjour Prénom Nom », sans civilité devinée). Le contexte détaillé
+//! des expériences et des projets n'y est jamais transmis.
 
 // Importation des modules internes
 use crate::error::AppError;
 use crate::llm::client::call_claude;
+use crate::llm::profile_prompt::{profile_prompt_json, ProjectContexts};
 use crate::models::{CandidatureDetail, ContactView, ProfileDto};
 use crate::llm::target::ClaudeTarget;
 
@@ -45,8 +47,8 @@ fn build_user_message(
     candidature: &CandidatureDetail,
     contact: Option<&ContactView>,
 ) -> Result<String, AppError> {
-    let profile_json = serde_json::to_string(profile)
-        .map_err(|e| AppError::Llm(format!("Erreur de sérialisation du profil: {e}")))?;
+    // Profil sans aucun contexte détaillé : le message reste celui d'avant le champ.
+    let profile_json = profile_prompt_json(profile, ProjectContexts::Exclude)?;
 
     let entreprise = candidature.entreprise.as_deref().unwrap_or("l'entreprise");
     let description_offre = candidature.description_offre.as_deref().unwrap_or("Non renseignée.");
@@ -159,4 +161,54 @@ pub async fn generate_application_message(
 
     let raw_response = call_claude("message de candidature", &system_prompt, &user_message, None, target).await?;
     Ok(raw_response.trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::test_profile::{experience, profile_with, projet};
+
+    /// Candidature fictive.
+    fn candidature() -> CandidatureDetail {
+        CandidatureDetail {
+            id: 1,
+            session_id: Some(1),
+            poste: "Data engineer stagiaire".to_string(),
+            entreprise: Some("Lumen Santé".to_string()),
+            localisation: Some("Paris".to_string()),
+            status: "a_postuler".to_string(),
+            source: None,
+            type_contrat: Some("stage".to_string()),
+            remuneration: None,
+            url_offre: None,
+            description_offre: Some("Construire des pipelines.".to_string()),
+            notes: None,
+            cv_path: None,
+            lettre_motivation_path: None,
+            cv_reference_version: None,
+            lm_reference_version: None,
+            generation_warnings: Vec::new(),
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    #[test]
+    fn aucun_contexte_detaille_dans_le_message() {
+        let profile = profile_with(vec![experience(1, Some("CTX-EXPERIENCE"))], vec![projet(2, Some("CTX-PROJET"))]);
+        let message = build_user_message(&profile, &candidature(), None).expect("message");
+        for marker in ["CTX-EXPERIENCE", "CTX-PROJET", "contexte"] {
+            assert!(!message.contains(marker), "{marker} absent : {message}");
+        }
+    }
+
+    #[test]
+    fn profil_serialise_comme_avant_le_contexte_detaille() {
+        let profile = profile_with(vec![experience(1, Some("CTX"))], vec![projet(2, Some("CTX"))]);
+        let message = build_user_message(&profile, &candidature(), None).expect("message");
+        let mut without = profile.clone();
+        without.experiences.iter_mut().for_each(|e| e.contexte = None);
+        without.projets.iter_mut().for_each(|p| p.contexte = None);
+        let before = serde_json::to_string(&without).expect("profil").replace(r#","contexte":null"#, "");
+        assert!(message.ends_with(&format!("Profil du candidat :\n{before}")), "{message}");
+    }
 }

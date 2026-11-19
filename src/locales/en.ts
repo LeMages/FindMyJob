@@ -309,6 +309,12 @@ export const en = {
     start_year: 'Start year',
     end_year: 'End year',
     description: 'Description',
+    detailed_context: {
+      label: 'Detailed context',
+      help: 'Never shown on the CV. Used by the AI for the cover letter and project selection.',
+      provided: 'Context provided',
+      counter: '{count} / {max}',
+    },
     info: {
       section: 'INFORMATION',
       first_name: 'First name',

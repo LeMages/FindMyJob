@@ -312,6 +312,12 @@ export const fr = {
     start_year: 'Année de début',
     end_year: 'Année de fin',
     description: 'Description',
+    detailed_context: {
+      label: 'Contexte détaillé',
+      help: "Jamais affiché sur le CV. Sert à l'IA pour la lettre et le choix des projets.",
+      provided: 'Contexte renseigné',
+      counter: '{count} / {max}',
+    },
     info: {
       section: 'INFORMATIONS',
       first_name: 'Prénom',

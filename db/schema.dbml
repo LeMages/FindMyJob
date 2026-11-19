@@ -48,6 +48,7 @@ Table experiences {
   date_fin date
   type_contrat contract_type
   created_at timestamp [not null]
+  contexte text [note: "jamais rendu, fourni au LLM (lettre)"]
 }
 
 Table formations {
@@ -70,6 +71,7 @@ Table projets {
   date_debut date
   date_fin date
   created_at timestamp [not null]
+  contexte text [note: "jamais rendu, fourni au LLM (matching et lettre)"]
 }
 
 Table skills {

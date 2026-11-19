@@ -44,6 +44,7 @@ pub fn experience(id: i64, poste: &str, start: NaiveDate, end: Option<NaiveDate>
         date_debut: Some(start),
         date_fin: end,
         type_contrat: Some("stage".to_string()),
+        contexte: None,
     }
 }
 
@@ -58,6 +59,7 @@ pub fn projet(id: i64, titre: &str) -> ProjetView {
         pour_qui: Some("École".to_string()),
         date_debut: Some(date(2024, 9, 1)),
         date_fin: Some(date(2025, 6, 30)),
+        contexte: None,
     }
 }
 

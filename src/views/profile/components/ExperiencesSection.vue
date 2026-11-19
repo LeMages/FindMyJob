@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des modules internes
+import DetailedContextField from './DetailedContextField.vue'
 import { useEditableList } from '@/composables/useEditableList'
 import { insertBullet } from '@/composables/insertBullet'
 import { parseBulletDescription } from '@/composables/parseBulletDescription'
@@ -34,6 +35,7 @@ interface ExpDraft {
   fin_annee: number
   en_cours: boolean
   description: string
+  contexte: string
 }
 
 type ExpDisplayItem = ExperienceView & { isPending?: true; pendingKind?: 'new' | 'edited' }
@@ -66,6 +68,7 @@ function defaultExpDraft(): ExpDraft {
     fin_annee: now.getFullYear(),
     en_cours: false,
     description: '',
+    contexte: '',
   }
 }
 
@@ -96,6 +99,7 @@ function draftFromView(e: ExperienceView): ExpDraft {
     fin_annee: fin.annee,
     en_cours: e.date_fin === null,
     description: e.description ?? '',
+    contexte: e.contexte ?? '',
   }
 }
 
@@ -109,6 +113,7 @@ function displayFromDraft(d: ExpDraft, id: number, pendingKind: 'new' | 'edited'
     date_debut: `${d.debut_annee}-${pad(d.debut_mois)}-01`,
     date_fin: d.en_cours ? null : `${d.fin_annee}-${pad(d.fin_mois)}-01`,
     type_contrat: d.type_contrat || null,
+    contexte: d.contexte.trim() || null,
     isPending: true,
     pendingKind,
   }
@@ -123,6 +128,7 @@ function draftToInput(d: ExpDraft): CreateExperienceInput {
     date_debut: `${d.debut_annee}-${pad(d.debut_mois)}-01`,
     date_fin: d.en_cours ? null : `${d.fin_annee}-${pad(d.fin_mois)}-01`,
     type_contrat: d.type_contrat || null,
+    contexte: d.contexte.trim() || null,
   }
 }
 
@@ -209,6 +215,7 @@ defineExpose({ hasChanges, reset, save })
           <div class="flex items-center gap-2 flex-wrap">
             <div class="text-[14px] font-semibold">{{ exp.poste }}</div>
             <span v-if="exp.type_contrat" class="inline-block font-mono text-[10.5px] border border-neutral-300 rounded-5 px-[7px] py-0.5 text-neutral-700">{{ typeLabel(exp.type_contrat) }}</span>
+            <span v-if="exp.contexte" class="inline-block font-mono text-[10.5px] rounded-5 px-[7px] py-0.5 border border-neutral-200 text-neutral-500">{{ t('profile.detailed_context.provided') }}</span>
             <span v-if="exp.isPending" class="inline-block font-mono text-[10.5px] rounded-5 px-[7px] py-0.5 border border-amber-300 text-amber-700 bg-amber-50">
               {{ exp.pendingKind === 'edited' ? t('profile.pending.edited') : t('profile.pending.new') }}
             </span>
@@ -340,6 +347,7 @@ defineExpose({ hasChanges, reset, save })
           class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[100px]"
           :placeholder="t('profile.experiences.description_placeholder')"
         />
+        <DetailedContextField v-model="draft.contexte" />
       </div>
 
       <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
