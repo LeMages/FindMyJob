@@ -11,6 +11,7 @@ concurrency:
 jobs:
   version:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
     outputs:
@@ -55,15 +56,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # cache-key : une clé de cache par cible, identique dans build-check.yml.
           - platform: macos-latest
             args: --target aarch64-apple-darwin
+            cache-key: macos-aarch64
           - platform: macos-latest
             args: --target x86_64-apple-darwin
+            cache-key: macos-x86_64
           - platform: ubuntu-22.04
             args: ""
+            cache-key: ubuntu
           - platform: windows-latest
             args: ""
+            cache-key: windows
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,10 +87,15 @@ jobs:
       - name: Setup Rust
         run: rustup toolchain install
 
+      # Restaure les caches sauvegardés par build-check.yml sur push vers dev
+      # (branche par défaut) ; la Release ne sauvegarde jamais. Le cache est
+      # restauré avant « Inject version » : la clé ne dépend pas de la version.
       - name: Cache Cargo
         uses: swatinem/rust-cache@v2
         with:
           workspaces: . -> target
+          shared-key: tauri-build-${{ matrix.cache-key }}
+          save-if: false
 
       - name: Install system dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'

@@ -1,7 +1,11 @@
 name: CI
 
+# Le run sur push vers dev sauvegarde les caches Cargo (branche par défaut,
+# donc restaurables par toutes les PR). Les runs de PR ne font que restaurer.
 on:
   pull_request:
+    branches: [dev]
+  push:
     branches: [dev]
 
 concurrency:
@@ -11,6 +15,7 @@ concurrency:
 jobs:
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,6 +42,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     # Les infos de debug (~300 Mo par binaire de test) et le cache incrémental
     # saturent le disque du runner Linux au link des tests.
     env:
@@ -61,7 +67,8 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: . -> target
-          key: ${{ matrix.os }}
+          shared-key: ci-${{ matrix.os }}
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
