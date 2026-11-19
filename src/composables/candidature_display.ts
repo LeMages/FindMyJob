@@ -92,6 +92,18 @@ export function sourceOptions(): SelectOption[] {
   return SOURCE_VALUES.map(({ value, key }) => ({ value, label: t(`source.${key}`) }))
 }
 
+/**
+ * Libellé traduit d'une plateforme d'origine stockée (valeur française).
+ *
+ * @param value - Valeur stockée dans `candidatures.source`.
+ * @returns Libellé dans la langue de l'interface, ou la valeur elle-même si
+ *   elle ne fait pas partie des plateformes proposées.
+ */
+export function sourceLabel(value: string): string {
+  const known = SOURCE_VALUES.find((s) => s.value === value)
+  return known ? t(`source.${known.key}`) : value
+}
+
 /** Classes Tailwind (fond + texte) associées à chaque statut brut de candidature. */
 const STATUS_COLORS: Record<string, string> = {
   a_postuler: 'bg-neutral-100 text-neutral-600',

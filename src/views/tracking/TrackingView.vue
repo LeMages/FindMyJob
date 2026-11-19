@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * Vue « Suivi » : en-tête de la session courante (compteurs ouvertes /
- * clôturées, nouvelle candidature) et onglets Candidatures, Planning et
- * Paramètres.
+ * clôturées, nouvelle candidature) et onglets Candidatures, Planning,
+ * Statistiques et Paramètres.
  */
 
 // Importation des modules Vue / framework
@@ -13,10 +13,11 @@ import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des composants
-import CandidaturesTabs from '@/views/tracking/components/CandidaturesTabs.vue'
+import CandidaturesTabs, { type TrackingTab } from '@/views/tracking/components/CandidaturesTabs.vue'
 import PipelineTable from '@/views/tracking/components/PipelineTable.vue'
 import PlanningPanel from '@/views/tracking/components/PlanningPanel.vue'
 import SessionParametersForm from '@/views/tracking/components/SessionParametersForm.vue'
+import StatsPanel from '@/views/tracking/components/stats/StatsPanel.vue'
 
 // Importation des composables
 import { backendErrorMessage } from '@/composables/backend_error_message'
@@ -33,7 +34,7 @@ const { t } = useI18n()
 const candidatures = ref<CandidatureView[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const activeTab = ref<'candidatures' | 'planning' | 'parametres'>('candidatures')
+const activeTab = ref<TrackingTab>('candidatures')
 
 const sessionId = computed(() => currentSession.value?.id ?? null)
 
@@ -149,6 +150,9 @@ watch(sessionId, loadDocumentsStatus)
 
     <!-- Onglet Planning -->
     <PlanningPanel v-else-if="activeTab === 'planning'" />
+
+    <!-- Onglet Statistiques -->
+    <StatsPanel v-else-if="activeTab === 'stats'" :session-id="currentSession.id" />
 
     <!-- Onglet Paramètres -->
     <SessionParametersForm v-else />

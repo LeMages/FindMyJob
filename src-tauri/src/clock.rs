@@ -29,6 +29,16 @@ pub fn now_utc() -> String {
     format_timestamp(Utc::now())
 }
 
+/// Instant présent, pour les calculs de durée (jamais écrit tel quel en base :
+/// voir `now_utc` pour les horodatages stockés).
+///
+/// # Returns
+///
+/// Instant UTC courant.
+pub fn now() -> DateTime<Utc> {
+    Utc::now()
+}
+
 /// Heure courante sous une forme utilisable dans un nom de dossier
 /// (`20261014T081530125Z`) : triable, sans caractère interdit sous Windows.
 ///

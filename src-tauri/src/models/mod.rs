@@ -22,6 +22,7 @@ pub mod projet;
 pub mod prose_guidance;
 pub mod reference_texts;
 pub mod session;
+pub mod session_stats;
 pub mod skill;
 pub mod status_history;
 pub mod timeline_event;
@@ -57,6 +58,10 @@ pub use offer_extraction::{ExtractionStage, OfferExtraction};
 pub use profile::ProfileDto;
 pub use projet::{CreateProjetInput, ProjetView};
 pub use session::{CreateSessionInput, SessionView, UpdateSessionInput, UpdateSessionLocationInput};
+pub use session_stats::{
+    Comparison, ComparisonRow, FollowUpStats, InterviewTypeCount, MedianDurations, OutcomeCount, SessionStats,
+    StatsCandidature, StatsEvent, StatsInput, StatsInterview, WeekActivity,
+};
 pub use skill::{CreateSkillInput, SkillView};
 pub use status_history::StatusHistoryView;
 pub use timeline_event::{AvailableEvent, NewInterviewData, NewTimelineEvent};

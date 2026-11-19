@@ -48,6 +48,7 @@ mod scraping_json_ld;
 mod scraping_page_text;
 mod services_api_key;
 mod services_files;
+mod session_stats;
 mod sessions_lifecycle;
 mod startup_run_mode;
 mod templatize_markup;

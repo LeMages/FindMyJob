@@ -8,6 +8,7 @@ pub mod claude_target;
 pub mod generation;
 pub mod profile_language;
 pub mod scraping;
+pub mod session_stats;
 pub mod sessions;
 pub mod settings;
 pub mod user_errors;
