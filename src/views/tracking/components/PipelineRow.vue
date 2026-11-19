@@ -80,7 +80,7 @@ function longDate(iso: string): string {
     <td class="py-2.5 px-4">
       <span class="inline-block font-medium text-[12px] rounded-5 px-[9px] py-1 whitespace-nowrap" :class="pillColor">{{ statusLabel(c.status) }}</span>
     </td>
-    <td class="py-2.5 px-4 font-mono text-neutral-500 whitespace-nowrap">
+    <td class="hidden @[620px]:table-cell py-2.5 px-4 font-mono text-neutral-500 whitespace-nowrap">
       <span v-if="!c.date_envoi" class="text-neutral-300">—</span>
       <template v-else>{{ longDate(c.date_envoi) }}</template>
     </td>

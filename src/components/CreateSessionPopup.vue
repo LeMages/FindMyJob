@@ -8,6 +8,9 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+// Importation des composants
+import AppModal from '@/components/AppModal.vue'
+
 // Importation des modules internes
 import { state, cancelCreateSession, confirmCreateSession } from '@/stores/app'
 import { backendErrorMessage } from '@/composables/backend_error_message'
@@ -57,17 +60,8 @@ function onKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div
-    v-if="state.createSessionPopup"
-    class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]"
-    @click="cancelCreateSession"
-  >
-    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[420px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop @vue:mounted="onOpen">
-      <div class="flex items-center justify-between mb-5">
-        <div class="text-[17px] font-semibold">{{ t('session.create.title') }}</div>
-        <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="cancelCreateSession">×</button>
-      </div>
-
+  <AppModal v-if="state.createSessionPopup" :title="t('session.create.title')" :width="420" backdrop-close @close="cancelCreateSession">
+    <div @vue:mounted="onOpen">
       <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[18px]">
         {{ t('session.create.intro') }}
       </div>
@@ -83,8 +77,8 @@ function onKeydown(e: KeyboardEvent) {
         />
       </div>
 
-      <div class="flex gap-[14px] mb-[14px]">
-        <div class="flex-1">
+      <div class="flex flex-wrap gap-[14px] mb-[14px]">
+        <div class="flex-1 min-w-[160px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('session.create.city_optional') }}</label>
           <input
             v-model="ville"
@@ -105,21 +99,21 @@ function onKeydown(e: KeyboardEvent) {
       </div>
 
       <div v-if="error" class="text-red-500 text-[12px] mt-[6px]">{{ error }}</div>
-
-      <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
-        <button
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-          @click="cancelCreateSession"
-        >{{ t('common.cancel') }}</button>
-        <button
-          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': saving || !nom.trim() }"
-          :disabled="saving || !nom.trim()"
-          @click="submit"
-        >
-          {{ saving ? t('onboarding.creating') : t('session.create.submit') }}
-        </button>
-      </div>
     </div>
-  </div>
+
+    <template #footer>
+      <button
+        class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
+        @click="cancelCreateSession"
+      >{{ t('common.cancel') }}</button>
+      <button
+        class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': saving || !nom.trim() }"
+        :disabled="saving || !nom.trim()"
+        @click="submit"
+      >
+        {{ saving ? t('onboarding.creating') : t('session.create.submit') }}
+      </button>
+    </template>
+  </AppModal>
 </template>

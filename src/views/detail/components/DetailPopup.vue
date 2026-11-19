@@ -11,6 +11,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 // Importation des composants
+import AppModal from '@/components/AppModal.vue'
 import ContactFormPopup from './ContactFormPopup.vue'
 
 // Importation des modules internes
@@ -53,6 +54,24 @@ async function confirmDeleteContact() {
 /** Voie de candidature en cours de traitement (désactive les trois options tant qu'elle est active). */
 const applyingVia = ref<'mail' | 'message' | 'sans_message' | null>(null)
 
+/** Titre de chaque variante de la popup (le contact a sa propre popup). */
+const POPUP_TITLES: Record<string, string> = {
+  apply: 'detail.apply.title',
+  mail: 'detail.mail.title',
+  confirmDeleteContact: 'detail.delete_contact.title',
+  offer: 'detail.offer.title',
+  statusHistoryContent: 'detail.sent_content.title',
+  confirmDelete: 'detail.delete_application.title',
+}
+
+const popupTitle = computed(() => {
+  const key = state.detailPopup ? POPUP_TITLES[state.detailPopup] : undefined
+  return key ? t(key) : null
+})
+
+/** Toutes les variantes ont un pied, sauf le choix de la voie d'envoi. */
+const hasFooter = computed(() => state.detailPopup !== 'apply')
+
 /**
  * Déclenche une des trois façons de postuler pour la candidature ouverte,
  * en bloquant les autres options le temps de l'appel (rédaction IA incluse
@@ -71,15 +90,13 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
 </script>
 
 <template>
-  <div v-if="state.detailPopup" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]" @click="closeDetailPopup">
-    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
+  <!-- Contact popup (ajout ou modification) : popup autonome -->
+  <ContactFormPopup v-if="state.detailPopup === 'contact'" />
+
+  <AppModal v-else-if="state.detailPopup && popupTitle" :title="popupTitle" :width="580" backdrop-close @close="closeDetailPopup">
 
       <!-- Apply popup -->
       <template v-if="state.detailPopup === 'apply'">
-        <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ t('detail.apply.title') }}</div>
-          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
-        </div>
         <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[18px]">{{ t('detail.apply.question') }}</div>
 
         <div
@@ -121,10 +138,6 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
 
       <!-- Mail popup -->
       <template v-else-if="state.detailPopup === 'mail'">
-        <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ t('detail.mail.title') }}</div>
-          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
-        </div>
         <div class="mb-[14px]">
           <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.mail.subject_label') }}</label>
           <input
@@ -139,27 +152,10 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
         <button class="w-full justify-center mb-1 h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3">
           {{ t('detail.mail.generate') }}
         </button>
-        <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
-          <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-            @click="closeDetailPopup"
-          >{{ t('common.cancel') }}</button>
-          <button
-            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-            @click="closeDetailPopup"
-          >{{ t('common.save') }}</button>
-        </div>
       </template>
-
-      <!-- Contact popup (ajout ou modification) -->
-      <ContactFormPopup v-else-if="state.detailPopup === 'contact'" />
 
       <!-- Confirm delete contact popup -->
       <template v-else-if="state.detailPopup === 'confirmDeleteContact' && state.detailContact">
-        <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ t('detail.delete_contact.title') }}</div>
-          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
-        </div>
         <div class="text-[13px] text-neutral-600 leading-[1.6]">
           {{ t('detail.delete_contact.body', { name: state.detailContact.nom }) }}
           <template v-if="otherCandidatureCount > 0">
@@ -168,73 +164,66 @@ async function confirmApply(via: 'mail' | 'message' | 'sans_message', action: ()
           {{ t('common.irreversible') }}
         </div>
         <div v-if="deleteContactError" class="text-[12.5px] text-red-600 mt-3">{{ deleteContactError }}</div>
-        <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
-          <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-            @click="closeDetailPopup"
-          >{{ t('common.cancel') }}</button>
-          <button
-            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-red-600 bg-red-600 text-white hover:bg-red-700"
-            @click="confirmDeleteContact"
-          >{{ t('detail.delete_contact.confirm') }}</button>
-        </div>
       </template>
 
       <!-- Offer content popup -->
       <template v-else-if="state.detailPopup === 'offer'">
-        <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ t('detail.offer.title') }}</div>
-          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
-        </div>
         <div class="bg-neutral-50 border border-neutral-200 rounded-10 p-[18px] text-[13px] leading-[1.7] text-neutral-700 min-h-[200px] font-sans whitespace-pre-wrap">
           {{ state.detailCandidature?.description_offre || t('detail.offer.empty') }}
-        </div>
-        <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
-          <button
-            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-            @click="closeDetailPopup"
-          >{{ t('common.close') }}</button>
         </div>
       </template>
 
       <!-- Status history content popup -->
       <template v-else-if="state.detailPopup === 'statusHistoryContent'">
-        <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ t('detail.sent_content.title') }}</div>
-          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
-        </div>
         <div class="bg-neutral-50 border border-neutral-200 rounded-10 p-[18px] text-[13px] leading-[1.7] text-neutral-700 min-h-[200px] font-mono whitespace-pre-wrap">
           {{ state.detailStatusHistoryContent }}
-        </div>
-        <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
-          <button
-            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-            @click="closeDetailPopup"
-          >{{ t('common.close') }}</button>
         </div>
       </template>
 
       <!-- Confirm delete popup -->
       <template v-else-if="state.detailPopup === 'confirmDelete'">
-        <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ t('detail.delete_application.title') }}</div>
-          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="closeDetailPopup">×</button>
-        </div>
         <div class="text-[13px] text-neutral-600 leading-[1.6]">
           {{ t('detail.delete_application.body') }}
         </div>
-        <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
-          <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-            @click="closeDetailPopup"
-          >{{ t('common.cancel') }}</button>
-          <button
-            class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-red-600 bg-red-600 text-white hover:bg-red-700"
-            @click="confirmDelete"
-          >{{ t('common.delete') }}</button>
-        </div>
       </template>
 
-    </div>
-  </div>
+    <template v-if="hasFooter" #footer>
+      <template v-if="state.detailPopup === 'mail'">
+        <button
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
+          @click="closeDetailPopup"
+        >{{ t('common.cancel') }}</button>
+        <button
+          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+          @click="closeDetailPopup"
+        >{{ t('common.save') }}</button>
+      </template>
+      <template v-else-if="state.detailPopup === 'confirmDeleteContact'">
+        <button
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
+          @click="closeDetailPopup"
+        >{{ t('common.cancel') }}</button>
+        <button
+          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-red-600 bg-red-600 text-white hover:bg-red-700"
+          @click="confirmDeleteContact"
+        >{{ t('detail.delete_contact.confirm') }}</button>
+      </template>
+      <template v-else-if="state.detailPopup === 'offer' || state.detailPopup === 'statusHistoryContent'">
+        <button
+          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+          @click="closeDetailPopup"
+        >{{ t('common.close') }}</button>
+      </template>
+      <template v-else-if="state.detailPopup === 'confirmDelete'">
+        <button
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
+          @click="closeDetailPopup"
+        >{{ t('common.cancel') }}</button>
+        <button
+          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-red-600 bg-red-600 text-white hover:bg-red-700"
+          @click="confirmDelete"
+        >{{ t('common.delete') }}</button>
+      </template>
+    </template>
+  </AppModal>
 </template>

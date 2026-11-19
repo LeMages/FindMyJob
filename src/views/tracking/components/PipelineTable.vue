@@ -63,14 +63,15 @@ const TH = 'py-3 px-4 font-semibold font-mono text-[11px] tracking-[.06em] text-
       </button>
     </div>
 
-    <div class="overflow-x-auto bg-surface-1 border border-neutral-200 rounded-10">
-      <table class="w-full min-w-[640px] text-[13px] border-collapse">
+    <!-- Conteneur de requête : la colonne « Candidaté » disparaît sous 620 px -->
+    <div class="@container overflow-x-auto bg-surface-1 border border-neutral-200 rounded-10">
+      <table class="w-full min-w-[520px] text-[13px] border-collapse">
         <thead>
           <tr class="text-left bg-neutral-950">
             <th :class="TH">{{ t('tracking.columns.company') }}</th>
             <th :class="TH">{{ t('tracking.columns.role') }}</th>
             <th :class="TH">{{ t('tracking.columns.status') }}</th>
-            <th :class="TH">{{ t('tracking.columns.applied') }}</th>
+            <th :class="TH" class="hidden @[620px]:table-cell">{{ t('tracking.columns.applied') }}</th>
             <th :class="TH">{{ filter === 'closed' ? t('tracking.columns.closed_on') : t('tracking.columns.inactivity') }}</th>
           </tr>
         </thead>

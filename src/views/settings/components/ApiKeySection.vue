@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des composants
+import AppModal from '@/components/AppModal.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import SettingsRow from '@/components/SettingsRow.vue'
 import TrashIcon from '@/views/settings/components/TrashIcon.vue'
@@ -156,25 +157,16 @@ async function deleteKey() {
   </SettingsRow>
 
   <!-- Confirmation de suppression -->
-  <div
-    v-if="confirmDelete"
-    class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100] p-4"
-    @click="confirmDelete = false"
-  >
-    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[440px] max-w-full max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
-      <div class="flex items-center justify-between mb-5">
-        <div class="text-[17px] font-semibold">{{ t('settings.api_key.delete_title') }}</div>
-        <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" type="button" @click="confirmDelete = false">×</button>
-      </div>
+  <AppModal v-if="confirmDelete" :title="t('settings.api_key.delete_title')" :width="440" backdrop-close @close="confirmDelete = false">
 
       <div class="text-[13px] text-neutral-500 font-mono -mt-1 mb-[6px]">{{ t('common.irreversible') }}</div>
-      <div class="bg-neutral-50 border border-neutral-200 rounded-9 px-[14px] py-3 mb-5 text-[13.5px]">
+      <div class="bg-neutral-50 border border-neutral-200 rounded-9 px-[14px] py-3 mb-3 text-[13.5px]">
         <i18n-t keypath="settings.api_key.delete_body" tag="span" scope="global">
           <template #key><strong>…{{ status?.last4 }}</strong></template>
         </i18n-t>
       </div>
 
-      <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
+    <template #footer>
         <button
           class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
           type="button"
@@ -185,7 +177,6 @@ async function deleteKey() {
           type="button"
           @click="deleteKey"
         >{{ t('common.delete') }}</button>
-      </div>
-    </div>
-  </div>
+    </template>
+  </AppModal>
 </template>

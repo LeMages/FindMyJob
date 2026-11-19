@@ -19,6 +19,7 @@ import { backendErrorMessage } from '@/composables/backend_error_message'
 import { eventActionLabel, interviewTypeLabel, interviewTypeOptions, modaliteOptions } from '@/composables/candidature_display'
 import type { AvailableEvent, InterviewView, NewTimelineEvent } from '@/types'
 import TimelineEventIcon from './TimelineEventIcon.vue'
+import AppModal from '@/components/AppModal.vue'
 
 const { t } = useI18n()
 
@@ -227,20 +228,21 @@ async function save() {
   close()
 }
 
+/** Titre de la popup : choix du type, puis libellé de l'événement choisi. */
+const popupTitle = computed(() =>
+  step.value === 'select' || !selected.value
+    ? t('detail.add_event.title')
+    : eventActionLabel(selected.value.event_type, selected.value.label),
+)
+
 defineExpose({ open })
 </script>
 
 <template>
-  <div v-if="visible" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]" @click="close">
-    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
+  <AppModal v-if="visible" :title="popupTitle" :width="580" backdrop-close @close="close">
 
       <!-- Étape 1 : choix du type d'événement -->
       <template v-if="step === 'select'">
-        <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ t('detail.add_event.title') }}</div>
-          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="close">×</button>
-        </div>
-
         <div v-if="loadingEvents" class="text-[12px] text-neutral-400 font-mono py-4 text-center">{{ t('common.loading') }}</div>
         <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-10 p-3 text-[13px] text-red-600 mb-3">{{ error }}</div>
 
@@ -266,11 +268,6 @@ defineExpose({ open })
 
       <!-- Étape 2 : formulaire adapté au type choisi -->
       <template v-else-if="selected">
-        <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ eventActionLabel(selected.event_type, selected.label) }}</div>
-          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="close">×</button>
-        </div>
-
         <!-- entretien_planifie -->
         <template v-if="selected.event_type === 'entretien_planifie'">
           <div class="mb-[14px]">
@@ -344,25 +341,22 @@ defineExpose({ open })
 
         <div v-if="error" class="bg-red-50 border border-red-200 rounded-10 p-3 text-[13px] text-red-600 mb-3">{{ error }}</div>
 
-        <div class="flex justify-between items-center mt-5 pt-4 border-t border-neutral-100">
-          <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-            @click="back"
-          >{{ t('common.back') }}</button>
-          <div class="flex gap-[10px]">
-            <button
-              class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-              @click="close"
-            >{{ t('common.cancel') }}</button>
-            <button
-              class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-              :class="{ 'opacity-40 pointer-events-none': saving }"
-              @click="save"
-            >{{ t('common.save') }}</button>
-          </div>
-        </div>
       </template>
 
-    </div>
-  </div>
+    <template v-if="step !== 'select' && selected" #footer>
+      <button
+        class="mr-auto h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
+        @click="back"
+      >{{ t('common.back') }}</button>
+      <button
+        class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
+        @click="close"
+      >{{ t('common.cancel') }}</button>
+      <button
+        class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+        :class="{ 'opacity-40 pointer-events-none': saving }"
+        @click="save"
+      >{{ t('common.save') }}</button>
+    </template>
+  </AppModal>
 </template>
