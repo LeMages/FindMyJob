@@ -28,6 +28,10 @@ La référence déposée par les tests (`test_state::reference_source`) est le t
 
 `*_example_data.json` sont les données d'exemple correctes (sortie de l'étape A, sans `texts`), `*_template.typ` le template correct (étape B), écrits à la main : les textes en dur sont lus dans `data.texts` (`t1`, `t2`…). Dans `cv_balise_template.typ`, la ligne « Intérêts » est lue dans `data.texts.t2` et `t3` ; la section « Langues » garde son titre grâce à elle quand les langues sont vides. `lm_balisee_expected_zones.json` est le découpage attendu des zones de la lettre. Les tests de `templatize_validation.rs` les passent dans `check_example` et `check_template` : si l'un d'eux est refusé, la validation est devenue trop stricte. Les références demandent la police `Arimo`, absente des machines et des polices embarquées de Typst : une famille introuvable étant une erreur de compilation, les tests la fournissent comme une police importée, en copiant `fonts/arimo_reference/` dans le dossier de polices propre au test (`shared/font_fixtures.rs::install_reference_font`, appelé par `test_state::app`, `templatize_validation.rs` et `templatize_retries.rs`). Avec elle, le CV et la lettre tiennent chacun sur 1 page.
 
+## `description_list_cases.json` : découpage des descriptions
+
+Table de cas écrite à la main (aucune donnée réelle) : pour chaque description saisie (`input`), l'intro et les éléments attendus. Elle est lue à la fois par le parseur Rust (`src/docgen/description_list.rs`) et par son miroir TS (`src/composables/parseDescriptionList.test.ts`), pour que les deux appliquent exactement la même règle. Un cas ajouté ici est testé des deux côtés.
+
 ## `fonts/` : polices de fixture
 
 Sous-ensembles générés avec fontTools (`subset`, `varLib.instancer`) à partir de polices sous licence SIL OFL 1.1 ; chaque dossier garde son `OFL.txt`. Basic Latin (U+0020–U+007E) sauf `arimo_reference/`. Copiées dans le dossier propre au test via `shared/font_fixtures.rs`.
