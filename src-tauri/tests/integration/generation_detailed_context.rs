@@ -1,5 +1,5 @@
 //! Tests : contexte détaillé des expériences et des projets dans la
-//! génération. Il n'atteint jamais le CV (données, template, texte rendu,
+//! génération. Il n'atteint jamais le CV (données, référence, texte rendu,
 //! prompts du CV et de la traduction) ; le matching ne reçoit que celui des
 //! projets ; la lettre reçoit les deux, et la recopie d'un passage relance
 //! la rédaction puis, si elle persiste, laisse un avertissement.
@@ -10,9 +10,9 @@ use sqlx::SqlitePool;
 // Importation des modules internes
 use crate::shared::fake_llm::{fixtures_dir, Reply, Step};
 use crate::shared::seed;
+use crate::shared::tagged_references::render;
 use crate::shared::test_state::{self, artefact, candidature_input, wait_generation, TestApp};
 use findmyjob_lib::db;
-use findmyjob_lib::documents::typst::compile_template;
 use findmyjob_lib::llm::writing_loop::MAX_WRITING_ATTEMPTS;
 use findmyjob_lib::models::GenerationStatus;
 use findmyjob_lib::services::candidatures;
@@ -68,14 +68,14 @@ fn assert_no_marker(what: &str, text: &str) {
     }
 }
 
-/// Template `.typ` du CV (celui que la génération compile, sans le
-/// modifier) et texte rendu du CV généré avec ce template.
+/// Référence `.typ` du CV (celle que la génération compile, sans la
+/// modifier) et texte rendu du CV généré avec elle.
 async fn rendered_cv(app: &TestApp, sid: i64, data_json: String) -> (String, String) {
     let doc = db::documents::get_current(&app.state.pool, sid, "cv").await.expect("lecture").expect("référence");
     let dir = storage_paths::to_absolute(&app.state.data_dir, &storage_paths::version_dir(sid, "cv", doc.current_version_id));
-    let template = std::fs::read_to_string(dir.join("template.typ")).expect("template");
-    let rendered = compile_template(template.clone(), data_json.into_bytes(), dir, app.state.fonts_dir.clone()).expect("compilation");
-    (template, rendered.text)
+    let template = std::fs::read_to_string(dir.join("reference.typ")).expect("référence");
+    let data = serde_json::from_str(&data_json).expect("data.json valide");
+    (template, render(app, sid, "cv", &data).await.text)
 }
 
 /// Avertissements enregistrés sur la fiche d'une candidature.
@@ -90,7 +90,7 @@ async fn contexte_jamais_dans_le_cv_ni_ses_prompts() {
     let cid = generate(&app, sid).await;
 
     // ------------------------------------------------------------------
-    // 1. Fichiers du CV : data.json, template .typ compilé, texte rendu
+    // 1. Fichiers du CV : data.json, référence .typ compilée, texte rendu
     // ------------------------------------------------------------------
     let data_json = std::fs::read_to_string(artefact(&app.state, sid, "cv", cid, "data.json")).expect("data.json du CV");
     assert_no_marker("data.json du CV", &data_json);
@@ -147,12 +147,16 @@ async fn sans_contexte_prompt_de_lettre_identique() {
 
     generate(&app, sid).await;
 
-    // Message capturé avant l'ajout du contexte détaillé ; à régénérer si le
-    // prompt de la lettre change volontairement. Les fins de ligne du
+    // Message capturé sans contexte détaillé ; à régénérer si le prompt de
+    // la lettre change volontairement (`FINDMYJOB_UPDATE_SNAPSHOTS=1`). Les fins de ligne du
     // fichier dépendent de la configuration Git : on les ramène à `\n`.
     let path = fixtures_dir().join("llm").join("lm_prompt_sans_contexte.txt");
+    let actual = &app.llm.messages_for(Step::LmContent)[0];
+    if std::env::var_os("FINDMYJOB_UPDATE_SNAPSHOTS").is_some() {
+        std::fs::write(&path, actual).expect("écriture du prompt de référence");
+    }
     let expected = std::fs::read_to_string(&path).expect("prompt de référence").replace("\r\n", "\n");
-    assert_eq!(app.llm.messages_for(Step::LmContent)[0], expected);
+    assert_eq!(actual, &expected);
 }
 
 #[tokio::test]
@@ -163,10 +167,8 @@ async fn contexte_jamais_envoye_a_la_traduction() {
     let cid = generate(&app, sid).await;
 
     assert!(app.llm.calls_for(Step::ProfileTranslation) > 0, "les entrées du profil sont traduites");
-    for step in [Step::ProfileTranslation, Step::ReferenceTranslation, Step::CvLabels, Step::LmLabels] {
-        for message in app.llm.messages_for(step) {
-            assert_no_marker("traduction", &message);
-        }
+    for message in app.llm.messages_for(Step::ProfileTranslation) {
+        assert_no_marker("traduction", &message);
     }
     let data_json = std::fs::read_to_string(artefact(&app.state, sid, "cv", cid, "data.json")).expect("data.json du CV");
     assert_no_marker("data.json du CV traduit", &data_json);

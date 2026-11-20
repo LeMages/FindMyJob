@@ -32,6 +32,19 @@ Paragraphe 2 : Exemple de second paragraphe qui relie une expérience passée au
 Paragraphe 3 : Exemple de dernier paragraphe qui propose un entretien pour échanger sur le poste.
 MODÈLE>>>
 
+DOCUMENT DE RÉFÉRENCE COMPLET, tel qu'il s'affiche avec ses valeurs d'exemple. Ses parties fixes (titres, formules, phrases écrites dans le modèle) sont ajoutées à part autour des champs rédigés : ne les répète pas. Il situe chaque champ dans le document, il ne fournit aucun fait.
+<<<RÉFÉRENCE
+Camille Exemple Exempleville, 00000 camille@exemple.invalid 00 00 00 00 00 Exemple Corp Exempleville Exempleville, le 1 janvier 2026 Objet : Candidature exemple pour un stage Madame, Monsieur, Exemple de premier paragraphe qui présente la candidate et explique pourquoi l'entreprise l'intéresse particulièrement. Exemple de second paragraphe qui relie une expérience passée aux missions décrites dans l'offre de stage. Exemple de dernier paragraphe qui propose un entretien pour échanger sur le poste. Je vous prie d'agréer, Madame, Monsieur, mes salutations distinguées. Camille Exemple
+RÉFÉRENCE>>>
+
+CONSIGNES DE LA RÉFÉRENCE (priorité 3 de l'ordre des consignes).
+Emplacements des champs de prose :
+subject [VARIABLE] « Candidature exemple pour un stage »
+Règles des emplacements.
+[VARIABLE] : remplace le texte d'exemple de l'emplacement par les informations tirées de l'offre, en suivant sa consigne.
+[ADAPTABLE] : rédige l'emplacement à partir du profil selon l'offre, en suivant sa consigne, sans rien inventer.
+Un champ sans emplacement est rédigé à partir du profil et de l'offre.
+
 BUDGETS
 subject : environ 5 mots, au plus 6 mots.
 paragraphs : exactement 3 paragraphes.

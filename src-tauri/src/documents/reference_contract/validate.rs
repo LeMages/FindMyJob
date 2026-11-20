@@ -22,7 +22,7 @@ use serde_json::Value;
 
 // Importation des modules internes
 use crate::docgen::example_facts::{cv_information_values, lm_information_values};
-use crate::docgen::text_diff::orphan_separators;
+use crate::docgen::rendered_words::orphan_separators;
 use crate::documents::reference_contract::example_schema::{shape_for, shape_issues};
 use crate::documents::reference_contract::metadata::read_metadata;
 use crate::documents::reference_contract::render_checks::{
@@ -32,6 +32,7 @@ use crate::documents::reference_contract::render_data::{control_renders, single_
 use crate::documents::reference_contract::slots::check_slots;
 use crate::documents::reference_contract::source_rules::{file_issues, forbidden_constructs};
 use crate::documents::typst::{CompileFailure, CompiledDocument, ContractEngine};
+use crate::documents::typst_text::reading_text;
 use crate::error::AppError;
 use crate::models::doc_lang::is_supported;
 use crate::models::{CvData, LmData, RawMetadata, ReferenceIssue, ReferenceIssueCode, Slot, StoredContract};
@@ -174,7 +175,7 @@ pub async fn validate_reference(
         match rendered {
             Ok(doc) => {
                 if let RenderKind::Language(lang) = kind {
-                    example_text.insert(lang.to_string(), doc.text.clone());
+                    example_text.insert(lang.to_string(), reading_text(&doc.text));
                 }
                 sparse_has_orphans |= *kind == RenderKind::Sparse && !orphan_separators(&doc.text).is_empty();
                 report.issues.extend(checks.issues(*kind, doc));

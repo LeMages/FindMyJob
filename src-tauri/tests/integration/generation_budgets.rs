@@ -4,7 +4,6 @@
 
 // Importation des modules standard
 use std::cell::Cell;
-use std::collections::BTreeMap;
 
 // Importation des modules internes
 use crate::common;
@@ -16,9 +15,10 @@ use findmyjob_lib::docgen::build_cv_data::{build_cv_data, CvLayout};
 use findmyjob_lib::docgen::entry_texts::source_texts;
 use findmyjob_lib::docgen::identity::SenderLocation;
 use findmyjob_lib::docgen::lint::Violation;
+use findmyjob_lib::docgen::period_format::PeriodFormat;
 use findmyjob_lib::docgen::selection::select;
 use findmyjob_lib::llm::writing_loop::{write_with_retries, Review};
-use findmyjob_lib::models::{CvContent, CvLabels, GenerationStatus, PeriodStyle};
+use findmyjob_lib::models::{CvContent, GenerationStatus, PeriodSpec};
 use findmyjob_lib::services::candidatures;
 
 /// Violation d'un texte trop court (signalée sans relance).
@@ -88,16 +88,14 @@ fn listes_du_cv_sans_repli_sur_la_reference() {
     let profile = common::profile();
     let selection = select(&profile, &[]);
     let texts = source_texts(&profile, &selection);
-    let labels = CvLabels { months_short: vec![String::new(); 12], ..Default::default() };
-    let no_texts = BTreeMap::new();
+    let spec = PeriodSpec::default();
+    let format = PeriodFormat::new(&spec, "fr");
     let location = SenderLocation::default();
     let layout = CvLayout {
         location: &location,
-        labels: &labels,
-        period_style: &PeriodStyle::default(),
-        separator: " – ",
+        granularity: &spec.granularity,
+        period_format: &format,
         lang: "fr",
-        texts: &no_texts,
         list_marker: "•",
     };
     let data = build_cv_data(&profile, &selection, &texts, &CvContent::default(), &layout);

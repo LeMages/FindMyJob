@@ -22,7 +22,6 @@ pub mod projet;
 pub mod prose_guidance;
 pub mod reference_contract;
 pub mod reference_issue;
-pub mod reference_texts;
 pub mod session;
 pub mod session_stats;
 pub mod skill;
@@ -38,18 +37,15 @@ pub use connection_test::TestConnectionResult;
 pub use contact::{CandidatureContactInput, ContactInput, ContactView};
 pub use doc_content::{CvContent, LmContent, ProseField};
 pub use doc_data::{
-    CvData, CvExampleData, CvExperience, CvFormation, CvLabels, CvLangue, CvProject, Identity, LmData,
-    LmExampleData, LmLabels, PeriodGranularity, PeriodStyle, Recipient, SkillsGroup,
+    CvData, CvExperience, CvFormation, CvLangue, CvProject, Identity, LmData, PeriodGranularity, Recipient,
+    SkillsGroup,
 };
-pub use prose_guidance::{ProseGuidance, ProseZone, ZoneMode};
+pub use prose_guidance::{ProseGuidance, ProseZone};
 pub use reference_contract::{
     expected_contract, MonthStyle, PeriodGranularityBySection, PeriodSpec, RawMetadata, RawSlot, Slot, SlotMode,
     StoredContract, CONTRACT_CV, CONTRACT_FILE, CONTRACT_LM, CONTRACT_VERSION, METADATA_LABEL,
 };
 pub use reference_issue::{ReferenceIssue, ReferenceIssueCode, Severity};
-pub use reference_texts::{
-    expected_format_version, ReferenceTexts, CV_REFERENCE_FORMAT_VERSION, REFERENCE_FORMAT_VERSION, REFERENCE_TEXTS_FILE,
-};
 pub use document::{
     Document, DocumentFileInfo, DocumentReferenceView, DocumentVersionView, DocumentsStatus, TemplateArtifacts,
 };

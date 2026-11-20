@@ -25,9 +25,6 @@ use crate::models::{CvContent, LmContent, MatchingResult};
 /// * `page_count` - Nombre de pages du PDF.
 /// * `page_retries` - Relances dues au dépassement de pages.
 /// * `warning` - Avertissement éventuel (pages dépassées).
-/// * `labels_translated` - Vrai si les libellés ont été traduits.
-/// * `reference_texts_translated` - Vrai si les textes de la référence
-///   (textes en dur, zones [FIXE], consignes) ont été traduits.
 /// * `rendered_dash_marks` - Tirets interdits encore présents dans le texte
 ///   rendu (séparateurs écrits en dur dans le template).
 /// * `typst_warnings` - Avertissements non bloquants du compilateur Typst
@@ -40,8 +37,6 @@ pub struct DocumentTrace<C> {
     pub page_count: usize,
     pub page_retries: u8,
     pub warning: Option<String>,
-    pub labels_translated: bool,
-    pub reference_texts_translated: bool,
     pub rendered_dash_marks: Vec<String>,
     pub typst_warnings: Vec<String>,
 }
@@ -78,8 +73,6 @@ fn attempts_of<C>(doc: &DocumentTrace<C>) -> Value {
         "page_retries": doc.page_retries,
         "page_count": doc.page_count,
         "warning": doc.warning,
-        "labels_translated": doc.labels_translated,
-        "reference_texts_translated": doc.reference_texts_translated,
         "rendered_dash_marks": doc.rendered_dash_marks,
         "typst_warnings": doc.typst_warnings,
     })

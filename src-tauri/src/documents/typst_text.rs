@@ -29,6 +29,39 @@ pub fn extract_text(doc: &PagedDocument) -> String {
     fragments.join(" ")
 }
 
+/// Texte lisible d'un rendu, pour un prompt : les mots coupés en fin de
+/// ligne (césure, rendue par un trait d'union conditionnel) sont recollés
+/// et les espaces multiples réduites à une seule.
+///
+/// # Arguments
+///
+/// * `text` - Texte rendu (`extract_text`).
+///
+/// # Returns
+///
+/// Texte d'un seul tenant, mots séparés par une espace.
+pub fn reading_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    // Vrai juste après un trait d'union conditionnel : le mot suivant est
+    // la suite du mot coupé.
+    let mut glue = false;
+    for word in text.split_whitespace() {
+        let (stem, hyphenated) = match word.strip_suffix(SOFT_HYPHEN) {
+            Some(stem) => (stem, true),
+            None => (word, false),
+        };
+        if !stem.is_empty() && !out.is_empty() && !glue {
+            out.push(' ');
+        }
+        out.push_str(stem);
+        glue = hyphenated || (glue && stem.is_empty());
+    }
+    out
+}
+
+/// Trait d'union conditionnel, rendu par Typst à une césure.
+const SOFT_HYPHEN: char = '\u{ad}';
+
 /// Ajoute à `fragments` le texte d'un cadre et de ses sous-groupes.
 fn collect_frame_text(frame: &Frame, depth: usize, fragments: &mut Vec<String>) {
     if depth > MAX_GROUP_DEPTH {
@@ -40,5 +73,17 @@ fn collect_frame_text(frame: &Frame, depth: usize, fragments: &mut Vec<String>) 
             FrameItem::Text(text) => fragments.push(text.text.to_string()),
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reading_text;
+
+    #[test]
+    fn cesure_recollee_et_espaces_reduites() {
+        assert_eq!(reading_text("intéresse parti \u{ad} culièrement. Fin"), "intéresse particulièrement. Fin");
+        assert_eq!(reading_text("parti\u{ad} culièrement"), "particulièrement");
+        assert_eq!(reading_text("tableaux de bord  utiles"), "tableaux de bord utiles");
     }
 }

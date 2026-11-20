@@ -5,7 +5,8 @@
 //! avertissement, jamais de repli sur la référence).
 //!
 //! Toute ligne d'une référence qui ne relève d'aucune de ces catégories est
-//! un texte en dur (`data.texts`), traduit mais jamais tiré du profil.
+//! un texte fixe de la référence, écrit dans chacune de ses langues, jamais
+//! tiré du profil.
 
 // Importation des modules internes
 use crate::models::{CvData, ProfileDto};

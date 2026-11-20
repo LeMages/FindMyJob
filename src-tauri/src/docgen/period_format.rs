@@ -1,64 +1,62 @@
 //! Formatage des périodes (expériences, projets, formations) à partir des
-//! dates du profil, dans le style de la référence : granularité (mois ou
-//! année), abréviations de mois et séparateur.
+//! dates du profil, selon le format déclaré par la référence (`period` de
+//! sa métadonnée) : granularité par section, forme du mois, séparateur.
+//! Les noms de mois et « présent » viennent de `docgen::month_names`.
 
 // Importation des crates externes
 use chrono::{Datelike, NaiveDate};
 
 // Importation des modules internes
-use crate::models::PeriodGranularity;
+use crate::docgen::month_names::{long_month, present, short_month};
+use crate::models::{MonthStyle, PeriodGranularity, PeriodSpec};
 
-/// Séparateur utilisé quand la référence n'en montre aucun.
-const DEFAULT_SEPARATOR: &str = " - ";
-/// Séparateurs reconnus dans les périodes de la référence, du plus au moins
-/// spécifique.
-const KNOWN_SEPARATORS: [&str; 3] = [" – ", " — ", " - "];
-/// Tirets d'un séparateur de la référence, remplacés par « - » : aucun
-/// document généré n'affiche de tiret cadratin ou demi-cadratin.
+/// Tirets interdits dans un document généré, remplacés par « - » dans un
+/// séparateur déclaré.
 const FORBIDDEN_DASHES: [char; 2] = ['\u{2013}', '\u{2014}'];
 
-/// Style de formatage des périodes d'un document.
+/// Format des périodes d'un document, dans sa langue.
 ///
 /// # Attributes
 ///
-/// * `months_short` - Les 12 abréviations de mois de la référence.
-/// * `present` - Borne de fin d'une période en cours (ex. « aujourd'hui »).
-/// * `separator` - Séparateur entre début et fin (ex. « - »).
+/// * `month_style` - Forme du mois.
+/// * `numeric_separator` - Entre le mois et l'année en forme numérique.
+/// * `separator` - Entre début et fin, sans tiret cadratin ni demi-cadratin.
+/// * `lang` - Langue du document (noms de mois, « présent »).
 #[derive(Debug, Clone, PartialEq)]
-pub struct PeriodStyleText {
-    pub months_short: Vec<String>,
-    pub present: String,
+pub struct PeriodFormat {
+    pub month_style: MonthStyle,
+    pub numeric_separator: String,
     pub separator: String,
+    pub lang: String,
 }
 
-/// Retrouve le séparateur de période utilisé par la référence.
-///
-/// # Arguments
-///
-/// * `periods` - Périodes telles qu'affichées dans la référence.
-///
-/// # Returns
-///
-/// Le premier séparateur connu trouvé, sinon « - », ses tirets cadratins
-/// ou demi-cadratins remplacés par « - ».
-pub fn detect_separator<'a>(periods: impl IntoIterator<Item = &'a str>) -> String {
-    let periods: Vec<&str> = periods.into_iter().collect();
-    KNOWN_SEPARATORS
-        .iter()
-        .find(|sep| periods.iter().any(|p| p.contains(*sep)))
-        .unwrap_or(&DEFAULT_SEPARATOR)
-        .replace(FORBIDDEN_DASHES, "-")
+impl PeriodFormat {
+    /// Format déclaré par une référence, dans la langue du document.
+    ///
+    /// # Arguments
+    ///
+    /// * `spec` - Format déclaré (`period` de la métadonnée).
+    /// * `lang` - Langue du document.
+    pub fn new(spec: &PeriodSpec, lang: &str) -> Self {
+        Self {
+            month_style: spec.month_style,
+            numeric_separator: spec.numeric_separator.clone(),
+            separator: spec.separator.replace(FORBIDDEN_DASHES, "-"),
+            lang: lang.to_string(),
+        }
+    }
 }
 
 /// Formate une date seule selon la granularité.
-fn format_date(date: NaiveDate, granularity: PeriodGranularity, style: &PeriodStyleText) -> String {
-    match granularity {
-        PeriodGranularity::Year => date.year().to_string(),
-        PeriodGranularity::Month => match style.months_short.get(date.month0() as usize) {
-            Some(month) if !month.is_empty() => format!("{month} {}", date.year()),
-            // Sans abréviations exploitables, le mois reste lisible en chiffres.
-            _ => format!("{:02}/{}", date.month(), date.year()),
-        },
+fn format_date(date: NaiveDate, granularity: PeriodGranularity, format: &PeriodFormat) -> String {
+    let month0 = date.month0() as usize;
+    match (granularity, format.month_style) {
+        (PeriodGranularity::Year, _) => date.year().to_string(),
+        (PeriodGranularity::Month, MonthStyle::Short) => format!("{} {}", short_month(month0, &format.lang), date.year()),
+        (PeriodGranularity::Month, MonthStyle::Long) => format!("{} {}", long_month(month0, &format.lang), date.year()),
+        (PeriodGranularity::Month, MonthStyle::Numeric) => {
+            format!("{:02}{}{}", date.month(), format.numeric_separator, date.year())
+        }
     }
 }
 
@@ -66,8 +64,7 @@ fn format_date(date: NaiveDate, granularity: PeriodGranularity, style: &PeriodSt
 ///
 /// - début et fin : « début - fin », ou une seule date si elles s'affichent
 ///   identiques (même année en granularité année, même mois sinon) ;
-/// - début seul (période en cours) : « début - aujourd'hui », ou le début
-///   seul si la référence n'a pas de libellé pour le présent ;
+/// - début seul (période en cours) : « début - présent » ;
 /// - fin seule : la fin ; aucune date : chaîne vide.
 ///
 /// # Arguments
@@ -75,7 +72,7 @@ fn format_date(date: NaiveDate, granularity: PeriodGranularity, style: &PeriodSt
 /// * `start` - Date de début.
 /// * `end` - Date de fin, `None` si en cours.
 /// * `granularity` - Mois ou année.
-/// * `style` - Abréviations, libellé du présent et séparateur.
+/// * `format` - Forme du mois, séparateur et langue.
 ///
 /// # Returns
 ///
@@ -84,15 +81,14 @@ pub fn format_period(
     start: Option<NaiveDate>,
     end: Option<NaiveDate>,
     granularity: PeriodGranularity,
-    style: &PeriodStyleText,
+    format: &PeriodFormat,
 ) -> String {
-    let start_text = start.map(|d| format_date(d, granularity, style));
-    let end_text = end.map(|d| format_date(d, granularity, style));
+    let start_text = start.map(|d| format_date(d, granularity, format));
+    let end_text = end.map(|d| format_date(d, granularity, format));
     match (start_text, end_text) {
         (Some(s), Some(e)) if s == e => s,
-        (Some(s), Some(e)) => format!("{s}{}{e}", style.separator),
-        (Some(s), None) if style.present.is_empty() => s,
-        (Some(s), None) => format!("{s}{}{}", style.separator, style.present),
+        (Some(s), Some(e)) => format!("{s}{}{e}", format.separator),
+        (Some(s), None) => format!("{s}{}{}", format.separator, present(&format.lang)),
         (None, Some(e)) => e,
         (None, None) => String::new(),
     }

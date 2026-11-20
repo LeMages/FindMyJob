@@ -1,9 +1,10 @@
 //! Rédaction des champs de prose de la lettre de motivation (objet,
 //! paragraphes) via l'API Claude, avec revue et retry
 //! (`llm::writing_loop`). Expéditeur, destinataire, date, formule d'appel
-//! et formule de politesse sont remplis par Rust. Les consignes de la
-//! référence (zones `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]` de l'objet et des
-//! paragraphes) sont transmises au LLM et vérifiées. Le contexte détaillé des
+//! et phrases fixes sont du texte du template. Les consignes de la
+//! référence (consignes générales, emplacements `[VARIABLE]` /
+//! `[ADAPTABLE]` de l'objet et des paragraphes) et son rendu complet sont
+//! transmis au LLM. Le contexte détaillé des
 //! entrées retenues est fourni comme matière de fond, et sa recopie mot pour
 //! mot est relevée à la revue (`docgen::verbatim_check`).
 
@@ -12,7 +13,6 @@ use serde_json::{json, Value};
 
 // Importation des modules internes
 use crate::docgen::budgets::LmBudget;
-use crate::docgen::example_facts::lm_information_values;
 use crate::docgen::lint::lint_lm_budget;
 use crate::docgen::entry_texts::CvEntryTexts;
 use crate::docgen::selection::Selection;
@@ -26,7 +26,8 @@ use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::prose_checks::ProseChecks;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
 use crate::llm::writing_rules::{
-    guidance_block, language_reminder, language_rule, style_model_block, with_feedback, COMMON_RULES,
+    guidance_block, language_reminder, language_rule, reference_document_block, style_model_block, with_feedback,
+    COMMON_RULES,
 };
 use crate::models::{LmContent, LmData, MatchingResult, ProfileDto, ProseGuidance};
 use crate::llm::target::ClaudeTarget;
@@ -45,7 +46,8 @@ L'objet contient l'intitulé exact du poste (ligne « INTITULÉ EXACT DU POSTE �
 /// * `selection` - Entrées du profil retenues.
 /// * `profile` - Profil complet du candidat.
 /// * `entry_texts` - Descriptions des entrées, dans la langue du document.
-/// * `example` - Contenu de la référence (modèle de style).
+/// * `example` - Valeurs d'exemple de la référence (modèle de style).
+/// * `reference_text` - Texte rendu de la référence avec son exemple.
 /// * `guidance` - Consignes de la référence (`subject`, `paragraphs[i]`).
 /// * `budget` - Budget de longueur.
 /// * `company` - Entreprise destinataire (vide si inconnue).
@@ -59,6 +61,7 @@ pub struct LmWritingInput<'a> {
     pub profile: &'a ProfileDto,
     pub entry_texts: &'a CvEntryTexts,
     pub example: &'a LmData,
+    pub reference_text: &'a str,
     pub guidance: &'a ProseGuidance,
     pub budget: LmBudget,
     pub company: &'a str,
@@ -128,6 +131,7 @@ fn user_message(input: &LmWritingInput<'_>) -> String {
     // Absent sans contexte renseigné : le message reste alors celui d'avant le contexte détaillé.
     blocks.extend(detailed_context_block(&letter_contexts(input.selection), input.target_lang));
     blocks.push(style_model_block(&example_prose(input.example)));
+    blocks.extend(reference_document_block(input.reference_text));
     blocks.extend(guidance_block(input.guidance));
     blocks.push(budget_block(&input.budget));
     blocks.join("\n\n")
@@ -193,11 +197,7 @@ async fn call_once(
 ///
 /// `WritingOutcome<LmContent>`.
 pub async fn write_lm(input: &LmWritingInput<'_>, target: &ClaudeTarget) -> Result<WritingOutcome<LmContent>, AppError> {
-    let checks = ProseChecks {
-        example_prose: example_prose(input.example),
-        guidance: input.guidance.clone(),
-        information: lm_information_values(input.example),
-    };
+    let checks = ProseChecks { example_prose: example_prose(input.example) };
     let contexts: Vec<String> = letter_contexts(input.selection).into_iter().map(|c| c.text).collect();
     let rules = LmReview { budget: &input.budget, checks: &checks, job_title: input.job_title, contexts: &contexts };
     write_with_retries(
@@ -205,7 +205,7 @@ pub async fn write_lm(input: &LmWritingInput<'_>, target: &ClaudeTarget) -> Resu
         &language_reminder(input.target_lang),
         |feedback| call_once(input, feedback, target),
         |content| review(content, &rules),
-        |content| content.map_prose(|path, text| checks.clean(path, text)),
+        |content| content.map_prose(|_, text| checks.clean(text)),
     )
     .await
 }

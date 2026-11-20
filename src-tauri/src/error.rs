@@ -20,8 +20,8 @@ pub enum AppError {
     /// Échec typé de la récupération ou de l'extraction d'une offre, sérialisé
     /// en code (`{"kind":"Scraping","message":"access_denied"}`).
     Scraping(ScrapingFailure),
-    /// Référence templatisée par une version précédente, dont le template ne
-    /// compile plus avec le schéma actuel : elle doit être réimportée. Le
+    /// Référence importée avant le contrat actuel (sans `contract.json` ou
+    /// d'une autre version du contrat) : elle doit être réimportée. Le
     /// message est la phrase française affichée à l'utilisateur.
     OutdatedReference(String),
     /// Référence refusée à l'import : tous les problèmes relevés par la

@@ -1,22 +1,21 @@
 //! Génération du CV et de la lettre au niveau des services appelés par les
 //! commandes (`documents::save_reference`, `services::candidatures::create`) :
-//! profil en base, références de test templatisées, réponses LLM figées,
+//! profil en base, références de test au contrat, réponses LLM figées,
 //! compilation Typst réelle dans un dossier temporaire.
 
 // Importation des crates externes
 use serde_json::Value;
 
 // Importation des modules internes
+use crate::shared::tagged_references::render;
 use crate::shared::{fake_llm, seed, test_state};
 use crate::shared::no_dashes::{assert_no_dash_in_data, assert_no_dash_in_text};
 use fake_llm::{Reply, Step};
-use findmyjob_lib::llm::client::TEMPLATIZE_MODEL;
 use findmyjob_lib::docgen::lint::lint_prose;
 use findmyjob_lib::error::AppError;
 use findmyjob_lib::models::{GenerationProgress, GenerationStatus, ProseField};
 use findmyjob_lib::app_state::AppState;
 use findmyjob_lib::db;
-use findmyjob_lib::documents::typst::compile_template;
 use findmyjob_lib::services::candidatures;
 use findmyjob_lib::storage_paths;
 use test_state::{artefact, candidature_input, count, wait_generation, TestApp};
@@ -151,11 +150,8 @@ async fn prenom_vide_refuse_la_generation_avant_tout_appel_llm() {
 #[tokio::test]
 async fn generation_remplit_data_json_depuis_le_profil() {
     let (app, sid) = ready_app("generation-ok").await;
-    // Les références de test passent la validation dès le premier essai,
-    // avec le modèle imposé à la templatisation.
-    for step in [Step::ExampleCv, Step::TemplateCv, Step::ExampleLm, Step::TemplateLm] {
-        assert_eq!(app.llm.models_for(step), [TEMPLATIZE_MODEL], "{step:?}");
-    }
+    // L'import des références ne fait aucun appel LLM.
+    assert_eq!(app.llm.total_calls(), 0, "import sans LLM");
 
     let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
     let progress = wait_generation(&app.state, view.id).await;
@@ -216,11 +212,8 @@ async fn generation_remplit_data_json_depuis_le_profil() {
     }
     let detail = db::candidatures::fetch_detail(&app.state.pool, view.id).await.unwrap();
     assert!(detail.cv_path.is_some() && detail.lettre_motivation_path.is_some());
-    let version = i64::from(detail.cv_reference_version.expect("version de référence"));
-    let version_dir = storage_paths::to_absolute(&app.state.data_dir, &storage_paths::version_dir(sid, "cv", version));
-    let template = std::fs::read_to_string(version_dir.join("template.typ")).expect("template enregistré");
-    let rendered = compile_template(template, cv_raw.into_bytes(), version_dir, app.state.fonts_dir.clone())
-        .expect("recompilation du CV");
+    assert!(detail.cv_reference_version.is_some(), "version de référence");
+    let rendered = render(&app, sid, "cv", &cv).await;
     assert_eq!(rendered.page_count, 1);
     assert!(rendered.text.contains("ALEX MARTIN"), "texte du CV : {}", rendered.text);
 }
@@ -247,8 +240,8 @@ async fn aucun_tiret_interdit_dans_les_documents_generes() {
     // ------------------------------------------------------------------
     // 1. data.json : aucune chaîne avec un tiret interdit
     // ------------------------------------------------------------------
-    let (cv_raw, cv) = read_data(&app.state, sid, "cv", cid);
-    let (lm_raw, lm) = read_data(&app.state, sid, "lettre_motivation", cid);
+    let (_, cv) = read_data(&app.state, sid, "cv", cid);
+    let (_, lm) = read_data(&app.state, sid, "lettre_motivation", cid);
     assert_no_dash_in_data("CV", &cv);
     assert_no_dash_in_data("lettre", &lm);
     assert_eq!(cv["experiences"][0]["poste"], "Fondateur - Plateforme de covoiturage");
@@ -262,14 +255,8 @@ async fn aucun_tiret_interdit_dans_les_documents_generes() {
     // ------------------------------------------------------------------
     // 2. Texte rendu : aucun tiret interdit non plus
     // ------------------------------------------------------------------
-    for (doc_type, raw) in [("cv", cv_raw), ("lettre_motivation", lm_raw)] {
-        let doc = db::documents::get_current(pool, sid, doc_type).await.expect("lecture").expect("référence");
-        let dir = storage_paths::to_absolute(
-            &app.state.data_dir,
-            &storage_paths::version_dir(sid, doc_type, doc.current_version_id),
-        );
-        let template = std::fs::read_to_string(dir.join("template.typ")).expect("template");
-        let rendered = compile_template(template, raw.into_bytes(), dir, app.state.fonts_dir.clone()).expect("compilation");
+    for (doc_type, data) in [("cv", &cv), ("lettre_motivation", &lm)] {
+        let rendered = render(&app, sid, doc_type, data).await;
         assert_no_dash_in_text(doc_type, &rendered.text);
     }
 }

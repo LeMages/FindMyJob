@@ -30,7 +30,7 @@ async fn parcours_complet_de_l_offre_a_la_suppression() {
     assert_eq!((profil.experiences.len(), profil.projets.len(), profil.skills.len()), (1, 1, 2));
 
     // ------------------------------------------------------------------
-    // 2. Session et références templatisées
+    // 2. Session et références au contrat
     // ------------------------------------------------------------------
     let sid = db::sessions::insert(pool, &seed::session_input("Stage 2027", Some("Villeurbanne"), Some("69100")), seed::NOW).await.expect("session").id;
     assert!(!db::documents::status_for_session(pool, sid).await.unwrap().all_ready);

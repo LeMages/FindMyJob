@@ -1,6 +1,6 @@
 //! Normalisation des tirets de toutes les chaînes d'un `data.json` (CV ou
-//! lettre), juste avant la compilation : prose rédigée, profil, zones
-//! [FIXE], textes de la référence, traductions, libellés, périodes. Les
+//! lettre), juste avant la compilation : prose rédigée, profil,
+//! traductions, périodes. Les
 //! données du profil en base ne sont jamais modifiées : seul le rendu l'est.
 
 // Importation des crates externes

@@ -1,33 +1,22 @@
 //! Ré-exports publics de la couche de gestion des documents (CV, lettre de
-//! motivation) et des polices utilisateur : compilation Typst, templatisation
-//! des références et stockage sur disque.
+//! motivation) et des polices utilisateur : compilation Typst, validation
+//! des références au contrat FindMyJob et stockage sur disque.
 
 pub mod doc_type;
-pub mod example_check;
 pub mod font_files;
 pub mod font_metadata;
 pub mod font_shadowing;
 pub mod fonts;
 pub mod generation_trace;
-pub mod labels_cache;
 pub mod list_marker_check;
-pub mod markup;
 pub mod missing_fonts;
-pub mod orphan_title_check;
 pub mod page_fit;
-pub mod paragraph_check;
 pub mod reference_template;
 pub mod recipient_check;
 pub mod reference_contract;
-pub mod reference_texts_cache;
 pub mod reference_versions;
 pub mod sparse_check;
 pub mod storage;
-pub mod template_check;
-pub mod template_edits;
-pub mod template_problems;
-pub mod templatize;
-pub mod templatize_debug;
 pub mod typst;
 pub mod typst_diagnostics;
 pub mod typst_headings;

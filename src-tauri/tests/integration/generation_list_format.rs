@@ -1,5 +1,5 @@
 //! Tests : format des listes du CV selon la session (`sessions.format_liste`),
-//! avec la référence balisée templatisée au format 4 et une compilation
+//! avec la référence balisée au contrat et une compilation
 //! Typst réelle. Chaque élément de description est précédé du symbole de la
 //! session (« • » ou « - »), l'intro n'en a pas, une suite de ligne passe à
 //! la ligne dans le même élément, et une description vide n'affiche aucun

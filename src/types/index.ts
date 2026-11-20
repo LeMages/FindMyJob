@@ -201,6 +201,48 @@ export interface DocumentReferenceView {
   file_path: string
   pdf_path: string
   updated_at: string
+  /** Avertissements de la validation, remplis seulement au retour d'un import. */
+  warnings: ReferenceIssue[]
+}
+
+/** Code d'un problème de référence au contrat FindMyJob (miroir de `ReferenceIssueCode`). */
+export type ReferenceIssueCode =
+  | 'not_typ'
+  | 'too_large'
+  | 'not_utf8'
+  | 'forbidden_construct'
+  | 'compile_error'
+  | 'missing_font'
+  | 'metadata_missing'
+  | 'metadata_duplicated'
+  | 'metadata_invalid'
+  | 'wrong_contract'
+  | 'outdated_contract_version'
+  | 'language_missing'
+  | 'example_invalid'
+  | 'slot_unknown_field'
+  | 'slot_invalid_mode'
+  | 'slot_duplicated'
+  | 'language_compile_error'
+  | 'page_count_mismatch'
+  | 'empty_data_compile_error'
+  | 'hardcoded_value'
+  | 'list_marker_wrong'
+  | 'orphan_heading'
+  | 'orphan_separator'
+  | 'recipient_not_right_aligned'
+  | 'dash_marks'
+
+/** Problème relevé à l'import d'une référence (miroir de `ReferenceIssue`). */
+export interface ReferenceIssue {
+  code: ReferenceIssueCode
+  severity: 'error' | 'warning'
+  /** Chemin du champ concerné (`example.experiences[1].period`). */
+  path: string | null
+  /** Ligne Typst concernée (à partir de 1). */
+  line: number | null
+  /** Contexte brut non traduit (message du compilateur, police, valeur). */
+  detail: string | null
 }
 
 /** Version d'un document de référence d'une session (voir `DocumentVersionView` côté Rust). */

@@ -1,66 +1,49 @@
-//! Tests des consignes de rédaction de la référence : cohérence des zones
-//! avec la prose d'exemple, respect des zones `[FIXE]` à la rédaction,
-//! linter et budgets qui épargnent le texte recopié.
+//! Tests des consignes de rédaction de la référence : emplacements lus dans
+//! le contrat (avec leur valeur d'exemple), linter de la prose et budgets.
 
 // Importation des modules internes
 use findmyjob_lib::docgen::budgets::{lm_budget, WordRange};
-use findmyjob_lib::docgen::fixed_zones::{fixed_zone_violations, transform_outside_fixed, without_fixed_text};
 use findmyjob_lib::docgen::lint::{lint_prose, strip_dashes};
-use findmyjob_lib::docgen::words::count_words;
-use findmyjob_lib::models::{LmData, ProseField, ProseGuidance, ProseZone, ZoneMode};
+use findmyjob_lib::models::{LmData, ProseField, ProseGuidance, Slot, SlotMode};
 
 /// Champ de prose.
 fn field(path: &str, text: &str) -> ProseField {
     ProseField { path: path.to_string(), text: text.to_string() }
 }
 
-/// Zone d'un champ.
-fn zone(field: &str, mode: ZoneMode, text: &str) -> ProseZone {
-    ProseZone { field: field.to_string(), mode, instruction: String::new(), text: text.to_string() }
-}
-
-/// Dernier paragraphe de la lettre de référence : une zone fixe.
-const FIXED: &str = "Résidant à Lyon, je suis mobile et prêt à m'installer à proximité de votre site.";
-
-/// Consignes : paragraphe 0 découpé en une zone fixe puis une variable.
-fn guidance() -> ProseGuidance {
-    ProseGuidance {
-        general: "Ne jamais inventer.".to_string(),
-        zones: vec![
-            zone("paragraphs[0]", ZoneMode::Fixe, FIXED),
-            zone("paragraphs[0]", ZoneMode::Variable, "Je postule chez Exemple SA."),
-        ],
-    }
+/// Emplacement déclaré.
+fn slot(field: &str, mode: SlotMode) -> Slot {
+    Slot { field: field.to_string(), mode, instruction: format!("Consigne de {field}") }
 }
 
 // ======================================================================
-// Zones fixes (rédaction)
+// Emplacements
 // ======================================================================
 
 #[test]
-fn zone_fixe_recopiee_avec_une_information_mise_a_jour() {
-    let information = vec!["Lyon".to_string()];
-    let written = FIXED.replace("Lyon", "Nantes") + " Je postule chez Lumen.";
-    let violations = fixed_zone_violations(&guidance(), &[field("paragraphs[0]", &written)], &information);
-    assert!(violations.is_empty(), "{violations:?}");
+fn emplacements_avec_leur_valeur_d_exemple() {
+    let example = LmData {
+        subject: "Candidature".to_string(),
+        paragraphs: vec!["Premier.".to_string(), "Second.".to_string()],
+        ..Default::default()
+    };
+    let example = serde_json::to_value(&example).expect("JSON");
+    let slots = [slot("subject", SlotMode::Variable), slot("paragraphs[1]", SlotMode::Adaptable)];
+
+    let guidance = ProseGuidance::from_slots("  Ne jamais inventer. ", &slots, &example);
+
+    assert_eq!(guidance.general, "Ne jamais inventer.");
+    assert_eq!(guidance.zones.len(), 2);
+    assert_eq!((guidance.zones[0].text.as_str(), guidance.zones[0].mode), ("Candidature", SlotMode::Variable));
+    assert_eq!((guidance.zones[1].text.as_str(), guidance.zones[1].mode), ("Second.", SlotMode::Adaptable));
+    assert_eq!(guidance.zones[1].instruction, "Consigne de paragraphs[1]");
+    assert_eq!(guidance.zones_of("paragraphs[1]").count(), 1);
+    assert_eq!(guidance.zones_of("paragraphs[0]").count(), 0, "sans emplacement : rédigé librement");
 }
 
-#[test]
-fn zone_fixe_reecrite_signalee() {
-    let information = vec!["Lyon".to_string()];
-    let written = "J'habite à Lyon et je peux déménager. Je postule chez Lumen.";
-    let violations = fixed_zone_violations(&guidance(), &[field("paragraphs[0]", written)], &information);
-    assert_eq!(violations.len(), 1);
-    assert!(violations[0].message.contains("[FIXE]") && violations[0].message.contains("\"proximité\""));
-}
-
-#[test]
-fn le_linter_ignore_le_texte_recopie() {
-    let guidance = ProseGuidance { general: String::new(), zones: vec![zone("subject", ZoneMode::Fixe, "Stage – 6 mois")] };
-    let fields = [field("subject", "Data Engineer, Stage – 6 mois")];
-    assert!(lint_prose(&without_fixed_text(&guidance, &fields), "").is_empty());
-    assert_eq!(lint_prose(&fields, "").len(), 1, "sans zone fixe, le tiret est relevé");
-}
+// ======================================================================
+// Linter
+// ======================================================================
 
 #[test]
 fn une_marque_de_la_reference_reste_interdite() {
@@ -70,25 +53,17 @@ fn une_marque_de_la_reference_reste_interdite() {
     assert_eq!(strip_dashes("a – b — c"), "a, b, c");
 }
 
-#[test]
-fn nettoyage_hors_zone_fixe() {
-    let cleaned = transform_outside_fixed("Intro — suite. Stage – 6 mois. Fin — ok", &["Stage – 6 mois."], strip_dashes);
-    assert_eq!(cleaned, "Intro, suite. Stage – 6 mois. Fin, ok");
-}
-
 // ======================================================================
 // Budgets
 // ======================================================================
 
 #[test]
-fn les_mots_fixes_ne_sont_jamais_reduits() {
-    let range = WordRange::around(100).with_fixed(60);
-    let scaled = range.scaled(0.5);
-    assert_eq!(scaled.target, 80, "60 mots fixes + la moitié des 40 autres");
-    assert_eq!(scaled.fixed, 60);
+fn budgets_reduits_proportionnellement() {
+    let scaled = WordRange::around(100).scaled(0.5);
+    assert_eq!(scaled.target, 50);
 
-    let example = LmData { paragraphs: vec![format!("{FIXED} Je postule chez Exemple SA.")], ..Default::default() };
-    let budget = lm_budget(&example, 1).with_fixed_words(&guidance());
-    assert_eq!(budget.paragraph_words[0].fixed, count_words(FIXED));
-    assert!(budget.scaled(0.5).paragraph_words[0].target >= count_words(FIXED));
+    let example = LmData { paragraphs: vec!["Un deux trois quatre.".to_string()], ..Default::default() };
+    let budget = lm_budget(&example, 1);
+    assert_eq!(budget.paragraph_count(), 1);
+    assert!(budget.scaled(0.5).paragraph_words[0].target <= budget.paragraph_words[0].target);
 }

@@ -19,7 +19,8 @@ import { backendErrorMessage } from '@/composables/backend_error_message'
 import { formatDateTime } from '@/composables/date_time_format'
 import DocumentVersionsPopup from '@/components/DocumentVersionsPopup.vue'
 import StatusPill from '@/components/StatusPill.vue'
-import type { DocumentReferenceView, DocumentVersionView } from '@/types/index'
+import { referenceIssueMessage, referenceIssuesOf } from '@/components/reference_issue_message'
+import type { DocumentReferenceView, DocumentVersionView, ReferenceIssue } from '@/types/index'
 
 const { t } = useI18n()
 
@@ -50,6 +51,10 @@ const isCv = computed(() => props.docType === 'cv')
 
 const saving = ref(false)
 const error = ref<string | null>(null)
+/** Problèmes bloquants du dernier import refusé (contrat non respecté). */
+const issues = ref<ReferenceIssue[]>([])
+/** Avertissements du dernier import réussi. */
+const warnings = ref<ReferenceIssue[]>([])
 
 // ── Mode "reference" (profil) ────────────────────────────────────────────────
 
@@ -136,8 +141,15 @@ function onVersionsClose() {
   versionsOpen.value = false
 }
 
-function triggerPicker() {
+/** Efface le retour du dernier import (erreur, problèmes, avertissements). */
+function clearImportFeedback() {
   error.value = null
+  issues.value = []
+  warnings.value = []
+}
+
+function triggerPicker() {
+  clearImportFeedback()
   fileInput.value?.click()
 }
 
@@ -153,7 +165,7 @@ async function onFileSelected(event: Event) {
   }
 
   saving.value = true
-  error.value = null
+  clearImportFeedback()
 
   try {
     const content = await file.text()
@@ -163,9 +175,12 @@ async function onFileSelected(event: Event) {
       content,
     })
     emit('update:reference', saved)
+    warnings.value = saved.warnings
     justSaved.value = true
   } catch (e: unknown) {
-    error.value = backendErrorMessage(e, saveErrorFallback.value)
+    const refused = referenceIssuesOf(e)
+    if (refused) issues.value = refused
+    else error.value = backendErrorMessage(e, saveErrorFallback.value)
   } finally {
     saving.value = false
     input.value = ''
@@ -215,7 +230,7 @@ const hasChanges = computed(() => justSaved.value)
 /** Efface l'indicateur de sauvegarde récente (utilisé quand l'utilisateur annule). */
 function reset() {
   justSaved.value = false
-  error.value = null
+  clearImportFeedback()
 }
 
 defineExpose({ hasChanges, reset })
@@ -265,6 +280,18 @@ defineExpose({ hasChanges, reset })
       <span>{{ t('documents.reference.importing') }}</span>
     </div>
     <div v-if="error" class="mt-[6px] text-[12px] text-red-600 whitespace-pre-line">{{ error }}</div>
+    <div v-if="issues.length > 0" class="mt-[6px] text-[12px] text-red-600">
+      <div class="font-medium">{{ t('documents.reference.issues_title') }}</div>
+      <ul class="list-disc pl-4 mt-[3px] flex flex-col gap-[2px] break-words">
+        <li v-for="(issue, index) in issues" :key="index">{{ referenceIssueMessage(issue) }}</li>
+      </ul>
+    </div>
+    <div v-if="warnings.length > 0" class="mt-[6px] text-[12px] text-amber-700">
+      <div class="font-medium">{{ t('documents.reference.warnings_title') }}</div>
+      <ul class="list-disc pl-4 mt-[3px] flex flex-col gap-[2px] break-words">
+        <li v-for="(issue, index) in warnings" :key="index">{{ referenceIssueMessage(issue) }}</li>
+      </ul>
+    </div>
 
     <div class="flex flex-wrap gap-2 mt-4 pt-[14px] border-t border-neutral-100">
       <template v-if="reference">

@@ -2,7 +2,7 @@
 //! lettre de motivation) d'une session.
 //!
 //! La table `documents` n'est qu'un pointeur `(session_id, doc_type) →
-//! current_version_id` : fichiers et templatisation sont lus sur la version
+//! current_version_id` : fichiers et contrat sont lus sur la version
 //! pointée (`document_versions`), par jointure.
 
 // Importation des crates externes
@@ -113,7 +113,7 @@ pub async fn get_current<'e, E: SqliteExecutor<'e>>(
 }
 
 /// Calcule l'état de préparation des références d'une session (CV et
-/// lettre de motivation) : prêt = référence définie et templatisée, seule
+/// lettre de motivation) : prêt = référence définie et validée, seule
 /// condition sous laquelle une candidature peut être créée.
 ///
 /// # Arguments
