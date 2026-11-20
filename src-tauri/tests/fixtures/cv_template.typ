@@ -24,7 +24,8 @@
   heading(data.labels.section_experiences)
   for e in data.experiences {
     block(strong(e.poste) + " | " + e.entreprise + " | " + e.period)
-    list(..e.bullets)
+    if e.intro != "" { block(e.intro) }
+    list(marker: data.list_marker, ..e.bullets)
   }
 }
 
@@ -32,6 +33,7 @@
   heading(data.labels.section_projects)
   for p in data.projects {
     block(strong(p.titre) + " | " + p.period)
-    list(..p.bullets)
+    if p.intro != "" { block(p.intro) }
+    list(marker: data.list_marker, ..p.bullets)
   }
 }

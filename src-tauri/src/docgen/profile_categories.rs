@@ -90,13 +90,13 @@ impl ProfileCategory {
                 "coordonnées du candidat affichées dans l'original. identity.title : sous-titre professionnel affiché sous le nom, chaîne vide si l'original n'en a pas."
             }
             ProfileCategory::Experiences => {
-                "une entrée par expérience professionnelle, avec ses bullets (`bullets`). experiences.lieu : lieu affiché dans un champ distinct de l'entreprise, chaîne vide si l'original ne l'affiche pas dans un champ distinct."
+                "une entrée par expérience professionnelle, avec ses bullets (`bullets`) et son intro (`intro`). experiences.lieu : lieu affiché dans un champ distinct de l'entreprise, chaîne vide si l'original ne l'affiche pas dans un champ distinct."
             }
             ProfileCategory::Projets => {
-                "une entrée par projet, avec ses bullets. `pour_qui` est l'organisation affichée pour un projet, chaîne vide si l'original ne l'affiche pas dans un champ distinct. projects.stack et projects.url : technologies et lien affichés dans une ligne ou un champ distinct du projet ; chaîne vide si l'original n'en affiche pas. Les technologies citées dans les bullets restent dans les bullets : ne les recopie jamais dans stack."
+                "une entrée par projet, avec ses bullets et son intro. `pour_qui` est l'organisation affichée pour un projet, chaîne vide si l'original ne l'affiche pas dans un champ distinct. projects.stack et projects.url : technologies et lien affichés dans une ligne ou un champ distinct du projet ; chaîne vide si l'original n'en affiche pas. Les technologies citées dans les bullets restent dans les bullets : ne les recopie jamais dans stack."
             }
             ProfileCategory::Formations => {
-                "une entrée par formation ; `details` reçoit ses lignes de détail (spécialité, cours, échange)."
+                "une entrée par formation ; `details` reçoit ses lignes de détail (spécialité, cours, échange). `intro` reçoit le texte affiché avant elles."
             }
             ProfileCategory::Competences => "une entrée par ligne de compétences, la catégorie puis les compétences.",
             ProfileCategory::Langues => "nom et niveau de chaque langue parlée.",
@@ -195,6 +195,8 @@ pub fn cv_data_fields_prompt() -> String {
         .collect();
     format!(
         "Champs du CV, liste fermée :\n{}\n- summary : texte de la section profil.\n\
+- intro, bullets, details : la description d'une entrée. bullets (ou details) : ses éléments de liste, un par élément, sans leur symbole de tête (« • », « - »). intro : le texte de la description affiché avant ses éléments, sans symbole, chaîne vide s'il n'y en a pas. Une description sans aucun symbole affiche chaque ligne comme un élément de bullets (ou details).\n\
+- list_marker : le symbole affiché devant chaque élément de liste des descriptions (par exemple \"•\"), tel quel ; chaîne vide si aucun élément n'en a. Jamais un séparateur de l'en-tête ou des coordonnées.\n\
 - period : la période telle qu'affichée. period_style indique pour chaque section si les périodes affichent le mois (\"month\") ou seulement l'année (\"year\") ; \"month\" pour une section absente.\n\
 - labels.section_* : titres des sections, tels qu'écrits dans le code source de l'original. labels.permis : le texte affiché pour le permis.\n\
 - labels.months_short : les 12 abréviations de mois, de janvier à décembre, dans la langue et le style de l'original (\"01\"…\"12\" si l'original écrit les mois en chiffres).\n\

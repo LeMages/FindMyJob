@@ -10,6 +10,7 @@ pub mod font_shadowing;
 pub mod fonts;
 pub mod generation_trace;
 pub mod labels_cache;
+pub mod list_marker_check;
 pub mod markup;
 pub mod missing_fonts;
 pub mod orphan_title_check;

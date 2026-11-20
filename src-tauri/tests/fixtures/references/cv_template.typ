@@ -33,7 +33,8 @@
   heading(data.labels.section_experiences)
   for e in data.experiences {
     block(joined((e.poste, e.entreprise, e.lieu, e.period), " | "))
-    list(..e.bullets)
+    if e.intro != "" { block(e.intro) }
+    list(marker: data.list_marker, ..e.bullets)
   }
 }
 
@@ -41,7 +42,8 @@
   heading(data.labels.section_projects)
   for p in data.projects {
     block(joined((p.titre, p.pour_qui, p.period), " | "))
-    list(..p.bullets)
+    if p.intro != "" { block(p.intro) }
+    list(marker: data.list_marker, ..p.bullets)
   }
 }
 
@@ -49,7 +51,8 @@
   heading(data.labels.section_formations)
   for f in data.formations {
     block(joined((f.titre, f.ecole, f.period), " | "))
-    for d in f.details { block(d) }
+    if f.intro != "" { block(f.intro) }
+    list(marker: data.list_marker, ..f.details)
   }
 }
 

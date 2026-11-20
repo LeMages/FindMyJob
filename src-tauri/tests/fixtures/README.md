@@ -19,6 +19,8 @@ La référence déposée par les tests (`test_state::reference_source`) est le t
 
 `cv_template.typ` à la racine de `fixtures/` est un autre template, utilisé par les tests unitaires de `src/docgen/tests.rs`.
 
+Les templates de CV suivent le format de référence 4 : le symbole de chaque élément de description vient de `data.list_marker` (« • » dans les données d'exemple, celui de la session à la génération), y compris pour les formations, et l'`intro` d'une description s'affiche avant ses éléments, sans symbole. Le séparateur des coordonnées de `tagged/cv_balise_template.typ` (`sep`, « • ») reste écrit en dur : ce n'est pas un symbole de liste. Les échecs réels rejoués (`llm/templatize/real_failures/`) gardent leur symbole en dur : ils sont refusés pour leur défaut d'origine, et maintenant aussi par le contrôle du symbole.
+
 ### `references/tagged/` : références fictives balisées
 
 | Fichier | Source | Réduction |
@@ -82,7 +84,7 @@ Les réponses de templatisation par défaut sont construites à partir de `refer
 | `llm/templatize/real_failures/*.typ` | Templates refusés **réels**, repris de `dev-data/…/templatize_debug` (anonymisés comme les références) ; le `.txt` voisin garde les problèmes relevés à l'époque. `cv_hash_en_mode_code` : `#` en mode code ; `cv_code_rendu_en_texte` : code écrit en markup ; `lm_valeur_ajoutee` : « 69003, » ajouté à la ligne de date ; `lm_methode_inexistante` : `.filter` sur une chaîne |
 | `llm/templatize/real_failures/cv_stack_depuis_les_puces.json` | Données d'exemple (étape A) refusées, reproduisant une sortie **réelle** sur la référence fictive `cv_balise.typ` : les technologies citées dans les puces rangées dans `projects[].stack` (une valeur présente entre parenthèses, deux reconstruites). Le reste est identique à `cv_balise_example_data.json`, qui sert d'essai 2 corrigé (`stack` vide). Le `.txt` voisin garde les problèmes attendus |
 | `llm/templatize/lm_diese_en_mode_code.typ`, `lm_correction_ciblee.txt` | Un `#` en trop puis sa correction sous forme de remplacement ciblé |
-| `llm/templatize/cv_separateur_orphelin.typ` | Template dont le seul défaut est un séparateur orphelin (non bloquant) |
+| `llm/templatize/cv_separateur_orphelin.typ` | Template dont le seul défaut est un séparateur orphelin (non bloquant) ; copie de `tagged/cv_balise_template.typ` (format 4) à ce défaut près |
 | `llm/templatize/lm_exemple_ville_inventee.json` | Données d'exemple avec une ville absente de l'original |
 
 `tagged/lm_balisee_template.typ` rend le destinataire dans un `box` (largeur du contenu, calé à droite) ; `tagged/lm_balisee_template_largeur_fixe.typ` le garde dans un `block(width: 7cm)` comme la référence : il sert aux tests du contrôle du bloc destinataire (`recipient_check.rs`, `templatize_validation.rs`, `templatize_retries.rs`), qui le compilent pour de vrai.

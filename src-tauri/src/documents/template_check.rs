@@ -15,7 +15,11 @@
 //!   au dernier essai) ;
 //! - compilé avec un marqueur unique dans chaque chaîne (rendu sentinelle),
 //!   n'affiche plus aucun texte écrit en dur : tout texte visible vient d'un
-//!   champ, d'un libellé ou d'un texte de la référence (`data.texts`).
+//!   champ, d'un libellé ou d'un texte de la référence (`data.texts`) ;
+//! - (CV) compilé avec un symbole de liste sentinelle, l'affiche exactement
+//!   une fois devant chaque élément de description, et nulle part ailleurs
+//!   (`documents::list_marker_check`). La comparaison avec la référence
+//!   tolère un symbole de liste ajouté devant un élément.
 //!
 //! Tous les contrôles s'exécutent à chaque essai ; une même erreur de
 //! compilation n'est citée qu'une fois.
@@ -31,6 +35,7 @@ use crate::docgen::example_facts::word_keys;
 use crate::docgen::sentinel_data::{hardcoded_runs, hardcoded_values, is_month_word, sentinel_cv_data, sentinel_lm_data};
 use crate::docgen::text_diff::{diff_hunks, normalize_quotes, DiffHunk};
 use crate::documents::example_check::CheckedExample;
+use crate::documents::list_marker_check::{is_marker_hunk, list_marker_problems, pick_sentinel, sentinel_marker_data};
 use crate::documents::markup::hard_texts::add_text;
 use crate::documents::orphan_title_check::{empty_lists_data, orphan_title_problems};
 use crate::documents::paragraph_check::paragraph_problems;
@@ -115,8 +120,14 @@ pub async fn check_template(
     ];
     // Le contrôle des titres orphelins ne concerne que le CV (la lettre n'a pas de sections).
     let is_cv = context.doc_type == "cv";
+    // Symbole de liste sentinelle (CV) : absent de la référence, il ne peut
+    // venir que de data.list_marker.
+    let marker_sentinel = if is_cv { pick_sentinel(&context.reference.text) } else { None };
     if is_cv {
         data_sets.push(empty_lists_data(&example)?);
+        if let Some(sentinel) = marker_sentinel {
+            data_sets.push(sentinel_marker_data(&example, sentinel)?);
+        }
     } else {
         // Seule la lettre a un destinataire : rendu avec entreprise et ville seulement.
         data_sets.push(sparse_recipient_data(&example)?);
@@ -138,6 +149,7 @@ pub async fn check_template(
     };
     let fifth = renders.next();
     let (with_empty_lists, with_sparse_recipient) = if is_cv { (fifth, None) } else { (None, fifth) };
+    let with_marker_sentinel = renders.next();
 
     // ------------------------------------------------------------------
     // 2. Contrôles statiques et erreurs de compilation, dédoublonnées
@@ -150,6 +162,10 @@ pub async fn check_template(
         results.push(texts_of(rendered));
         names.push("listes vides, libellés et textes de la référence présents");
     }
+    if let Some(rendered) = &with_marker_sentinel {
+        results.push(texts_of(rendered));
+        names.push("symbole de liste sentinelle");
+    }
     let named: Vec<NamedRender> =
         names.iter().zip(&results).map(|(name, result)| NamedRender { name, result }).collect();
     problems.extend(compile_problems(&named));
@@ -159,12 +175,15 @@ pub async fn check_template(
     // ------------------------------------------------------------------
     let page_count = with_example.as_ref().ok().map(|rendered| rendered.page_count);
     if let Ok(rendered) = &with_example {
-        problems.extend(compare_with_reference(context, rendered));
+        problems.extend(compare_with_reference(context, rendered, &list_marker_of(&checked.example)));
         problems.extend(paragraph_problems(&context.reference.lines, &rendered.lines, &checked.paragraphs));
     }
     let mut texts = checked.texts.clone();
     if let Ok(rendered) = &with_sentinel {
         problems.extend(hardcoded_problems(&rendered.text, checked, &context.reference.text, &mut texts));
+    }
+    if let (Some(Ok(rendered)), Some(sentinel)) = (&with_marker_sentinel, marker_sentinel) {
+        problems.extend(list_marker_problems(&rendered.text, &checked.example, sentinel));
     }
 
     // ------------------------------------------------------------------
@@ -200,9 +219,19 @@ fn static_problems(template: &str) -> Vec<String> {
     problems
 }
 
+/// Symbole des listes des données d'exemple (chaîne vide pour une lettre).
+fn list_marker_of(example: &serde_json::Value) -> String {
+    example.get("list_marker").and_then(|v| v.as_str()).unwrap_or_default().to_string()
+}
+
 /// Compare le rendu du template avec celui de la référence : pas plus de
-/// pages, exactement les mêmes mots, pas de code affiché.
-fn compare_with_reference(context: &TemplateContext<'_>, rendered: &CompiledDocument) -> Vec<String> {
+/// pages, exactement les mêmes mots (à un symbole de liste ajouté près),
+/// pas de code affiché.
+fn compare_with_reference(
+    context: &TemplateContext<'_>,
+    rendered: &CompiledDocument,
+    list_marker: &str,
+) -> Vec<String> {
     let mut problems = Vec::new();
     if rendered.page_count > context.reference.page_count {
         problems.push(format!(
@@ -213,8 +242,11 @@ fn compare_with_reference(context: &TemplateContext<'_>, rendered: &CompiledDocu
     problems.extend(code_rendered_as_text(&rendered.text, &context.reference.text));
     match diff_hunks(&context.reference.text, &rendered.text) {
         Ok(hunks) => {
-            let hunks: Vec<DiffHunk> =
-                hunks.into_iter().filter(|h| !(context.computes_date && is_date_hunk(h))).collect();
+            let hunks: Vec<DiffHunk> = hunks
+                .into_iter()
+                .filter(|h| !(context.computes_date && is_date_hunk(h)))
+                .filter(|h| !is_marker_hunk(h, list_marker))
+                .collect();
             problems.extend(describe_hunks(&context.reference.text, &hunks));
             problems.extend(glued_words(&hunks));
         }

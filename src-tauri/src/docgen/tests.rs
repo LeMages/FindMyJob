@@ -598,10 +598,15 @@ fn reference_d_une_version_precedente_a_reimporter() {
     assert!(matches!(load_texts(&old, "cv", "CV"), Err(AppError::OutdatedReference(_))), "autre format : à réimporter");
 
     let current = dir.join("courant.json");
-    std::fs::write(&current, r#"{"format_version": 3, "lang": "fr", "texts": {"t1": "P.J."}, "guidance": {"general": "", "zones": []}}"#)
+    std::fs::write(&current, r#"{"format_version": 4, "lang": "fr", "texts": {"t1": "P.J."}, "guidance": {"general": "", "zones": []}}"#)
         .expect("écriture");
     assert_eq!(load_texts(&current, "cv", "CV").expect("format courant").texts["t1"], "P.J.");
-    // Le format de la lettre (3) est refusé pour un CV ; une lettre au format 2 est refusée (bloc destinataire).
+    // Un CV au format 3 (symbole des listes écrit en dur) est à réimporter.
+    let cv_format_3 = dir.join("cv_format_3.json");
+    std::fs::write(&cv_format_3, r#"{"format_version": 3, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
+        .expect("écriture");
+    assert!(matches!(load_texts(&cv_format_3, "cv", "CV"), Err(AppError::OutdatedReference(_))), "CV au format 3 refusé");
+    // Une lettre au format 3 reste valide ; une lettre au format 2 est refusée (bloc destinataire).
     let letter_format = dir.join("lettre.json");
     std::fs::write(&letter_format, r#"{"format_version": 3, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
         .expect("écriture");

@@ -63,11 +63,12 @@
   })
 }
 
-// Puce en liste native : ordre de lecture du texte garanti pour les ATS
+// Puce en liste native : ordre de lecture du texte garanti pour les ATS.
+// Le symbole vient de data.list_marker (format de la session).
 #let bullet-item(content) = {
   block(below: space-line, {
     list(
-      marker: text(fill: dark, "•"),
+      marker: text(fill: dark, data.list_marker),
       indent: 2pt,
       body-indent: 6pt,
       text(fill: dark, content),
@@ -75,7 +76,13 @@
   })
 }
 
+// Séparateur des coordonnées : pas un symbole de liste, reste en dur.
 #let sep = text(size: 9pt, fill: light-gray, "  •  ")
+
+// Texte d'une description avant ses éléments, sans symbole.
+#let intro-block(content) = {
+  if content != "" { block(below: space-line, text(fill: dark, content)) }
+}
 
 // Ligne de coordonnées : valeurs non vides séparées par `sep`.
 #let contact-line(values) = values.filter(v => v != "").map(v => text(size: 9pt, fill: gray, v)).join(sep)
@@ -126,6 +133,7 @@
   section-header(data.labels.section_experiences)
   for e in data.experiences {
     entry-header(e.poste, joined((e.entreprise, e.lieu), ", "), e.period)
+    intro-block(e.intro)
     for b in e.bullets { bullet-item(b) }
   }
 }
@@ -135,6 +143,7 @@
   section-header(data.labels.section_projects)
   for p in data.projects {
     entry-header(p.titre, p.pour_qui, p.period)
+    intro-block(p.intro)
     for b in p.bullets { bullet-item(b) }
   }
 }
@@ -144,6 +153,7 @@
   section-header(data.labels.section_formations)
   for f in data.formations {
     entry-header(f.titre, f.ecole, f.period)
+    intro-block(f.intro)
     for d in f.details { bullet-item(d) }
   }
 }

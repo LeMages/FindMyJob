@@ -24,8 +24,10 @@ use crate::models::{CvExampleData, LmExampleData, ProseField, ProseGuidance};
 
 /// Chemins dont la valeur n'a pas à figurer dans l'original : libellés
 /// (affichés seulement si leur section ou leur champ l'est : mois, période
-/// en cours, permis…), langue, granularité des périodes, textes en dur.
-const NOT_DISPLAYED_PATHS: [&str; 4] = ["labels", "lang", "period_style", "texts"];
+/// en cours, permis…), langue, granularité des périodes, textes en dur, et
+/// symbole des listes (contrôlé par le rendu du template, voir
+/// `documents::list_marker_check`).
+const NOT_DISPLAYED_PATHS: [&str; 5] = ["labels", "lang", "period_style", "texts", "list_marker"];
 /// Au-delà de ce nombre de mots, une valeur n'est pas cherchée telle quelle
 /// dans l'original : un long texte peut y être coupé par une césure, et la
 /// prose est de toute façon comparée mot à mot au rendu du template.
