@@ -11,6 +11,77 @@
 //! pour l'affichage ; les deux sont testés sur la même table de cas
 //! (`tests/fixtures/description_list_cases.json`).
 
+/// Symbole des éléments de liste du CV pour le format `puce` d'une session.
+pub const LIST_MARKER_BULLET: &str = "•";
+/// Symbole des éléments de liste du CV pour le format `tiret` d'une session.
+pub const LIST_MARKER_DASH: &str = "-";
+
+/// Symbole des éléments de liste du CV pour un format de session
+/// (`sessions.format_liste`).
+///
+/// # Arguments
+///
+/// * `format_liste` - `puce` ou `tiret` (contrainte CHECK en base).
+///
+/// # Returns
+///
+/// `"•"` pour `puce`, `"-"` pour `tiret`.
+pub fn list_marker(format_liste: &str) -> &'static str {
+    debug_assert!(matches!(format_liste, "puce" | "tiret"), "format de liste inconnu : {format_liste}");
+    match format_liste {
+        "tiret" => LIST_MARKER_DASH,
+        _ => LIST_MARKER_BULLET,
+    }
+}
+
+/// Forme d'une description sans son texte : nombre de lignes d'intro, puis
+/// nombre de lignes de chaque élément. Elle permet de reconstruire la
+/// structure à partir d'une liste plate de lignes (traduite).
+///
+/// # Attributes
+///
+/// * `intro` - Nombre de lignes d'intro.
+/// * `items` - Nombre de lignes de chaque élément (au moins 1).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ListShape {
+    pub intro: usize,
+    pub items: Vec<usize>,
+}
+
+impl ListShape {
+    /// Nombre total de lignes de la forme.
+    ///
+    /// # Returns
+    ///
+    /// Lignes d'intro plus lignes des éléments.
+    pub fn line_count(&self) -> usize {
+        self.intro + self.items.iter().sum::<usize>()
+    }
+
+    /// Range une liste plate de lignes selon cette forme.
+    ///
+    /// # Arguments
+    ///
+    /// * `lines` - Lignes dans l'ordre de [`DescriptionList::flat_lines`].
+    ///
+    /// # Returns
+    ///
+    /// La description reconstruite, ou `None` si le nombre de lignes diffère.
+    pub fn apply(&self, lines: &[String]) -> Option<DescriptionList> {
+        if lines.len() != self.line_count() {
+            return None;
+        }
+        let (intro, mut rest) = lines.split_at(self.intro);
+        let mut items = Vec::with_capacity(self.items.len());
+        for &len in &self.items {
+            let (taken, remaining) = rest.split_at(len);
+            items.push(taken.to_vec());
+            rest = remaining;
+        }
+        Some(DescriptionList { intro: intro.to_vec(), items })
+    }
+}
+
 /// Description découpée : lignes d'intro, puis éléments (chaque élément a
 /// sa première ligne et ses éventuelles lignes de suite). Aucune ligne n'est
 /// vide et aucune ne porte de symbole de liste.
@@ -97,17 +168,36 @@ impl DescriptionList {
     ///
     /// La description reconstruite, ou `None` si le nombre de lignes diffère.
     pub fn rebuild_from(&self, lines: &[String]) -> Option<DescriptionList> {
-        if lines.len() != self.flat_lines().len() {
-            return None;
-        }
-        let (intro, mut rest) = lines.split_at(self.intro.len());
-        let mut items = Vec::with_capacity(self.items.len());
-        for item in &self.items {
-            let (taken, remaining) = rest.split_at(item.len());
-            items.push(taken.to_vec());
-            rest = remaining;
-        }
-        Some(DescriptionList { intro: intro.to_vec(), items })
+        self.shape().apply(lines)
+    }
+
+    /// Forme de la description (nombre de lignes par partie).
+    ///
+    /// # Returns
+    ///
+    /// La forme, sans le texte.
+    pub fn shape(&self) -> ListShape {
+        ListShape { intro: self.intro.len(), items: self.items.iter().map(Vec::len).collect() }
+    }
+
+    /// Intro telle que rendue dans le CV : ses lignes jointes par `\n`
+    /// (chaîne vide sans intro).
+    ///
+    /// # Returns
+    ///
+    /// Texte de l'intro.
+    pub fn intro_text(&self) -> String {
+        self.intro.join("\n")
+    }
+
+    /// Éléments tels que rendus dans le CV : un texte par élément, sa
+    /// première ligne et ses suites jointes par `\n`.
+    ///
+    /// # Returns
+    ///
+    /// Textes des éléments, dans l'ordre.
+    pub fn item_texts(&self) -> Vec<String> {
+        self.items.iter().map(|item| item.join("\n")).collect()
     }
 
     /// Texte d'une seule ligne pour les prompts (faits du profil) : intro
@@ -171,6 +261,20 @@ mod tests {
     fn reconstruction_refusee_si_nombre_de_lignes_different() {
         let parsed = parse_description(Some("- A\n- B"));
         assert!(parsed.rebuild_from(&["a".to_string()]).is_none());
+    }
+
+    #[test]
+    fn textes_du_cv_avec_retours_a_la_ligne() {
+        let parsed = parse_description(Some("Ligne 1\nLigne 2\n- A\nsuite\n- B"));
+        assert_eq!(parsed.intro_text(), "Ligne 1\nLigne 2");
+        assert_eq!(parsed.item_texts(), ["A\nsuite", "B"]);
+        assert_eq!(parse_description(Some("- A")).intro_text(), "");
+    }
+
+    #[test]
+    fn symbole_selon_le_format_de_session() {
+        assert_eq!(list_marker("puce"), "•");
+        assert_eq!(list_marker("tiret"), "-");
     }
 
     #[test]

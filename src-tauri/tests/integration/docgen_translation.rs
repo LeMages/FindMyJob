@@ -3,9 +3,15 @@
 
 // Importation des modules internes
 use crate::common;
+use findmyjob_lib::docgen::description_list::ListShape;
 use findmyjob_lib::docgen::entry_texts::{source_texts, CvEntryTexts, EntryLines, LanguageTexts, ProjectTexts};
 use findmyjob_lib::docgen::selection::select;
 use findmyjob_lib::docgen::translation_check::{max_translated_chars, translation_problems};
+
+/// Forme d'une description faite de `items` éléments d'une ligne, sans intro.
+fn items(count: usize) -> ListShape {
+    ListShape { intro: 0, items: vec![1; count] }
+}
 
 /// Textes d'origine : une expérience à deux lignes, un projet, une formation.
 fn original() -> CvEntryTexts {
@@ -13,13 +19,15 @@ fn original() -> CvEntryTexts {
         experiences: vec![EntryLines {
             id: 10,
             lines: vec!["Conception d'un pipeline de données pour le reporting hebdomadaire".to_string(), "Mise en production".to_string()],
+            shape: items(2),
         }],
         projects: vec![ProjectTexts {
             id: 20,
             pour_qui: "Mairie".to_string(),
             lines: vec!["Tableau de bord des adhésions".to_string()],
+            shape: items(1),
         }],
-        formations: vec![EntryLines { id: 30, lines: vec!["Spécialité données".to_string()] }],
+        formations: vec![EntryLines { id: 30, lines: vec!["Spécialité données".to_string()], shape: items(1) }],
         langues: vec![LanguageTexts { id: 40, nom: "Anglais".to_string(), level: "Courant (TOEIC 905)".to_string() }],
     }
 }
@@ -30,13 +38,15 @@ fn translated() -> CvEntryTexts {
         experiences: vec![EntryLines {
             id: 10,
             lines: vec!["Designed a data pipeline for weekly reporting".to_string(), "Deployed to production".to_string()],
+            shape: ListShape::default(),
         }],
         projects: vec![ProjectTexts {
             id: 20,
             pour_qui: "Town hall".to_string(),
             lines: vec!["Membership dashboard".to_string()],
+            shape: ListShape::default(),
         }],
-        formations: vec![EntryLines { id: 30, lines: vec!["Data major".to_string()] }],
+        formations: vec![EntryLines { id: 30, lines: vec!["Data major".to_string()], shape: ListShape::default() }],
         langues: vec![LanguageTexts { id: 40, nom: "English".to_string(), level: "Fluent (TOEIC 905)".to_string() }],
     }
 }

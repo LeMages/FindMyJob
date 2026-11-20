@@ -177,8 +177,10 @@ async fn generation_remplit_data_json_depuis_le_profil() {
     assert_eq!(cv["experiences"][0]["poste"], "Alternant data engineer");
     assert_eq!(cv["experiences"][0]["entreprise"], "Lumen Data");
     assert_eq!(cv["formations"][0]["titre"], "Master informatique");
-    // Entrées : lignes exactes des descriptions du profil, jamais réécrites.
+    // Entrées : éléments « - » des descriptions du profil, sans le tiret, jamais réécrits.
     assert_eq!(cv["experiences"][0]["bullets"], serde_json::json!(["Pipelines SQL pour le reporting."]));
+    assert_eq!(cv["experiences"][0]["intro"], "", "aucune ligne avant le premier élément");
+    assert_eq!(cv["list_marker"], "•", "format de session par défaut : puce");
     assert_eq!(cv["projects"][0]["titre"], "Tableau de bord associatif");
     assert_eq!(cv["projects"][0]["bullets"], serde_json::json!(["Suivi des adhésions en Python."]));
     assert_eq!(cv["projects"][0]["pour_qui"], "Association Escalade Lyon");
@@ -422,6 +424,31 @@ async fn matching_invalide_puis_corrige() {
     assert_eq!(cv["projects"][0]["titre"], "Tableau de bord associatif");
 }
 
+#[tokio::test]
+async fn traduction_garde_intro_elements_et_suites() {
+    let (app, sid) = english_app("generation-traduction-structure").await;
+    // Intro, élément avec une suite de ligne, puis un second élément.
+    let description = "Équipe de 5 personnes.\n- Pipelines SQL pour le reporting\ndéployés chaque semaine\n- Tests automatisés";
+    sqlx::query("UPDATE experiences SET description = $1").bind(description).execute(&app.state.pool).await.unwrap();
+    app.llm.respond_with(Step::ProfileTranslation, Reply::Fixture("profile_translation_structure.json"));
+
+    let (cid, progress) = generate(&app, sid).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+    let sent = &app.llm.messages_for(Step::ProfileTranslation)[0];
+    for line in ["Équipe de 5 personnes.", "Pipelines SQL pour le reporting", "déployés chaque semaine", "Tests automatisés"] {
+        assert!(sent.contains(&format!("\"{line}\"")), "une ligne à plat par ligne de la description : {sent}");
+    }
+    assert!(!sent.contains("- "), "aucun symbole de liste envoyé à la traduction : {sent}");
+    let (_, cv) = read_data(&app.state, sid, "cv", cid);
+    assert_eq!(cv["experiences"][0]["intro"], "Team of 5 people.");
+    assert_eq!(
+        cv["experiences"][0]["bullets"],
+        serde_json::json!(["SQL pipelines for reporting\ndeployed every week", "Automated tests"]),
+        "structure reconstruite après traduction"
+    );
+}
+
 /// Application dont l'offre est analysée en anglais (référence en français).
 async fn english_app(name: &str) -> (TestApp, i64) {
     let (app, sid) = ready_app(name).await;
@@ -438,7 +465,8 @@ async fn offre_dans_une_autre_langue_traduit_les_entrees() {
     assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
     assert_eq!(app.llm.calls_for(Step::ProfileTranslation), 1, "un seul appel pour toutes les entrées");
     let sent = &app.llm.messages_for(Step::ProfileTranslation)[0];
-    assert!(sent.contains("Pipelines SQL pour le reporting."), "{sent}");
+    assert!(sent.contains("\"Pipelines SQL pour le reporting.\""), "ligne envoyée sans son tiret : {sent}");
+    assert!(!sent.contains("- Pipelines"), "aucun symbole de liste envoyé à la traduction : {sent}");
     for official in ["Alternant data engineer", "Lumen Data", "Tableau de bord associatif", "Master informatique", "Université Lyon 1"] {
         assert!(!sent.contains(official), "{official} n'est jamais envoyé à la traduction : {sent}");
     }

@@ -62,12 +62,23 @@ pub struct SkillsGroup {
 }
 
 /// Entrée de la section « Expérience » du CV.
+///
+/// # Attributes
+///
+/// * `poste`, `entreprise`, `lieu`, `period` - Intitulé, organisation, lieu et période.
+/// * `intro` - Texte de la description avant le premier élément, rendu
+///   sans symbole (lignes séparées par `\n`, chaîne vide si absent).
+/// * `bullets` - Éléments de la description, chacun précédé de
+///   `CvData.list_marker` ; un `\n` dans un élément est un retour à la
+///   ligne dans le même élément.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvExperience {
     pub poste: String,
     pub entreprise: String,
     pub lieu: String,
     pub period: String,
+    #[serde(default)]
+    pub intro: String,
     pub bullets: Vec<String>,
 }
 
@@ -78,7 +89,8 @@ pub struct CvExperience {
 /// * `titre`, `pour_qui`, `period` - Intitulé, organisation et période.
 /// * `stack` - Technologies du projet, telles que saisies dans le profil.
 /// * `url` - Lien du projet, sous sa forme affichable.
-/// * `bullets` - Lignes de la description du profil.
+/// * `intro` - Texte avant le premier élément, sans symbole (voir `CvExperience`).
+/// * `bullets` - Éléments de la description du profil (voir `CvExperience`).
 ///
 /// `stack` et `url` ne s'affichent que si le template les lit : une
 /// référence convertie avant leur ajout n'en a pas, d'où `default`.
@@ -91,15 +103,25 @@ pub struct CvProject {
     pub stack: String,
     #[serde(default)]
     pub url: String,
+    #[serde(default)]
+    pub intro: String,
     pub bullets: Vec<String>,
 }
 
 /// Entrée de la section « Formation » du CV.
+///
+/// # Attributes
+///
+/// * `titre`, `ecole`, `period` - Diplôme, établissement et période.
+/// * `intro` - Texte avant le premier élément, sans symbole (voir `CvExperience`).
+/// * `details` - Éléments de la description (voir `CvExperience.bullets`).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvFormation {
     pub titre: String,
     pub ecole: String,
     pub period: String,
+    #[serde(default)]
+    pub intro: String,
     pub details: Vec<String>,
 }
 
@@ -134,7 +156,10 @@ pub struct CvLabels {
 
 /// Données complètes d'un CV, lues par son template. `texts` contient les
 /// textes en dur de la référence, par identifiant ; absent des données
-/// produites par le LLM, il est rempli par Rust.
+/// produites par le LLM, il est rempli par Rust. `list_marker` est le
+/// symbole placé devant chaque élément de `bullets` / `details` : à la
+/// génération, celui du format de la session (`•` ou `-`) ; dans les données
+/// d'exemple, celui de la référence.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvData {
     pub identity: Identity,
@@ -146,6 +171,8 @@ pub struct CvData {
     pub formations: Vec<CvFormation>,
     pub langues: Vec<CvLangue>,
     pub labels: CvLabels,
+    #[serde(default)]
+    pub list_marker: String,
     #[serde(default)]
     pub texts: BTreeMap<String, String>,
 }

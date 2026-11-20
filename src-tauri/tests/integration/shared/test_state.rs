@@ -97,7 +97,7 @@ pub async fn seed_profile(pool: &SqlitePool) {
         poste: "Alternant data engineer".into(),
         entreprise: Some("Lumen Data".into()),
         lieu: Some("Lyon".into()),
-        description: Some("Pipelines SQL pour le reporting.".into()),
+        description: Some("- Pipelines SQL pour le reporting.".into()),
         date_debut: Some(date(2024, 9, 1)),
         date_fin: Some(date(2025, 8, 31)),
         type_contrat: Some("alternance".into()),
@@ -106,7 +106,7 @@ pub async fn seed_profile(pool: &SqlitePool) {
     db::experiences::insert(pool, experience, seed::NOW).await.expect("expérience");
     let projet = CreateProjetInput {
         titre: "Tableau de bord associatif".into(),
-        description: Some("Suivi des adhésions en Python.".into()),
+        description: Some("- Suivi des adhésions en Python.".into()),
         stack: Some("Python".into()),
         url: None,
         pour_qui: Some("Association Escalade Lyon".into()),
@@ -118,7 +118,7 @@ pub async fn seed_profile(pool: &SqlitePool) {
     let formation = CreateFormationInput {
         titre: "Master informatique".into(),
         ecole: Some("Université Lyon 1".into()),
-        description: Some("Spécialité données".into()),
+        description: Some("- Spécialité données".into()),
         date_debut: Some(date(2023, 9, 1)),
         date_fin: Some(date(2025, 6, 30)),
     };

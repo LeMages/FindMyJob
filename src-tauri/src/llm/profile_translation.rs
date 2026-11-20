@@ -92,7 +92,7 @@ async fn call_once(
 ///
 /// # Returns
 ///
-/// Les textes traduits ; les textes d'origine, sans appel, si les langues
+/// Les textes traduits, avec la forme des descriptions de l'original ; les textes d'origine, sans appel, si les langues
 /// coïncident ou s'il n'y a rien à traduire ; `AppError::Llm` si la
 /// traduction reste invalide après 3 essais.
 pub async fn translate_entry_texts(
@@ -107,12 +107,15 @@ pub async fn translate_entry_texts(
     let source = serde_json::to_string_pretty(texts)
         .map_err(|e| AppError::Llm(format!("Textes du profil non sérialisables : {e}")))?;
     let prompt = system_prompt(from, to);
-    call_until_valid(
+    let translated = call_until_valid(
         "La traduction du profil",
         |feedback| call_once(&prompt, &source, feedback, target),
         |translated| translation_problems(texts, translated),
     )
-    .await
+    .await?;
+    // Le LLM ne voit que les lignes à plat ; validées ligne à ligne, elles
+    // reprennent la forme (intro, éléments, suites) de l'original.
+    Ok(translated.with_shapes_of(texts))
 }
 
 #[cfg(test)]

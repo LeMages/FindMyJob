@@ -14,7 +14,7 @@ use crate::docgen::build_cv_data::{build_cv_data, CvLayout};
 use crate::docgen::build_lm_data::{build_lm_data, LmLayout};
 use crate::docgen::contact_fields::{missing_contacts, ContactField};
 use crate::docgen::entry_texts::source_texts;
-use crate::docgen::identity::{display_url, lines, validate_sender_name, SenderLocation};
+use crate::docgen::identity::{display_url, validate_sender_name, SenderLocation};
 use crate::docgen::recipient::{build_recipient, split_location};
 use crate::documents::typst::compile_template;
 use crate::docgen::selection::{select, Selection};
@@ -88,7 +88,7 @@ fn profile() -> ProfileDto {
             ProjetView {
                 id: 20,
                 titre: "Projet A".to_string(),
-                description: Some("• Fait 20.".to_string()),
+                description: Some("- Fait 20.".to_string()),
                 stack: Some("Rust, Typst".to_string()),
                 url: Some("https://github.com/camille/projet-a/".to_string()),
                 pour_qui: Some("École".to_string()),
@@ -124,6 +124,7 @@ fn cv_data(profile: &ProfileDto, selection: &Selection) -> CvData {
         separator: " - ",
         lang: "fr",
         texts: &NO_TEXTS,
+        list_marker: "•",
     };
     build_cv_data(profile, selection, &source_texts(profile, selection), &cv_content(), &layout)
 }
@@ -172,12 +173,10 @@ fn compile_cv(data: &impl serde::Serialize) -> crate::documents::typst::Compiled
 // ======================================================================
 
 #[test]
-fn liens_affichables_et_lignes_du_profil() {
+fn liens_affichables() {
     let url = Some("https://www.linkedin.com/in/camille-martin/".to_string());
     assert_eq!(display_url(url.as_ref()), "linkedin.com/in/camille-martin");
     assert_eq!(display_url(None), "");
-    let text = Some("• Escalade\n\n - Photographie \n".to_string());
-    assert_eq!(lines(text.as_ref()), vec!["Escalade".to_string(), "Photographie".to_string()]);
 }
 
 #[test]
@@ -236,11 +235,14 @@ fn cv_data_fusionne_profil_contenu_et_libelles() {
     assert_eq!(data.experiences[0].poste, "Stage data");
     assert_eq!(data.experiences[0].entreprise, "Société Exemple");
     assert_eq!(data.experiences[0].period, "Nov. 2025 - Avr. 2026");
+    assert_eq!(data.experiences[0].intro, "A conçu un pipeline.", "ligne sans tiret avant la liste = intro");
     assert_eq!(
         data.experiences[0].bullets,
-        vec!["A conçu un pipeline.".to_string(), "Mis en production chez le client".to_string()],
-        "bullets = lignes exactes de la description"
+        vec!["Mis en production chez le client".to_string()],
+        "bullets = éléments « - » de la description, sans le tiret"
     );
+    assert_eq!((data.formations[0].intro.as_str(), data.formations[0].details.as_slice()), ("Spécialité data", &["Échange à l'étranger".to_string()][..]));
+    assert_eq!(data.list_marker, "•", "symbole du format de la session");
     assert_eq!(data.projects.len(), 1);
     assert_eq!(data.projects[0].titre, "Projet A");
     assert_eq!(data.projects[0].period, "2025");
@@ -248,7 +250,6 @@ fn cv_data_fusionne_profil_contenu_et_libelles() {
     assert_eq!(data.projects[0].stack, "Rust, Typst");
     assert_eq!(data.projects[0].url, "github.com/camille/projet-a");
     assert_eq!(data.formations[0].period, "2022 - 2027");
-    assert_eq!(data.formations[0].details, vec!["Spécialité data".to_string(), "Échange à l'étranger".to_string()]);
     assert_eq!(data.lang, "fr");
 }
 
@@ -397,6 +398,7 @@ fn le_lieu_vient_de_la_session() {
             separator: " - ",
             lang: "fr",
             texts: &NO_TEXTS,
+            list_marker: "•",
         };
         build_cv_data(&profile, &select(&profile, &[]), &source_texts(&profile, &select(&profile, &[])), &cv_content(), &layout)
     };
@@ -419,6 +421,24 @@ fn sections_vides_sans_contenu_de_la_reference() {
     assert!(data.experiences.is_empty(), "profil sans expérience : section vide");
     assert!(data.projects.is_empty(), "profil sans projet : section vide");
     assert!(data.formations.is_empty(), "profil sans formation : section vide");
+}
+
+#[test]
+fn suite_de_ligne_dans_le_meme_element() {
+    let mut profile = profile();
+    profile.experiences[0].description = Some("Intro 1\nIntro 2\n- A\nsuite de A\n- B".to_string());
+    let data = cv_data(&profile, &select(&profile, &[]));
+    assert_eq!(data.experiences[0].intro, "Intro 1\nIntro 2", "retours à la ligne de l'intro conservés");
+    assert_eq!(data.experiences[0].bullets, vec!["A\nsuite de A".to_string(), "B".to_string()]);
+}
+
+#[test]
+fn description_sans_tiret_reste_un_bloc() {
+    let mut profile = profile();
+    profile.experiences[0].description = Some("Une seule phrase.\nEt une autre.".to_string());
+    let data = cv_data(&profile, &select(&profile, &[]));
+    assert_eq!(data.experiences[0].intro, "Une seule phrase.\nEt une autre.");
+    assert!(data.experiences[0].bullets.is_empty(), "aucun élément sans tiret");
 }
 
 #[test]
@@ -448,14 +468,19 @@ fn textes_traduits_injectes_sans_toucher_aux_noms() {
         separator: " - ",
         lang: "en",
         texts: &NO_TEXTS,
+        list_marker: "-",
     };
 
     let data = build_cv_data(&profile, &selection, &texts, &cv_content(), &layout);
 
-    assert_eq!(data.experiences[0].bullets, texts.experiences[0].lines);
+    // Les lignes traduites gardent la forme de l'original : intro, puis éléments.
+    assert_eq!(data.experiences[0].intro, "Built a pipeline.");
+    assert_eq!(data.experiences[0].bullets, vec!["Deployed it for the client".to_string()]);
     assert_eq!(data.projects[0].bullets, vec!["Did 20.".to_string()]);
     assert_eq!(data.projects[0].pour_qui, "School");
-    assert_eq!(data.formations[0].details, texts.formations[0].lines);
+    assert_eq!(data.formations[0].intro, "Data major");
+    assert_eq!(data.formations[0].details, vec!["Exchange abroad".to_string()]);
+    assert_eq!(data.list_marker, "-");
     assert_eq!(data.experiences[0].poste, "Stage data", "poste jamais traduit");
     assert_eq!(data.experiences[0].entreprise, "Société Exemple");
     assert_eq!(data.projects[0].titre, "Projet A", "titre de projet jamais traduit");

@@ -55,7 +55,7 @@ pub fn cv_information_values(data: &CvData) -> Vec<String> {
         values.extend([project.titre.as_str(), &project.pour_qui, &project.stack, &project.url]);
     }
     for formation in &data.formations {
-        values.extend([formation.titre.as_str(), &formation.ecole]);
+        values.extend([formation.titre.as_str(), &formation.ecole, &formation.intro]);
         values.extend(formation.details.iter().map(String::as_str));
     }
     values.extend(data.skills_groups.iter().flat_map(|g| g.skills.iter().map(String::as_str)));
@@ -65,7 +65,7 @@ pub fn cv_information_values(data: &CvData) -> Vec<String> {
     retained(values)
 }
 
-/// Prose d'un CV : titre, résumé et bullets.
+/// Prose d'un CV : titre, résumé, intros et bullets des expériences et projets.
 ///
 /// # Arguments
 ///
@@ -76,6 +76,8 @@ pub fn cv_information_values(data: &CvData) -> Vec<String> {
 /// Valeurs retenues, dans l'ordre du schéma.
 pub fn cv_prose_values(data: &CvData) -> Vec<String> {
     let mut values = vec![data.identity.title.as_str(), &data.summary];
+    values.extend(data.experiences.iter().map(|e| e.intro.as_str()));
+    values.extend(data.projects.iter().map(|p| p.intro.as_str()));
     for bullets in data.experiences.iter().map(|e| &e.bullets).chain(data.projects.iter().map(|p| &p.bullets)) {
         values.extend(bullets.iter().map(String::as_str));
     }

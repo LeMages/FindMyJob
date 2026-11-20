@@ -60,6 +60,7 @@ Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l
 |---|---|---|
 | `offer_analysis.json` | Analyse de l'offre | Langue `fr` (pas de traduction des libellés ni du profil) |
 | `offer_analysis_en.json` | Analyse de l'offre | Langue `en` : déclenche la traduction des libellés et du profil |
+| `profile_translation_structure.json` | Traduction du profil | Expérience à intro + élément avec une suite de ligne + élément (4 lignes à plat), pour vérifier la reconstruction de la structure |
 | `matching.json` | Matching | Projet 1, celui de `test_state::seed_profile` |
 | `matching_id_inconnu.json` | Matching | Projet 99, absent du profil, pour déclencher les relances puis l'échec |
 | `cv_content.json` | Rédaction du CV | Titre, résumé et compétences seulement ; un tiret cadratin volontaire, que `strip_dashes` doit retirer |

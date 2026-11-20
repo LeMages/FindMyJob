@@ -38,6 +38,7 @@ use crate::docgen::recipient::build_recipient;
 use crate::documents::reference_template::{load_reference, ReferenceTemplate};
 use crate::documents::generation_trace::{DocumentTrace, GenerationTrace};
 use crate::docgen::budgets::{cv_budget, lm_budget, CvBudget, LmBudget};
+use crate::docgen::description_list::list_marker;
 use crate::docgen::entry_texts::{source_texts, CvEntryTexts};
 use crate::docgen::period_format::detect_separator;
 use crate::docgen::profile_categories::{missing_categories, ProfileCategory};
@@ -181,6 +182,7 @@ struct DocumentLanguage<L> {
 /// * `missing` - Catégories du CV retirées car vides dans le profil.
 /// * `missing_contacts` - Coordonnées affichées par une référence mais vides dans le profil.
 /// * `cv`, `lm` - Langue de chaque document et textes dans cette langue.
+/// * `list_marker` - Symbole des éléments de liste du CV (format de la session).
 struct GenerationContext {
     profile: ProfileDto,
     target: ClaudeTarget,
@@ -198,6 +200,7 @@ struct GenerationContext {
     missing_contacts: Vec<ContactField>,
     cv: DocumentLanguage<CvLabels>,
     lm: DocumentLanguage<LmLabels>,
+    list_marker: &'static str,
 }
 
 impl GenerationContext {
@@ -262,6 +265,9 @@ async fn prepare(
     // Le lieu de l'expéditeur vient de la session, jamais de la référence.
     let session = db::sessions::fetch_view(pool, request.session_id).await?;
     let location = SenderLocation::new(session.ville.as_ref(), session.zip_code.as_ref());
+    // Le symbole des listes du CV vient aussi de la session, lu une fois au
+    // démarrage : un changement pendant la génération vaut pour la suivante.
+    let list_marker = list_marker(&session.format_liste);
 
     // ------------------------------------------------------------------
     // 2. Analyse de l'offre, matching et sélection
@@ -350,6 +356,7 @@ async fn prepare(
         missing_contacts,
         cv,
         lm,
+        list_marker,
     })
 }
 
@@ -367,6 +374,7 @@ async fn produce_cv(
         separator: &separator,
         lang: &ctx.cv.lang,
         texts: &ctx.cv.texts.texts.texts,
+        list_marker: ctx.list_marker,
     };
     let target = CompileTarget {
         label: "CV",
