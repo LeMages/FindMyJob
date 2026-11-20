@@ -18,12 +18,14 @@ import SectionCard from '@/components/SectionCard.vue'
 import SessionLockedBanner from '@/components/SessionLockedBanner.vue'
 import AddEventPopup from './components/AddEventPopup.vue'
 import ApplicationProgressBar from './components/ApplicationProgressBar.vue'
+import ApplyPopup from './components/ApplyPopup.vue'
 import DetailContactsCard from './components/DetailContactsCard.vue'
 import DetailHeader from './components/DetailHeader.vue'
 import DetailPopup from './components/DetailPopup.vue'
 import DocumentPreviewModal from './components/DocumentPreviewModal.vue'
 import DocumentsCard from './components/DocumentsCard.vue'
 import JobCard from './components/JobCard.vue'
+import MailPopup from './components/MailPopup.vue'
 import StatusTimelineCard from './components/StatusTimelineCard.vue'
 
 // Importation des modules internes
@@ -134,6 +136,8 @@ function previewDocument(path: string, label: string, docType: DownloadDocType) 
 
   <!-- Popups -->
   <DetailPopup />
+  <ApplyPopup />
+  <MailPopup />
   <AddEventPopup ref="addEventPopup" />
   <DocumentPreviewModal ref="previewModal" />
 </template>
