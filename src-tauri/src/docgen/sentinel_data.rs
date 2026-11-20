@@ -32,9 +32,9 @@ pub const MONTH_NAMES: [&str; 24] = [
     "septembre", "octobre", "novembre", "décembre",
 ];
 /// Début d'un marqueur, suivi de son numéro.
-const MARKER_START: &str = "__F";
+pub const MARKER_START: &str = "__F";
 /// Fin d'un marqueur.
-const MARKER_END: &str = "__";
+pub const MARKER_END: &str = "__";
 /// Champ jamais marqué : la langue pilote `set text(lang: …)` et doit
 /// rester une langue valide.
 const UNMARKED_KEY: &str = "lang";
@@ -178,7 +178,7 @@ pub fn hardcoded_runs(text: &str) -> Vec<String> {
 
 /// Remplace chaque marqueur du texte par une barre isolée : deux mots en
 /// dur séparés par une valeur des données ne se suivent plus.
-fn strip_markers(text: &str) -> String {
+pub fn strip_markers(text: &str) -> String {
     let upper = text.to_uppercase();
     // `to_uppercase` peut changer la longueur de certains caractères : on ne
     // travaille sur la version majuscule que si les positions coïncident.

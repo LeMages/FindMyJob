@@ -18,6 +18,7 @@ pub mod page_fit;
 pub mod paragraph_check;
 pub mod reference_template;
 pub mod recipient_check;
+pub mod reference_contract;
 pub mod reference_texts_cache;
 pub mod reference_versions;
 pub mod sparse_check;
@@ -29,7 +30,9 @@ pub mod templatize;
 pub mod templatize_debug;
 pub mod typst;
 pub mod typst_diagnostics;
+pub mod typst_headings;
 pub mod typst_lines;
+pub mod typst_metadata;
 pub mod typst_text;
 
 pub use doc_type::parse_doc_type;

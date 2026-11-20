@@ -80,6 +80,46 @@ fn marker_before(rendered: &[&str], sentinel: &str, first_word: &str) -> bool {
         || rendered.iter().any(|word| glued(word))
 }
 
+/// Écart entre le symbole de liste rendu et les éléments de description.
+///
+/// # Attributes
+///
+/// * `shown` - Nombre d'occurrences du symbole sentinelle dans le rendu.
+/// * `expected` - Nombre d'éléments de description (`bullets`, `details`).
+/// * `unmarked` - Premiers mots des éléments que le symbole ne précède pas
+///   (seulement quand les nombres coïncident).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListMarkerMismatch {
+    pub shown: usize,
+    pub expected: usize,
+    pub unmarked: Vec<String>,
+}
+
+/// Contrôle du rendu avec le symbole sentinelle : exactement une
+/// occurrence par élément de description, juste devant lui.
+///
+/// # Arguments
+///
+/// * `rendered_text` - Texte du rendu avec la sentinelle.
+/// * `example` - Données d'exemple (pour compter les éléments).
+/// * `sentinel` - Symbole sentinelle utilisé.
+///
+/// # Returns
+///
+/// `None` si chaque élément porte le symbole des données, l'écart sinon.
+pub fn list_marker_mismatch(rendered_text: &str, example: &Value, sentinel: &str) -> Option<ListMarkerMismatch> {
+    let first_words = item_first_words(example);
+    let shown = rendered_text.matches(sentinel).count();
+    if shown != first_words.len() {
+        return Some(ListMarkerMismatch { shown, expected: first_words.len(), unmarked: Vec::new() });
+    }
+    let rendered = normalize_quotes(rendered_text);
+    let rendered_words = words(&rendered);
+    let unmarked: Vec<String> =
+        first_words.iter().filter(|word| !marker_before(&rendered_words, sentinel, word)).cloned().collect();
+    (!unmarked.is_empty()).then_some(ListMarkerMismatch { shown, expected: first_words.len(), unmarked })
+}
+
 /// Problèmes du rendu avec le symbole sentinelle.
 ///
 /// # Arguments

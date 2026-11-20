@@ -89,6 +89,31 @@ fn reference_block_is_on_the_right(rendered: &CompiledDocument, example: &Value)
     block.iter().map(|l| l.left).fold(f64::MAX, f64::min) > (left_margin + right_edge) / 2.0
 }
 
+/// Décalage du bloc destinataire réduit à l'entreprise et la ville, quand
+/// celui de l'exemple est dans la moitié droite de la page.
+///
+/// # Arguments
+///
+/// * `with_example` - Rendu du template avec les données d'exemple complètes.
+/// * `example` - Données d'exemple de la lettre (JSON).
+/// * `sparse` - Rendu avec le destinataire clairsemé (`sparse_recipient_data`).
+///
+/// # Returns
+///
+/// `Some((bord droit du bloc, marge droite))` en pt si le bloc réduit n'est
+/// plus calé contre la marge droite, `None` sinon ou sans objet.
+pub fn recipient_misalignment(with_example: &CompiledDocument, example: &Value, sparse: &CompiledDocument) -> Option<(f64, f64)> {
+    if !reference_block_is_on_the_right(with_example, example) {
+        return None;
+    }
+    let markers = [SPARSE_COMPANY.to_string(), SPARSE_LOCATION.to_string()];
+    let block = lines_showing(&sparse.lines, &markers);
+    let first = block.first()?;
+    let block_right = block.iter().map(|l| l.right).fold(f64::MIN, f64::max);
+    let margin = page_right_edge(&sparse.lines, first.page);
+    ((margin - block_right).abs() > RIGHT_EDGE_TOLERANCE_PT).then_some((block_right, margin))
+}
+
 /// Problèmes du bloc destinataire clairsemé (vide si conforme ou sans objet).
 ///
 /// # Arguments

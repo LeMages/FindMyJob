@@ -5,6 +5,7 @@
 //! `serde::Serialize` afin de traverser le pont IPC de Tauri.
 
 // Importation des modules internes
+use crate::models::ReferenceIssue;
 use crate::scraping::failure::ScrapingFailure;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -23,6 +24,10 @@ pub enum AppError {
     /// compile plus avec le schéma actuel : elle doit être réimportée. Le
     /// message est la phrase française affichée à l'utilisateur.
     OutdatedReference(String),
+    /// Référence refusée à l'import : tous les problèmes relevés par la
+    /// validation du contrat, codes typés traduits par l'interface
+    /// (`{"kind":"InvalidReference","message":[{"code":…}]}`).
+    InvalidReference(Vec<ReferenceIssue>),
     /// Modification refusée parce que la session est en pause ou terminée
     /// (lecture seule tant qu'elle n'est pas repassée « active »). Le
     /// message est la phrase française affichée à l'utilisateur.
@@ -41,6 +46,10 @@ impl std::fmt::Display for AppError {
             | AppError::OutdatedReference(m)
             | AppError::SessionLocked(m) => write!(f, "{}", m),
             AppError::Scraping(failure) => write!(f, "Échec de l'extraction de l'offre ({failure})"),
+            AppError::InvalidReference(issues) => {
+                let listed: Vec<String> = issues.iter().map(ToString::to_string).collect();
+                write!(f, "Référence refusée : {}", listed.join(" ; "))
+            }
         }
     }
 }

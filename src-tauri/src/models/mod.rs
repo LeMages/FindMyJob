@@ -20,6 +20,8 @@ pub mod offer_extraction;
 pub mod profile;
 pub mod projet;
 pub mod prose_guidance;
+pub mod reference_contract;
+pub mod reference_issue;
 pub mod reference_texts;
 pub mod session;
 pub mod session_stats;
@@ -40,6 +42,11 @@ pub use doc_data::{
     LmExampleData, LmLabels, PeriodGranularity, PeriodStyle, Recipient, SkillsGroup,
 };
 pub use prose_guidance::{ProseGuidance, ProseZone, ZoneMode};
+pub use reference_contract::{
+    expected_contract, MonthStyle, PeriodGranularityBySection, PeriodSpec, RawMetadata, RawSlot, Slot, SlotMode,
+    StoredContract, CONTRACT_CV, CONTRACT_FILE, CONTRACT_LM, CONTRACT_VERSION, METADATA_LABEL,
+};
+pub use reference_issue::{ReferenceIssue, ReferenceIssueCode, Severity};
 pub use reference_texts::{
     expected_format_version, ReferenceTexts, CV_REFERENCE_FORMAT_VERSION, REFERENCE_FORMAT_VERSION, REFERENCE_TEXTS_FILE,
 };

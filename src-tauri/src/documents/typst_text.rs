@@ -7,7 +7,7 @@ use typst_library::layout::{Frame, FrameItem};
 
 /// Profondeur maximale d'imbrication de groupes parcourue : bien au-delà de
 /// ce que produit un CV ou une lettre, elle borne la récursion.
-const MAX_GROUP_DEPTH: usize = 64;
+pub(crate) const MAX_GROUP_DEPTH: usize = 64;
 
 /// Extrait le texte rendu de toutes les pages d'un document compilé.
 ///

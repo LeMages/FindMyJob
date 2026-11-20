@@ -170,6 +170,7 @@ pub struct CvData {
     pub projects: Vec<CvProject>,
     pub formations: Vec<CvFormation>,
     pub langues: Vec<CvLangue>,
+    #[serde(default)]
     pub labels: CvLabels,
     #[serde(default)]
     pub list_marker: String,
@@ -265,6 +266,7 @@ pub struct LmData {
     pub date: String,
     pub subject: String,
     pub paragraphs: Vec<String>,
+    #[serde(default)]
     pub labels: LmLabels,
     #[serde(default)]
     pub texts: BTreeMap<String, String>,
