@@ -219,6 +219,22 @@ export const fr = {
       decliner_offre: "Décliner l'offre",
       desistement: 'Se désister',
     },
+    // Description d'une ligne de chaque événement proposé à l'ajout.
+    description: {
+      message_envoye: 'Tu as écrit au recruteur.',
+      message_recu: "Le recruteur t'a répondu.",
+      appel: 'Un échange téléphonique.',
+      relance: "Tu as relancé l'entreprise.",
+      entretien_planifie: 'Ajouté au planning de la session.',
+      entretien_passe: "Note l'issue d'un entretien prévu.",
+      note: 'Une info à garder pour plus tard.',
+      offre_recue: "L'entreprise te fait une offre.",
+      accepter_offre: 'Clôture la candidature et termine la session.',
+      decliner_offre: "Tu refuses l'offre reçue.",
+      refus_recu: "Réponse négative de l'entreprise.",
+      ghosting: 'Plus aucune nouvelle depuis longtemps.',
+      desistement: 'Tu abandonnes cette candidature.',
+    },
     category: {
       communication: 'Communication',
       interview: 'Entretien',
@@ -590,8 +606,8 @@ export const fr = {
       contacts: 'Interlocuteurs (optionnel)',
       no_contacts: 'Aucun contact lié à cette candidature.',
       interview: 'Entretien',
-      pick_interview: "Choisir l'entretien passé",
       issue: 'Issue',
+      submit: 'Ajouter au suivi',
       content: {
         relance: 'Contenu du message',
         message: 'Contenu',
