@@ -2,7 +2,7 @@
 
 This document is the technical reference for FindMyJob. It exists so a conversation with an AI assistant (or a new contributor) can resume without re-explaining the project from scratch. It describes the what, the why, and the actual state of the code.
 
-Last updated: 2026-10-10, after the move to a standalone desktop application: the Axum agent, Docker Compose and PostgreSQL are gone, the Tauri commands call the business logic directly and data lives in a local SQLite file. The server-mode version is kept at the Git tag `archive/agent-postgres`. Earlier, automatic offer collection was removed (tag `archive/collecte-automatique`): offers enter the app only through their link or pasted text (see §9 « Offer import by link »).
+Last updated: 2026-11-20, after the interface redesign (collapsible sidebar, session statistics, closed-application grouping, application progress, session status and CV list format, three-step new-application flow). The app has been a standalone desktop application since 2026-10-10: the Axum agent, Docker Compose and PostgreSQL are gone, the Tauri commands call the business logic directly and data lives in a local SQLite file. The server-mode version is kept at the Git tag `archive/agent-postgres`. Earlier, automatic offer collection was removed (tag `archive/collecte-automatique`): offers enter the app only through their link or pasted text (see §9 « Offer import by link »).
 
 ## 1. Vision
 
@@ -59,7 +59,7 @@ src-tauri/
     llm/                             Claude client and call traces, prompt assembly per pipeline step (templatization steps A and B, matching, writing, label, reference-text and profile translation)
     scraping/                        add-by-link flow: URL validation, guarded fetch, typed failures, JSON-LD and page-text extraction, final cleanup
     text/                            deterministic HTML/Markdown to plain text conversion (html_to_plain)
-    app_state.rs                     AppState { pool, data_dir, fonts_dir, capture_profile_dir, progress, api_key } and AppContext (state or init error)
+    app_state.rs                     AppState { pool, data_dir, fonts_dir, capture_profile_dir, progress, api_key, llm, run_mode } and AppContext (state or init error)
     startup/                         .env loading, run mode (DEV/PROD) and folders, log file, pool + migrations, interrupted-generation cleanup, main window
     clock.rs                         single source of the current time and of the stored date formats
     storage_paths.rs                 builds every path of the data folder and resolves paths received from the frontend
@@ -116,7 +116,7 @@ Only the frontend is bilingual. Every visible text goes through `vue-i18n` (`src
 
 The database is a single SQLite file, `findmyjob.db`, in the app data folder (see §12). The Rust side owns the pool (`sqlx::SqlitePool`, `db/init.rs`): WAL journal, foreign keys enabled on every connection, 5 s `busy_timeout`. Every write transaction is opened with `BEGIN IMMEDIATE` (`db/transaction.rs::begin_write`) so a read-then-write transaction takes the write lock up front instead of failing with `SQLITE_BUSY`.
 
-Migrations live in `db/migrations/sqlite/` (`0001_init.sql`, the initial schema; `0002_adresse_libre.sql`, which merges the street and postal code into `adresse` and drops `code_postal`; `0003_adresse_seul_lieu.sql`, which makes the free-text `adresse` the profile's only location field, taking over the former `ville`, and drops `ville`; `0004_contacts_carnet.sql`, the global contact book; `0005_ville_code_postal.sql`, which replaces `adresse` with `ville` and `zip_code`, parsing them from the old free text — FR 5-digit or CH 4-digit postal code with the city after it, or before it when nothing follows; otherwise the whole value as the city unless it looks like a street — then drops `adresse`; `0006_avertissements_generation.sql`; `0007_langue_profil.sql`, the profile language; `0008_localisation_session.sql`, which moves the sender's location from the profile to the sessions: adds `sessions.ville` / `sessions.zip_code`, copies the profile's values into every existing session, then drops `users.ville` / `users.zip_code`; `0010_contexte_detaille.sql`, which adds the nullable `contexte` column to `experiences` and `projets`; `0011_session_terminee_si_acceptee.sql`, data only, which sets every session holding an `accepte` application to `termine`; `0012_format_liste_session.sql`, which adds `sessions.format_liste` (`puce` by default, or `tiret`); `0013_descriptions_listes_tiret.sql`, data only, which converts the descriptions of experiences, projects and formations to the list syntax: every non-empty line becomes a `- ` item, a leading `•`, `*`, `-`, `–` or `—` is normalized (never `- - x`), a `•` inside a line is kept and a line starting with `-` followed by a digit keeps its sign (`-30 %` becomes `- -30 %`); it is idempotent and checked by `tests/integration/db_migration_descriptions_listes.rs`), embedded in the binary by `sqlx::migrate!` and applied at startup. `db/schema.dbml` is the hand-maintained column-level reference.
+Migrations live in `db/migrations/sqlite/` (`0001_init.sql`, the initial schema; `0002_adresse_libre.sql`, which merges the street and postal code into `adresse` and drops `code_postal`; `0003_adresse_seul_lieu.sql`, which makes the free-text `adresse` the profile's only location field, taking over the former `ville`, and drops `ville`; `0004_contacts_carnet.sql`, the global contact book; `0005_ville_code_postal.sql`, which replaces `adresse` with `ville` and `zip_code`, parsing them from the old free text — FR 5-digit or CH 4-digit postal code with the city after it, or before it when nothing follows; otherwise the whole value as the city unless it looks like a street — then drops `adresse`; `0006_avertissements_generation.sql`, which adds `candidatures.generation_warnings` (JSON list, `'[]'` by default); `0007_langue_profil.sql`, the profile language; `0008_localisation_session.sql`, which moves the sender's location from the profile to the sessions: adds `sessions.ville` / `sessions.zip_code`, copies the profile's values into every existing session, then drops `users.ville` / `users.zip_code`; `0009_retrait_interets.sql`, which drops `users.interets` (an « Intérêts » line of a reference is now a hard-coded reference text); `0010_contexte_detaille.sql`, which adds the nullable `contexte` column to `experiences` and `projets`; `0011_session_terminee_si_acceptee.sql`, data only, which sets every session holding an `accepte` application to `termine`; `0012_format_liste_session.sql`, which adds `sessions.format_liste` (`puce` by default, or `tiret`); `0013_descriptions_listes_tiret.sql`, data only, which converts the descriptions of experiences, projects and formations to the list syntax: every non-empty line becomes a `- ` item, a leading `•`, `*`, `-`, `–` or `—` is normalized (never `- - x`), a `•` inside a line is kept and a line starting with `-` followed by a digit keeps its sign (`-30 %` becomes `- -30 %`); it is idempotent and checked by `tests/integration/db_migration_descriptions_listes.rs`), embedded in the binary by `sqlx::migrate!` and applied at startup. `db/schema.dbml` is the hand-maintained column-level reference.
 
 Storage conventions:
 
@@ -135,7 +135,7 @@ Table summary:
 | `projets` | Personal projects attached to the profile; optional `contexte` (detailed context, see §7.2) |
 | `experiences` | Work experience entries in the profile; optional `contexte` (detailed context, see §7.2) |
 | `skills` | Skills, grouped by a free-text domain; `(domaine, nom)` unique |
-| `settings` | Key-value app settings (`llm_model`, `theme`, `ui_lang`) |
+| `settings` | Key-value app settings (`llm_model`, `theme`, `ui_lang`, `sidebar_collapsed`) |
 | `sessions` | A search "session" (name, status, location, `format_liste`: symbol of the generated CV's lists, `puce` = « • » or `tiret` = « - ») grouping a set of applications, with its own reference CV/cover letter |
 | `document_versions` | One row per uploaded reference (CV or letter), never overwritten: files, template, page count |
 | `documents` | Pointer `(session_id, doc_type) → current_version_id`, plus `updated_at` |
@@ -184,7 +184,7 @@ All three then record the `candidature_envoyee` event and refuse (`AppError::Con
 
 ## 7. Documents pipeline (CV / cover letter tailoring)
 
-Each session owns one reference CV and one reference cover letter, stored under `documents/sessions/<session_id>/{cv,lettre_motivation}/` in the app data folder. The user's reference `.typ` is never modified. **The reference is the source of truth for structure and text**: nothing is ever removed from it, and a text with no field in the schema (a mention, a sentence, an address line) stays as is in every generated document. **The profile is the source of truth for every piece of information it holds**: when the reference shows an information the profile knows (name, city, school, company…), the profile's value replaces it, even inside a sentence; when the profile is empty on that information, the reference's value is kept. Generation adapts the prose to the offer from the profile, without inventing anything.
+Each session owns one reference CV and one reference cover letter, stored under `documents/sessions/<session_id>/{cv,lettre_motivation}/` in the app data folder. The user's reference `.typ` is never modified. **The reference is the source of truth for structure and text**: nothing is ever removed from it, and a text with no field in the schema (a mention, a sentence, an address line) stays as is in every generated document. **The profile is the source of truth for every piece of information it holds**: when the reference shows an information the profile knows (name, city, school, company…), the profile's value replaces it, even inside a sentence; when the profile is empty on that information, nothing falls back to the reference: the line or section disappears, with a warning when the reference showed it (see §7.2, step 6). Generation adapts the prose to the offer from the profile, without inventing anything.
 
 ### 7.1 Templatization, at upload
 
@@ -249,23 +249,23 @@ Two functions (`generate_application_email`, `generate_application_message`), pl
 
 ## 9. Tauri commands (`src-tauri/src/commands/`)
 
-86 commands are registered in `lib.rs` (`generate_handler!`). Each takes the managed `AppContext` and calls one service or `db` function; if startup failed, every command returns that error (`AppError::Config`), which `App.vue` shows on its startup error screen.
+87 commands are registered in `lib.rs` (`generate_handler!`). Each takes the managed `AppContext` and calls one service or `db` function; if startup failed, every command returns that error (`AppError::Config`), which `App.vue` shows on its startup error screen.
 
 | Module | Commands (summary) |
 |---|---|
-| `users` | user existence check, create, get, aggregated profile, update description/info |
+| `users` | user existence check, create, get, aggregated profile, update description/info, profile language (`update_profile_language`) |
 | `experiences` / `formations` / `langues` / `projets` / `skills` | add / update / delete per sub-entity |
-| `sessions` | list / create / update / delete (with its documents folder) |
+| `sessions` | list / create / update (name, status) / delete (with its documents folder), location (`update_session_location`), CV list format (`update_session_list_format`) |
 | `candidatures` | list by session (with the send date `date_envoi`, from the `candidature_envoyee` event), create (+ background generation), generation progress, get, update, delete (à postuler only), apply (no message / by mail / by message), find by normalized offer URL |
 | `contacts` | contact book, contacts of an application, create (optionally linked to an application), update, delete (all its links go with it), link to / unlink from an application |
 | `status_history` | history for an application |
 | `timeline_events` | list available events, add an event |
 | `interviews` | pending interviews for an application, all interviews for a session |
 | `session_stats` | statistics of a session (`get_session_stats`, see « Session statistics » below) |
-| `scraping`, `capture` | offer extraction from a URL, from the capture window, or from pasted text; see « Offer import by link » below |
+| `scraping`, `capture` | offer extraction from a URL or from pasted text; capture window (`open_capture_window`, `capture_offer_page`, `close_capture_window`); see « Offer import by link » below |
 | `documents`, `document_versions` | reference CV & cover letter (get, import, compile), status, versions (list, preview, restore), attached PDFs (info, preview, export), downloads folder, text export |
 | `fonts` | list / import / delete an imported font folder (families and variants read from the files) |
-| `settings` | LLM model, theme, interface language, connection test |
+| `settings` | LLM model, theme, interface language, sidebar state (`get_sidebar_collapsed` / `set_sidebar_collapsed`), connection test, API key (`get_api_key_status`, `save_api_key`, `delete_api_key`, see §8) |
 | `system` | open a URL with the OS |
 
 ### Session statistics
@@ -329,14 +329,16 @@ The result is managed as `AppContext`: either the `AppState`, or the initializat
 ### Implemented end-to-end
 
 - Onboarding and full profile management (experiences, formations, languages, projects, skills).
-- Sessions: CRUD, reference CV/cover letter per session (import, compile, templatization, version history with restore, PDF preview).
-- Applications: creation with mandatory AI-generated documents (failure blocks creation), table view per session, editable detail while `a_postuler`, typed timeline, interview management, trash for negative terminal statuses.
+- Sessions: CRUD, status (`active` / `pause` / `termine`, read-only outside `active`, set to `termine` when an offer is accepted), sender location, CV list format (`puce` / `tiret`), reference CV/cover letter per session (import, compile, templatization, version history with restore, PDF preview).
+- Applications: three-step creation (offer, details with the « Prêt à générer ? » checklist — required fields, references imported, session city, active session —, generation) with mandatory AI-generated documents (failure blocks creation), table view per session with quick filters (all, to apply, in progress, offers, closed) and a collapsible « Clôturées » group for the negative terminal statuses, editable detail while `a_postuler`, five-step progress bar (`src/views/detail/application_progress.ts`), typed timeline, interview management.
 - Recruiter contacts: global book shared across applications, picked or created from the new-application form and the application detail, editable and removable whatever the status, several interviewers per interview (shown in the planning), used by the application email/message (never by the cover letter).
 - Apply flow: no message / by mail / by message, all exporting documents to disk.
 - Offer import from a link (JSON-LD, then page text + LLM), from a page captured in the FindMyJob window, or from pasted text, prefilling the new-application form; choice screen on failure, non-blocking duplicate warning.
 - Interview planning (week/month views).
 - Session statistics: funnel, outcomes, weekly activity, what works (CV/letter version, source, contact), interviews, durations and follow-ups, computed in Rust from the history (no migration).
-- Settings: LLM model selection, Anthropic API key (system keyring in PROD with save/delete, read-only `.env` state in DEV), connection test (run again after a key is saved), fonts, theme, interface language (French / English).
+- Settings: LLM model selection, Anthropic API key (system keyring in PROD with save/delete, read-only `.env` state in DEV), connection test (run again after a key is saved), fonts, theme (light / dark / system), interface language (French / English).
+- Interface: collapsible sidebar (state stored in `settings.sidebar_collapsed`, folded automatically below 1100 px without saving, `src/composables/sidebar_state.ts`), layouts adapted to the window width (Tailwind breakpoints and container queries).
+- Profile: descriptions as dash lists (see §5), optional detailed context for experiences and projects (see §7.2), section-by-section editing.
 - CI/CD: lint, clippy and tests (Linux + Windows) on every PR to `dev`, full Tauri build check on PRs to `staging`/`main`, Conventional Commits, `dev → staging → main` branch flow, semantic-release on `main`.
 
 ### Planned / out of MVP scope
@@ -364,7 +366,7 @@ Conventional Commits drive automated versioning: `<type>(<scope>): <description>
 
 Everything runs on the user's machine, in one process; there is no server and no Docker.
 
-- `npm install && npm run tauri dev`, from the repository root. Tests: `cargo test --workspace`, from the repository root. In development, `.env` is found at the repository root by walking up from the current directory.
+- `npm install && npm run tauri dev`, from the repository root. Tests: `cargo test --workspace` and `npm test` (Vitest, frontend), from the repository root. In development, `.env` is found at the repository root by walking up from the current directory.
 - With `MODE=DEV` in that `.env`, all data goes to `dev-data/` at the repository root (gitignored); without it, the app uses the system folders like an installed app (PROD). See §10 for the full table.
 - PROD data folder (Tauri `app_data_dir`, identifier `com.findmyjob.app`): `findmyjob.db`, `documents/`, `polices/`. On Windows, `%APPDATA%\com.findmyjob.app\`; on macOS, `~/Library/Application Support/com.findmyjob.app/`; on Linux, `~/.local/share/com.findmyjob.app/`. An installed app reads its `.env` from the app config folder (the same folder on Windows).
 - API key: in DEV, `ANTHROPIC_API_KEY` in the `.env`; in PROD, entered in Paramètres and stored in the system keyring (see §8). On Linux, PROD needs a running Secret Service (GNOME Keyring, KWallet).
@@ -379,5 +381,6 @@ Everything runs on the user's machine, in one process; there is no server and no
   - one end-to-end scenario.
 
   The crate builds a single integration test binary from `src-tauri/tests/integration/` (`main.rs` declares one module per test file), which keeps disk use and link time down; every new integration test is a module of `tests/integration/`, never a new file at the root of `tests/`. Since all integration tests share one process, each test gets its own temporary folder (`tests/integration/shared/temp_dir.rs`). The Claude API is replaced by `tests/integration/shared/fake_llm.rs`, an `LlmCaller` with canned answers. Loopback fetching (`fetch_html_allowing_loopback`) is compiled only under the `test-support` feature, which only the crate's dev-dependency on itself (`findmyjob = { path = ".", features = ["test-support"] }`) enables, so a plain `cargo test --workspace` has it and no app build does. No test reaches the network, the Claude API, `.env` or `dev-data`. The Tauri commands themselves and the capture window remain untested.
+- Frontend tests: `npm test` runs Vitest on the view-layer logic (`src/**/*.test.ts`: description-list parser, sidebar state, session refresh, application progress, event categories, extraction choice, generation checklist and steps, profile sections, pipeline groups, statistics formatting). They are not run in CI yet (the `frontend` job runs `npm run lint` and `npm run build`, which type-checks with `vue-tsc`).
 - Generation progress is in memory only: closing the app during a generation loses it, and the half-created application is removed at the next startup (there is no way to resume a generation).
 - Only the profile was carried over from the PostgreSQL version: sessions, references and applications were not migrated.

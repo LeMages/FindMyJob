@@ -59,6 +59,17 @@ Reported at import with their line, before any AI call when possible:
 
 The recipient block is built from the application, not from the reference: the company, then the location split on commas (the last part is the city line, the previous ones, such as a street, are extra lines). When the reference places the block against the right margin (for example `block(width: 7cm)`), the generated template makes it as wide as its longest line and keeps it flush right with left-aligned text (`box`), at the same vertical position, so a block with fewer lines than the reference stays against the margin. Nothing from the reference's example identity (email, phone, links, name) is ever kept: a contact the profile lacks is removed from the document.
 
+## CV lists
+
+The descriptions of experiences, projects and education come from the profile, where each line that starts with `-` is a list item; the lines before the first item form an introduction. The symbol shown in front of each item of a generated CV is a setting of the session (**Listes du CV**: bullet « • » or dash « - »), passed to the template as `data.list_marker`:
+
+- whatever symbol the reference shows in front of its items (`•`, `-`, `–`, none…), the generated template never hard-codes it: every item of every description section is preceded by `data.list_marker`, even where the reference showed no symbol;
+- the introduction is shown before the items, without a symbol; a line break inside an item stays in the same item;
+- separators that are not list symbols (between header or contact items, between languages) stay as the reference shows them;
+- there is no tag for the list symbol: it needs no markup.
+
+This is format 4 of CV references: a CV reference imported before it is refused at generation and must be imported again. Cover letters are not affected: the letter receives the descriptions as plain text, without a symbol.
+
 ## Classification of each unit
 
 Every visible unit (a line, a row, a paragraph) of the reference is classified one by one:
