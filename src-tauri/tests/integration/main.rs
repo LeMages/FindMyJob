@@ -46,6 +46,7 @@ mod profile_lifecycle;
 mod recipient_check;
 mod reference_contract_compile;
 mod reference_contract_validation;
+mod reference_examples;
 mod reference_outdated;
 mod scraping_contract_type;
 mod scraping_fetch_rules;

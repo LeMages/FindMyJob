@@ -168,10 +168,14 @@
 #let joined(values, sep) = values.filter(v => v != "").join(sep, default: "")
 
 // Titre de section : un heading, mis en forme par cette règle.
+// L'espacement autour du heading est fixé ici (et non hérité de ses
+// voisins) : la mise en page reste celle d'un en-tête bloc + filet.
+#show heading: set block(above: 12pt, below: 0pt)
 #show heading: title => {
   v(space-section)
   block(
     width: 100%,
+    above: 0pt,
     below: space-entry,
     {
       text(size: 10pt, weight: "bold", fill: accent, upper(title.body))
@@ -246,9 +250,10 @@
   }
 })
 
+#v(1.2em)
 #if data.summary != "" {
   heading(L.profile)
-  block({
+  block(below: 1.2em, {
     set par(leading: 0.45em, justify: false)
     text(size: 9.5pt, fill: gray, data.summary)
   })
