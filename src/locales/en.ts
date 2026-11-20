@@ -335,14 +335,11 @@ export const en = {
       edited: 'Edited',
       new: 'Not saved',
     },
-    bullet: {
-      add: 'Add a bullet',
-      label: 'Bullet',
-    },
     in_progress: 'Ongoing',
     start_year: 'Start year',
     end_year: 'End year',
     description: 'Description',
+    description_list_help: 'Start a line with “-” to make it a list item.',
     detailed_context: {
       label: 'Detailed context',
       help: 'Never shown on the CV. Used by the AI for the cover letter and project selection.',
@@ -399,7 +396,7 @@ export const en = {
       location_placeholder: 'London, United Kingdom',
       start: 'Start',
       end: 'End',
-      description_placeholder: 'Describe your tasks, the technologies you used…',
+      description_placeholder: 'Team of 5 people.\n- Built a REST API\n- Set up the tests',
     },
     formations: {
       section: 'EDUCATION',
@@ -410,8 +407,8 @@ export const en = {
       title_placeholder: 'MSc Computer Science',
       school: 'School / Institution',
       school_placeholder: 'University of Manchester',
-      details: 'Details (one per line)',
-      details_placeholder: 'Specialisation, key courses, exchange programme...',
+      details: 'Details',
+      details_placeholder: '- Specialisation: data science\n- Exchange programme in Lisbon',
     },
     projects: {
       section: 'PROJECTS',
@@ -424,7 +421,7 @@ export const en = {
       for_whom_placeholder: 'Personal, School, Client...',
       stack: 'Tech stack',
       link: 'Link',
-      description_placeholder: 'This project is about...',
+      description_placeholder: 'Job application tracker.\n- Vue 3 interface\n- Local SQLite database',
     },
     skills: {
       section: 'SKILLS',

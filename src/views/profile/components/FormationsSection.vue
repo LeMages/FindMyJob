@@ -180,7 +180,6 @@ defineExpose({ hasChanges, reset, save })
         :sub="form.ecole"
         :period="fmtYearRange(form.date_debut, form.date_fin)"
         :description="form.description"
-        description-style="lines"
         :pending-kind="form.pendingKind"
         :editing="mode === 'editing'"
         :last="i === allItems.length - 1"
@@ -242,6 +241,7 @@ defineExpose({ hasChanges, reset, save })
       <div class="mb-[14px]">
         <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.formations.details') }}</label>
         <textarea v-model="draft.description" class="w-full h-[180px] border border-neutral-300 rounded-lg px-3 py-2 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 resize-y" :placeholder="t('profile.formations.details_placeholder')"></textarea>
+        <div class="mt-[5px] text-[11.5px] text-neutral-500">{{ t('profile.description_list_help') }}</div>
       </div>
     </div>
 

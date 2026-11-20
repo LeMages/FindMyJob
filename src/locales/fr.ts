@@ -339,14 +339,11 @@ export const fr = {
       edited: 'Modifié',
       new: 'Non enregistré',
     },
-    bullet: {
-      add: 'Ajouter une puce',
-      label: 'Puce',
-    },
     in_progress: 'En cours',
     start_year: 'Année de début',
     end_year: 'Année de fin',
     description: 'Description',
+    description_list_help: 'Commence une ligne par « - » pour en faire un élément de liste.',
     detailed_context: {
       label: 'Contexte détaillé',
       help: "Jamais affiché sur le CV. Sert à l'IA pour la lettre et le choix des projets.",
@@ -403,7 +400,7 @@ export const fr = {
       location_placeholder: 'Paris, France',
       start: 'Début',
       end: 'Fin',
-      description_placeholder: 'Décris tes missions, technologies utilisées…',
+      description_placeholder: 'Équipe de 5 personnes.\n- Développement d’une API REST\n- Mise en place des tests',
     },
     formations: {
       section: 'FORMATION',
@@ -414,8 +411,8 @@ export const fr = {
       title_placeholder: 'Master Informatique',
       school: 'École / Établissement',
       school_placeholder: 'École Supérieure du Numérique',
-      details: 'Détails (un par ligne)',
-      details_placeholder: 'Spécialité, cours clés, échange universitaire...',
+      details: 'Détails',
+      details_placeholder: '- Spécialité : science des données\n- Échange universitaire à Lisbonne',
     },
     projects: {
       section: 'PROJETS',
@@ -428,7 +425,7 @@ export const fr = {
       for_whom_placeholder: 'Perso, École, Client...',
       stack: 'Stack utilisé',
       link: 'Lien',
-      description_placeholder: 'Ce projet consiste à...',
+      description_placeholder: 'Application de suivi de candidatures.\n- Interface en Vue 3\n- Base SQLite locale',
     },
     skills: {
       section: 'COMPÉTENCES',

@@ -7,7 +7,7 @@
  */
 
 // Importation des modules Vue / framework
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
@@ -19,7 +19,6 @@ import ProfileEntryRow from './ProfileEntryRow.vue'
 
 // Importation des composables
 import { useEditableList } from '@/composables/useEditableList'
-import { insertBullet } from '@/composables/insertBullet'
 import { buildYearRange, fmtYearRange } from './dateRangeFormat'
 
 // Importation des types
@@ -145,8 +144,6 @@ const {
   displayFromDraft,
   isDraftValid: (d) => d.titre.trim() !== '',
 })
-
-const descTextarea = ref<HTMLTextAreaElement | null>(null)
 
 /**
  * Sauvegarde les suppressions, modifications et ajouts en attente, puis
@@ -274,21 +271,13 @@ defineExpose({ hasChanges, reset, save })
 
       <div>
         <div class="mb-[14px]">
-          <div class="flex items-center justify-between mb-[5px]">
-            <label class="text-[12px] text-neutral-600 mb-0 block">{{ t('profile.description') }}</label>
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 h-6 px-[9px] text-[12px] rounded-5 border border-neutral-300 bg-surface-2 text-neutral-700 cursor-pointer leading-none transition-colors duration-[120ms] hover:bg-surface-3 hover:border-neutral-300 hover:text-neutral-950"
-              :aria-label="t('profile.bullet.add')"
-              @click="descTextarea && insertBullet(descTextarea, draft.description, v => draft.description = v)"
-            ><span aria-hidden="true">•</span> {{ t('profile.bullet.label') }}</button>
-          </div>
+          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.description') }}</label>
           <textarea
-            ref="descTextarea"
             v-model="draft.description"
             class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[180px]"
             :placeholder="t('profile.projects.description_placeholder')"
           ></textarea>
+          <div class="mt-[5px] text-[11.5px] text-neutral-500">{{ t('profile.description_list_help') }}</div>
         </div>
         <DetailedContextField v-model="draft.contexte" />
       </div>
