@@ -14,6 +14,7 @@ mod db_contacts;
 mod db_init;
 mod db_migration_adresse;
 mod db_migration_contexte;
+mod db_migration_descriptions_listes;
 mod db_migration_retrait_interets;
 mod db_migration_session_terminee;
 mod db_migration_session_location;

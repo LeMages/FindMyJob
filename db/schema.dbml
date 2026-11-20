@@ -1,6 +1,6 @@
 // ============================================
 // FindMyJob - Schéma de base de données (SQLite)
-// Mis à jour le 2026-10-20 (migrations db/migrations/sqlite/0001_init.sql à 0007_langue_profil.sql).
+// Mis à jour le 2026-11-20 (migrations db/migrations/sqlite/0001_init.sql à 0013_descriptions_listes_tiret.sql).
 //
 // Base locale de l'application desktop : <dossier de données>/findmyjob.db.
 // Toutes les tables sont STRICT ; PRAGMA foreign_keys = ON à chaque connexion.
@@ -43,7 +43,7 @@ Table experiences {
   poste text [not null]
   entreprise text
   lieu text
-  description text
+  description text    // une ligne « - x » = un élément de liste ; lignes avant = intro, ligne sans tiret après un élément = sa suite
   date_debut date
   date_fin date
   type_contrat contract_type
@@ -55,7 +55,7 @@ Table formations {
   id integer [pk, increment]
   titre text [not null]
   ecole text
-  description text    // une ligne = un détail
+  description text    // une ligne « - x » = un élément de liste ; lignes avant = intro, ligne sans tiret après un élément = sa suite
   date_debut date
   date_fin date
   created_at timestamp [not null]
@@ -64,7 +64,7 @@ Table formations {
 Table projets {
   id integer [pk, increment]
   titre text [not null]
-  description text
+  description text    // une ligne « - x » = un élément de liste ; lignes avant = intro, ligne sans tiret après un élément = sa suite
   stack text
   url text
   pour_qui text
@@ -108,6 +108,7 @@ Table sessions {
   statut session_status [not null, default: 'active']
   ville text          // ville de l'expéditeur (obligatoire pour générer ; trim, vide = NULL)
   zip_code text       // code postal de l'expéditeur (facultatif)
+  format_liste session_list_format [not null, default: 'puce'] // symbole des listes des descriptions dans les CV générés : • ou -
   created_at timestamp [not null]
 }
 
@@ -252,6 +253,11 @@ Enum session_status {
   active
   pause
   termine
+}
+
+Enum session_list_format {
+  puce
+  tiret
 }
 
 Enum doc_type {
