@@ -64,6 +64,7 @@ function session(overrides: Partial<Session> = {}): Session {
     statut: 'active',
     ville: 'Lyon',
     zip_code: null,
+    format_liste: 'puce',
     candidature_count: 3,
     created_at: '2026-11-19T08:00:00.000Z',
     ...overrides,

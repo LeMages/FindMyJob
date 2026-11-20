@@ -12,7 +12,7 @@ import { invoke } from '@tauri-apps/api/core'
 // Importation des modules internes
 import type {
   Screen, PopupKey, TrackingTab,
-  BoardCard, Session, CreateSessionInput, UpdateSessionInput, UpdateSessionLocationInput,
+  BoardCard, Session, CreateSessionInput, UpdateSessionInput, UpdateSessionLocationInput, UpdateSessionListFormatInput,
   CandidatureDetail, ContactView, StatusHistoryView, DocumentFileInfo,
   ContactDraft, ContactInput, NewTimelineEvent,
   UpdateCandidatureInput,
@@ -218,6 +218,24 @@ export async function updateSession(id: number, patch: Partial<UpdateSessionInpu
 export async function updateSessionLocation(id: number, input: UpdateSessionLocationInput): Promise<string | null> {
   try {
     const updated = await invoke<Session>('update_session_location', { id, input })
+    const idx = backendSessions.value.findIndex(s => s.id === id)
+    if (idx !== -1) backendSessions.value[idx] = updated
+    return null
+  } catch (e: unknown) {
+    return backendErrorMessage(e, t('error.fallback.update_session'))
+  }
+}
+
+/**
+ * Modifie le format des listes des CV générés dans une session.
+ *
+ * @param id - Identifiant de la session.
+ * @param input - Nouveau format (`puce` ou `tiret`).
+ * @returns Message d'erreur en cas d'échec, sinon `null`.
+ */
+export async function updateSessionListFormat(id: number, input: UpdateSessionListFormatInput): Promise<string | null> {
+  try {
+    const updated = await invoke<Session>('update_session_list_format', { id, input })
     const idx = backendSessions.value.findIndex(s => s.id === id)
     if (idx !== -1) backendSessions.value[idx] = updated
     return null

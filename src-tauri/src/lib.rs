@@ -115,6 +115,7 @@ pub fn run() {
             commands::get_sessions,
             commands::update_session,
             commands::update_session_location,
+            commands::update_session_list_format,
             commands::delete_session,
             commands::get_session_stats,
             commands::get_llm_model,

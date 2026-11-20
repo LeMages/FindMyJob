@@ -57,7 +57,9 @@ pub use matching::{MatchedSkill, MatchingResult};
 pub use offer_extraction::{ExtractionStage, OfferExtraction};
 pub use profile::ProfileDto;
 pub use projet::{CreateProjetInput, ProjetView};
-pub use session::{CreateSessionInput, SessionView, UpdateSessionInput, UpdateSessionLocationInput};
+pub use session::{
+    CreateSessionInput, SessionView, UpdateSessionInput, UpdateSessionListFormatInput, UpdateSessionLocationInput,
+};
 pub use session_stats::{
     Comparison, ComparisonRow, FollowUpStats, InterviewTypeCount, MedianDurations, OutcomeCount, SessionStats,
     StatsCandidature, StatsEvent, StatsInput, StatsInterview, WeekActivity,

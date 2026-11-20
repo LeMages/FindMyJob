@@ -2,7 +2,7 @@
 /**
  * Paramètres de la session courante (onglet Paramètres de la page
  * Candidatures). Section « Session » : nom, ville + code postal (édités d'un
- * simple clic) et statut (sélecteur segmenté), reliés au backend
+ * simple clic), statut et format des listes du CV (sélecteurs segmentés), reliés au backend
  * (`sessions`). Section « Modèles de documents » : le CV et la lettre de
  * référence propres à cette session (`documents/sessions/<id>/`), une
  * `DocumentReferenceCard` par document, puis une aide au balisage repliable.
@@ -14,9 +14,11 @@ import { invoke } from '@tauri-apps/api/core'
 import { useI18n } from 'vue-i18n'
 
 // Importation des modules internes
-import { currentSession, currentSessionLocked, updateSession, updateSessionLocation } from '@/stores/app'
+import {
+  currentSession, currentSessionLocked, updateSession, updateSessionListFormat, updateSessionLocation,
+} from '@/stores/app'
 import { backendErrorMessage } from '@/composables/backend_error_message'
-import type { DocumentReferenceView, SessionStatut } from '@/types'
+import type { DocumentReferenceView, SessionListFormat, SessionStatut } from '@/types'
 import DocumentReferenceCard from '@/components/DocumentReferenceCard.vue'
 import EditableField from '@/components/EditableField.vue'
 import ReferenceMarkupHelp from '@/components/ReferenceMarkupHelp.vue'
@@ -47,6 +49,21 @@ async function saveStatut(v: SessionStatut) {
   const session = currentSession.value
   if (!session || session.statut === v) return
   statusError.value = (await updateSession(session.id, { statut: v })) ?? null
+}
+
+/** Formats de liste proposés : valeurs stockées inchangées, libellés traduits (avec leur symbole). */
+const listFormatOptions = computed<{ value: SessionListFormat; label: string }[]>(() => [
+  { value: 'puce', label: t('session.params.list_format_bullet') },
+  { value: 'tiret', label: t('session.params.list_format_dash') },
+])
+
+const listFormatError = ref<string | null>(null)
+
+/** Sauvegarde le format des listes du CV (refusé par le backend si la session est verrouillée). */
+async function saveListFormat(v: SessionListFormat) {
+  const session = currentSession.value
+  if (!session || session.format_liste === v || currentSessionLocked.value) return
+  listFormatError.value = (await updateSessionListFormat(session.id, { format_liste: v })) ?? null
 }
 
 /** La ville est requise pour créer une candidature : l'aide le rappelle. */
@@ -154,6 +171,32 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
         </div>
         <template #below>
           <div v-if="statusError" class="text-[12px] font-mono mt-2 text-red-500">{{ statusError }}</div>
+        </template>
+      </SettingsRow>
+
+      <SettingsRow :label="t('session.params.list_format')" :help="t('session.params.list_format_help')">
+        <div
+          class="inline-flex p-[3px] rounded-9 bg-neutral-100 gap-0.5"
+          :class="{ 'opacity-60': currentSessionLocked }"
+          :title="lockedHint ?? undefined"
+        >
+          <button
+            v-for="opt in listFormatOptions"
+            :key="opt.value"
+            type="button"
+            class="border-0 px-[14px] py-[5px] rounded-7 text-[12.5px] font-sans"
+            :class="[
+              currentSession?.format_liste === opt.value
+                ? 'bg-white text-neutral-950 font-medium shadow-[0_1px_2px_rgba(0,0,0,.08)]'
+                : 'bg-transparent text-neutral-600',
+              currentSessionLocked ? 'cursor-not-allowed' : 'cursor-pointer',
+            ]"
+            :disabled="currentSessionLocked"
+            @click="saveListFormat(opt.value)"
+          >{{ opt.label }}</button>
+        </div>
+        <template #below>
+          <div v-if="listFormatError" class="text-[12px] font-mono mt-2 text-red-500">{{ listFormatError }}</div>
         </template>
       </SettingsRow>
     </SettingsSection>

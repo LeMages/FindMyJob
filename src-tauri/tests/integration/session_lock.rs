@@ -10,7 +10,9 @@ use findmyjob_lib::app_state::AppState;
 use findmyjob_lib::db::{candidatures, contacts, sessions, timeline_events};
 use findmyjob_lib::documents;
 use findmyjob_lib::error::AppError;
-use findmyjob_lib::models::{ContactInput, NewTimelineEvent, UpdateSessionInput, UpdateSessionLocationInput};
+use findmyjob_lib::models::{
+    ContactInput, NewTimelineEvent, UpdateSessionInput, UpdateSessionListFormatInput, UpdateSessionLocationInput,
+};
 use findmyjob_lib::services;
 use findmyjob_lib::services::candidatures::ApplicationMessage;
 
@@ -30,6 +32,10 @@ fn contact(nom: &str) -> ContactInput {
 
 fn location(ville: &str) -> UpdateSessionLocationInput {
     UpdateSessionLocationInput { ville: Some(ville.into()), zip_code: None }
+}
+
+fn list_format(format_liste: &str) -> UpdateSessionListFormatInput {
+    UpdateSessionListFormatInput { format_liste: format_liste.into() }
 }
 
 /// Change le statut d'une session sans toucher à son nom.
@@ -104,10 +110,11 @@ async fn assert_every_write_refused(state: &AppState, f: &Fixture) {
     let nom = sessions::fetch_view(pool, f.sid).await.unwrap().nom;
     let statut = sessions::fetch_view(pool, f.sid).await.unwrap().statut;
 
-    // Session : nom et localisation
+    // Session : nom, localisation et format des listes
     let renamed = UpdateSessionInput { nom: format!("{nom} bis"), statut: statut.clone() };
     assert_locked(sessions::update(pool, f.sid, &renamed).await, "renommer la session");
     assert_locked(sessions::update_location(pool, f.sid, &location("Paris")).await, "changer la ville");
+    assert_locked(sessions::update_list_format(pool, f.sid, &list_format("tiret")).await, "changer le format des listes");
 
     // Candidatures : création, champs, suppression, postulation, timeline
     let input = test_state::candidature_input(f.sid, "Offre", None);
@@ -165,6 +172,7 @@ async fn repasser_active_rouvre_les_modifications() {
     let renamed = UpdateSessionInput { nom: "Alternance".into(), statut: "active".into() };
     assert_eq!(sessions::update(pool, f.sid, &renamed).await.unwrap().nom, "Alternance");
     assert_eq!(sessions::update_location(pool, f.sid, &location("Paris")).await.unwrap().ville.as_deref(), Some("Paris"));
+    assert_eq!(sessions::update_list_format(pool, f.sid, &list_format("tiret")).await.unwrap().format_liste, "tiret");
     candidatures::update(pool, f.a_postuler, &seed::fields(None)).await.unwrap();
     timeline_events::add_event(pool, f.postulee, event("note", Some("Relancer lundi")), seed::NOW).await.unwrap();
     contacts::link(pool, f.postulee, f.free_contact, seed::NOW).await.unwrap();

@@ -11,6 +11,9 @@ pub struct SessionView {
     pub ville: Option<String>,
     /// Code postal de l'expéditeur (facultatif).
     pub zip_code: Option<String>,
+    /// Symbole des listes des descriptions dans les CV générés : `puce` (•)
+    /// ou `tiret` (-).
+    pub format_liste: String,
     /// Candidatures non clôturées (tout sauf refus, offre déclinée, abandon, ghosting).
     pub candidature_count: i64,
     pub created_at: DateTime<Utc>,
@@ -41,4 +44,12 @@ pub struct UpdateSessionLocationInput {
     pub ville: Option<String>,
     #[serde(default)]
     pub zip_code: Option<String>,
+}
+
+/// Format des listes des CV d'une session (modifié seul, sans toucher au
+/// reste de la session).
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct UpdateSessionListFormatInput {
+    /// `puce` ou `tiret`.
+    pub format_liste: String,
 }

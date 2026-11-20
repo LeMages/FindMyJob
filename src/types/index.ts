@@ -66,6 +66,9 @@ export interface BoardCard {
 
 export type SessionStatut = 'active' | 'pause' | 'termine'
 
+/** Symbole des listes des descriptions dans les CV générés : `puce` (•) ou `tiret` (-). */
+export type SessionListFormat = 'puce' | 'tiret'
+
 export interface Session {
   id: number
   nom: string
@@ -74,6 +77,8 @@ export interface Session {
   ville: string | null
   /** Code postal de l'expéditeur (facultatif). */
   zip_code: string | null
+  /** Format des listes des CV générés dans la session (pas de l'affichage dans l'app). */
+  format_liste: SessionListFormat
   /** Candidatures non clôturées (tout sauf refus, offre déclinée, abandon, ghosting). */
   candidature_count: number
   created_at: string
@@ -88,6 +93,10 @@ export interface CreateSessionInput {
 export interface UpdateSessionLocationInput {
   ville: string | null
   zip_code: string | null
+}
+
+export interface UpdateSessionListFormatInput {
+  format_liste: SessionListFormat
 }
 
 export interface UpdateSessionInput {
