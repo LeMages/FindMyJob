@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * Ligne d'un document de référence (CV ou lettre de motivation) de la card
- * « Documents » des paramètres de session : document Typst persistant,
+ * Carte d'un modèle de document (CV ou lettre de motivation) des paramètres
+ * de session : version, pastille Prêt / Manquant, aperçu, remplacement et
+ * historique des versions (`DocumentVersionsPopup`). Document Typst persistant,
  * sauvegardé immédiatement côté backend, avec compilation et aperçu PDF, et
  * accès à ses versions (`DocumentVersionsPopup`). Paramétré par `docType`
  * (labels et noms de commande dérivés de `cv` | `lettre_motivation`), ce qui
@@ -17,7 +18,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { backendErrorMessage } from '@/composables/backend_error_message'
 import { formatDateTime } from '@/composables/date_time_format'
 import DocumentVersionsPopup from '@/components/DocumentVersionsPopup.vue'
-import ReferenceMarkupHelp from '@/components/ReferenceMarkupHelp.vue'
+import StatusPill from '@/components/StatusPill.vue'
 import type { DocumentReferenceView, DocumentVersionView } from '@/types/index'
 
 const { t } = useI18n()
@@ -30,12 +31,15 @@ interface Props {
   editMode?: boolean
   /** Référence actuellement sauvegardée. */
   reference?: DocumentReferenceView | null
+  /** Raison pour laquelle import, remplacement et restauration sont bloqués (session en lecture seule), sinon `null`. */
+  lockedHint?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
   sessionId: null,
   editMode: true,
   reference: null,
+  lockedHint: null,
 })
 
 const emit = defineEmits<{
@@ -53,13 +57,7 @@ const saveCommand = computed(() => (isCv.value ? 'save_cv' : 'save_lettre_motiva
 const compileCommand = computed(() => (isCv.value ? 'compile_cv' : 'compile_lettre_motivation'))
 
 const docLabel = computed(() => (isCv.value ? t('detail.documents.cv') : t('detail.documents.cover_letter')))
-const emptyLabel = computed(() => (isCv.value ? t('documents.reference.empty_cv') : t('documents.reference.empty_lm')))
-const savedLabelKey = computed(() => (isCv.value ? 'documents.reference.saved_cv' : 'documents.reference.saved_lm'))
-const previewTitle = computed(() => (isCv.value ? t('documents.reference.preview_cv') : t('documents.reference.preview_lm')))
-const uploadLabel = computed(() => {
-  if (!isCv.value) return props.reference ? t('documents.reference.replace_lm') : t('documents.reference.add_lm')
-  return props.reference ? t('documents.reference.replace_cv') : t('documents.reference.add_cv')
-})
+const emptyLabel = computed(() => (isCv.value ? t('documents.reference.none_cv') : t('documents.reference.none_lm')))
 const modalTitle = computed(() => (isCv.value ? t('detail.documents.cv_preview_title') : t('detail.documents.lm_preview_title')))
 const iframeTitle = computed(() => (isCv.value ? t('documents.reference.iframe_cv') : t('documents.reference.iframe_lm')))
 const saveErrorFallback = computed(() =>
@@ -70,6 +68,9 @@ const compileErrorFallback = computed(() =>
 )
 
 const fileInput = ref<HTMLInputElement | null>(null)
+
+/** Petit bouton secondaire des actions de la carte. */
+const SM_BUTTON = 'h-8 px-3 rounded-lg border border-neutral-300 bg-surface-2 text-[12.5px] font-medium text-neutral-900 inline-flex items-center gap-[6px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-50 disabled:cursor-not-allowed'
 const justSaved = ref(false)
 
 const previewVisible = ref(false)
@@ -221,7 +222,10 @@ defineExpose({ hasChanges, reset })
 </script>
 
 <template>
-  <div class="py-[12px]">
+  <div
+    class="bg-white border rounded-xl px-5 py-[18px] flex flex-col"
+    :class="reference ? 'border-neutral-200' : 'border-dashed border-neutral-300'"
+  >
     <input
       ref="fileInput"
       type="file"
@@ -231,84 +235,62 @@ defineExpose({ hasChanges, reset })
     />
 
     <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-500 flex-none">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <div class="w-9 h-9 rounded-9 bg-neutral-100 text-neutral-700 flex items-center justify-center flex-none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
           <line x1="16" y1="13" x2="8" y2="13"/>
           <line x1="16" y1="17" x2="8" y2="17"/>
-          <polyline points="10 9 9 9 8 9"/>
         </svg>
       </div>
-      <div class="flex-1 min-w-0">
-        <div class="text-[13px] font-semibold text-neutral-950">{{ docLabel }}</div>
-        <!-- Document actuel : nom du fichier et date de la version courante -->
-        <template v-if="reference">
-          <div class="text-[12px] text-neutral-700 mt-px whitespace-nowrap overflow-hidden text-ellipsis font-mono">{{ displayFilename }}</div>
-          <div class="text-[11px] text-neutral-500 mt-px">{{ t(savedLabelKey, { date: displayDate }) }}</div>
-        </template>
-        <div v-else class="text-[12px] text-neutral-400 mt-px font-mono">{{ emptyLabel }}</div>
+      <div class="flex-1 min-w-0 flex items-center gap-2 text-[14px] font-semibold text-neutral-950">
+        {{ docLabel }}
+        <span v-if="reference && currentVersion" class="text-[10.5px] font-medium px-[7px] py-px rounded-full bg-neutral-100 text-neutral-700">v{{ currentVersion.version }}</span>
       </div>
-      <div class="flex items-center gap-2 flex-none">
-        <button
-          v-if="reference"
-          class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-blue-200 bg-blue-50 text-blue-500 cursor-pointer transition-colors duration-150 hover:bg-blue-100 hover:border-blue-300"
-          type="button"
-          :title="previewTitle"
-          :aria-label="previewTitle"
-          @click="preview"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-        </button>
-        <button
-          v-if="editMode"
-          class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-neutral-300 bg-surface-2 text-neutral-600 cursor-pointer transition-colors duration-150 hover:bg-surface-3 hover:border-neutral-400 disabled:opacity-60 disabled:cursor-default"
-          type="button"
-          :disabled="saving"
-          :title="uploadLabel"
-          :aria-label="uploadLabel"
-          @click="triggerPicker"
-        >
-          <!-- Sans document : icône d'ajout ; sinon icône de remplacement -->
-          <svg v-if="reference" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="17 1 21 5 17 9"/>
-            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-            <polyline points="7 23 3 19 7 15"/>
-            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-          </svg>
-          <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
-        <button
-          v-if="reference"
-          class="inline-flex items-center justify-center flex-none w-[30px] h-[30px] rounded-7 border border-neutral-300 bg-surface-2 text-neutral-600 cursor-pointer transition-colors duration-150 hover:bg-surface-3 hover:border-neutral-400"
-          type="button"
-          :title="t('documents.reference.versions')"
-          :aria-label="t('documents.reference.versions')"
-          @click="versionsOpen = true"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
-            <polyline points="3 3 3 8 8 8"/>
-            <polyline points="12 7 12 12 15 14"/>
-          </svg>
-        </button>
-      </div>
+      <StatusPill v-if="reference" tone="ok">{{ t('documents.reference.ready') }}</StatusPill>
+      <StatusPill v-else tone="warn">{{ t('documents.reference.missing') }}</StatusPill>
     </div>
 
-    <div v-if="saving" class="mt-[10px] flex items-center gap-[7px] text-[12px] text-neutral-500 font-mono">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-blue-500 flex-none">
+    <!-- Document actuel : nom du fichier et date de la version courante -->
+    <template v-if="reference">
+      <div class="font-mono text-[12.5px] text-neutral-800 mt-[14px] whitespace-nowrap overflow-hidden text-ellipsis">{{ displayFilename }}</div>
+      <div class="text-[12px] text-neutral-500 mt-[3px]">{{ t('documents.reference.imported_on', { date: displayDate }) }}</div>
+    </template>
+    <div v-else class="text-[12.5px] text-neutral-500 mt-[14px]">{{ emptyLabel }}</div>
+
+    <div v-if="saving" class="text-[12px] text-neutral-500 mt-[3px] flex items-center gap-[6px]">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin flex-none">
         <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
       </svg>
-      <span>{{ t('profile.saving') }}</span>
+      <span>{{ t('documents.reference.importing') }}</span>
     </div>
-    <div v-if="error" class="mt-[10px] text-[12px] text-red-600 whitespace-pre-line">{{ error }}</div>
-    <ReferenceMarkupHelp v-if="editMode" />
+    <div v-if="error" class="mt-[6px] text-[12px] text-red-600 whitespace-pre-line">{{ error }}</div>
+
+    <div class="flex flex-wrap gap-2 mt-4 pt-[14px] border-t border-neutral-100">
+      <template v-if="reference">
+        <button type="button" :class="SM_BUTTON" @click="preview">{{ t('documents.reference.preview') }}</button>
+        <button
+          v-if="editMode"
+          type="button"
+          :class="SM_BUTTON"
+          :title="lockedHint ?? undefined"
+          :disabled="saving || lockedHint !== null"
+          @click="triggerPicker"
+        >{{ t('documents.reference.replace') }}</button>
+        <button v-if="versions.length > 1" type="button" :class="SM_BUTTON" @click="versionsOpen = true">
+          {{ t('documents.reference.history') }}
+          <span class="font-mono text-[10.5px] text-neutral-500">{{ versions.length }}</span>
+        </button>
+      </template>
+      <button
+        v-else-if="editMode"
+        type="button"
+        class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed"
+        :title="lockedHint ?? undefined"
+        :disabled="saving || lockedHint !== null"
+        @click="triggerPicker"
+      >{{ t('documents.reference.import') }}</button>
+    </div>
   </div>
 
   <DocumentVersionsPopup
@@ -318,6 +300,7 @@ defineExpose({ hasChanges, reset })
     :versions="versions"
     :load-error="versionsLoadError"
     :edit-mode="editMode"
+    :locked-hint="lockedHint"
     @close="onVersionsClose"
     @preview="previewVersion"
     @restored="emit('update:reference', $event)"

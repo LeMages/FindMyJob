@@ -5,7 +5,9 @@ use crate::app_state::AppContext;
 use crate::clock;
 use crate::db;
 use crate::error::AppError;
-use crate::models::{CreateSessionInput, SessionView, UpdateSessionInput, UpdateSessionLocationInput};
+use crate::models::{
+    CreateSessionInput, SessionView, UpdateSessionInput, UpdateSessionListFormatInput, UpdateSessionLocationInput,
+};
 use crate::services;
 
 /// Crée une session de candidature.
@@ -78,6 +80,26 @@ pub async fn update_session_location(
     input: UpdateSessionLocationInput,
 ) -> Result<SessionView, AppError> {
     db::sessions::update_location(&ctx.state()?.pool, id, &input).await
+}
+
+/// Modifie le format des listes des CV générés dans une session.
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+/// * `id` - Identifiant de la session.
+/// * `input` - Nouveau format (`puce` ou `tiret`).
+///
+/// # Returns
+///
+/// `SessionView` mise à jour.
+#[tauri::command]
+pub async fn update_session_list_format(
+    ctx: tauri::State<'_, AppContext>,
+    id: i64,
+    input: UpdateSessionListFormatInput,
+) -> Result<SessionView, AppError> {
+    db::sessions::update_list_format(&ctx.state()?.pool, id, &input).await
 }
 
 /// Supprime une session, ses données et son dossier de documents.

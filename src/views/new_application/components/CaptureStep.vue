@@ -1,12 +1,19 @@
 <script setup lang="ts">
 /**
  * Étape de capture : la page de l'offre est ouverte dans une fenêtre
- * FindMyJob, l'utilisateur y accepte les cookies ou se connecte, puis
- * capture la page affichée pour l'envoyer à l'analyse.
+ * FindMyJob, l'utilisateur y accepte les cookies ou se connecte (consignes en
+ * trois étapes), puis capture la page affichée pour l'envoyer à l'analyse.
+ * La fenêtre peut être rouverte ; collage et saisie manuelle restent offerts.
  */
 
 // Importation des modules Vue / framework
 import { useI18n } from 'vue-i18n'
+
+// Importation des composants
+import InfoBanner from '@/components/InfoBanner.vue'
+import SectionCard from '@/components/SectionCard.vue'
+import UiIcon from '@/components/UiIcon.vue'
+import BackToLinkButton from './BackToLinkButton.vue'
 
 const { t } = useI18n()
 
@@ -16,41 +23,40 @@ defineProps<{
 }>()
 
 defineEmits<{ capture: []; reopen: []; paste: []; manual: []; back: [] }>()
+
+const LINK = 'border-0 bg-transparent p-0 text-[12.5px] font-sans text-neutral-500 cursor-pointer underline underline-offset-[3px] hover:text-neutral-950'
 </script>
 
 <template>
-  <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-    <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('new_application.capture.section') }}</div>
-    <p class="text-[13px] text-neutral-500 mb-[14px] leading-[1.5]">
-      {{ t('new_application.capture.intro') }}
-    </p>
-    <div v-if="error" class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-[14px] text-[13px] text-red-600">{{ error }}</div>
-    <div class="flex flex-wrap gap-3">
-      <button
-        class="h-12 text-[15px] rounded-10 px-4 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': busy }"
-        :disabled="busy"
-        @click="$emit('capture')"
-      >{{ busy ? t('new_application.analyzing') : t('new_application.capture.capture') }}</button>
-      <button
-        class="h-12 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': busy }"
-        :disabled="busy"
-        @click="$emit('reopen')"
-      >{{ t('new_application.capture.reopen') }}</button>
-      <button
-        class="h-12 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': busy }"
-        :disabled="busy"
-        @click="$emit('paste')"
-      >{{ t('new_application.capture.paste') }}</button>
-      <button
-        class="h-12 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': busy }"
-        :disabled="busy"
-        @click="$emit('manual')"
-      >{{ t('new_application.manual') }}</button>
-    </div>
-    <button class="bg-transparent border-none font-mono text-[12px] text-neutral-500 cursor-pointer py-1 mt-[14px] hover:text-neutral-950" @click="$emit('back')">{{ t('new_application.back_to_link') }}</button>
+  <div class="max-w-[720px] mx-auto mt-6">
+    <SectionCard :title="t('new_application.capture.title')" :hint="t('new_application.capture.hint')">
+      <ol class="mt-0 mb-4 pl-5 list-decimal text-[13px] text-neutral-700 leading-[1.8]">
+        <li>{{ t('new_application.capture.step_1') }}</li>
+        <li>{{ t('new_application.capture.step_2') }}</li>
+        <li>{{ t('new_application.capture.step_3') }}</li>
+      </ol>
+      <InfoBanner v-if="error" tone="err">{{ error }}</InfoBanner>
+      <div class="flex flex-wrap items-center gap-[10px] mt-4">
+        <button
+          type="button"
+          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+          :disabled="busy"
+          @click="$emit('capture')"
+        >
+          <template v-if="busy"><UiIcon name="spinner" /> {{ t('new_application.analyzing') }}</template>
+          <template v-else>{{ t('new_application.capture.capture') }}</template>
+        </button>
+        <button
+          type="button"
+          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+          :disabled="busy"
+          @click="$emit('reopen')"
+        >{{ t('new_application.capture.reopen') }}</button>
+        <span class="flex-1" />
+        <button type="button" :class="LINK" @click="$emit('paste')">{{ t('new_application.capture.paste') }}</button>
+        <button type="button" :class="LINK" @click="$emit('manual')">{{ t('new_application.fill_manually') }}</button>
+      </div>
+    </SectionCard>
+    <BackToLinkButton class="mt-4" @back="$emit('back')" />
   </div>
 </template>

@@ -98,6 +98,7 @@ fn listes_du_cv_sans_repli_sur_la_reference() {
         separator: " – ",
         lang: "fr",
         texts: &no_texts,
+        list_marker: "•",
     };
     let data = build_cv_data(&profile, &selection, &texts, &CvContent::default(), &layout);
     assert!(data.langues.is_empty() && data.skills_groups.is_empty(), "{data:?}");

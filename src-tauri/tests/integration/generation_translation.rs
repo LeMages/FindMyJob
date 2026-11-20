@@ -2,64 +2,17 @@
 //! balisées (zones [FIXE] / [VARIABLE] / [ADAPTABLE], texte hors
 //! schéma) templatisées par le LLM factice.
 
-// Importation des modules standard
-use std::path::PathBuf;
-
 // Importation des crates externes
 use serde_json::Value;
 
 // Importation des modules internes
 use crate::shared::fake_llm::{read_reference, Reply, Step};
 use crate::shared::no_dashes::{assert_no_dash_in_data, assert_no_dash_in_text};
-use crate::shared::seed;
-use crate::shared::test_state::{self, artefact, candidature_input, wait_generation, TestApp};
-use findmyjob_lib::db;
-use findmyjob_lib::documents;
+use crate::shared::tagged_references::{app_with_tagged_references, data, generate, version_dir};
 use findmyjob_lib::documents::typst::compile_template;
 use findmyjob_lib::llm::offer::OFFER_SYSTEM_PROMPT;
-use findmyjob_lib::models::{GenerationStatus, REFERENCE_TEXTS_FILE};
-use findmyjob_lib::services::candidatures;
+use findmyjob_lib::models::REFERENCE_TEXTS_FILE;
 use findmyjob_lib::storage_paths;
-
-/// Application avec un profil et les deux références balisées.
-async fn app_with_tagged_references(name: &str) -> (TestApp, i64) {
-    let app = test_state::app(name).await;
-    test_state::seed_profile(&app.state.pool).await;
-    let sid = seed::session(&app.state.pool).await;
-    let llm = &app.llm;
-    llm.respond_with(Step::ExampleCv, Reply::Files(&["references/tagged/cv_balise_example_data.json"]));
-    llm.respond_with(Step::TemplateCv, Reply::Files(&["references/tagged/cv_balise_template.typ"]));
-    llm.respond_with(Step::ExampleLm, Reply::Files(&["references/tagged/lm_balisee_example_data.json"]));
-    llm.respond_with(Step::TemplateLm, Reply::Files(&["references/tagged/lm_balisee_template.typ"]));
-    let cv = read_reference("tagged/cv_balise.typ");
-    documents::save_reference(&app.state, sid, "cv", "cv.typ".into(), cv).await.expect("référence CV");
-    let lm = read_reference("tagged/lm_balisee.typ");
-    documents::save_reference(&app.state, sid, "lettre_motivation", "lettre.typ".into(), lm)
-        .await
-        .expect("référence lettre");
-    (app, sid)
-}
-
-/// Lance une génération et attend sa fin.
-async fn generate(app: &TestApp, sid: i64) -> (i64, Option<String>, bool) {
-    let view = candidatures::create(&app.state, &candidature_input(sid, "Data engineering intern.", None))
-        .await
-        .expect("création");
-    let progress = wait_generation(&app.state, view.id).await;
-    (view.id, progress.error, matches!(progress.status, GenerationStatus::Completed))
-}
-
-/// Lit le `data.json` généré d'un document.
-fn data(app: &TestApp, sid: i64, doc_type: &str, cid: i64) -> Value {
-    let raw = std::fs::read_to_string(artefact(&app.state, sid, doc_type, cid, "data.json")).expect("data.json");
-    serde_json::from_str(&raw).expect("data.json valide")
-}
-
-/// Dossier de la version courante d'une référence.
-async fn version_dir(app: &TestApp, sid: i64, doc_type: &str) -> PathBuf {
-    let doc = db::documents::get_current(&app.state.pool, sid, doc_type).await.expect("lecture").expect("référence");
-    storage_paths::to_absolute(&app.state.data_dir, &storage_paths::version_dir(sid, doc_type, doc.current_version_id))
-}
 
 #[tokio::test]
 async fn offre_anglaise_documents_entierement_en_anglais() {

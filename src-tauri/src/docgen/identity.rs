@@ -110,24 +110,3 @@ pub fn validate_sender_name(user: &UserView) -> Result<(), AppError> {
     }
     Ok(())
 }
-
-/// Découpe un texte multiligne du profil en éléments (une ligne = un
-/// élément), sans les puces éventuellement saisies en tête de ligne.
-///
-/// # Arguments
-///
-/// * `value` - Texte du profil (détails de formation).
-///
-/// # Returns
-///
-/// Éléments non vides, dans l'ordre.
-pub fn lines(value: Option<&String>) -> Vec<String> {
-    let Some(value) = value else {
-        return Vec::new();
-    };
-    value
-        .lines()
-        .map(|line| line.trim().trim_start_matches(['•', '-', '*', '–', '—']).trim().to_string())
-        .filter(|line| !line.is_empty())
-        .collect()
-}

@@ -1,75 +1,62 @@
 <script setup lang="ts">
 /**
- * Card « STATUT & SUIVI » de la page de détail : timeline complète des
- * événements de suivi d'une candidature (relances, entretiens, messages,
- * appels, notes...) et point d'entrée pour en ajouter un nouveau.
- * Propre à `DetailView`.
+ * Carte « Suivi » de la fiche candidature : timeline verticale des
+ * événements (icône, libellé, date) avec « Voir le contenu » pour un mail ou
+ * un message envoyé. L'ajout d'un événement se fait depuis l'en-tête de la
+ * fiche. Masquée tant que la candidature est « à postuler ». Propre à
+ * `DetailView`.
  */
 
 // Importation des modules Vue / framework
-import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+// Importation des composants
+import SectionCard from '@/components/SectionCard.vue'
+import UiIcon from '@/components/UiIcon.vue'
+import TimelineEventIcon from './TimelineEventIcon.vue'
 
 // Importation des modules internes
 import { state, openStatusHistoryPopup } from '@/stores/app'
 import { eventLabel } from '@/composables/candidature_display'
 import { dateLocale } from '@/i18n'
-import TimelineEventIcon from './TimelineEventIcon.vue'
-import AddEventPopup from './AddEventPopup.vue'
 
 const { t } = useI18n()
 
-/** Formate une date ISO pour l'affichage court (ex. "12 juin 2025"). */
+/** Formate une date ISO pour l'affichage (ex. "12 juin 2025"). */
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long', year: 'numeric' })
-
-// Statuts terminaux : plus aucun événement de suivi ne peut être ajouté une
-// fois la candidature dans l'un de ces statuts (voir aussi
-// db::timeline_events::available_events côté backend). `offre` n'y figure
-// pas : c'est un statut intermédiaire, on peut encore accepter/décliner
-// l'offre ou se désister.
-const STATUTS_TERMINAUX = ['accepte', 'offre_refusee', 'refus', 'abandon', 'ghosting']
-
-const canAddEvent = computed(() =>
-  !!state.detailCandidature && !STATUTS_TERMINAUX.includes(state.detailCandidature.status),
-)
-
-const addEventPopup = ref<InstanceType<typeof AddEventPopup> | null>(null)
 </script>
 
 <template>
-  <div v-if="state.detailCandidature?.status !== 'a_postuler'" class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-    <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('detail.timeline.section') }}</div>
-
-    <div v-for="entry in state.detailHistory" :key="entry.id" class="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded-10 px-[14px] py-3 mb-[10px]">
-      <div class="w-9 h-9 rounded-9 bg-surface-2 border border-neutral-200 flex items-center justify-center text-neutral-600 flex-none">
-        <TimelineEventIcon :event-type="entry.event_type" />
-      </div>
-      <div class="flex-1 min-w-0">
-        <div class="text-[13.5px] font-semibold">{{ eventLabel(entry.event_type) }}</div>
-        <div class="text-[12px] text-neutral-500 font-mono mt-0.5">{{ formatDate(entry.changed_at) }}</div>
-      </div>
-      <button
-        v-if="entry.content"
-        class="bg-transparent border-none px-[6px] py-1 cursor-pointer text-neutral-400 flex items-center rounded-md flex-none hover:text-neutral-950 hover:bg-surface-2"
-        :title="t('detail.timeline.view_content')"
-        @click="openStatusHistoryPopup(entry.content)"
+  <SectionCard
+    v-if="state.detailCandidature?.status !== 'a_postuler'"
+    :title="t('detail.timeline.title')"
+    :hint="t('detail.timeline.count', state.detailHistory.length)"
+  >
+    <ol v-if="state.detailHistory.length > 0" class="list-none m-0 p-0">
+      <li
+        v-for="(entry, i) in state.detailHistory"
+        :key="entry.id"
+        class="relative flex items-start gap-[14px]"
+        :class="i < state.detailHistory.length - 1 ? 'pb-[18px]' : ''"
       >
-        <svg width="17" height="13" viewBox="0 0 17 13" fill="none">
-          <ellipse cx="8.5" cy="6.5" rx="7.5" ry="5.5" stroke="currentColor" stroke-width="1.4" />
-          <circle cx="8.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.4" />
-        </svg>
-      </button>
-    </div>
-
-    <div v-if="state.detailHistory.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">{{ t('detail.timeline.empty') }}</div>
-
-    <button
-      v-if="canAddEvent"
-      class="w-full justify-center mt-1 h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-      @click="addEventPopup?.open()"
-    >{{ t('detail.timeline.add_event') }}</button>
-
-    <AddEventPopup ref="addEventPopup" />
-  </div>
+        <!-- Trait vertical reliant chaque événement au suivant -->
+        <span v-if="i < state.detailHistory.length - 1" class="absolute left-4 top-[34px] bottom-[2px] w-px bg-neutral-200" aria-hidden="true" />
+        <span class="w-[33px] h-[33px] rounded-full bg-neutral-100 text-neutral-700 flex items-center justify-center flex-none [&_svg]:w-[15px] [&_svg]:h-[15px]">
+          <TimelineEventIcon :event-type="entry.event_type" />
+        </span>
+        <div class="flex-1 min-w-0 pt-0.5">
+          <div class="text-[13.5px] font-medium text-neutral-950">{{ eventLabel(entry.event_type) }}</div>
+          <div class="text-[12px] text-neutral-500 mt-px">{{ formatDate(entry.changed_at) }}</div>
+        </div>
+        <button
+          v-if="entry.content"
+          type="button"
+          class="mt-[7px] border-0 bg-transparent p-0 font-sans text-[12.5px] text-blue-500 cursor-pointer inline-flex items-center gap-[5px] hover:underline"
+          @click="openStatusHistoryPopup(entry.content)"
+        ><UiIcon name="eye" /> {{ t('detail.timeline.view_content') }}</button>
+      </li>
+    </ol>
+    <div v-else class="text-[12px] text-neutral-500 mt-2">{{ t('detail.timeline.empty') }}</div>
+  </SectionCard>
 </template>

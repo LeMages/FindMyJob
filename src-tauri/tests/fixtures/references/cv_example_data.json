@@ -29,6 +29,7 @@
       "entreprise": "Exemple SARL",
       "lieu": "Exempleville",
       "period": "Janv. 2024 - Juin 2024",
+      "intro": "",
       "bullets": [
         "Exemple de réalisation chiffrée sur un projet interne.",
         "Exemple de mission menée avec une équipe."
@@ -40,6 +41,7 @@
       "titre": "Exemple de projet",
       "pour_qui": "Exemple association",
       "period": "2023",
+      "intro": "",
       "bullets": [
         "Exemple de livrable présenté au client."
       ]
@@ -50,6 +52,7 @@
       "titre": "Exemple de master",
       "ecole": "Université Exemple",
       "period": "2022 - 2024",
+      "intro": "",
       "details": [
         "Exemple de spécialité"
       ]
@@ -61,6 +64,7 @@
       "level": "courant"
     }
   ],
+  "list_marker": "•",
   "labels": {
     "section_profile": "Profil",
     "section_skills": "Compétences",

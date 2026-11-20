@@ -7,6 +7,9 @@
 
 export type Screen = 'tracking' | 'detail' | 'new' | 'profile' | 'settings'
 
+/** Onglet de la page Candidatures. */
+export type TrackingTab = 'candidatures' | 'planning' | 'stats' | 'parametres'
+
 // ── Utilisateur / profil ─────────────────────────────────────────────────────
 
 export interface UpdateUserInfoInput {
@@ -63,6 +66,9 @@ export interface BoardCard {
 
 export type SessionStatut = 'active' | 'pause' | 'termine'
 
+/** Symbole des listes des descriptions dans les CV générés : `puce` (•) ou `tiret` (-). */
+export type SessionListFormat = 'puce' | 'tiret'
+
 export interface Session {
   id: number
   nom: string
@@ -71,8 +77,10 @@ export interface Session {
   ville: string | null
   /** Code postal de l'expéditeur (facultatif). */
   zip_code: string | null
+  /** Format des listes des CV générés dans la session (pas de l'affichage dans l'app). */
+  format_liste: SessionListFormat
+  /** Candidatures non clôturées (tout sauf refus, offre déclinée, abandon, ghosting). */
   candidature_count: number
-  has_accepted: boolean
   created_at: string
 }
 
@@ -85,6 +93,10 @@ export interface CreateSessionInput {
 export interface UpdateSessionLocationInput {
   ville: string | null
   zip_code: string | null
+}
+
+export interface UpdateSessionListFormatInput {
+  format_liste: SessionListFormat
 }
 
 export interface UpdateSessionInput {
@@ -232,6 +244,8 @@ export interface CandidatureView {
   source: string | null
   type_contrat: string | null
   derniere_maj_statut: string
+  /** Date d'envoi (événement `candidature_envoyee`), `null` avant l'envoi. */
+  date_envoi: string | null
   cv_path: string | null
   lettre_motivation_path: string | null
   created_at: string
@@ -514,3 +528,65 @@ export interface FontFolderView {
 
 /** Langue de l'interface (indépendante de la langue des documents générés). */
 export type UiLanguage = 'fr' | 'en'
+
+// ======================================================================
+// Statistiques d'une session (miroir de `models/session_stats.rs`)
+// ======================================================================
+
+/** Nombre de candidatures envoyées pour une issue. */
+export interface OutcomeCount {
+  /** `in_progress`, `offer`, `refus`, `ghosting`, `abandon` ou `offre_refusee`. */
+  outcome: string
+  count: number
+}
+
+/** Activité d'une semaine (du lundi au dimanche). */
+export interface WeekActivity {
+  /** Lundi de la semaine (`YYYY-MM-DD`). */
+  week_start: string
+  sent: number
+  interviews: number
+}
+
+/** Une valeur du critère comparé. */
+export interface ComparisonRow {
+  /** Numéro de version, valeur de `source`, `with` / `without`, ou `unknown`. */
+  key: string
+  sent: number
+  replied: number
+  interviewed: number
+  low_sample: boolean
+  best: boolean
+}
+
+/** Comparaison des candidatures envoyées selon un critère. */
+export interface Comparison {
+  criterion: 'cv_template' | 'lm_template' | 'source' | 'contact'
+  rows: ComparisonRow[]
+}
+
+/** Entretiens passés d'un type. */
+export interface InterviewTypeCount {
+  interview_type: string
+  passed: number
+  positive: number
+}
+
+/** Statistiques d'une session, calculées sur les candidatures envoyées. */
+export interface SessionStats {
+  enough_data: boolean
+  min_sent: number
+  min_sent_per_row: number
+  sent: number
+  sent_this_week: number
+  replied: number
+  interviewed: number
+  offers: number
+  avg_first_reply_days: number | null
+  outcomes: OutcomeCount[]
+  weeks: WeekActivity[]
+  comparisons: Comparison[]
+  interview_types: InterviewTypeCount[]
+  median_days: { to_offer: number | null; to_rejection: number | null; to_ghosting: number | null }
+  follow_ups: { sent: number; answered: number; avg_days_before: number | null }
+}

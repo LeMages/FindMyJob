@@ -333,3 +333,44 @@ fn saut_de_ligne_du_source_normalise_dans_les_valeurs() {
     assert!(!checked.paragraphs[0].contains('\n'), "{}", checked.paragraphs[0]);
     assert!(!checked.example["paragraphs"][0].as_str().expect("paragraphe").contains('\n'));
 }
+
+// ======================================================================
+// Symbole des listes (format de référence CV 4)
+// ======================================================================
+
+#[tokio::test]
+async fn symbole_de_liste_ecrit_en_dur_refuse() {
+    let cv = reference("cv_balise.typ", "cv");
+    let template = template("cv_balise_template.typ").replace("text(fill: dark, data.list_marker)", "text(fill: dark, \"•\")");
+    let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
+    let expected = |p: &String| p.contains("data.list_marker") && p.contains("0 fois pour 9");
+    assert!(verdict.problems.iter().any(expected), "{:?}", verdict.problems);
+    assert!(verdict.blocking > 0, "symbole en dur bloquant : {:?}", verdict.problems);
+}
+
+#[tokio::test]
+async fn separateur_de_l_en_tete_branche_sur_le_symbole_refuse() {
+    let cv = reference("cv_balise.typ", "cv");
+    let template = template("cv_balise_template.typ").replace(
+        "#let sep = text(size: 9pt, fill: light-gray, \"  •  \")",
+        "#let sep = text(size: 9pt, fill: light-gray, \"  \" + data.list_marker + \"  \")",
+    );
+    let verdict = verdict(&cv, "cv_balise_example_data.json", &template).await;
+    let expected = |p: &String| p.contains("data.list_marker") && p.contains("fois pour 9") && !p.contains("9 fois");
+    assert!(verdict.problems.iter().any(expected), "{:?}", verdict.problems);
+}
+
+#[tokio::test]
+async fn section_sans_symbole_dans_la_reference_recoit_celui_des_donnees() {
+    // Référence dont la formation affiche son détail sans puce : le template
+    // place quand même data.list_marker devant (symbole de la session pour
+    // toutes les sections), et cet ajout n'est pas un écart avec l'original.
+    let source = read_reference("tagged/cv_balise.typ").replace(
+        "#bullet-item[Semestre d'échange",
+        "#block(below: space-line, text(fill: dark)[Semestre d'échange",
+    );
+    let source = source.replace("(09.2024 – 01.2025)]", "(09.2024 – 01.2025)])");
+    let cv = reference_from_source(source, "cv");
+    let verdict = verdict(&cv, "cv_balise_example_data.json", &template("cv_balise_template.typ")).await;
+    assert!(verdict.problems.is_empty(), "problèmes :\n- {}", verdict.problems.join("\n- "));
+}

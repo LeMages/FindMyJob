@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 
 // Importation des composants
 import ContactEntryFields from '@/components/ContactEntryFields.vue'
+import SectionCard from '@/components/SectionCard.vue'
 
 // Importation des modules internes
 import { state, addContactDraft, removeContactDraft, loadContactBook } from '@/stores/app'
@@ -39,8 +40,7 @@ function idsChosenElsewhere(index: number): number[] {
 </script>
 
 <template>
-  <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-    <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('detail.contacts.section') }}</div>
+  <SectionCard :title="t('new_application.form.contacts_title')" :hint="t('new_application.form.contacts_hint')">
     <div v-if="loadError" class="text-[12.5px] text-red-600 mb-3">{{ loadError }}</div>
     <div
       v-for="(draft, index) in state.newContacts"
@@ -71,5 +71,5 @@ function idsChosenElsewhere(index: number): number[] {
     >
       {{ t('contacts.add') }}
     </button>
-  </div>
+  </SectionCard>
 </template>

@@ -25,8 +25,10 @@ pub const REFERENCE_FORMAT_VERSION: u32 = 3;
 /// Version du format des fichiers d'une référence de CV. Elle est distincte
 /// de celle de la lettre : le retrait des centres d'intérêt du profil (une
 /// ligne « Intérêts » devient un texte en dur) invalide les anciens CV de
-/// référence, pas les lettres.
-pub const CV_REFERENCE_FORMAT_VERSION: u32 = 3;
+/// référence, pas les lettres. La version 4 impose de lire le symbole des
+/// listes dans `data.list_marker` (format de la session) et d'afficher
+/// l'`intro` des descriptions : un template plus ancien écrit son symbole en dur.
+pub const CV_REFERENCE_FORMAT_VERSION: u32 = 4;
 
 /// Version du format attendue pour un type de document.
 ///

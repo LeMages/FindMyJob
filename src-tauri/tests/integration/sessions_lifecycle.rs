@@ -5,7 +5,7 @@
 // Importation des modules internes
 use crate::shared::seed;
 use findmyjob_lib::error::AppError;
-use findmyjob_lib::models::{UpdateSessionInput, UpdateSessionLocationInput};
+use findmyjob_lib::models::{UpdateSessionInput, UpdateSessionListFormatInput, UpdateSessionLocationInput};
 use findmyjob_lib::db::sessions;
 
 /// Message d'une erreur de validation.
@@ -59,13 +59,14 @@ async fn localisation_a_la_creation_et_modification_dediee() {
     let vide = sessions::insert(&pool, &seed::session_input("Vide", Some("   "), Some("")), seed::NOW).await.unwrap();
     assert_eq!((vide.ville, vide.zip_code), (None, None));
 
-    // Modification dédiée : ni nom ni statut ne bougent.
-    let update = UpdateSessionInput { nom: "Renommée".into(), statut: "pause".into() };
+    // Modification dédiée : ni nom ni statut ne bougent (session active, la
+    // seule dont la localisation est modifiable).
+    let update = UpdateSessionInput { nom: "Renommée".into(), statut: "active".into() };
     sessions::update(&pool, sans.id, &update).await.unwrap();
     let input = UpdateSessionLocationInput { ville: Some("  Paris ".into()), zip_code: Some("75001".into()) };
     let updated = sessions::update_location(&pool, sans.id, &input).await.unwrap();
     assert_eq!((updated.ville.as_deref(), updated.zip_code.as_deref()), (Some("Paris"), Some("75001")));
-    assert_eq!((updated.nom.as_str(), updated.statut.as_str()), ("Renommée", "pause"));
+    assert_eq!((updated.nom.as_str(), updated.statut.as_str()), ("Renommée", "active"));
 
     // La modification du nom ou du statut conserve le lieu.
     let update = UpdateSessionInput { nom: "Encore".into(), statut: "active".into() };
@@ -104,6 +105,45 @@ async fn donnees_invalides_refusees_en_francais() {
 
     let input = UpdateSessionInput { nom: "Stage".into(), statut: "active".into() };
     match sessions::update(&pool, 999, &input).await {
+        Err(AppError::NotFound(message)) => assert_eq!(message, "Session introuvable."),
+        other => panic!("introuvable attendu, obtenu {:?}", other.map(|s| s.id)),
+    }
+}
+
+/// Format de liste demandé.
+fn list_format(format_liste: &str) -> UpdateSessionListFormatInput {
+    UpdateSessionListFormatInput { format_liste: format_liste.into() }
+}
+
+#[tokio::test]
+async fn format_de_liste_puce_par_defaut_et_modification_dediee() {
+    let pool = seed::pool().await;
+
+    // Création : puce par défaut, relue à l'identique dans la liste.
+    let session = sessions::insert(&pool, &seed::session_input("Stage", Some("Lyon"), None), seed::NOW).await.unwrap();
+    assert_eq!(session.format_liste, "puce");
+    assert_eq!(sessions::fetch_view(&pool, session.id).await.unwrap().format_liste, "puce");
+
+    // Modification dédiée : ni nom, ni statut, ni lieu ne bougent.
+    let updated = sessions::update_list_format(&pool, session.id, &list_format("tiret")).await.unwrap();
+    assert_eq!(updated.format_liste, "tiret");
+    assert_eq!((updated.nom.as_str(), updated.statut.as_str(), updated.ville.as_deref()), ("Stage", "active", Some("Lyon")));
+    let relu = sessions::list_all(&pool).await.unwrap().remove(0);
+    assert_eq!(relu.format_liste, "tiret");
+
+    // La modification du nom ou du lieu conserve le format.
+    let update = UpdateSessionInput { nom: "Stage M2".into(), statut: "active".into() };
+    assert_eq!(sessions::update(&pool, session.id, &update).await.unwrap().format_liste, "tiret");
+    let location = UpdateSessionLocationInput { ville: Some("Paris".into()), zip_code: None };
+    assert_eq!(sessions::update_location(&pool, session.id, &location).await.unwrap().format_liste, "tiret");
+
+    // Valeur inconnue refusée en français, rien n'a changé.
+    let message = validation_message(sessions::update_list_format(&pool, session.id, &list_format("numero")).await);
+    assert_eq!(message, "Format de liste inconnu : « numero » (attendu : « puce » ou « tiret »).");
+    assert_eq!(sessions::fetch_view(&pool, session.id).await.unwrap().format_liste, "tiret");
+
+    // Session inconnue.
+    match sessions::update_list_format(&pool, 999, &list_format("puce")).await {
         Err(AppError::NotFound(message)) => assert_eq!(message, "Session introuvable."),
         other => panic!("introuvable attendu, obtenu {:?}", other.map(|s| s.id)),
     }

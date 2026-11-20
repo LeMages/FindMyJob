@@ -61,8 +61,9 @@ pub async fn read_version_pdf(
 /// # Returns
 ///
 /// `DocumentReferenceView` de la nouvelle référence courante,
-/// `AppError::NotFound` si la version n'existe pas, `AppError::Validation`
-/// si ses fichiers ont disparu du disque.
+/// `AppError::NotFound` si la version n'existe pas, `AppError::SessionLocked`
+/// si la session n'est pas active, `AppError::Validation` si ses fichiers ont
+/// disparu du disque.
 pub async fn restore_version(
     pool: &SqlitePool,
     data_dir: &Path,
@@ -72,6 +73,7 @@ pub async fn restore_version(
 ) -> Result<DocumentReferenceView, AppError> {
     let now = clock::now_utc();
     let mut tx = begin_write(pool).await?;
+    db::sessions::ensure_active(&mut *tx, session_id).await?;
     let record = db::document_versions::get_version_record(&mut tx, session_id, doc_type, version)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("Version {version} introuvable.")))?;

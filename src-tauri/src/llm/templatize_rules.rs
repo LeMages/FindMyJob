@@ -57,7 +57,9 @@ pub const CV_TEMPLATE_FIELDS: &str = "Rendu du CV :
 - Les coordonnées s'affichent dans l'ordre de l'original ; `data.labels.permis` s'affiche à la place du permis, seulement si `data.identity.permis` est vrai.
 - Le lieu se compose de `data.identity.ville` et `data.identity.zip_code` dans l'ordre et avec la ponctuation de l'original ; le séparateur n'apparaît que si les deux sont non vides.
 - skills_groups : une ligne par groupe, la catégorie puis `g.skills.join(\", \")`.
-- experiences, projects, formations : une boucle par section, chaque entrée avec ses bullets (ou details). Un élément affiché avec une mise en page différente des autres se choisit dans la boucle d'après ses données.
+- experiences, projects, formations : une boucle par section, chaque entrée avec son intro puis ses bullets (ou details). Un élément affiché avec une mise en page différente des autres se choisit dans la boucle d'après ses données.
+- Descriptions : `intro` s'affiche avant les éléments, sans symbole, seulement s'il est non vide. Chaque élément de bullets (et de details) est précédé de `data.list_marker` et de rien d'autre (par exemple `list(marker: data.list_marker, ..e.bullets)`, ou `#for b in e.bullets [#data.list_marker #b]` avec la mise en page de l'original). Par exception aux règles 1 et 2, ce symbole n'est jamais écrit en dur, même si l'original en affiche un autre ou n'en affiche aucun dans cette section : toutes les sections de description lisent `data.list_marker`. Un `\n` dans une intro ou un élément est un retour à la ligne dans le même bloc : affiche la valeur telle quelle.
+- `data.list_marker` ne sert qu'aux éléments de description. Les séparateurs de l'en-tête, des coordonnées ou des langues (par exemple `#let sep = \"  •  \"`) ne sont pas des symboles de liste : ils restent écrits en dur, même s'ils utilisent le même caractère.
 - langues : le séparateur entre le nom et le niveau ne s'affiche que si le niveau n'est pas vide.";
 
 /// Rendu propre à la lettre.

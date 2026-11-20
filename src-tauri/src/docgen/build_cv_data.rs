@@ -27,6 +27,8 @@ use crate::models::{
 /// * `lang` - Langue du CV.
 /// * `texts` - Textes en dur de la référence, dans la langue du CV.
 /// * `location` - Localisation de l'expéditeur (session), sans repli sur la référence.
+/// * `list_marker` - Symbole des éléments de liste, celui du format de la
+///   session (`docgen::description_list::list_marker`), jamais celui de la référence.
 ///
 /// Identité, compétences, langues, expériences, projets et formations ne
 /// viennent que du profil : vide dans le profil, la ligne ou la section est vide.
@@ -37,6 +39,7 @@ pub struct CvLayout<'a> {
     pub separator: &'a str,
     pub lang: &'a str,
     pub texts: &'a BTreeMap<String, String>,
+    pub list_marker: &'a str,
 }
 
 /// Assemble les données du CV.
@@ -69,12 +72,16 @@ pub fn build_cv_data(
     let experiences = selection
         .experiences
         .iter()
-        .map(|e| CvExperience {
-            poste: e.poste.trim().to_string(),
-            entreprise: text(e.entreprise.as_ref()),
-            lieu: text(e.lieu.as_ref()),
-            period: format_period(e.date_debut, e.date_fin, layout.period_style.experiences, &style),
-            bullets: texts.experience_lines(e.id),
+        .map(|e| {
+            let list = texts.experience_list(e.id);
+            CvExperience {
+                poste: e.poste.trim().to_string(),
+                entreprise: text(e.entreprise.as_ref()),
+                lieu: text(e.lieu.as_ref()),
+                period: format_period(e.date_debut, e.date_fin, layout.period_style.experiences, &style),
+                intro: list.intro_text(),
+                bullets: list.item_texts(),
+            }
         })
         .collect();
 
@@ -84,9 +91,9 @@ pub fn build_cv_data(
         .map(|p| {
             // Sans texte pour ce projet (cas qui ne devrait pas arriver), le
             // profil reste la source : jamais la référence.
-            let (pour_qui, bullets) = match texts.project(p.id) {
-                Some(t) => (t.pour_qui.clone(), t.lines.clone()),
-                None => (text(p.pour_qui.as_ref()), Vec::new()),
+            let (pour_qui, list) = match texts.project(p.id) {
+                Some(t) => (t.pour_qui.clone(), t.list()),
+                None => (text(p.pour_qui.as_ref()), Default::default()),
             };
             CvProject {
                 titre: p.titre.trim().to_string(),
@@ -94,7 +101,8 @@ pub fn build_cv_data(
                 period: format_period(p.date_debut, p.date_fin, layout.period_style.projects, &style),
                 stack: text(p.stack.as_ref()),
                 url: display_url(p.url.as_ref()),
-                bullets,
+                intro: list.intro_text(),
+                bullets: list.item_texts(),
             }
         })
         .collect();
@@ -102,11 +110,15 @@ pub fn build_cv_data(
     let formations = profile
         .formations
         .iter()
-        .map(|f| CvFormation {
-            titre: f.titre.trim().to_string(),
-            ecole: text(f.ecole.as_ref()),
-            period: format_period(f.date_debut, f.date_fin, layout.period_style.formations, &style),
-            details: texts.formation_lines(f.id),
+        .map(|f| {
+            let list = texts.formation_list(f.id);
+            CvFormation {
+                titre: f.titre.trim().to_string(),
+                ecole: text(f.ecole.as_ref()),
+                period: format_period(f.date_debut, f.date_fin, layout.period_style.formations, &style),
+                intro: list.intro_text(),
+                details: list.item_texts(),
+            }
         })
         .collect();
 
@@ -122,6 +134,7 @@ pub fn build_cv_data(
         formations,
         langues,
         labels: layout.labels.clone(),
+        list_marker: layout.list_marker.to_string(),
         texts: layout.texts.clone(),
     }
 }

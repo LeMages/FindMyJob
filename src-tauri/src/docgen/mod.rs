@@ -17,6 +17,7 @@ pub mod budgets;
 pub mod build_cv_data;
 pub mod build_lm_data;
 pub mod dash_normalization;
+pub mod description_list;
 pub mod contact_fields;
 pub mod data_normalization;
 pub mod date_format;

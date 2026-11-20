@@ -76,6 +76,7 @@
       "entreprise": "Transvia Logistique",
       "lieu": "Lyon",
       "period": "09.2025 – 02.2026",
+      "intro": "",
       "bullets": [
         "Refonte du pipeline d'ingestion de 300+ entrepôts : traitement 40% plus rapide, < 1% d'erreurs (Airflow, dbt)",
         "Création de tableaux de bord de suivi des livraisons : adoptés par 5 équipes opérationnelles",
@@ -88,6 +89,7 @@
       "titre": "Prévision de fréquentation – Vélos en libre-service",
       "pour_qui": "École Supérieure du Numérique",
       "period": "2025 – 2026",
+      "intro": "",
       "bullets": [
         "Modélisation de la demande horaire sur 400 stations à partir de données ouvertes et météo, livrée à une collectivité",
         "Mise en place du pipeline de collecte et d'entraînement des modèles (Python, XGBoost, PostgreSQL, Airflow)"
@@ -97,6 +99,7 @@
       "titre": "DocFinder – Recherche sémantique dans des notices",
       "pour_qui": "Projet personnel open source",
       "period": "2026",
+      "intro": "",
       "bullets": [
         "Conception d'une application web (TypeScript, FastAPI) : recherche en langage naturel dans des notices techniques",
         "Déploiement conteneurisé sur Azure avec Terraform, tests automatisés et CI/CD GitLab"
@@ -106,6 +109,7 @@
       "titre": "QualiVision – Détection de défauts par vision",
       "pour_qui": "École Supérieure du Numérique",
       "period": "2024 – 2025",
+      "intro": "",
       "bullets": [
         "Entraînement d'un modèle de classification OpenCV (92% de précision sur 2 500 images) et interface de contrôle"
       ]
@@ -116,6 +120,7 @@
       "titre": "Diplôme d'ingénieur (niveau Master, CTI) – Data & Cloud",
       "ecole": "École Supérieure du Numérique",
       "period": "2022 – 2027",
+      "intro": "",
       "details": [
         "Semestre d'échange – Université de Lisbonne, Portugal (09.2024 – 01.2025)"
       ]
@@ -131,6 +136,7 @@
       "level": "C1, TOEIC 905/990 (semestre d'échange au Portugal)"
     }
   ],
+  "list_marker": "•",
   "labels": {
     "section_profile": "Profil",
     "section_skills": "Compétences Techniques",
