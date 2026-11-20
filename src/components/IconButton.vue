@@ -8,19 +8,21 @@
 withDefaults(defineProps<{
   /** Infobulle et libellé accessible. */
   title: string
+  /** Infobulle à la place de `title` (raison d'un bouton désactivé), sinon `null`. */
+  tooltip?: string | null
   /** Action destructive : rouge au survol. */
   danger?: boolean
   disabled?: boolean
   /** Côté du bouton en pixels. */
   size?: number
-}>(), { danger: false, disabled: false, size: 28 })
+}>(), { tooltip: null, danger: false, disabled: false, size: 28 })
 
 defineEmits<{ click: [] }>()
 </script>
 
 <template>
   <!-- L'infobulle reste visible sur un bouton désactivé grâce à l'enveloppe. -->
-  <span class="inline-flex flex-none" :title="title">
+  <span class="inline-flex flex-none" :title="tooltip ?? title">
     <button
       type="button"
       class="rounded-7 border border-transparent bg-transparent text-neutral-400 flex items-center justify-center cursor-pointer flex-none disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"

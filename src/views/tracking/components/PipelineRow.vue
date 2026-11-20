@@ -10,7 +10,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 // Importation des modules internes
-import { statusColor, statusLabel } from '@/composables/candidature_display'
+import { avatarColor, closedStatusColor, nameInitials, statusColor, statusLabel } from '@/composables/candidature_display'
 import { dateLocale } from '@/i18n'
 import type { CandidatureView } from '@/types'
 
@@ -24,32 +24,12 @@ const props = defineProps<{
 
 defineEmits<{ open: [] }>()
 
-/** Palette des couleurs d'avatar, assignées de façon stable par candidature. */
-const AVATAR_COLORS = [
-  'bg-blue-100 text-blue-700',
-  'bg-emerald-100 text-emerald-700',
-  'bg-amber-100 text-amber-700',
-  'bg-rose-100 text-rose-700',
-  'bg-purple-100 text-purple-700',
-  'bg-cyan-100 text-cyan-700',
-]
-
-/** Couleur propre à chaque issue d'une candidature clôturée. */
-const CLOSED_COLORS: Record<string, string> = {
-  refus: 'bg-rose-100 text-rose-700',
-  abandon: 'bg-neutral-200 text-neutral-600',
-  ghosting: 'bg-neutral-100 text-neutral-500',
-  offre_refusee: 'bg-amber-100 text-amber-700',
-}
-
 const c = computed(() => props.candidature)
 
 /** Initiales de l'entreprise (deux lettres), vide si le nom est absent. */
-const initials = computed(() =>
-  (c.value.entreprise ?? '').split(' ').map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase(),
-)
+const initials = computed(() => nameInitials(c.value.entreprise))
 
-const pillColor = computed(() => (props.closed ? CLOSED_COLORS[c.value.status] : undefined) ?? statusColor(c.value.status))
+const pillColor = computed(() => (props.closed ? closedStatusColor(c.value.status) : statusColor(c.value.status)))
 
 /** Jours écoulés depuis le dernier changement de statut. */
 const inactivityDays = computed(() =>
@@ -72,7 +52,7 @@ function longDate(iso: string): string {
   <tr class="border-b border-neutral-100 cursor-pointer hover:bg-surface-3" @click="$emit('open')">
     <td class="py-2.5 px-4">
       <div class="flex items-center gap-[10px]">
-        <div class="w-[26px] h-[26px] rounded-7 flex-none flex items-center justify-center font-semibold text-[11px]" :class="AVATAR_COLORS[c.id % AVATAR_COLORS.length]">{{ initials }}</div>
+        <div class="w-[26px] h-[26px] rounded-7 flex-none flex items-center justify-center font-semibold text-[11px]" :class="avatarColor(c.id)">{{ initials }}</div>
         <span class="font-semibold" :class="closed ? 'text-neutral-600' : ''">{{ c.entreprise ?? '—' }}</span>
       </div>
     </td>
