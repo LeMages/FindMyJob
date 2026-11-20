@@ -290,7 +290,6 @@ export const en = {
       list_format_dash: '- Dash',
       documents_title: 'Document templates',
       documents_description: 'Typst templates from which the CV and the letter are generated for each application.',
-      markup_summary: 'How to mark up a template (instructions, fixed and variable zones)',
     },
     create: {
       title: 'New session',
@@ -933,18 +932,20 @@ export const en = {
       lm: 'the cover letter',
       both: 'the CV and the cover letter',
     },
-    markup: {
-      summary: 'Instruction markup',
-      intro: 'Instructions are written as {comment} comments in the .typ file; they do not appear in the PDF.',
-      instruction: 'instruction',
-      general: '{tag} followed by {comment} lines: general instructions, up to the first line that is not a comment.',
-      fixed: '{tag}: the following text is copied word for word (faithfully translated if the document is generated in another language).',
-      variable: '{tag}: the following text is rewritten based on the offer.',
-      adaptable: '{tag}: the following text is rewritten based on your profile, without inventing anything.',
-      zones:
-        'A zone runs until the next tag or the next blank line. Tags apply to written text: subject and paragraphs of the letter, title and summary of the CV. Written text without a tag is treated as {tag}.',
-      must_open: 'The tag must open the comment: {example} is rejected.',
-      example_heading: 'Body',
+    preparation: {
+      title: 'Preparing your templates',
+      intro:
+        'A template is a .typ file that follows the FindMyJob contract: your example values, data read from data, a <findmyjob> metadata and fixed texts in French and English. The import checks it right away, without AI, and lists every problem.',
+      step_copy: 'Copy the prompt for the CV or the letter.',
+      step_claude: 'Paste it into Claude with your current document (PDF, Word, Canva, .typ…).',
+      step_import: 'Import the resulting .typ file here. If it is refused, send the list of problems back to Claude so it fixes the file.',
+      copy_cv: 'Copy the prompt for Claude (CV)',
+      copy_lm: 'Copy the prompt for Claude (letter)',
+      copied: 'Prompt copied',
+      copy_failed: 'Could not copy the prompt.',
+      contract_link: 'FindMyJob contract',
+      cv_example_link: 'Example CV',
+      lm_example_link: 'Example letter',
     },
   },
 

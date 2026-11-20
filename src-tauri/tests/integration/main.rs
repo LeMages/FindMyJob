@@ -45,6 +45,7 @@ mod offer_import;
 mod profile_lifecycle;
 mod recipient_check;
 mod reference_contract_compile;
+mod reference_contract_docs;
 mod reference_contract_validation;
 mod reference_examples;
 mod reference_outdated;

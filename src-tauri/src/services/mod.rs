@@ -7,6 +7,7 @@ pub mod candidatures;
 pub mod claude_target;
 pub mod generation;
 pub mod profile_language;
+pub mod reference_prompt;
 pub mod scraping;
 pub mod session_stats;
 pub mod sessions;

@@ -294,7 +294,6 @@ export const fr = {
       list_format_dash: '- Tiret',
       documents_title: 'Modèles de documents',
       documents_description: 'Modèles Typst à partir desquels le CV et la lettre sont générés pour chaque candidature.',
-      markup_summary: 'Comment baliser un modèle (consignes, zones fixes et variables)',
     },
     create: {
       title: 'Nouvelle session',
@@ -943,19 +942,20 @@ export const fr = {
       lm: 'la lettre de motivation',
       both: 'le CV et la lettre de motivation',
     },
-    markup: {
-      summary: 'Balisage des consignes',
-      intro: "Les consignes s'écrivent en commentaires {comment} dans le fichier .typ ; elles n'apparaissent pas dans le PDF.",
-      instruction: 'consigne',
-      general:
-        "{tag} puis des lignes {comment} : consignes générales, jusqu'à la première ligne qui n'est pas un commentaire.",
-      fixed: '{tag} : le texte qui suit est recopié mot pour mot (traduit fidèlement si le document est généré dans une autre langue).',
-      variable: "{tag} : le texte qui suit est réécrit d'après l'offre.",
-      adaptable: "{tag} : le texte qui suit est réécrit d'après votre profil, sans rien inventer.",
-      zones:
-        "Une zone va jusqu'à la balise suivante ou jusqu'à la ligne vide. Les balises s'appliquent au texte rédigé : objet et paragraphes de la lettre, titre et résumé du CV. Un texte rédigé sans balise est traité comme {tag}.",
-      must_open: 'La balise doit ouvrir le commentaire : {example} est refusé.',
-      example_heading: 'Corps',
+    preparation: {
+      title: 'Préparer vos modèles',
+      intro:
+        "Un modèle est un fichier .typ qui respecte le contrat FindMyJob : vos valeurs d'exemple, les données lues dans data, une métadonnée <findmyjob> et les textes fixes en français et en anglais. L'import le vérifie aussitôt, sans IA, et liste chaque problème.",
+      step_copy: 'Copiez le prompt du CV ou de la lettre.',
+      step_claude: 'Collez-le dans Claude avec votre document actuel (PDF, Word, Canva, .typ…).',
+      step_import: 'Importez ici le fichier .typ obtenu. En cas de refus, renvoyez la liste des problèmes à Claude pour qu’il corrige le fichier.',
+      copy_cv: 'Copier le prompt pour Claude (CV)',
+      copy_lm: 'Copier le prompt pour Claude (lettre)',
+      copied: 'Prompt copié',
+      copy_failed: 'Impossible de copier le prompt.',
+      contract_link: 'Contrat FindMyJob',
+      cv_example_link: 'Exemple de CV',
+      lm_example_link: 'Exemple de lettre',
     },
   },
 

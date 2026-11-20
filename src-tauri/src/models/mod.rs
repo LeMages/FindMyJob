@@ -21,6 +21,7 @@ pub mod profile;
 pub mod projet;
 pub mod prose_guidance;
 pub mod reference_contract;
+pub mod reference_doc_links;
 pub mod reference_issue;
 pub mod session;
 pub mod session_stats;

@@ -205,6 +205,13 @@ export interface DocumentReferenceView {
   warnings: ReferenceIssue[]
 }
 
+/** Liens GitHub du contrat et des exemples conformes (miroir de `ReferenceDocLinks`). */
+export interface ReferenceDocLinks {
+  contract: string
+  cv_example: string
+  lm_example: string
+}
+
 /** Code d'un problème de référence au contrat FindMyJob (miroir de `ReferenceIssueCode`). */
 export type ReferenceIssueCode =
   | 'not_typ'
