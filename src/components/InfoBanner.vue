@@ -11,7 +11,7 @@ withDefaults(defineProps<{
 const TONES = {
   warn: 'bg-amber-50 border-amber-200 text-amber-700',
   err: 'bg-red-50 border-red-200 text-red-600',
-  ok: 'bg-green-50 border-green-200 text-green-700',
+  ok: 'bg-green-50 border-green-400/40 text-green-700',
   muted: 'bg-neutral-50 border-neutral-200 text-neutral-600',
 }
 </script>

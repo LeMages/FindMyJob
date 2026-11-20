@@ -35,7 +35,8 @@ const STAGE_LABEL_KEYS = {
 const LABEL_CLASSES = {
   done: 'text-neutral-600',
   on: 'text-neutral-950 font-semibold',
-  stop: 'text-rose-700 font-semibold',
+  // red-600 plutôt que rose-700 : seul red est redéfini en thème sombre (lisible sur les deux fonds).
+  stop: 'text-red-600 font-semibold',
   todo: 'text-neutral-400',
 }
 
