@@ -1,0 +1,75 @@
+[
+  { "name": "texte vide", "input": "", "intro": [], "items": [] },
+  { "name": "bloc seul", "input": "Développement d'une API.", "intro": ["Développement d'une API."], "items": [] },
+  { "name": "liste seule", "input": "- Mission A\n- Mission B", "intro": [], "items": [["Mission A"], ["Mission B"]] },
+  {
+    "name": "intro puis liste",
+    "input": "Équipe de 5 personnes.\n- Mission A\n- Mission B",
+    "intro": ["Équipe de 5 personnes."],
+    "items": [["Mission A"], ["Mission B"]]
+  },
+  {
+    "name": "intro sur plusieurs lignes",
+    "input": "Ligne 1\nLigne 2\n- Mission",
+    "intro": ["Ligne 1", "Ligne 2"],
+    "items": [["Mission"]]
+  },
+  {
+    "name": "suite de ligne dans un élément",
+    "input": "- Mission A\nsuite de A\n- Mission B",
+    "intro": [],
+    "items": [["Mission A", "suite de A"], ["Mission B"]]
+  },
+  { "name": "tiret collé", "input": "-Mission", "intro": [], "items": [["Mission"]] },
+  { "name": "nombre négatif seul", "input": "-30 % de coûts", "intro": ["-30 % de coûts"], "items": [] },
+  {
+    "name": "nombre négatif après un élément",
+    "input": "- Mission\n-5°C en chambre froide",
+    "intro": [],
+    "items": [["Mission", "-5°C en chambre froide"]]
+  },
+  { "name": "élément qui commence par un nombre négatif", "input": "- -30 % de coûts", "intro": [], "items": [["-30 % de coûts"]] },
+  {
+    "name": "lignes vides au début, au milieu et à la fin",
+    "input": "\n\n- A\n\n- B\n\n",
+    "intro": [],
+    "items": [["A"], ["B"]]
+  },
+  {
+    "name": "espaces autour et retours Windows",
+    "input": "  Intro  \r\n   -   A  \r\n\t- B\t\r\n",
+    "intro": ["Intro"],
+    "items": [["A"], ["B"]]
+  },
+  { "name": "tiret seul ignoré", "input": "- \n-\n- A", "intro": [], "items": [["A"]] },
+  {
+    "name": "tiret seul entre deux éléments",
+    "input": "- A\n- \nsuite",
+    "intro": [],
+    "items": [["A", "suite"]]
+  },
+  {
+    "name": "autres symboles en tête = texte",
+    "input": "• Puce\n* Étoile\n– Demi-cadratin\n— Cadratin",
+    "intro": ["• Puce", "* Étoile", "– Demi-cadratin", "— Cadratin"],
+    "items": []
+  },
+  {
+    "name": "suite qui commence par un demi-cadratin",
+    "input": "- Mission\n– détail",
+    "intro": [],
+    "items": [["Mission", "– détail"]]
+  },
+  {
+    "name": "puce au milieu d'une ligne",
+    "input": "- Python • SQL",
+    "intro": [],
+    "items": [["Python • SQL"]]
+  },
+  {
+    "name": "tiret au milieu d'une ligne",
+    "input": "Semestre d'échange – Lisbonne - Portugal",
+    "intro": ["Semestre d'échange – Lisbonne - Portugal"],
+    "items": []
+  }
+]

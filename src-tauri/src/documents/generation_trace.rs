@@ -25,9 +25,6 @@ use crate::models::{CvContent, LmContent, MatchingResult};
 /// * `page_count` - Nombre de pages du PDF.
 /// * `page_retries` - Relances dues au dépassement de pages.
 /// * `warning` - Avertissement éventuel (pages dépassées).
-/// * `labels_translated` - Vrai si les libellés ont été traduits.
-/// * `reference_texts_translated` - Vrai si les textes de la référence
-///   (textes en dur, zones [FIXE], consignes) ont été traduits.
 /// * `rendered_dash_marks` - Tirets interdits encore présents dans le texte
 ///   rendu (séparateurs écrits en dur dans le template).
 /// * `typst_warnings` - Avertissements non bloquants du compilateur Typst
@@ -40,8 +37,6 @@ pub struct DocumentTrace<C> {
     pub page_count: usize,
     pub page_retries: u8,
     pub warning: Option<String>,
-    pub labels_translated: bool,
-    pub reference_texts_translated: bool,
     pub rendered_dash_marks: Vec<String>,
     pub typst_warnings: Vec<String>,
 }
@@ -54,6 +49,7 @@ pub struct DocumentTrace<C> {
 /// * `matching` - Résultat du matching.
 /// * `experience_ids`, `project_ids` - Entrées retenues, dans l'ordre d'affichage.
 /// * `cv_budget`, `lm_budget` - Budgets initiaux.
+/// * `missing_categories` - Catégories du CV retirées car vides dans le profil.
 /// * `cv`, `lm` - Trace de chaque document.
 /// * `llm_calls` - Appels à Claude (modèle, tokens, durée, prompts, réponses).
 pub struct GenerationTrace {
@@ -63,6 +59,7 @@ pub struct GenerationTrace {
     pub project_ids: Vec<i64>,
     pub cv_budget: CvBudget,
     pub lm_budget: LmBudget,
+    pub missing_categories: Vec<String>,
     pub cv: DocumentTrace<CvContent>,
     pub lm: DocumentTrace<LmContent>,
     pub llm_calls: Vec<LlmCallRecord>,
@@ -76,8 +73,6 @@ fn attempts_of<C>(doc: &DocumentTrace<C>) -> Value {
         "page_retries": doc.page_retries,
         "page_count": doc.page_count,
         "warning": doc.warning,
-        "labels_translated": doc.labels_translated,
-        "reference_texts_translated": doc.reference_texts_translated,
         "rendered_dash_marks": doc.rendered_dash_marks,
         "typst_warnings": doc.typst_warnings,
     })
@@ -95,6 +90,7 @@ impl GenerationTrace {
             ("matching.json", to_value(&self.matching)?),
             ("selection.json", json!({ "experience_ids": self.experience_ids, "project_ids": self.project_ids })),
             ("budgets.json", json!({ "cv": to_value(&self.cv_budget)?, "lm": to_value(&self.lm_budget)? })),
+            ("missing_categories.json", to_value(&self.missing_categories)?),
             ("cv_content.json", to_value(&self.cv.content)?),
             ("lm_content.json", to_value(&self.lm.content)?),
             (

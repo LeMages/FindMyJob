@@ -1,0 +1,53 @@
+ENTREPRISE DESTINATAIRE : Lumen Santé
+
+INTITULÉ EXACT DU POSTE : Data engineer stagiaire (cite-le tel quel dans l'objet, sans le modifier)
+
+ANALYSE DE L'OFFRE :
+{"company_context":"Éditeur de logiciels de santé en forte croissance.","experience_level":"junior","job_title":"Data engineer stagiaire","key_responsibilities":["Construire des pipelines de données","Fiabiliser les tableaux de bord"],"keywords":["SQL","Python","pipelines"],"language":"fr","preferred_skills":{"soft":["curiosité"],"technical":["Airflow"]},"required_skills":{"soft":["rigueur"],"technical":["SQL","Python"]}}
+
+PROFIL DU CANDIDAT (seule source des faits)
+Présentation : non renseigné
+Formations :
+- Master informatique (Université Lyon 1), du 2023-09-01 au 2025-06-30. Détails : Spécialité données
+
+Expériences retenues, dans l'ordre d'affichage :
+Expérience id 1 : Alternant data engineer chez Lumen Data (Lyon), du 2024-09-01 au 2025-08-31, contrat alternance
+  Description (source des faits) : Pipelines SQL pour le reporting.
+
+Projets retenus, dans l'ordre d'affichage :
+Projet id 1 : Tableau de bord associatif (pour Association Escalade Lyon), du 2023-01-01 au 2023-06-30
+  Description (source des faits) : Suivi des adhésions en Python.
+  Technologies : Python
+
+Compétences du profil (nom, domaine) : Python (Données), SQL (Données)
+Compétences du profil qui répondent à l'offre : SQL (exact), Python (exact)
+Compétences demandées par l'offre et absentes du profil, à ne jamais affirmer : Airflow
+Angle conseillé pour le résumé ou l'accroche : Mettre en avant l'expérience de pipelines et le projet de tableau de bord.
+
+MODÈLE DE STYLE. Ce texte vient d'un autre document de la même personne. Imite sa forme, ne reprends rien de son contenu.
+<<<MODÈLE
+Objet : Candidature exemple pour un stage
+Paragraphe 1 : Exemple de premier paragraphe qui présente la candidate et explique pourquoi l'entreprise l'intéresse particulièrement.
+Paragraphe 2 : Exemple de second paragraphe qui relie une expérience passée aux missions décrites dans l'offre de stage.
+Paragraphe 3 : Exemple de dernier paragraphe qui propose un entretien pour échanger sur le poste.
+MODÈLE>>>
+
+DOCUMENT DE RÉFÉRENCE COMPLET, tel qu'il s'affiche avec ses valeurs d'exemple. Ses parties fixes (titres, formules, phrases écrites dans le modèle) sont ajoutées à part autour des champs rédigés : ne les répète pas. Il situe chaque champ dans le document, il ne fournit aucun fait.
+<<<RÉFÉRENCE
+Camille Exemple Exempleville, 00000 camille@exemple.invalid 00 00 00 00 00 Exemple Corp Exempleville Exempleville, le 1 janvier 2026 Objet : Candidature exemple pour un stage Madame, Monsieur, Exemple de premier paragraphe qui présente la candidate et explique pourquoi l'entreprise l'intéresse particulièrement. Exemple de second paragraphe qui relie une expérience passée aux missions décrites dans l'offre de stage. Exemple de dernier paragraphe qui propose un entretien pour échanger sur le poste. Je vous prie d'agréer, Madame, Monsieur, mes salutations distinguées. Camille Exemple
+RÉFÉRENCE>>>
+
+CONSIGNES DE LA RÉFÉRENCE (priorité 3 de l'ordre des consignes).
+Emplacements des champs de prose :
+subject [VARIABLE] « Candidature exemple pour un stage »
+Règles des emplacements.
+[VARIABLE] : remplace le texte d'exemple de l'emplacement par les informations tirées de l'offre, en suivant sa consigne.
+[ADAPTABLE] : rédige l'emplacement à partir du profil selon l'offre, en suivant sa consigne, sans rien inventer.
+Un champ sans emplacement est rédigé à partir du profil et de l'offre.
+
+BUDGETS
+subject : environ 5 mots, au plus 6 mots.
+paragraphs : exactement 3 paragraphes.
+Paragraphe 1 : environ 14 mots, au plus 16 mots.
+Paragraphe 2 : environ 16 mots, au plus 18 mots.
+Paragraphe 3 : environ 13 mots, au plus 15 mots.

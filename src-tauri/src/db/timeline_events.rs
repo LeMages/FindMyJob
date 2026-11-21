@@ -12,6 +12,8 @@ use crate::db::candidatures;
 use crate::db::common::{map_db_err, normalize};
 use crate::db::contacts;
 use crate::db::interviews::{self, NewInterview};
+use crate::db::joins::ensure_candidature_session_active;
+use crate::db::sessions;
 use crate::db::status_history::{self, NewHistoryEntry};
 use crate::db::transaction::begin_write;
 use crate::error::AppError;
@@ -265,9 +267,11 @@ async fn close_interview(
 /// # Returns
 ///
 /// `Ok(())` une fois l'événement enregistré, `AppError::NotFound` si la
-/// candidature n'existe pas, `AppError::Validation` si un champ requis
-/// manque, ou `AppError::Conflict` si l'événement n'est pas autorisé pour le
-/// statut courant.
+/// candidature n'existe pas, `AppError::SessionLocked` si sa session n'est
+/// pas active, `AppError::Validation` si un champ requis manque, ou
+/// `AppError::Conflict` si l'événement n'est pas autorisé pour le statut
+/// courant. Accepter l'offre passe aussi la session à `termine`, dans la
+/// même transaction.
 pub async fn add_event(
     pool: &SqlitePool,
     candidature_id: i64,
@@ -280,8 +284,10 @@ pub async fn add_event(
     let mut tx = begin_write(pool).await?;
 
     // ------------------------------------------------------------------
-    // 1. Candidature existante et événement autorisé pour son statut
+    // 1. Session modifiable, candidature existante et événement autorisé
+    //    pour son statut
     // ------------------------------------------------------------------
+    let session_id = ensure_candidature_session_active(&mut *tx, candidature_id).await?;
     let ancien_status = ensure_allowed(&mut tx, candidature_id, event_type).await?;
 
     // ------------------------------------------------------------------
@@ -318,6 +324,11 @@ pub async fn add_event(
             .execute(&mut *tx)
             .await
             .map_err(map_db_err)?;
+    }
+    // Une offre acceptée clôt la recherche : la session passe en lecture
+    // seule, l'utilisateur peut la rouvrir depuis ses paramètres.
+    if event_type == EventType::AccepterOffre {
+        sessions::set_statut(&mut *tx, session_id, sessions::STATUT_TERMINE).await?;
     }
 
     // ------------------------------------------------------------------

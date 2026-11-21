@@ -1,6 +1,6 @@
 // ============================================
 // FindMyJob - Schéma de base de données (SQLite)
-// Mis à jour le 2026-10-20 (migrations db/migrations/sqlite/0001_init.sql à 0007_langue_profil.sql).
+// Mis à jour le 2026-11-20 (migrations db/migrations/sqlite/0001_init.sql à 0013_descriptions_listes_tiret.sql).
 //
 // Base locale de l'application desktop : <dossier de données>/findmyjob.db.
 // Toutes les tables sont STRICT ; PRAGMA foreign_keys = ON à chaque connexion.
@@ -29,14 +29,11 @@ Table users {
   prenom text [not null]
   email text [not null]
   telephone text
-  ville text          // ville du candidat ; avec zip_code, seul lieu du profil (pas d'adresse postale)
-  zip_code text       // code postal du candidat
   permis boolean [note: "NULL = non renseigné"]
   description text
   linkedin text
   github text
   portfolio text
-  interets text       // une ligne = un centre d'intérêt
   langue_profil text [not null, default: 'fr', note: "CHECK IN ('fr', 'en') ; langue dans laquelle le profil est rédigé"]
   created_at timestamp [not null]
 }
@@ -46,18 +43,19 @@ Table experiences {
   poste text [not null]
   entreprise text
   lieu text
-  description text
+  description text    // une ligne « - x » = un élément de liste ; lignes avant = intro, ligne sans tiret après un élément = sa suite
   date_debut date
   date_fin date
   type_contrat contract_type
   created_at timestamp [not null]
+  contexte text [note: "jamais rendu, fourni au LLM (lettre)"]
 }
 
 Table formations {
   id integer [pk, increment]
   titre text [not null]
   ecole text
-  description text    // une ligne = un détail
+  description text    // une ligne « - x » = un élément de liste ; lignes avant = intro, ligne sans tiret après un élément = sa suite
   date_debut date
   date_fin date
   created_at timestamp [not null]
@@ -66,13 +64,14 @@ Table formations {
 Table projets {
   id integer [pk, increment]
   titre text [not null]
-  description text
+  description text    // une ligne « - x » = un élément de liste ; lignes avant = intro, ligne sans tiret après un élément = sa suite
   stack text
   url text
   pour_qui text
   date_debut date
   date_fin date
   created_at timestamp [not null]
+  contexte text [note: "jamais rendu, fourni au LLM (matching et lettre)"]
 }
 
 Table skills {
@@ -94,7 +93,7 @@ Table langues {
 }
 
 Table settings {
-  cle text [pk, note: "'llm_model', 'theme', 'ui_lang'"]
+  cle text [pk, note: "'llm_model', 'theme', 'ui_lang', 'sidebar_collapsed'"]
   valeur text
 }
 
@@ -107,6 +106,9 @@ Table sessions {
   id integer [pk, increment, note: "AUTOINCREMENT"]
   nom text [not null]
   statut session_status [not null, default: 'active']
+  ville text          // ville de l'expéditeur (obligatoire pour générer ; trim, vide = NULL)
+  zip_code text       // code postal de l'expéditeur (facultatif)
+  format_liste session_list_format [not null, default: 'puce'] // symbole des listes des descriptions dans les CV générés : • ou -
   created_at timestamp [not null]
 }
 
@@ -118,9 +120,9 @@ Table document_versions {
   original_filename text [not null]
   typst_path text [not null]
   pdf_path text [not null]
-  template_path text
-  example_data_path text
-  page_count integer
+  template_path text      // reference.typ lui-même pour une version au contrat FindMyJob
+  example_data_path text  // contract.json (exemple, consignes, emplacements, périodes)
+  page_count integer      // pages du rendu de l'exemple
   created_at timestamp [not null]
 
   indexes {
@@ -251,6 +253,11 @@ Enum session_status {
   active
   pause
   termine
+}
+
+Enum session_list_format {
+  puce
+  tiret
 }
 
 Enum doc_type {

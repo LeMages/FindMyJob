@@ -31,7 +31,7 @@ pub struct TokenUsage {
 ///
 /// # Attributes
 ///
-/// * `label` - Étape qui a fait l'appel (ex. `"templatisation:exemple"`).
+/// * `label` - Étape qui a fait l'appel (ex. `"traduction:profil"`).
 /// * `model` - Modèle demandé.
 /// * `usage` - Tokens consommés, absents en cas d'erreur.
 /// * `duration_ms` - Durée de l'appel.
@@ -75,8 +75,7 @@ impl LlmCallRecord {
 /// Préfixe de [`LlmCallRecord::response`] pour un appel en erreur.
 pub const ERROR_PREFIX: &str = "ERREUR : ";
 
-/// Collecteur d'appels partagé par une opération (une templatisation, une
-/// génération). Thread-safe : les appels parallèles y écrivent ensemble.
+/// Collecteur d'appels partagé par une opération (une génération). Thread-safe : les appels parallèles y écrivent ensemble.
 ///
 /// # Attributes
 ///

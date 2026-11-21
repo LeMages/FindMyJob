@@ -20,8 +20,11 @@ pub mod offer_extraction;
 pub mod profile;
 pub mod projet;
 pub mod prose_guidance;
-pub mod reference_texts;
+pub mod reference_contract;
+pub mod reference_doc_links;
+pub mod reference_issue;
 pub mod session;
+pub mod session_stats;
 pub mod skill;
 pub mod status_history;
 pub mod timeline_event;
@@ -35,11 +38,15 @@ pub use connection_test::TestConnectionResult;
 pub use contact::{CandidatureContactInput, ContactInput, ContactView};
 pub use doc_content::{CvContent, LmContent, ProseField};
 pub use doc_data::{
-    CvData, CvExampleData, CvExperience, CvFormation, CvLabels, CvLangue, CvProject, Identity, LmData,
-    LmExampleData, LmLabels, PeriodGranularity, PeriodStyle, Recipient, SkillsGroup,
+    CvData, CvExperience, CvFormation, CvLangue, CvProject, Identity, LmData, PeriodGranularity, Recipient,
+    SkillsGroup,
 };
-pub use prose_guidance::{ProseGuidance, ProseZone, ZoneMode};
-pub use reference_texts::{ReferenceTexts, REFERENCE_FORMAT_VERSION, REFERENCE_TEXTS_FILE};
+pub use prose_guidance::{ProseGuidance, ProseZone};
+pub use reference_contract::{
+    expected_contract, MonthStyle, PeriodGranularityBySection, PeriodSpec, RawMetadata, RawSlot, Slot, SlotMode,
+    StoredContract, CONTRACT_CV, CONTRACT_FILE, CONTRACT_LM, CONTRACT_VERSION, METADATA_LABEL,
+};
+pub use reference_issue::{ReferenceIssue, ReferenceIssueCode, Severity};
 pub use document::{
     Document, DocumentFileInfo, DocumentReferenceView, DocumentVersionView, DocumentsStatus, TemplateArtifacts,
 };
@@ -54,7 +61,13 @@ pub use matching::{MatchedSkill, MatchingResult};
 pub use offer_extraction::{ExtractionStage, OfferExtraction};
 pub use profile::ProfileDto;
 pub use projet::{CreateProjetInput, ProjetView};
-pub use session::{CreateSessionInput, SessionView, UpdateSessionInput};
+pub use session::{
+    CreateSessionInput, SessionView, UpdateSessionInput, UpdateSessionListFormatInput, UpdateSessionLocationInput,
+};
+pub use session_stats::{
+    Comparison, ComparisonRow, FollowUpStats, InterviewTypeCount, MedianDurations, OutcomeCount, SessionStats,
+    StatsCandidature, StatsEvent, StatsInput, StatsInterview, WeekActivity,
+};
 pub use skill::{CreateSkillInput, SkillView};
 pub use status_history::StatusHistoryView;
 pub use timeline_event::{AvailableEvent, NewInterviewData, NewTimelineEvent};

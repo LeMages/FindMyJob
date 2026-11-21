@@ -5,6 +5,7 @@
 //! `serde::Serialize` afin de traverser le pont IPC de Tauri.
 
 // Importation des modules internes
+use crate::models::ReferenceIssue;
 use crate::scraping::failure::ScrapingFailure;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -19,10 +20,18 @@ pub enum AppError {
     /// Échec typé de la récupération ou de l'extraction d'une offre, sérialisé
     /// en code (`{"kind":"Scraping","message":"access_denied"}`).
     Scraping(ScrapingFailure),
-    /// Référence templatisée par une version précédente, dont le template ne
-    /// compile plus avec le schéma actuel : elle doit être réimportée. Le
+    /// Référence importée avant le contrat actuel (sans `contract.json` ou
+    /// d'une autre version du contrat) : elle doit être réimportée. Le
     /// message est la phrase française affichée à l'utilisateur.
     OutdatedReference(String),
+    /// Référence refusée à l'import : tous les problèmes relevés par la
+    /// validation du contrat, codes typés traduits par l'interface
+    /// (`{"kind":"InvalidReference","message":[{"code":…}]}`).
+    InvalidReference(Vec<ReferenceIssue>),
+    /// Modification refusée parce que la session est en pause ou terminée
+    /// (lecture seule tant qu'elle n'est pas repassée « active »). Le
+    /// message est la phrase française affichée à l'utilisateur.
+    SessionLocked(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -34,8 +43,13 @@ impl std::fmt::Display for AppError {
             | AppError::NotFound(m)
             | AppError::Config(m)
             | AppError::Llm(m)
-            | AppError::OutdatedReference(m) => write!(f, "{}", m),
+            | AppError::OutdatedReference(m)
+            | AppError::SessionLocked(m) => write!(f, "{}", m),
             AppError::Scraping(failure) => write!(f, "Échec de l'extraction de l'offre ({failure})"),
+            AppError::InvalidReference(issues) => {
+                let listed: Vec<String> = issues.iter().map(ToString::to_string).collect();
+                write!(f, "Référence refusée : {}", listed.join(" ; "))
+            }
         }
     }
 }

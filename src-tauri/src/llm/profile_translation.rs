@@ -34,7 +34,6 @@ pub fn translation_schema() -> Value {
         ("projects", json!({ "type": "array", "items": project })),
         ("formations", json!({ "type": "array", "items": entry })),
         ("langues", json!({ "type": "array", "items": language })),
-        ("interets", json!({ "type": "array", "items": { "type": "string" } })),
     ])
 }
 
@@ -46,7 +45,7 @@ fn system_prompt(from: &str, to: &str) -> String {
          Chaque ligne de `lines` est traduite en une ligne, dans le même ordre : même nombre de lignes que l'original, sans saut de ligne.\n\
          Une traduction n'est pas plus longue que l'original : au plus {LENGTH_TOLERANCE_PERCENT} % de caractères en plus (ou {SHORT_TEXT_MARGIN_CHARS} caractères pour un texte court). Plus court est accepté.\n\
          `pour_qui` est le nom de l'organisation d'un projet : traduis-le seulement s'il est un nom commun (par exemple une association décrite), garde un nom propre tel quel. Un texte vide reste vide.\n\
-         `langues` : traduis le nom de chaque langue et son niveau (« Langue maternelle » devient « Native »), en gardant les certifications et scores tels quels (TOEIC 905). `interets` : un centre d'intérêt traduit par élément, dans le même ordre.\n\
+         `langues` : traduis le nom de chaque langue et son niveau (« Langue maternelle » devient « Native »), en gardant les certifications et scores tels quels (TOEIC 905).\n\
          Garde les mêmes identifiants, une entrée par entrée de l'original.",
         direction(from, to)
     )
@@ -64,7 +63,6 @@ fn trimmed(mut texts: CvEntryTexts) -> CvEntryTexts {
         langue.nom = langue.nom.trim().to_string();
         langue.level = langue.level.trim().to_string();
     }
-    trim(&mut texts.interets);
     texts
 }
 
@@ -94,7 +92,7 @@ async fn call_once(
 ///
 /// # Returns
 ///
-/// Les textes traduits ; les textes d'origine, sans appel, si les langues
+/// Les textes traduits, avec la forme des descriptions de l'original ; les textes d'origine, sans appel, si les langues
 /// coïncident ou s'il n'y a rien à traduire ; `AppError::Llm` si la
 /// traduction reste invalide après 3 essais.
 pub async fn translate_entry_texts(
@@ -109,12 +107,15 @@ pub async fn translate_entry_texts(
     let source = serde_json::to_string_pretty(texts)
         .map_err(|e| AppError::Llm(format!("Textes du profil non sérialisables : {e}")))?;
     let prompt = system_prompt(from, to);
-    call_until_valid(
+    let translated = call_until_valid(
         "La traduction du profil",
         |feedback| call_once(&prompt, &source, feedback, target),
         |translated| translation_problems(texts, translated),
     )
-    .await
+    .await?;
+    // Le LLM ne voit que les lignes à plat ; validées ligne à ligne, elles
+    // reprennent la forme (intro, éléments, suites) de l'original.
+    Ok(translated.with_shapes_of(texts))
 }
 
 #[cfg(test)]

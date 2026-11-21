@@ -1,17 +1,14 @@
 //! Schémas de données canoniques des documents générés (CV, lettre de
 //! motivation), identiques pour tous les utilisateurs.
 //!
-//! Un template Typst (`template.typ`, produit à l'upload d'une référence) lit
-//! depuis un fichier `data.json` qui suit l'un de ces schémas (`CvData` pour
-//! un CV, `LmData` pour une lettre) tout ce que le profil, l'offre ou la
-//! rédaction fournissent, et dans `texts` les textes en dur de la référence
-//! (`models::reference_texts`), traduisibles ; rien de la référence n'est
-//! jamais retiré. Un champ
-//! optionnel absent vaut la chaîne vide (ou une liste vide), jamais `null` :
-//! le template teste `!= ""` pour faire disparaître la ligne correspondante.
-
-// Importation des modules standard
-use std::collections::BTreeMap;
+//! Une référence au contrat FindMyJob lit dans `sys.inputs.data` (JSON) des
+//! données qui suivent l'un de ces schémas (`CvData` pour un CV, `LmData`
+//! pour une lettre) : tout ce que le profil, la session, l'offre ou la
+//! rédaction fournissent. Ses libellés et textes fixes sont écrits dans le
+//! template, dans chaque langue. Un champ optionnel absent vaut la chaîne
+//! vide (ou une liste vide), jamais `null` : le template teste `!= ""` pour
+//! faire disparaître la ligne correspondante. Le schéma est aussi celui des
+//! valeurs d'exemple du template (`documents::reference_contract::example_schema`).
 
 // Importation des crates externes
 use serde::{Deserialize, Serialize};
@@ -34,7 +31,7 @@ use serde::{Deserialize, Serialize};
 ///   ponctuation de la référence ; la ligne de date de la lettre n'utilise
 ///   que `ville`.
 /// * `linkedin`, `github`, `portfolio` - Liens, tels que saisis dans le profil.
-/// * `permis` - Vrai si le candidat a le permis B (affiché via un libellé).
+/// * `permis` - Vrai si le candidat a le permis B (affiché via un libellé du template).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Identity {
     pub prenom: String,
@@ -62,12 +59,22 @@ pub struct SkillsGroup {
 }
 
 /// Entrée de la section « Expérience » du CV.
+///
+/// # Attributes
+///
+/// * `poste`, `entreprise`, `lieu`, `period` - Intitulé, organisation, lieu et période.
+/// * `intro` - Texte de la description avant le premier élément, rendu
+///   sans symbole (lignes séparées par `\n`, chaîne vide si absent).
+/// * `bullets` - Éléments de la description, chacun précédé de
+///   `CvData.list_marker` ; un `\n` dans un élément est un retour à la
+///   ligne dans le même élément.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvExperience {
     pub poste: String,
     pub entreprise: String,
     pub lieu: String,
     pub period: String,
+    pub intro: String,
     pub bullets: Vec<String>,
 }
 
@@ -78,28 +85,32 @@ pub struct CvExperience {
 /// * `titre`, `pour_qui`, `period` - Intitulé, organisation et période.
 /// * `stack` - Technologies du projet, telles que saisies dans le profil.
 /// * `url` - Lien du projet, sous sa forme affichable.
-/// * `bullets` - Lignes de la description du profil.
-///
-/// `stack` et `url` ne s'affichent que si le template les lit : une
-/// référence convertie avant leur ajout n'en a pas, d'où `default`.
+/// * `intro` - Texte avant le premier élément, sans symbole (voir `CvExperience`).
+/// * `bullets` - Éléments de la description du profil (voir `CvExperience`).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvProject {
     pub titre: String,
     pub pour_qui: String,
     pub period: String,
-    #[serde(default)]
     pub stack: String,
-    #[serde(default)]
     pub url: String,
+    pub intro: String,
     pub bullets: Vec<String>,
 }
 
 /// Entrée de la section « Formation » du CV.
+///
+/// # Attributes
+///
+/// * `titre`, `ecole`, `period` - Diplôme, établissement et période.
+/// * `intro` - Texte avant le premier élément, sans symbole (voir `CvExperience`).
+/// * `details` - Éléments de la description (voir `CvExperience.bullets`).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvFormation {
     pub titre: String,
     pub ecole: String,
     pub period: String,
+    pub intro: String,
     pub details: Vec<String>,
 }
 
@@ -110,33 +121,10 @@ pub struct CvLangue {
     pub level: String,
 }
 
-/// Textes fixes d'un CV (titres de sections, libellés), dans la langue du
-/// document. Chaîne vide = absent de la référence.
-///
-/// # Attributes
-///
-/// * `section_*` - Titres des sections, tels qu'écrits dans la référence.
-/// * `interets_label` - Préfixe de la ligne des centres d'intérêt.
-/// * `permis` - Texte affiché quand `identity.permis` est vrai (ex. « Permis B »).
-/// * `present` - Borne de fin d'une période en cours (ex. « aujourd'hui »).
-/// * `months_short` - Les 12 abréviations de mois utilisées dans les périodes.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct CvLabels {
-    pub section_profile: String,
-    pub section_skills: String,
-    pub section_experiences: String,
-    pub section_projects: String,
-    pub section_formations: String,
-    pub section_langues: String,
-    pub interets_label: String,
-    pub permis: String,
-    pub present: String,
-    pub months_short: Vec<String>,
-}
-
-/// Données complètes d'un CV, lues par son template. `texts` contient les
-/// textes en dur de la référence, par identifiant ; absent des données
-/// produites par le LLM, il est rempli par Rust.
+/// Données complètes d'un CV, lues par son template. `list_marker` est le
+/// symbole placé devant chaque élément de `bullets` / `details` : à la
+/// génération, celui du format de la session (`•` ou `-`) ; dans les
+/// valeurs d'exemple, celui de la référence.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CvData {
     pub identity: Identity,
@@ -147,10 +135,7 @@ pub struct CvData {
     pub projects: Vec<CvProject>,
     pub formations: Vec<CvFormation>,
     pub langues: Vec<CvLangue>,
-    pub interets: Vec<String>,
-    pub labels: CvLabels,
-    #[serde(default)]
-    pub texts: BTreeMap<String, String>,
+    pub list_marker: String,
 }
 
 /// Granularité d'affichage d'une période (mois + année, ou année seule).
@@ -160,25 +145,6 @@ pub enum PeriodGranularity {
     #[default]
     Month,
     Year,
-}
-
-/// Granularité des périodes par section, détectée dans la référence.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct PeriodStyle {
-    pub experiences: PeriodGranularity,
-    pub projects: PeriodGranularity,
-    pub formations: PeriodGranularity,
-}
-
-/// Contenu d'un CV de référence rangé dans le schéma canonique
-/// (`example_data.json`), avec la granularité des périodes détectée à
-/// l'upload. Sa langue est `data.lang` ; ses textes en dur et consignes
-/// sont dans `reference_texts.json`.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct CvExampleData {
-    #[serde(flatten)]
-    pub data: CvData,
-    pub period_style: PeriodStyle,
 }
 
 // ============================================================================
@@ -192,47 +158,19 @@ pub struct CvExampleData {
 ///
 /// * `company` - Entreprise de la candidature.
 /// * `location` - Lieu de la candidature.
-/// * `extra_lines` - Autres lignes du destinataire (service, adresse
-///   postale), tirées de l'offre. Remplies dans les données d'exemple avec
-///   celles de la référence ; vides à la génération, l'offre ne les donnant
-///   pas : la ligne disparaît plutôt que d'afficher l'adresse d'une autre
-///   entreprise. `default` tolère leur absence dans les anciennes données.
-/// * `contact_name`, `contact_role` - Toujours vides. Gardés uniquement pour
-///   les templates convertis avant l'abandon du contact dans la lettre, qui
-///   lisent encore ces clés (une clé absente ferait échouer leur
-///   compilation Typst). Absents du schéma de templatisation : `default`
-///   les tolère manquants à la lecture.
+/// * `extra_lines` - Autres lignes du destinataire (parties de la
+///   localisation de la candidature avant la ville, voir
+///   `docgen::recipient`) ; dans les valeurs d'exemple, celles de la référence.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Recipient {
     pub company: String,
     pub location: String,
-    #[serde(default)]
     pub extra_lines: Vec<String>,
-    #[serde(default)]
-    pub contact_name: String,
-    #[serde(default)]
-    pub contact_role: String,
-}
-
-/// Textes fixes d'une lettre, dans la langue du document. Chaîne vide =
-/// absent de la référence.
-///
-/// # Attributes
-///
-/// * `subject_prefix` - Préfixe de l'objet (ex. « Objet : »).
-/// * `salutation` - Formule d'appel (ex. « Madame, Monsieur, »).
-/// * `closing` - Formule de politesse finale, en entier.
-/// * `date_prefix` - Mot entre la ville (`identity.ville`) et la date (ex. « le »).
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct LmLabels {
-    pub subject_prefix: String,
-    pub salutation: String,
-    pub closing: String,
-    pub date_prefix: String,
 }
 
 /// Données complètes d'une lettre de motivation, lues par son template.
-/// `texts` : voir `CvData`.
+/// `paragraphs` ne contient que les paragraphes rédigés, dans l'ordre : le
+/// template place librement ses phrases fixes autour d'eux.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct LmData {
     pub identity: Identity,
@@ -241,16 +179,4 @@ pub struct LmData {
     pub date: String,
     pub subject: String,
     pub paragraphs: Vec<String>,
-    pub labels: LmLabels,
-    #[serde(default)]
-    pub texts: BTreeMap<String, String>,
-}
-
-/// Contenu d'une lettre de référence rangé dans le schéma canonique
-/// (`example_data.json`). Sa langue est `data.lang` ; ses textes en dur et
-/// consignes sont dans `reference_texts.json`.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct LmExampleData {
-    #[serde(flatten)]
-    pub data: LmData,
 }

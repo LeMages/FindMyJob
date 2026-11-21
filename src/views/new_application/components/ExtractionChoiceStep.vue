@@ -1,50 +1,68 @@
 <script setup lang="ts">
 /**
  * Écran de choix affiché quand l'analyse automatique du lien échoue (accès
- * refusé, contenu insuffisant…) : ouvrir la page dans FindMyJob, coller le
- * texte, ou saisir l'offre à la main.
+ * refusé, contenu insuffisant…) : bandeau ambre avec la raison, puis trois
+ * cartes — ouvrir la page dans FindMyJob (si la capture peut aider), coller
+ * le texte, remplir à la main — dont l'option conseillée mise en avant.
  */
 
 // Importation des modules Vue / framework
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+// Importation des composants
+import InfoBanner from '@/components/InfoBanner.vue'
+import OptionCard from '@/components/OptionCard.vue'
+import BackToLinkButton from './BackToLinkButton.vue'
+
+// Importation des modules internes
+import { recommendedOption } from '../extraction_choice'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   message: string
   canCapture: boolean
   busy: boolean
 }>()
 
 defineEmits<{ capture: []; paste: []; manual: []; back: [] }>()
+
+const recommended = computed(() => recommendedOption(props.canCapture))
 </script>
 
 <template>
-  <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-    <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('new_application.choice.section') }}</div>
-    <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[14px] text-[13px] text-amber-700">{{ message }}</div>
-    <p class="text-[13px] text-neutral-500 mb-[14px]">{{ t('new_application.choice.prompt') }}</p>
-    <div class="flex flex-col gap-3">
-      <button
+  <div class="max-w-[720px] mx-auto mt-6">
+    <InfoBanner tone="warn"><strong>{{ t('new_application.choice.impossible') }}</strong> {{ message }}</InfoBanner>
+    <div class="text-[15px] font-semibold text-neutral-950 mt-[6px] mb-3">{{ t('new_application.choice.prompt') }}</div>
+    <div class="flex flex-col gap-[10px]">
+      <OptionCard
         v-if="canCapture"
-        class="h-12 text-[15px] rounded-10 px-4 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': busy }"
+        icon="window"
+        :title="t('new_application.choice.capture')"
+        :description="t('new_application.choice.capture_description')"
+        :badge="recommended === 'capture' ? t('new_application.choice.recommended') : null"
+        :primary="recommended === 'capture'"
         :disabled="busy"
-        @click="$emit('capture')"
-      >{{ t('new_application.choice.capture') }}</button>
-      <button
-        class="h-12 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': busy }"
+        @select="$emit('capture')"
+      />
+      <OptionCard
+        icon="paste"
+        :title="t('new_application.choice.paste')"
+        :description="t('new_application.choice.paste_description')"
+        :badge="recommended === 'paste' ? t('new_application.choice.recommended') : null"
+        :primary="recommended === 'paste'"
         :disabled="busy"
-        @click="$emit('paste')"
-      >{{ t('new_application.choice.paste') }}</button>
-      <button
-        class="h-12 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': busy }"
+        @select="$emit('paste')"
+      />
+      <OptionCard
+        icon="pen"
+        :title="t('new_application.fill_manually')"
+        :description="t('new_application.choice.manual_description')"
         :disabled="busy"
-        @click="$emit('manual')"
-      >{{ t('new_application.manual') }}</button>
+        @select="$emit('manual')"
+      />
     </div>
-    <button class="bg-transparent border-none font-mono text-[12px] text-neutral-500 cursor-pointer py-1 mt-[14px] hover:text-neutral-950" @click="$emit('back')">{{ t('new_application.back_to_link') }}</button>
+    <BackToLinkButton class="mt-4" @back="$emit('back')" />
   </div>
 </template>

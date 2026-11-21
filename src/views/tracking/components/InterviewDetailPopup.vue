@@ -8,6 +8,9 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+// Importation des composants
+import AppModal from '@/components/AppModal.vue'
+
 // Importation des modules internes
 import { interviewTypeLabel, interviewTypeColor, modaliteLabel } from '@/composables/candidature_display'
 import { parseInterviewDate, formatFullDate } from './planning_dates'
@@ -51,15 +54,14 @@ defineExpose({ open })
 </script>
 
 <template>
-  <div v-if="visible && interview" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]" @click="close">
-    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[480px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
-      <div class="flex items-center justify-between mb-5">
-        <div>
-          <div class="text-[17px] font-semibold">{{ interview.entreprise ?? t('common.unknown_company') }}</div>
-          <div class="text-[13px] text-neutral-500">{{ interview.poste }}</div>
-        </div>
-        <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="close">×</button>
-      </div>
+  <AppModal
+    v-if="visible && interview"
+    :title="interview.entreprise ?? t('common.unknown_company')"
+    :subtitle="interview.poste"
+    :width="480"
+    backdrop-close
+    @close="close"
+  >
 
       <div class="text-[13.5px] text-neutral-800 mb-4 font-mono">
         {{ date ? formatFullDate(date) : t('common.date_missing') }}
@@ -100,6 +102,5 @@ defineExpose({ open })
         <div class="text-[12px] text-neutral-600 mb-[5px]">{{ t('interview.detail.notes') }}</div>
         <div class="text-[13.5px] text-neutral-950 whitespace-pre-wrap leading-[1.5]">{{ interview.notes }}</div>
       </div>
-    </div>
-  </div>
+  </AppModal>
 </template>

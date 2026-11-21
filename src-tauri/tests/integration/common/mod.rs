@@ -23,14 +23,11 @@ pub fn user() -> UserView {
         prenom: Some("Camille".to_string()),
         email: Some("camille.martin@example.org".to_string()),
         telephone: Some("01 23 45 67 89".to_string()),
-        ville: Some("Lyon".to_string()),
-        zip_code: Some("69000".to_string()),
         permis: Some(true),
         description: Some("Étudiante ingénieure en informatique.".to_string()),
         linkedin: Some("https://www.linkedin.com/in/camille-martin/".to_string()),
         github: None,
         portfolio: None,
-        interets: Some("• Escalade\n\nPhotographie\n- Échecs".to_string()),
         langue_profil: "fr".to_string(),
         created_at: now,
     }
@@ -47,6 +44,7 @@ pub fn experience(id: i64, poste: &str, start: NaiveDate, end: Option<NaiveDate>
         date_debut: Some(start),
         date_fin: end,
         type_contrat: Some("stage".to_string()),
+        contexte: None,
     }
 }
 
@@ -61,6 +59,7 @@ pub fn projet(id: i64, titre: &str) -> ProjetView {
         pour_qui: Some("École".to_string()),
         date_debut: Some(date(2024, 9, 1)),
         date_fin: Some(date(2025, 6, 30)),
+        contexte: None,
     }
 }
 

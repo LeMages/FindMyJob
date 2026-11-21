@@ -2,8 +2,10 @@
 /**
  * Popup d'ajout d'un événement à la timeline de suivi d'une candidature.
  * Étape 1 : choix du type d'événement parmi ceux renvoyés par le backend
- * pour le statut courant (`get_available_events`). Étape 2 : formulaire
- * adapté au type choisi. Propre à `DetailView`.
+ * pour le statut courant (`get_available_events`), en grille par catégorie.
+ * Étape 2 : formulaire adapté au type choisi (flèche de retour, icône et
+ * titre de l'événement, « Ajouter au suivi »). Refuse de s'ouvrir quand la
+ * session est en lecture seule. Propre à `DetailView`.
  */
 
 // Importation des modules Vue / framework
@@ -13,14 +15,23 @@ import { useI18n } from 'vue-i18n'
 // Importation des modules externes
 import { invoke } from '@tauri-apps/api/core'
 
-// Importation des modules internes
-import { state, addTimelineEvent } from '@/stores/app'
-import { backendErrorMessage } from '@/composables/backend_error_message'
-import { eventActionLabel, interviewTypeLabel, interviewTypeOptions, modaliteOptions } from '@/composables/candidature_display'
-import type { AvailableEvent, InterviewView, NewTimelineEvent } from '@/types'
+// Importation des composants
+import AppModal from '@/components/AppModal.vue'
+import InfoBanner from '@/components/InfoBanner.vue'
+import UiIcon from '@/components/UiIcon.vue'
+import EventTypeGrid from './EventTypeGrid.vue'
+import PastInterviewFields from './PastInterviewFields.vue'
+import ScheduledInterviewFields from './ScheduledInterviewFields.vue'
 import TimelineEventIcon from './TimelineEventIcon.vue'
 
-const { t } = useI18n()
+// Importation des modules internes
+import { state, addTimelineEvent, isSessionLocked } from '@/stores/app'
+import { backendErrorMessage } from '@/composables/backend_error_message'
+import { eventActionLabel } from '@/composables/candidature_display'
+import { groupEvents } from './event_categories'
+import type { AvailableEvent, InterviewView, NewTimelineEvent } from '@/types'
+
+const { t, te } = useI18n()
 
 const visible = ref(false)
 const step = ref<'select' | 'form'>('select')
@@ -29,27 +40,6 @@ const events = ref<AvailableEvent[]>([])
 const selected = ref<AvailableEvent | null>(null)
 const error = ref<string | null>(null)
 const saving = ref(false)
-
-// Regroupement visuel des événements par catégorie (étape 1). Les catégories
-// sont des identifiants stables : le regroupement ne dépend pas de la langue,
-// seul le titre affiché est traduit (`event.category.<id>`).
-type EventCategory = 'communication' | 'interview' | 'follow_up' | 'outcome'
-const EVENT_CATEGORIES: Record<string, EventCategory> = {
-  message_envoye: 'communication',
-  message_recu: 'communication',
-  appel: 'communication',
-  relance: 'communication',
-  entretien_planifie: 'interview',
-  entretien_passe: 'interview',
-  note: 'follow_up',
-  refus_recu: 'outcome',
-  ghosting: 'outcome',
-  desistement: 'outcome',
-  offre_recue: 'outcome',
-  accepter_offre: 'outcome',
-  decliner_offre: 'outcome',
-}
-const ORDER_CATEGORIES: EventCategory[] = ['communication', 'interview', 'follow_up', 'outcome']
 
 // Champ commun à la plupart des événements (message, note, notes libres...).
 const content = ref('')
@@ -81,26 +71,8 @@ function resetFormFields() {
   interviewIssue.value = 'positif'
 }
 
-/** Événements disponibles regroupés par catégorie, dans l'ordre `ORDER_CATEGORIES`. */
-const groupedEvents = computed(() => {
-  const groups: { category: EventCategory | 'other'; items: AvailableEvent[] }[] = []
-
-  for (const cat of ORDER_CATEGORIES) {
-    const items = events.value.filter((ev) => EVENT_CATEGORIES[ev.event_type] === cat)
-    if (items.length > 0) {
-      groups.push({ category: cat, items })
-    }
-  }
-
-  // Filet de sécurité si un event_type n'est pas encore mappé ci-dessus.
-  const mapped = new Set(Object.keys(EVENT_CATEGORIES))
-  const unmapped = events.value.filter((ev) => !mapped.has(ev.event_type))
-  if (unmapped.length > 0) {
-    groups.push({ category: 'other', items: unmapped })
-  }
-
-  return groups
-})
+/** Événements disponibles regroupés par catégorie. */
+const groupedEvents = computed(() => groupEvents(events.value))
 
 /**
  * Libellé du champ de texte libre, adapté au type d'événement choisi.
@@ -131,8 +103,9 @@ function contentLabel(eventType: string): string {
 
 /** Ouvre la popup et charge les événements disponibles pour la candidature ouverte. */
 async function open() {
-  const candidatureId = state.detailCandidature?.id
-  if (!candidatureId) return
+  const candidature = state.detailCandidature
+  // Session en pause ou terminée : lecture seule, aucun événement ne s'ajoute.
+  if (!candidature || isSessionLocked(candidature.session_id)) return
 
   visible.value = true
   step.value = 'select'
@@ -142,7 +115,7 @@ async function open() {
 
   loadingEvents.value = true
   try {
-    events.value = await invoke<AvailableEvent[]>('get_available_events', { candidatureId })
+    events.value = await invoke<AvailableEvent[]>('get_available_events', { candidatureId: candidature.id })
   } catch (e: unknown) {
     error.value = backendErrorMessage(e, t('error.fallback.load_available_events'))
   } finally {
@@ -190,7 +163,7 @@ function back() {
 
 /** Construit et enregistre l'événement saisi, puis ferme la popup en cas de succès. */
 async function save() {
-  if (!selected.value) return
+  if (!selected.value || saving.value) return
 
   const event: NewTimelineEvent = {
     event_type: selected.value.event_type,
@@ -227,142 +200,101 @@ async function save() {
   close()
 }
 
+/** Sous-titre du choix : poste et entreprise de la candidature. */
+const candidatureSubtitle = computed(() => {
+  const c = state.detailCandidature
+  if (!c) return ''
+  return c.entreprise ? `${c.poste} · ${c.entreprise}` : c.poste
+})
+
+/** Description d'une ligne de l'événement choisi (sous-titre du formulaire). */
+const selectedDescription = computed(() => {
+  const key = `event.description.${selected.value?.event_type}`
+  return te(key) ? t(key) : undefined
+})
+
 defineExpose({ open })
 </script>
 
 <template>
-  <div v-if="visible" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]" @click="close">
-    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[580px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6" @click.stop>
+  <!-- Étape 1 : choix du type d'événement -->
+  <AppModal
+    v-if="visible && (step === 'select' || !selected)"
+    :title="t('detail.add_event.title')"
+    :subtitle="candidatureSubtitle"
+    :width="720"
+    divided
+    backdrop-close
+    @close="close"
+  >
+    <div v-if="loadingEvents" class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('common.loading') }}</div>
+    <InfoBanner v-else-if="error" tone="err">{{ error }}</InfoBanner>
+    <template v-else>
+      <EventTypeGrid :groups="groupedEvents" @select="selectEvent" />
+      <div v-if="events.length === 0" class="text-[12px] text-neutral-500 mt-2">{{ t('detail.add_event.empty') }}</div>
+    </template>
+  </AppModal>
 
-      <!-- Étape 1 : choix du type d'événement -->
-      <template v-if="step === 'select'">
-        <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ t('detail.add_event.title') }}</div>
-          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="close">×</button>
-        </div>
+  <!-- Étape 2 : formulaire adapté au type choisi -->
+  <AppModal
+    v-else-if="visible && selected"
+    :title="eventActionLabel(selected.event_type, selected.label)"
+    :subtitle="selectedDescription"
+    :width="680"
+    divided
+    back
+    backdrop-close
+    @back="back"
+    @close="close"
+  >
+    <template #icon><TimelineEventIcon :event-type="selected.event_type" /></template>
 
-        <div v-if="loadingEvents" class="text-[12px] text-neutral-400 font-mono py-4 text-center">{{ t('common.loading') }}</div>
-        <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-10 p-3 text-[13px] text-red-600 mb-3">{{ error }}</div>
+    <ScheduledInterviewFields
+      v-if="selected.event_type === 'entretien_planifie'"
+      v-model:type="interviewType"
+      v-model:date="interviewDate"
+      v-model:modalite="interviewModalite"
+      v-model:lieu="interviewLieu"
+      v-model:contact-ids="interviewContactIds"
+    />
 
-        <template v-else>
-          <div v-for="group in groupedEvents" :key="group.category" class="mb-4">
-            <div class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider px-1 mb-2">{{ t(`event.category.${group.category}`) }}</div>
+    <template v-else-if="selected.event_type === 'entretien_passe'">
+      <div v-if="loadingInterviews" class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('common.loading') }}</div>
+      <PastInterviewFields
+        v-else
+        v-model:selected-id="selectedInterviewId"
+        v-model:issue="interviewIssue"
+        :interviews="pendingInterviews"
+      />
+    </template>
 
-            <div
-              v-for="ev in group.items"
-              :key="ev.event_type"
-              class="border border-neutral-200 rounded-xl px-[18px] py-4 cursor-pointer flex items-center gap-[14px] mb-[10px] bg-surface-2 hover:border-neutral-300 hover:bg-surface-3"
-              @click="selectEvent(ev)"
-            >
-              <div class="w-9 h-9 rounded-9 bg-surface-2 border border-neutral-200 flex items-center justify-center text-neutral-600 flex-none">
-                <TimelineEventIcon :event-type="ev.event_type" />
-              </div>
-              <div class="text-[14px] font-semibold">{{ eventActionLabel(ev.event_type, ev.label) }}</div>
-            </div>
-          </div>
-          <div v-if="events.length === 0" class="text-[12px] text-neutral-400 font-mono py-2">{{ t('detail.add_event.empty') }}</div>
-        </template>
-      </template>
-
-      <!-- Étape 2 : formulaire adapté au type choisi -->
-      <template v-else-if="selected">
-        <div class="flex items-center justify-between mb-5">
-          <div class="text-[17px] font-semibold">{{ eventActionLabel(selected.event_type, selected.label) }}</div>
-          <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" @click="close">×</button>
-        </div>
-
-        <!-- entretien_planifie -->
-        <template v-if="selected.event_type === 'entretien_planifie'">
-          <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.interview_type') }}</label>
-            <select v-model="interviewType" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
-              <option v-for="opt in interviewTypeOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-            </select>
-          </div>
-          <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.date_time') }}</label>
-            <input v-model="interviewDate" type="datetime-local" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" />
-          </div>
-          <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.location') }}</label>
-            <input v-model="interviewLieu" :placeholder="t('detail.add_event.location_placeholder')" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" />
-          </div>
-          <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.modality') }}</label>
-            <select v-model="interviewModalite" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
-              <option value="">{{ t('detail.add_event.modality_unspecified') }}</option>
-              <option v-for="opt in modaliteOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-            </select>
-          </div>
-          <div class="mb-[14px]">
-            <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.contacts') }}</label>
-            <div v-if="state.detailContacts.length === 0" class="text-[12px] text-neutral-400 font-mono">
-              {{ t('detail.add_event.no_contacts') }}
-            </div>
-            <label
-              v-for="contact in state.detailContacts"
-              :key="contact.id"
-              class="flex items-center gap-2 py-1 text-[13px] text-neutral-900 cursor-pointer"
-            >
-              <input v-model="interviewContactIds" type="checkbox" :value="contact.id" />
-              <span>{{ contact.nom }}<span v-if="contact.role" class="text-neutral-500"> — {{ contact.role }}</span></span>
-            </label>
-          </div>
-        </template>
-
-        <!-- entretien_passe -->
-        <template v-else-if="selected.event_type === 'entretien_passe'">
-          <div v-if="loadingInterviews" class="text-[12px] text-neutral-400 font-mono py-2">{{ t('common.loading') }}</div>
-          <template v-else>
-            <div class="mb-[14px]">
-              <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.interview') }}</label>
-              <select v-model="selectedInterviewId" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
-                <option value="" disabled>{{ t('detail.add_event.pick_interview') }}</option>
-                <option v-for="iv in pendingInterviews" :key="iv.id" :value="iv.id">
-                  {{ interviewTypeLabel(iv.type) }} — {{ iv.date_entretien ?? t('common.date_missing') }}
-                </option>
-              </select>
-            </div>
-            <div class="mb-[14px]">
-              <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.add_event.issue') }}</label>
-              <select v-model="interviewIssue" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400">
-                <option value="positif">{{ t('interview.issue.positif') }}</option>
-                <option value="negatif">{{ t('interview.issue.negatif') }}</option>
-              </select>
-            </div>
-          </template>
-        </template>
-
-        <!-- Champ texte libre, commun à tous les autres événements -->
-        <div v-if="!['entretien_planifie'].includes(selected.event_type)" class="mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ contentLabel(selected.event_type) }}</label>
-          <textarea
-            v-model="content"
-            class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[140px]"
-          />
-        </div>
-
-        <div v-if="error" class="bg-red-50 border border-red-200 rounded-10 p-3 text-[13px] text-red-600 mb-3">{{ error }}</div>
-
-        <div class="flex justify-between items-center mt-5 pt-4 border-t border-neutral-100">
-          <button
-            class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-            @click="back"
-          >{{ t('common.back') }}</button>
-          <div class="flex gap-[10px]">
-            <button
-              class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-              @click="close"
-            >{{ t('common.cancel') }}</button>
-            <button
-              class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-              :class="{ 'opacity-40 pointer-events-none': saving }"
-              @click="save"
-            >{{ t('common.save') }}</button>
-          </div>
-        </div>
-      </template>
-
+    <!-- Champ texte libre, commun à tous les autres événements -->
+    <div v-if="selected.event_type !== 'entretien_planifie'" :class="selected.event_type === 'entretien_passe' ? 'mt-[14px]' : ''">
+      <label class="text-[12px] text-neutral-600 mb-[5px] block" for="ae-content">{{ contentLabel(selected.event_type) }}</label>
+      <textarea
+        id="ae-content"
+        v-model="content"
+        class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[180px] focus:outline-none focus:border-neutral-400"
+      />
     </div>
-  </div>
+
+    <div v-if="error" class="mt-[14px]"><InfoBanner tone="err">{{ error }}</InfoBanner></div>
+
+    <template #footer>
+      <button
+        type="button"
+        class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
+        @click="close"
+      >{{ t('common.cancel') }}</button>
+      <button
+        type="button"
+        class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+        :disabled="saving"
+        @click="save"
+      >
+        <template v-if="saving"><UiIcon name="spinner" /> {{ t('common.saving') }}</template>
+        <template v-else>{{ t('detail.add_event.submit') }}</template>
+      </button>
+    </template>
+  </AppModal>
 </template>

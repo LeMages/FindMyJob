@@ -1,22 +1,21 @@
 //! Génération du CV et de la lettre au niveau des services appelés par les
 //! commandes (`documents::save_reference`, `services::candidatures::create`) :
-//! profil en base, références de test templatisées, réponses LLM figées,
+//! profil en base, références de test au contrat, réponses LLM figées,
 //! compilation Typst réelle dans un dossier temporaire.
 
 // Importation des crates externes
 use serde_json::Value;
 
 // Importation des modules internes
+use crate::shared::tagged_references::render;
 use crate::shared::{fake_llm, seed, test_state};
 use crate::shared::no_dashes::{assert_no_dash_in_data, assert_no_dash_in_text};
 use fake_llm::{Reply, Step};
-use findmyjob_lib::llm::client::TEMPLATIZE_MODEL;
 use findmyjob_lib::docgen::lint::lint_prose;
 use findmyjob_lib::error::AppError;
 use findmyjob_lib::models::{GenerationProgress, GenerationStatus, ProseField};
 use findmyjob_lib::app_state::AppState;
 use findmyjob_lib::db;
-use findmyjob_lib::documents::typst::compile_template;
 use findmyjob_lib::services::candidatures;
 use findmyjob_lib::storage_paths;
 use test_state::{artefact, candidature_input, count, wait_generation, TestApp};
@@ -71,27 +70,102 @@ fn assert_no_generated_files(state: &AppState, sid: i64, cid: i64) {
 }
 
 #[tokio::test]
+async fn coordonnee_vide_du_profil_retiree_sans_valeur_d_exemple() {
+    let (app, sid) = ready_app("generation-sans-telephone").await;
+    let info = findmyjob_lib::models::UpdateUserInfoInput {
+        prenom: None,
+        nom: None,
+        email: None,
+        telephone: None,
+        permis: Some(true),
+        linkedin: None,
+        github: None,
+        portfolio: None,
+    };
+    db::users::update_user_info(&app.state.pool, info).await.expect("téléphone effacé");
+
+    let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+
+    let (cv_raw, cv) = read_data(&app.state, sid, "cv", view.id);
+    let (lm_raw, lm) = read_data(&app.state, sid, "lettre_motivation", view.id);
+    for data in [&cv, &lm] {
+        assert_eq!(data["identity"]["telephone"], "", "ligne retirée, pas de repli");
+    }
+    for raw in [&cv_raw, &lm_raw] {
+        assert!(!raw.contains("00 00 00 00 00") && !raw.contains("camille@exemple.invalid"), "valeur d'exemple : {raw}");
+    }
+    // Un seul avertissement, bien que les deux références affichent le téléphone.
+    let detail = db::candidatures::fetch_detail(&app.state.pool, view.id).await.expect("fiche");
+    let phone_warnings = detail.generation_warnings.iter().filter(|w| w.contains("téléphone")).count();
+    assert_eq!(phone_warnings, 1, "{:?}", detail.generation_warnings);
+}
+
+#[tokio::test]
+async fn objet_de_la_lettre_cite_l_intitule_exact_du_poste() {
+    let (app, sid) = ready_app("generation-intitule").await;
+    let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+
+    let (_, lm) = read_data(&app.state, sid, "lettre_motivation", view.id);
+    assert!(lm["subject"].as_str().is_some_and(|s| s.contains("Data engineer stagiaire")), "{}", lm["subject"]);
+    let messages = app.llm.messages_for(Step::LmContent);
+    assert!(messages[0].contains("INTITULÉ EXACT DU POSTE : Data engineer stagiaire"), "{}", messages[0]);
+}
+
+#[tokio::test]
+async fn intitule_reformule_relance_puis_succes() {
+    let (app, sid) = ready_app("generation-intitule-relance").await;
+    app.llm.respond_with(
+        Step::LmContent,
+        Reply::Sequence(&["lm_content_intitule_reformule.json", "lm_content.json"]),
+    );
+    let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+
+    assert!(app.llm.calls_for(Step::LmContent) >= 2, "au moins une relance");
+    let retry = &app.llm.messages_for(Step::LmContent)[1];
+    assert!(retry.contains("intitulé exact du poste « Data engineer stagiaire »"), "{retry}");
+    let (_, lm) = read_data(&app.state, sid, "lettre_motivation", view.id);
+    assert!(lm["subject"].as_str().is_some_and(|s| s.contains("Data engineer stagiaire")));
+}
+
+#[tokio::test]
+async fn prenom_vide_refuse_la_generation_avant_tout_appel_llm() {
+    let (app, sid) = ready_app("generation-sans-prenom").await;
+    sqlx::query("UPDATE users SET prenom = ''").execute(&app.state.pool).await.expect("prénom vidé");
+
+    let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Failed), "{:?}", progress.status);
+    assert!(progress.error.as_deref().is_some_and(|e| e.contains("prénom")), "{:?}", progress.error);
+    assert_eq!(app.llm.calls_for(Step::Matching), 0, "aucun appel LLM");
+    assert_eq!(app.llm.calls_for(Step::CvContent), 0);
+}
+
+#[tokio::test]
 async fn generation_remplit_data_json_depuis_le_profil() {
     let (app, sid) = ready_app("generation-ok").await;
-    // Les références de test passent la validation dès le premier essai,
-    // avec le modèle imposé à la templatisation.
-    for step in [Step::ExampleCv, Step::TemplateCv, Step::ExampleLm, Step::TemplateLm] {
-        assert_eq!(app.llm.models_for(step), [TEMPLATIZE_MODEL], "{step:?}");
-    }
+    // L'import des références ne fait aucun appel LLM.
+    assert_eq!(app.llm.total_calls(), 0, "import sans LLM");
 
     let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
     let progress = wait_generation(&app.state, view.id).await;
     assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
 
     // ------------------------------------------------------------------
-    // 1. data.json : faits du profil ; ce que le profil n'a pas (ville et
-    //    code postal, vidés par `seed_profile`) vient du document
+    // 1. data.json : faits du profil, lieu de la session (« Lyon », sans
+    //    code postal) ; le code postal absent ne vient jamais du document
     // ------------------------------------------------------------------
     let (cv_raw, cv) = read_data(&app.state, sid, "cv", view.id);
     let (_, lm) = read_data(&app.state, sid, "lettre_motivation", view.id);
     for data in [&cv, &lm] {
-        assert_eq!(data["identity"]["ville"], "Exempleville", "profil vide : ville du document");
-        assert_eq!(data["identity"]["zip_code"], "00000", "profil vide : code postal du document");
+        assert_eq!(data["identity"]["ville"], "Lyon", "ville de la session");
+        assert_eq!(data["identity"]["zip_code"], "", "code postal absent : pas de repli sur le document");
     }
     assert_eq!(cv["identity"]["prenom"], "Alex");
     assert_eq!(cv["identity"]["nom"], "Martin");
@@ -99,8 +173,10 @@ async fn generation_remplit_data_json_depuis_le_profil() {
     assert_eq!(cv["experiences"][0]["poste"], "Alternant data engineer");
     assert_eq!(cv["experiences"][0]["entreprise"], "Lumen Data");
     assert_eq!(cv["formations"][0]["titre"], "Master informatique");
-    // Entrées : lignes exactes des descriptions du profil, jamais réécrites.
+    // Entrées : éléments « - » des descriptions du profil, sans le tiret, jamais réécrits.
     assert_eq!(cv["experiences"][0]["bullets"], serde_json::json!(["Pipelines SQL pour le reporting."]));
+    assert_eq!(cv["experiences"][0]["intro"], "", "aucune ligne avant le premier élément");
+    assert_eq!(cv["list_marker"], "•", "format de session par défaut : puce");
     assert_eq!(cv["projects"][0]["titre"], "Tableau de bord associatif");
     assert_eq!(cv["projects"][0]["bullets"], serde_json::json!(["Suivi des adhésions en Python."]));
     assert_eq!(cv["projects"][0]["pour_qui"], "Association Escalade Lyon");
@@ -136,11 +212,8 @@ async fn generation_remplit_data_json_depuis_le_profil() {
     }
     let detail = db::candidatures::fetch_detail(&app.state.pool, view.id).await.unwrap();
     assert!(detail.cv_path.is_some() && detail.lettre_motivation_path.is_some());
-    let version = i64::from(detail.cv_reference_version.expect("version de référence"));
-    let version_dir = storage_paths::to_absolute(&app.state.data_dir, &storage_paths::version_dir(sid, "cv", version));
-    let template = std::fs::read_to_string(version_dir.join("template.typ")).expect("template enregistré");
-    let rendered = compile_template(template, cv_raw.into_bytes(), version_dir, app.state.fonts_dir.clone())
-        .expect("recompilation du CV");
+    assert!(detail.cv_reference_version.is_some(), "version de référence");
+    let rendered = render(&app, sid, "cv", &cv).await;
     assert_eq!(rendered.page_count, 1);
     assert!(rendered.text.contains("ALEX MARTIN"), "texte du CV : {}", rendered.text);
 }
@@ -167,13 +240,13 @@ async fn aucun_tiret_interdit_dans_les_documents_generes() {
     // ------------------------------------------------------------------
     // 1. data.json : aucune chaîne avec un tiret interdit
     // ------------------------------------------------------------------
-    let (cv_raw, cv) = read_data(&app.state, sid, "cv", cid);
-    let (lm_raw, lm) = read_data(&app.state, sid, "lettre_motivation", cid);
+    let (_, cv) = read_data(&app.state, sid, "cv", cid);
+    let (_, lm) = read_data(&app.state, sid, "lettre_motivation", cid);
     assert_no_dash_in_data("CV", &cv);
     assert_no_dash_in_data("lettre", &lm);
     assert_eq!(cv["experiences"][0]["poste"], "Fondateur - Plateforme de covoiturage");
     assert_eq!(cv["projects"][0]["titre"], "ALGN - Autonomous Legal Graph Navigator");
-    assert_eq!(lm["subject"], "Candidature, stage de data engineer");
+    assert_eq!(lm["subject"], "Candidature, Data engineer stagiaire");
     let paragraph = lm["paragraphs"][1].as_str().expect("paragraphe");
     assert!(paragraph.contains("pipelines SQL, un travail proche"), "{paragraph}");
     let profile = db::profile::build_profile(pool).await.expect("profil");
@@ -182,14 +255,8 @@ async fn aucun_tiret_interdit_dans_les_documents_generes() {
     // ------------------------------------------------------------------
     // 2. Texte rendu : aucun tiret interdit non plus
     // ------------------------------------------------------------------
-    for (doc_type, raw) in [("cv", cv_raw), ("lettre_motivation", lm_raw)] {
-        let doc = db::documents::get_current(pool, sid, doc_type).await.expect("lecture").expect("référence");
-        let dir = storage_paths::to_absolute(
-            &app.state.data_dir,
-            &storage_paths::version_dir(sid, doc_type, doc.current_version_id),
-        );
-        let template = std::fs::read_to_string(dir.join("template.typ")).expect("template");
-        let rendered = compile_template(template, raw.into_bytes(), dir, app.state.fonts_dir.clone()).expect("compilation");
+    for (doc_type, data) in [("cv", &cv), ("lettre_motivation", &lm)] {
+        let rendered = render(&app, sid, doc_type, data).await;
         assert_no_dash_in_text(doc_type, &rendered.text);
     }
 }
@@ -248,6 +315,64 @@ async fn creation_refusee_sans_references() {
     assert_eq!(app.llm.total_calls(), 0);
 }
 
+#[tokio::test]
+async fn creation_refusee_sans_ville_de_session() {
+    let app = test_state::app("generation-sans-ville").await;
+    test_state::seed_profile(&app.state.pool).await;
+    let session = db::sessions::insert(&app.state.pool, &seed::session_input("Sans lieu", None, Some("69000")), seed::NOW)
+        .await
+        .expect("session");
+    test_state::seed_references(&app.state, session.id).await;
+
+    let calls_before = app.llm.total_calls();
+    let result = candidatures::create(&app.state, &candidature_input(session.id, OFFRE, None)).await;
+
+    match result {
+        Err(AppError::Validation(message)) => assert!(message.contains("ville de la session"), "{message}"),
+        other => panic!("validation attendue, obtenu {:?}", other.map(|v| v.id)),
+    }
+    assert_eq!(count(&app.state.pool, "candidatures").await, 0);
+    assert_eq!(app.llm.total_calls(), calls_before, "aucun appel LLM après le refus");
+
+    // Avec la ville seule (code postal facultatif), la candidature est acceptée.
+    let location = findmyjob_lib::models::UpdateSessionLocationInput { ville: Some("Lyon".into()), zip_code: None };
+    db::sessions::update_location(&app.state.pool, session.id, &location).await.expect("lieu");
+    let view = candidatures::create(&app.state, &candidature_input(session.id, OFFRE, None)).await.expect("création");
+    let progress = wait_generation(&app.state, view.id).await;
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+}
+
+#[tokio::test]
+async fn session_sans_ville_ne_retombe_jamais_sur_la_reference() {
+    let (app, sid) = ready_app("generation-lieu-sans-repli").await;
+    // La création est refusée sans ville : on contourne le garde-fou pour
+    // atteindre la génération elle-même.
+    let input = candidature_input(sid, OFFRE, None);
+    let new = findmyjob_lib::services::candidature_validation::validate_create(&input).expect("validation");
+    let view = db::candidatures::insert(
+        &app.state.pool,
+        new.session_id,
+        &new.fields,
+        &new.description_offre,
+        &new.contacts,
+        seed::NOW,
+    )
+    .await
+    .expect("candidature");
+    let clear = findmyjob_lib::models::UpdateSessionLocationInput { ville: None, zip_code: None };
+    db::sessions::update_location(&app.state.pool, sid, &clear).await.expect("effacement du lieu");
+    findmyjob_lib::services::generation::start(&app.state, view.id, sid, new.description_offre);
+
+    let progress = wait_generation(&app.state, view.id).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+    for doc_type in ["cv", "lettre_motivation"] {
+        let (_, data) = read_data(&app.state, sid, doc_type, view.id);
+        assert_eq!(data["identity"]["ville"], "", "{doc_type} : jamais la ville de la référence");
+        assert_eq!(data["identity"]["zip_code"], "", "{doc_type} : jamais le code postal de la référence");
+    }
+}
+
 /// Lance une génération et attend sa fin.
 async fn generate(app: &TestApp, sid: i64) -> (i64, GenerationProgress) {
     let view = candidatures::create(&app.state, &candidature_input(sid, OFFRE, None)).await.expect("création");
@@ -286,6 +411,31 @@ async fn matching_invalide_puis_corrige() {
     assert_eq!(cv["projects"][0]["titre"], "Tableau de bord associatif");
 }
 
+#[tokio::test]
+async fn traduction_garde_intro_elements_et_suites() {
+    let (app, sid) = english_app("generation-traduction-structure").await;
+    // Intro, élément avec une suite de ligne, puis un second élément.
+    let description = "Équipe de 5 personnes.\n- Pipelines SQL pour le reporting\ndéployés chaque semaine\n- Tests automatisés";
+    sqlx::query("UPDATE experiences SET description = $1").bind(description).execute(&app.state.pool).await.unwrap();
+    app.llm.respond_with(Step::ProfileTranslation, Reply::Fixture("profile_translation_structure.json"));
+
+    let (cid, progress) = generate(&app, sid).await;
+
+    assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
+    let sent = &app.llm.messages_for(Step::ProfileTranslation)[0];
+    for line in ["Équipe de 5 personnes.", "Pipelines SQL pour le reporting", "déployés chaque semaine", "Tests automatisés"] {
+        assert!(sent.contains(&format!("\"{line}\"")), "une ligne à plat par ligne de la description : {sent}");
+    }
+    assert!(!sent.contains("- "), "aucun symbole de liste envoyé à la traduction : {sent}");
+    let (_, cv) = read_data(&app.state, sid, "cv", cid);
+    assert_eq!(cv["experiences"][0]["intro"], "Team of 5 people.");
+    assert_eq!(
+        cv["experiences"][0]["bullets"],
+        serde_json::json!(["SQL pipelines for reporting\ndeployed every week", "Automated tests"]),
+        "structure reconstruite après traduction"
+    );
+}
+
 /// Application dont l'offre est analysée en anglais (référence en français).
 async fn english_app(name: &str) -> (TestApp, i64) {
     let (app, sid) = ready_app(name).await;
@@ -302,7 +452,8 @@ async fn offre_dans_une_autre_langue_traduit_les_entrees() {
     assert!(matches!(progress.status, GenerationStatus::Completed), "génération : {:?}", progress.error);
     assert_eq!(app.llm.calls_for(Step::ProfileTranslation), 1, "un seul appel pour toutes les entrées");
     let sent = &app.llm.messages_for(Step::ProfileTranslation)[0];
-    assert!(sent.contains("Pipelines SQL pour le reporting."), "{sent}");
+    assert!(sent.contains("\"Pipelines SQL pour le reporting.\""), "ligne envoyée sans son tiret : {sent}");
+    assert!(!sent.contains("- Pipelines"), "aucun symbole de liste envoyé à la traduction : {sent}");
     for official in ["Alternant data engineer", "Lumen Data", "Tableau de bord associatif", "Master informatique", "Université Lyon 1"] {
         assert!(!sent.contains(official), "{official} n'est jamais envoyé à la traduction : {sent}");
     }

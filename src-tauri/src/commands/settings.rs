@@ -96,6 +96,35 @@ pub async fn set_ui_language(ctx: tauri::State<'_, AppContext>, lang: String) ->
     services::settings::set_ui_lang(&ctx.state()?.pool, &lang).await
 }
 
+/// Renvoie l'état enregistré de la barre latérale.
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+///
+/// # Returns
+///
+/// `true` si la barre latérale est repliée.
+#[tauri::command]
+pub async fn get_sidebar_collapsed(ctx: tauri::State<'_, AppContext>) -> Result<bool, AppError> {
+    db::settings::resolve_sidebar_collapsed(&ctx.state()?.pool).await
+}
+
+/// Enregistre l'état replié ou déplié de la barre latérale.
+///
+/// # Arguments
+///
+/// * `ctx` - Contexte de l'application.
+/// * `collapsed` - `true` si la barre latérale est repliée.
+///
+/// # Returns
+///
+/// `Ok(())` si l'écriture a réussi.
+#[tauri::command]
+pub async fn set_sidebar_collapsed(ctx: tauri::State<'_, AppContext>, collapsed: bool) -> Result<(), AppError> {
+    services::settings::set_sidebar_collapsed(&ctx.state()?.pool, collapsed).await
+}
+
 /// Teste la connexion à l'API Claude.
 ///
 /// # Arguments

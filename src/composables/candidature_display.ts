@@ -92,6 +92,18 @@ export function sourceOptions(): SelectOption[] {
   return SOURCE_VALUES.map(({ value, key }) => ({ value, label: t(`source.${key}`) }))
 }
 
+/**
+ * Libellé traduit d'une plateforme d'origine stockée (valeur française).
+ *
+ * @param value - Valeur stockée dans `candidatures.source`.
+ * @returns Libellé dans la langue de l'interface, ou la valeur elle-même si
+ *   elle ne fait pas partie des plateformes proposées.
+ */
+export function sourceLabel(value: string): string {
+  const known = SOURCE_VALUES.find((s) => s.value === value)
+  return known ? t(`source.${known.key}`) : value
+}
+
 /** Classes Tailwind (fond + texte) associées à chaque statut brut de candidature. */
 const STATUS_COLORS: Record<string, string> = {
   a_postuler: 'bg-neutral-100 text-neutral-600',
@@ -140,6 +152,54 @@ export function statusLabel(status: string): string {
  */
 export function statusColor(status: string): string {
   return STATUS_COLORS[status] ?? 'bg-neutral-100 text-neutral-600'
+}
+
+/** Couleur propre à chaque issue d'une candidature clôturée (tableau et fiche). */
+const CLOSED_COLORS: Record<string, string> = {
+  refus: 'bg-rose-100 text-rose-700',
+  abandon: 'bg-neutral-200 text-neutral-600',
+  ghosting: 'bg-neutral-100 text-neutral-500',
+  offre_refusee: 'bg-amber-100 text-amber-700',
+}
+
+/**
+ * Couleur de la pastille d'une candidature clôturée, propre à son issue.
+ *
+ * @param status - Statut brut de la candidature.
+ * @returns Classes Tailwind de fond et de texte, celles de `statusColor` si le statut n'est pas une clôture.
+ */
+export function closedStatusColor(status: string): string {
+  return CLOSED_COLORS[status] ?? statusColor(status)
+}
+
+/** Palette des couleurs d'avatar d'entreprise, assignées de façon stable par candidature. */
+const AVATAR_COLORS = [
+  'bg-blue-100 text-blue-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-amber-100 text-amber-700',
+  'bg-rose-100 text-rose-700',
+  'bg-purple-100 text-purple-700',
+  'bg-cyan-100 text-cyan-700',
+]
+
+/**
+ * Couleur de l'avatar d'entreprise d'une candidature, stable d'un écran à l'autre.
+ *
+ * @param candidatureId - Identifiant de la candidature.
+ * @returns Classes Tailwind de fond et de texte.
+ */
+export function avatarColor(candidatureId: number): string {
+  return AVATAR_COLORS[Math.abs(candidatureId) % AVATAR_COLORS.length]
+}
+
+/**
+ * Initiales d'un nom (entreprise, contact) : première lettre des deux premiers mots.
+ *
+ * @param name - Nom à abréger, `null` si absent.
+ * @returns Deux lettres en majuscules, vide si le nom est absent.
+ */
+export function nameInitials(name: string | null): string {
+  return (name ?? '').split(' ').map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase()
 }
 
 /**

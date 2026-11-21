@@ -38,6 +38,7 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let startup = startup::initialize(app.handle());
@@ -66,6 +67,8 @@ pub fn run() {
             commands::save_lettre_motivation,
             commands::compile_cv,
             commands::compile_lettre_motivation,
+            commands::get_reference_prompt,
+            commands::get_reference_doc_links,
             commands::get_documents_status,
             commands::get_document_versions,
             commands::get_document_version_pdf,
@@ -114,13 +117,18 @@ pub fn run() {
             commands::create_session,
             commands::get_sessions,
             commands::update_session,
+            commands::update_session_location,
+            commands::update_session_list_format,
             commands::delete_session,
+            commands::get_session_stats,
             commands::get_llm_model,
             commands::set_llm_model,
             commands::get_theme,
             commands::set_theme,
             commands::get_ui_language,
             commands::set_ui_language,
+            commands::get_sidebar_collapsed,
+            commands::set_sidebar_collapsed,
             commands::test_api_connection,
             commands::get_api_key_status,
             commands::save_api_key,
