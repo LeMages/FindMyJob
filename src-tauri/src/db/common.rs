@@ -1,5 +1,6 @@
 //! Fonctions partagées par les modules `db::*` : conversion des erreurs
-//! sqlx, normalisation des saisies et suppression d'une ligne par identifiant.
+//! sqlx, normalisation des saisies (dont le contexte détaillé des
+//! expériences et des projets) et suppression d'une ligne par identifiant.
 
 // Importation des crates externes
 use sqlx::SqlitePool;
@@ -38,6 +39,31 @@ pub fn normalize(s: Option<String>) -> Option<String> {
         let t = v.trim().to_string();
         if t.is_empty() { None } else { Some(t) }
     })
+}
+
+/// Nombre maximal de caractères du contexte détaillé d'une expérience ou
+/// d'un projet. Il borne la hausse des tokens envoyés au LLM.
+pub const MAX_CONTEXTE_CHARS: usize = 2000;
+
+/// Normalise et valide le contexte détaillé d'une expérience ou d'un projet :
+/// trim, `None` si vide, refus au-delà de `MAX_CONTEXTE_CHARS` caractères.
+///
+/// # Arguments
+///
+/// * `contexte` - Contexte tel que reçu du frontend.
+///
+/// # Returns
+///
+/// Contexte normalisé, ou `AppError::Validation` s'il est trop long.
+pub fn normalize_contexte(contexte: Option<String>) -> Result<Option<String>, AppError> {
+    let contexte = normalize(contexte);
+    let length = contexte.as_deref().map_or(0, |c| c.chars().count());
+    if length > MAX_CONTEXTE_CHARS {
+        return Err(AppError::Validation(format!(
+            "Le contexte détaillé ne doit pas dépasser {MAX_CONTEXTE_CHARS} caractères ({length} saisis)."
+        )));
+    }
+    Ok(contexte)
 }
 
 /// Supprime une ligne par identifiant (tables enfants du profil).

@@ -12,6 +12,8 @@ pub struct ProjetView {
     pub pour_qui: Option<String>,
     pub date_debut: Option<NaiveDate>,
     pub date_fin: Option<NaiveDate>,
+    /// Contexte détaillé : jamais rendu, fourni au LLM pour le matching et la lettre.
+    pub contexte: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -23,4 +25,5 @@ pub struct CreateProjetInput {
     pub pour_qui: Option<String>,
     pub date_debut: Option<NaiveDate>,
     pub date_fin: Option<NaiveDate>,
+    pub contexte: Option<String>,
 }

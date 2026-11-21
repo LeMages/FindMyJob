@@ -6,7 +6,7 @@
 
 // Importation des modules internes
 use crate::shared::{fake_llm, offer_server, seed, test_state};
-use fake_llm::Step;
+use fake_llm::{Reply, Step};
 use findmyjob_lib::error::AppError;
 use findmyjob_lib::models::{CreateCandidatureInput, ExtractionStage, GenerationStatus};
 use findmyjob_lib::scraping::fetch::fetch_html_allowing_loopback;
@@ -30,9 +30,9 @@ async fn parcours_complet_de_l_offre_a_la_suppression() {
     assert_eq!((profil.experiences.len(), profil.projets.len(), profil.skills.len()), (1, 1, 2));
 
     // ------------------------------------------------------------------
-    // 2. Session et références templatisées
+    // 2. Session et références au contrat
     // ------------------------------------------------------------------
-    let sid = db::sessions::insert(pool, "Stage 2027", seed::NOW).await.expect("session").id;
+    let sid = db::sessions::insert(pool, &seed::session_input("Stage 2027", Some("Villeurbanne"), Some("69100")), seed::NOW).await.expect("session").id;
     assert!(!db::documents::status_for_session(pool, sid).await.unwrap().all_ready);
     test_state::seed_references(&app.state, sid).await;
     assert!(db::documents::status_for_session(pool, sid).await.unwrap().all_ready);
@@ -42,6 +42,8 @@ async fn parcours_complet_de_l_offre_a_la_suppression() {
     // ------------------------------------------------------------------
     // 3. Import de l'offre par son lien
     // ------------------------------------------------------------------
+    // L'objet de la lettre doit citer l'intitulé exact de l'offre importée.
+    app.llm.respond_with(Step::LmContent, Reply::Fixture("lm_content_stage_assistant.json"));
     let server = OfferServer::start().await;
     let url = server.serve("/doctolib/stage", "ashby_json_ld.html", 200, HTML).await;
     let offre = scraping::scrape_offer_with(app.state.claude(), &url, fetch_html_allowing_loopback)
@@ -90,6 +92,12 @@ async fn parcours_complet_de_l_offre_a_la_suppression() {
     }
     let lm = std::fs::read_to_string(artefact(&app.state, sid, "lettre_motivation", view.id, "data.json")).unwrap();
     assert!(lm.contains("Doctolib"), "destinataire de la lettre : {lm}");
+    let lm_data: serde_json::Value = serde_json::from_str(&lm).unwrap();
+    assert_eq!(lm_data["identity"]["ville"], "Villeurbanne", "ville de la session");
+    assert_eq!(lm_data["identity"]["zip_code"], "69100");
+    let cv = std::fs::read_to_string(artefact(&app.state, sid, "cv", view.id, "data.json")).unwrap();
+    let cv_data: serde_json::Value = serde_json::from_str(&cv).unwrap();
+    assert_eq!(cv_data["identity"]["ville"], "Villeurbanne");
 
     // ------------------------------------------------------------------
     // 6. Passage à « postulé »

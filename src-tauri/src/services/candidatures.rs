@@ -20,7 +20,7 @@ use crate::models::{CandidatureView, CreateCandidatureInput, DuplicateCandidatur
 use crate::trace_log;
 
 /// Indique si les deux références (CV et lettre) d'une session sont
-/// templatisées — seule condition sous laquelle une candidature peut être
+/// validées — seule condition sous laquelle une candidature peut être
 /// créée et sa génération réussir.
 ///
 /// # Arguments
@@ -49,9 +49,21 @@ async fn references_ready(pool: &SqlitePool, session_id: i64) -> Result<bool, Ap
 ///
 /// # Returns
 ///
-/// `CandidatureView` créée, ou `AppError::Validation`.
+/// `CandidatureView` créée, `AppError::SessionLocked` si la session n'est
+/// pas active, ou `AppError::Validation`.
 pub async fn create(state: &AppState, input: &CreateCandidatureInput) -> Result<CandidatureView, AppError> {
     if let Some(session_id) = input.session_id {
+        // Refus explicite avant les autres contrôles ; `db::candidatures::insert`
+        // le refait dans sa transaction.
+        db::sessions::ensure_active(&state.pool, session_id).await?;
+        // La ville de l'expéditeur est celle de la session : sans elle, le
+        // document généré n'aurait pas de lieu.
+        if db::sessions::fetch_view(&state.pool, session_id).await?.ville.is_none() {
+            return Err(AppError::Validation(
+                "La ville de la session est requise avant de pouvoir postuler : renseigne-la dans les paramètres de la session."
+                    .to_string(),
+            ));
+        }
         if !references_ready(&state.pool, session_id).await? {
             return Err(AppError::Validation(
                 "Les documents de référence (CV et lettre de motivation) doivent être uploadés \
@@ -159,6 +171,8 @@ pub enum ApplicationMessage {
 /// Le texte rédigé, que l'interface exporte en `.txt`.
 pub async fn postuler_avec_message(state: &AppState, id: i64, kind: ApplicationMessage) -> Result<String, AppError> {
     let pool = &state.pool;
+    // Refus avant l'appel LLM ; `mark_postule` le refait dans sa transaction.
+    db::joins::ensure_candidature_session_active(pool, id).await?;
     let detail = db::candidatures::fetch_detail(pool, id).await?;
     let profile = db::profile::build_profile(pool).await?;
     // Le message est adressé au premier contact lié (ordre de liaison).

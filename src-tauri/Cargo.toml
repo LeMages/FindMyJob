@@ -1,6 +1,6 @@
 [package]
 name = "findmyjob"
-version = "0.1.0"
+version = "2.2.0"
 description = "FindMyJob — suivi de candidatures"
 authors = []
 edition = "2021"
@@ -20,6 +20,7 @@ tauri-build = { workspace = true }
 
 [dependencies]
 tauri = { workspace = true }
+tauri-plugin-clipboard-manager = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

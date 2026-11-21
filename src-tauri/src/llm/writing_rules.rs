@@ -1,5 +1,6 @@
 //! Consignes de rédaction communes au CV et à la lettre, et mise en forme
-//! des blocs de prompt partagés (langue, modèle de style, feedback).
+//! des blocs de prompt partagés (langue, modèle de style, document de
+//! référence, consignes, feedback).
 //!
 //! Les consignes sont écrites en phrases simples, sans tiret cadratin : le
 //! style du prompt déteint sur celui de la sortie.
@@ -13,22 +14,20 @@ use crate::models::ProseGuidance;
 /// seule hiérarchie, écrite une fois : aucune autre consigne ne la contredit.
 pub const COMMON_RULES: &str = "Ordre de priorité des consignes, de la plus forte à la plus faible :
 1. la langue du document ;
-2. les zones [FIXE] de la référence ;
-3. le maximum de mots de chaque champ (budgets) ;
-4. les autres zones et consignes de la référence ;
-5. le style du modèle.
+2. le maximum de mots de chaque champ (budgets) ;
+3. les emplacements et consignes de la référence ;
+4. le style du modèle.
 Quand deux consignes s'opposent, la plus forte l'emporte.
 
-Style. Imite la voix du modèle de style : même registre, même personne grammaticale, même temps, même longueur de phrases, même façon d'ouvrir les éléments. Garde le rôle et l'ordre des éléments du modèle, sauf quand une zone [ADAPTABLE] demande de choisir ou d'ordonner autrement.
-Contenu. Hors des zones [FIXE], n'emprunte au modèle ni ses faits ni ses chiffres : il ne sert qu'au style. Tous les faits viennent du profil ; un chiffre n'apparaît que s'il figure dans le profil. Un élément énonce un fait, il ne commente jamais son adéquation au poste (par exemple « directement transférable à » ou « ce qui correspond à »). Les mots-clés de l'offre ne sont repris que là où ils décrivent un fait réel du profil.
-Forme. N'écris jamais « — » (tiret cadratin), « – » (tiret demi-cadratin), « --- » ni « -- », même dans un texte à recopier : à leur place, mets une virgule ou des parenthèses pour une incise, un deux-points pour une précision, un point pour séparer deux idées, un trait d'union simple (-) entre deux nombres. N'utilise ni gras Markdown ni backticks, sauf dans un texte à recopier.";
+Style. Imite la voix du modèle de style : même registre, même personne grammaticale, même temps, même longueur de phrases, même façon d'ouvrir les éléments. Garde le rôle et l'ordre des éléments du modèle, sauf quand un emplacement [ADAPTABLE] demande de choisir ou d'ordonner autrement.
+Contenu. N'emprunte au modèle ni ses faits ni ses chiffres : il ne sert qu'au style. Tous les faits viennent du profil ; un chiffre n'apparaît que s'il figure dans le profil. Un élément énonce un fait, il ne commente jamais son adéquation au poste (par exemple « directement transférable à » ou « ce qui correspond à »). Les mots-clés de l'offre ne sont repris que là où ils décrivent un fait réel du profil.
+Forme. N'écris jamais « — » (tiret cadratin), « – » (tiret demi-cadratin), « --- » ni « -- » : à leur place, mets une virgule ou des parenthèses pour une incise, un deux-points pour une précision, un point pour séparer deux idées, un trait d'union simple (-) entre deux nombres. N'utilise ni gras Markdown ni backticks.";
 
-/// Règles des zones balisées de la référence.
-const ZONE_RULES: &str = "Règles des zones.
-[FIXE] : reprends le texte de la zone mot pour mot, dans la langue du document. Seules les informations qui diffèrent du profil (ville, école, entreprise, intitulé, chiffre) y sont remplacées par celles du profil.
-[VARIABLE] : remplace le texte de la zone par les informations tirées de l'offre, en suivant sa consigne.
-[ADAPTABLE] : rédige la zone à partir du profil selon l'offre, en suivant sa consigne, sans rien inventer.
-Les zones d'un champ s'enchaînent dans le même ordre, sans rien ajouter entre elles. Un champ sans zone est rédigé à partir du profil et de l'offre.";
+/// Règles des emplacements déclarés par la référence.
+const ZONE_RULES: &str = "Règles des emplacements.
+[VARIABLE] : remplace le texte d'exemple de l'emplacement par les informations tirées de l'offre, en suivant sa consigne.
+[ADAPTABLE] : rédige l'emplacement à partir du profil selon l'offre, en suivant sa consigne, sans rien inventer.
+Un champ sans emplacement est rédigé à partir du profil et de l'offre.";
 
 /// Consigne de langue, placée en tête du prompt système : langue cible, et
 /// transposition de la voix si le modèle de style est dans une autre langue.
@@ -47,7 +46,7 @@ pub fn language_rule(target_lang: &str, example_lang: &str) -> String {
         format!("Langue du document : {target}. Tout ce que tu écris est en {target}.")
     } else {
         format!(
-            "Langue du document : {target}. Tout ce que tu écris est en {target}, y compris les zones [FIXE], données ici dans leur traduction fidèle. Le modèle de style est en {} : transpose sa voix en {target} (registre, personne, temps, longueur des phrases) au lieu de le traduire.",
+            "Langue du document : {target}. Tout ce que tu écris est en {target}. Le modèle de style est en {} : transpose sa voix en {target} (registre, personne, temps, longueur des phrases) au lieu de le traduire.",
             language_name(example_lang)
         )
     }
@@ -82,9 +81,29 @@ pub fn style_model_block(body: &str) -> String {
     )
 }
 
-/// Bloc des consignes de la référence : consignes générales, puis zones
-/// balisées de chaque champ de prose, avec les règles des zones. Leur rang
-/// est celui de `COMMON_RULES` (zones [FIXE] en 2, le reste en 4).
+/// Encadre le rendu complet de la référence avec ses valeurs d'exemple :
+/// il situe chaque champ rédigé parmi les parties fixes du document.
+///
+/// # Arguments
+///
+/// * `text` - Texte rendu de la référence.
+///
+/// # Returns
+///
+/// Bloc délimité, `None` si le rendu est vide.
+pub fn reference_document_block(text: &str) -> Option<String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "DOCUMENT DE RÉFÉRENCE COMPLET, tel qu'il s'affiche avec ses valeurs d'exemple. Ses parties fixes (titres, formules, phrases écrites dans le modèle) sont ajoutées à part autour des champs rédigés : ne les répète pas. Il situe chaque champ dans le document, il ne fournit aucun fait.\n<<<RÉFÉRENCE\n{text}\nRÉFÉRENCE>>>"
+    ))
+}
+
+/// Bloc des consignes de la référence : consignes générales, puis
+/// emplacements déclarés de chaque champ de prose, avec leurs règles. Leur
+/// rang est le 3 de `COMMON_RULES`.
 ///
 /// # Arguments
 ///
@@ -99,14 +118,14 @@ pub fn guidance_block(guidance: &ProseGuidance) -> Option<String> {
         return None;
     }
     let mut lines = vec![
-        "CONSIGNES DE LA RÉFÉRENCE (priorités 2 et 4 de l'ordre des consignes).".to_string(),
+        "CONSIGNES DE LA RÉFÉRENCE (priorité 3 de l'ordre des consignes).".to_string(),
     ];
     if !guidance.general.trim().is_empty() {
         lines.push(format!("Consignes générales :
 {}", guidance.general.trim()));
     }
     if !guidance.zones.is_empty() {
-        lines.push("Zones des champs de prose :".to_string());
+        lines.push("Emplacements des champs de prose :".to_string());
         for zone in &guidance.zones {
             let instruction =
                 if zone.instruction.trim().is_empty() { String::new() } else { format!(" Consigne : {}", zone.instruction.trim()) };

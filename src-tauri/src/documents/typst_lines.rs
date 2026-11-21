@@ -185,12 +185,12 @@ fn mark_par_starts(lines: &mut [TextLine], par_starts: &[(usize, f64)]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::documents::typst::compile_document;
+    use crate::documents::typst::compile_contract;
 
     /// Compile une source et retourne ses lignes.
     fn lines_of(source: &str) -> Vec<TextLine> {
-        let (root, fonts) = (std::env::temp_dir(), std::env::temp_dir().join("findmyjob-no-fonts"));
-        compile_document(source.to_string(), root, fonts).expect("compilation").lines
+        let fonts = std::env::temp_dir().join("findmyjob-no-fonts");
+        compile_contract(source, None, &fonts).expect("compilation").lines
     }
 
     #[test]

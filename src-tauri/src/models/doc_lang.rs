@@ -1,5 +1,5 @@
 //! Langues de document prises en charge et leurs noms : la seule source
-//! de ces valeurs (templatisation, analyse d'offre, rédaction, traductions,
+//! de ces valeurs (contrat des références, analyse d'offre, rédaction, traductions,
 //! langue du profil). Les données gardent le code de langue (`"fr"`,
 //! `"en"`), validé à chaque entrée dans l'application.
 

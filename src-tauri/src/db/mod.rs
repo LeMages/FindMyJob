@@ -14,6 +14,7 @@ pub mod joins;
 pub mod langues;
 pub mod profile;
 pub mod projets;
+pub mod session_stats;
 pub mod sessions;
 pub mod settings;
 pub mod skills;

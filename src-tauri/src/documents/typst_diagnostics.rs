@@ -32,6 +32,45 @@ pub fn describe_compile_error(error: &TypstAsLibError, main_source: &str) -> Str
     }
 }
 
+/// Diagnostic d'erreur Typst situé dans la source principale.
+///
+/// # Attributes
+///
+/// * `line` - Ligne fautive (à partir de 1), si le diagnostic pointe dans la source.
+/// * `message` - Message du compilateur, suivi de ses indices.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocatedDiagnostic {
+    pub line: Option<usize>,
+    pub message: String,
+}
+
+/// Diagnostics d'une erreur de compilation Typst, un par erreur, avec leur
+/// ligne quand elle est connue.
+///
+/// # Arguments
+///
+/// * `error` - Erreur renvoyée par `typst_as_lib`.
+/// * `main_source` - Source principale compilée, pour situer les diagnostics.
+///
+/// # Returns
+///
+/// Diagnostics dans l'ordre du compilateur (au moins un).
+pub fn located_diagnostics(error: &TypstAsLibError, main_source: &str) -> Vec<LocatedDiagnostic> {
+    match error {
+        TypstAsLibError::TypstSource(diagnostics) => diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let hints = diagnostic.hints.iter().map(|hint| format!(" Hint: {}", hint.v)).collect::<String>();
+                LocatedDiagnostic {
+                    line: locate(diagnostic, main_source).map(|(line, _)| line),
+                    message: format!("{}.{hints}", diagnostic.message),
+                }
+            })
+            .collect(),
+        other => vec![LocatedDiagnostic { line: None, message: other.to_string() }],
+    }
+}
+
 /// Décrit les avertissements d'une compilation Typst, situés comme les erreurs.
 ///
 /// # Arguments

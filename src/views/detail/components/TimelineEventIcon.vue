@@ -2,7 +2,7 @@
 /**
  * Icône SVG associée à un type d'événement de la timeline de suivi
  * (`entry.event_type`). Propre à `DetailView` — utilisée par
- * `StatusTimelineCard` et `AddEventPopup`.
+ * `StatusTimelineCard`, `EventTypeGrid` et `AddEventPopup`.
  */
 
 defineProps<{ eventType: string }>()

@@ -7,6 +7,9 @@
 
 export type Screen = 'tracking' | 'detail' | 'new' | 'profile' | 'settings'
 
+/** Onglet de la page Candidatures. */
+export type TrackingTab = 'candidatures' | 'planning' | 'stats' | 'parametres'
+
 // ── Utilisateur / profil ─────────────────────────────────────────────────────
 
 export interface UpdateUserInfoInput {
@@ -14,14 +17,10 @@ export interface UpdateUserInfoInput {
   nom: string | null
   email: string | null
   telephone: string | null
-  ville: string | null
-  zip_code: string | null
   permis: boolean | null
   linkedin: string | null
   github: string | null
   portfolio: string | null
-  /** Centres d'intérêt, une ligne = un item. */
-  interets: string | null
 }
 
 export interface CreateUserInput {
@@ -29,8 +28,6 @@ export interface CreateUserInput {
   prenom: string
   email: string
   telephone: string | null
-  ville: string | null
-  zip_code: string | null
   permis: boolean | null
   description: string | null
   linkedin: string | null
@@ -44,15 +41,11 @@ export interface UserView {
   prenom: string | null
   email: string | null
   telephone: string | null
-  ville: string | null
-  zip_code: string | null
   permis: boolean | null
   description: string | null
   linkedin: string | null
   github: string | null
   portfolio: string | null
-  /** Centres d'intérêt, une ligne = un item. */
-  interets: string | null
   /** Langue dans laquelle le profil est rédigé (`fr` ou `en`). */
   langue_profil: string
   created_at: string
@@ -73,13 +66,37 @@ export interface BoardCard {
 
 export type SessionStatut = 'active' | 'pause' | 'termine'
 
+/** Symbole des listes des descriptions dans les CV générés : `puce` (•) ou `tiret` (-). */
+export type SessionListFormat = 'puce' | 'tiret'
+
 export interface Session {
   id: number
   nom: string
   statut: SessionStatut
+  /** Ville de l'expéditeur (requise pour créer une candidature). */
+  ville: string | null
+  /** Code postal de l'expéditeur (facultatif). */
+  zip_code: string | null
+  /** Format des listes des CV générés dans la session (pas de l'affichage dans l'app). */
+  format_liste: SessionListFormat
+  /** Candidatures non clôturées (tout sauf refus, offre déclinée, abandon, ghosting). */
   candidature_count: number
-  has_accepted: boolean
   created_at: string
+}
+
+export interface CreateSessionInput {
+  nom: string
+  ville: string | null
+  zip_code: string | null
+}
+
+export interface UpdateSessionLocationInput {
+  ville: string | null
+  zip_code: string | null
+}
+
+export interface UpdateSessionListFormatInput {
+  format_liste: SessionListFormat
 }
 
 export interface UpdateSessionInput {
@@ -98,6 +115,8 @@ export interface ExperienceView {
   date_debut: string | null
   date_fin: string | null
   type_contrat: string | null
+  /** Contexte détaillé : jamais affiché sur le CV, fourni à l'IA. */
+  contexte: string | null
 }
 
 export interface CreateExperienceInput {
@@ -108,6 +127,7 @@ export interface CreateExperienceInput {
   date_debut: string | null
   date_fin: string | null
   type_contrat: string | null
+  contexte: string | null
 }
 
 export interface SkillView {
@@ -160,6 +180,8 @@ export interface ProjetView {
   pour_qui: string | null
   date_debut: string | null
   date_fin: string | null
+  /** Contexte détaillé : jamais affiché sur le CV, fourni à l'IA. */
+  contexte: string | null
 }
 
 export interface CreateProjetInput {
@@ -170,6 +192,7 @@ export interface CreateProjetInput {
   pour_qui: string | null
   date_debut: string | null
   date_fin: string | null
+  contexte: string | null
 }
 
 // ── Documents (CV / lettre de motivation) ────────────────────────────────────
@@ -178,6 +201,55 @@ export interface DocumentReferenceView {
   file_path: string
   pdf_path: string
   updated_at: string
+  /** Avertissements de la validation, remplis seulement au retour d'un import. */
+  warnings: ReferenceIssue[]
+}
+
+/** Liens GitHub du contrat et des exemples conformes (miroir de `ReferenceDocLinks`). */
+export interface ReferenceDocLinks {
+  contract: string
+  cv_example: string
+  lm_example: string
+}
+
+/** Code d'un problème de référence au contrat FindMyJob (miroir de `ReferenceIssueCode`). */
+export type ReferenceIssueCode =
+  | 'not_typ'
+  | 'too_large'
+  | 'not_utf8'
+  | 'forbidden_construct'
+  | 'compile_error'
+  | 'missing_font'
+  | 'metadata_missing'
+  | 'metadata_duplicated'
+  | 'metadata_invalid'
+  | 'wrong_contract'
+  | 'outdated_contract_version'
+  | 'language_missing'
+  | 'example_invalid'
+  | 'slot_unknown_field'
+  | 'slot_invalid_mode'
+  | 'slot_duplicated'
+  | 'language_compile_error'
+  | 'page_count_mismatch'
+  | 'empty_data_compile_error'
+  | 'hardcoded_value'
+  | 'list_marker_wrong'
+  | 'orphan_heading'
+  | 'orphan_separator'
+  | 'recipient_not_right_aligned'
+  | 'dash_marks'
+
+/** Problème relevé à l'import d'une référence (miroir de `ReferenceIssue`). */
+export interface ReferenceIssue {
+  code: ReferenceIssueCode
+  severity: 'error' | 'warning'
+  /** Chemin du champ concerné (`example.experiences[1].period`). */
+  path: string | null
+  /** Ligne Typst concernée (à partir de 1). */
+  line: number | null
+  /** Contexte brut non traduit (message du compilateur, police, valeur). */
+  detail: string | null
 }
 
 /** Version d'un document de référence d'une session (voir `DocumentVersionView` côté Rust). */
@@ -221,6 +293,8 @@ export interface CandidatureView {
   source: string | null
   type_contrat: string | null
   derniere_maj_statut: string
+  /** Date d'envoi (événement `candidature_envoyee`), `null` avant l'envoi. */
+  date_envoi: string | null
   cv_path: string | null
   lettre_motivation_path: string | null
   created_at: string
@@ -503,3 +577,65 @@ export interface FontFolderView {
 
 /** Langue de l'interface (indépendante de la langue des documents générés). */
 export type UiLanguage = 'fr' | 'en'
+
+// ======================================================================
+// Statistiques d'une session (miroir de `models/session_stats.rs`)
+// ======================================================================
+
+/** Nombre de candidatures envoyées pour une issue. */
+export interface OutcomeCount {
+  /** `in_progress`, `offer`, `refus`, `ghosting`, `abandon` ou `offre_refusee`. */
+  outcome: string
+  count: number
+}
+
+/** Activité d'une semaine (du lundi au dimanche). */
+export interface WeekActivity {
+  /** Lundi de la semaine (`YYYY-MM-DD`). */
+  week_start: string
+  sent: number
+  interviews: number
+}
+
+/** Une valeur du critère comparé. */
+export interface ComparisonRow {
+  /** Numéro de version, valeur de `source`, `with` / `without`, ou `unknown`. */
+  key: string
+  sent: number
+  replied: number
+  interviewed: number
+  low_sample: boolean
+  best: boolean
+}
+
+/** Comparaison des candidatures envoyées selon un critère. */
+export interface Comparison {
+  criterion: 'cv_template' | 'lm_template' | 'source' | 'contact'
+  rows: ComparisonRow[]
+}
+
+/** Entretiens passés d'un type. */
+export interface InterviewTypeCount {
+  interview_type: string
+  passed: number
+  positive: number
+}
+
+/** Statistiques d'une session, calculées sur les candidatures envoyées. */
+export interface SessionStats {
+  enough_data: boolean
+  min_sent: number
+  min_sent_per_row: number
+  sent: number
+  sent_this_week: number
+  replied: number
+  interviewed: number
+  offers: number
+  avg_first_reply_days: number | null
+  outcomes: OutcomeCount[]
+  weeks: WeekActivity[]
+  comparisons: Comparison[]
+  interview_types: InterviewTypeCount[]
+  median_days: { to_offer: number | null; to_rejection: number | null; to_ghosting: number | null }
+  follow_ups: { sent: number; answered: number; avg_days_before: number | null }
+}

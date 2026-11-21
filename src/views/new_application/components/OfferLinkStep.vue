@@ -1,11 +1,17 @@
 <script setup lang="ts">
 /**
- * Étape « lien de l'offre » : saisie de l'URL, analyse ou saisie manuelle.
- * Affiche l'offre expirée ou l'erreur réelle d'une analyse précédente.
+ * Étape « lien de l'offre » : carte centrée avec le champ du lien et le
+ * bouton Analyser dans le même bloc, et un lien discret vers la saisie
+ * manuelle. Affiche au-dessus du champ l'offre expirée ou l'erreur réelle
+ * d'une analyse précédente.
  */
 
 // Importation des modules Vue / framework
 import { useI18n } from 'vue-i18n'
+
+// Importation des composants
+import InfoBanner from '@/components/InfoBanner.vue'
+import UiIcon from '@/components/UiIcon.vue'
 
 const { t } = useI18n()
 
@@ -17,34 +23,52 @@ defineProps<{
   error: string | null
 }>()
 
-defineEmits<{ analyze: []; manual: [] }>()
+const emit = defineEmits<{ analyze: []; manual: [] }>()
+
+/** Lance l'analyse (bouton ou touche Entrée), sauf lien vide ou analyse en cours. */
+function submit(busy: boolean) {
+  if (busy || !url.value.trim()) return
+  emit('analyze')
+}
 </script>
 
 <template>
-  <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-    <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('new_application.link.section') }}</div>
-    <p class="text-[13px] text-neutral-500 mb-[14px]">{{ t('new_application.link.intro') }}</p>
-    <div v-if="unavailable" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[14px] text-[13px] text-amber-700">
-      {{ unavailable }} {{ t('new_application.link.unavailable_hint') }}
+  <div class="max-w-[680px] mx-auto mt-10 text-center bg-white border border-neutral-200 rounded-2xl px-6 sm:px-11 pt-10 pb-8">
+    <div class="w-12 h-12 rounded-xl bg-neutral-100 text-neutral-700 flex items-center justify-center mx-auto mb-4">
+      <UiIcon name="link" :size="18" />
     </div>
-    <div v-if="error" class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-[14px] text-[13px] text-red-600">{{ error }}</div>
-    <div class="mb-[14px]">
-      <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.link') }}</label>
-      <input v-model="url" type="url" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('new_application.link.placeholder')" />
-    </div>
-    <div class="flex gap-3">
+    <h2 class="text-[20px] font-semibold text-neutral-950 m-0">{{ t('new_application.link.title') }}</h2>
+    <p class="text-[13.5px] text-neutral-500 mt-[6px] mb-[22px]">{{ t('new_application.link.intro') }}</p>
+
+    <InfoBanner v-if="unavailable" tone="warn">{{ unavailable }} {{ t('new_application.link.unavailable_hint') }}</InfoBanner>
+    <InfoBanner v-if="error" tone="err">{{ error }}</InfoBanner>
+
+    <form
+      class="flex items-center gap-2 border border-neutral-300 rounded-xl py-[6px] pr-[6px] pl-[14px] bg-neutral-50 text-left focus-within:border-neutral-500 focus-within:bg-white"
+      @submit.prevent="submit(busy)"
+    >
+      <span class="flex text-neutral-400"><UiIcon name="link" :size="18" /></span>
+      <input
+        v-model="url"
+        type="url"
+        class="flex-1 min-w-0 border-0 bg-transparent text-[14px] font-sans text-neutral-950 outline-none h-9"
+        :placeholder="t('new_application.link.placeholder')"
+      />
       <button
-        class="h-12 text-[15px] rounded-10 px-4 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': busy || !url.trim() }"
+        type="submit"
+        class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
         :disabled="busy || !url.trim()"
-        @click="$emit('analyze')"
-      >{{ busy ? t('new_application.analyzing') : t('new_application.link.analyze') }}</button>
-      <button
-        class="h-12 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': busy }"
-        :disabled="busy"
-        @click="$emit('manual')"
-      >{{ t('new_application.manual') }}</button>
-    </div>
+      >
+        <template v-if="busy"><UiIcon name="spinner" /> {{ t('new_application.analyzing') }}</template>
+        <template v-else>{{ t('new_application.link.analyze') }} <UiIcon name="arrow" /></template>
+      </button>
+    </form>
+
+    <button
+      type="button"
+      class="mt-[18px] border-0 bg-transparent p-0 text-[12.5px] font-sans text-neutral-500 cursor-pointer underline underline-offset-[3px] hover:text-neutral-950 disabled:opacity-40 disabled:cursor-not-allowed"
+      :disabled="busy"
+      @click="emit('manual')"
+    >{{ t('new_application.link.manual') }}</button>
   </div>
 </template>

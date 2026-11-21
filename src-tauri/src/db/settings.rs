@@ -30,6 +30,10 @@ pub const VALID_UI_LANGS: [&str; 2] = ["fr", "en"];
 /// Langue d'interface appliquée en l'absence de valeur enregistrée.
 pub const DEFAULT_UI_LANG: &str = "fr";
 
+/// Clé du paramètre stockant l'état replié (`"1"`) ou déplié (`"0"`) de la
+/// barre latérale, conservé entre deux lancements comme le thème.
+pub const KEY_SIDEBAR_COLLAPSED: &str = "sidebar_collapsed";
+
 /// Récupère la valeur brute associée à une clé de paramètre.
 ///
 /// # Arguments
@@ -119,4 +123,18 @@ pub async fn resolve_theme(pool: &SqlitePool) -> Result<String, AppError> {
 /// La langue de l'interface à appliquer (`"fr"` ou `"en"`).
 pub async fn resolve_ui_lang(pool: &SqlitePool) -> Result<String, AppError> {
     Ok(get(pool, KEY_UI_LANG).await?.unwrap_or_else(|| DEFAULT_UI_LANG.to_string()))
+}
+
+/// Résout l'état enregistré de la barre latérale : repliée si la valeur en
+/// base vaut `"1"`, dépliée sinon (y compris sans valeur enregistrée).
+///
+/// # Arguments
+///
+/// * `pool` - Pool de connexions SQLite.
+///
+/// # Returns
+///
+/// `true` si la barre latérale doit être repliée.
+pub async fn resolve_sidebar_collapsed(pool: &SqlitePool) -> Result<bool, AppError> {
+    Ok(get(pool, KEY_SIDEBAR_COLLAPSED).await?.as_deref() == Some("1"))
 }

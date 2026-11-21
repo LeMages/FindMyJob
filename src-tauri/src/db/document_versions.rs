@@ -26,9 +26,9 @@ const VIEW_COLUMNS: &str = "v.id, v.session_id, v.doc_type, v.version, v.origina
 /// Jointure utilisée par toutes les lectures de `DocumentVersionView`.
 const VIEW_FROM: &str = "document_versions v LEFT JOIN documents d ON d.current_version_id = v.id";
 
-/// Version complète d'un document de référence, avec ses fichiers de
-/// templatisation, nécessaires pour la relire ou la restaurer comme
-/// référence courante sans rappeler Claude. Interne, jamais exposée au frontend.
+/// Version complète d'un document de référence, avec les fichiers de son
+/// contrat validé, nécessaires pour la relire ou la restaurer comme
+/// référence courante. Interne, jamais exposée au frontend.
 ///
 /// # Attributes
 ///
@@ -36,7 +36,7 @@ const VIEW_FROM: &str = "document_versions v LEFT JOIN documents d ON d.current_
 /// * `original_filename` - Nom du fichier tel qu'uploadé.
 /// * `typst_path` - Chemin du `.typ`, relatif au dossier de données.
 /// * `pdf_path` - Chemin du `.pdf`, relatif au dossier de données.
-/// * `template` - Fichiers de templatisation, `None` si la version n'a pas été templatisée.
+/// * `template` - Fichiers du contrat validé, `None` si la version n'en a pas.
 pub struct VersionRecord {
     pub id: i64,
     pub original_filename: String,
@@ -55,7 +55,7 @@ pub struct VersionRecord {
 /// * `original_filename` - Nom du fichier tel qu'uploadé.
 /// * `typst_path` - Chemin du `.typ`, relatif au dossier de données.
 /// * `pdf_path` - Chemin du `.pdf`, relatif au dossier de données.
-/// * `template` - Fichiers de templatisation produits à l'upload.
+/// * `template` - Fichiers du contrat validé à l'upload.
 pub struct NewVersion<'a> {
     pub id: i64,
     pub session_id: i64,
@@ -224,7 +224,7 @@ pub async fn get_version(
     row.as_ref().map(row_to_view).transpose().map_err(map_db_err)
 }
 
-/// Récupère une version précise avec ses fichiers de templatisation, pour
+/// Récupère une version précise avec les fichiers de son contrat, pour
 /// la restaurer comme référence courante.
 ///
 /// # Arguments

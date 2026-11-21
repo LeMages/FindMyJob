@@ -1,5 +1,5 @@
-//! Budgets de longueur des documents générés, calculés depuis le contenu
-//! de la référence (`example_data.json`).
+//! Budgets de longueur des documents générés, calculés depuis les valeurs
+//! d'exemple de la référence (`contract.json`).
 //!
 //! Seule la prose rédigée a un budget : titre et résumé du CV, groupes de
 //! compétences, objet et paragraphes de la lettre. Les expériences, projets
@@ -14,17 +14,15 @@
 //!   document doit tenir dans ses pages), 30 % en dessous au plus (limite
 //!   souple, signalée sans relance : un texte un peu court ne casse rien) ;
 //! - le nombre de pages est celui du template rendu avec ses données
-//!   d'exemple (plafond, jamais dépassé) ;
-//! - les mots des zones `[FIXE]` d'un champ ne sont jamais réduits quand
-//!   le document dépasse son nombre de pages : seule la partie rédigée
-//!   raccourcit.
+//!   d'exemple (plafond, jamais dépassé). Les parties fixes du document
+//!   sont du texte du template : elles ne comptent dans aucun budget.
 
 // Importation des crates externes
 use serde::Serialize;
 
 // Importation des modules internes
 use crate::docgen::words::count_words;
-use crate::models::{CvData, LmData, ProseGuidance};
+use crate::models::{CvData, LmData};
 
 /// Dépassement toléré sur un nombre de mots, en pourcentage de la valeur
 /// cible (limite stricte). Calculs en entiers : en flottant, 100 × 1,1
@@ -51,19 +49,17 @@ fn upper_bound(n: usize) -> usize {
 /// * `target` - Nombre de mots visé (valeur de l'exemple).
 /// * `min` - Minimum souple : en dessous, le texte est signalé sans relance.
 /// * `max` - Maximum strict : au-dessus, la rédaction est relancée.
-/// * `fixed` - Mots recopiés de zones `[FIXE]`, jamais réduits.
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WordRange {
     pub target: usize,
     pub min: usize,
     pub max: usize,
-    pub fixed: usize,
 }
 
 impl WordRange {
     /// Plage autour de `target` : de 30 % en dessous à 10 % au-dessus.
     pub fn around(target: usize) -> Self {
-        Self { target, min: lower_bound(target), max: upper_bound(target), fixed: 0 }
+        Self { target, min: lower_bound(target), max: upper_bound(target) }
     }
 
     /// Indique si un nombre de mots est dans la plage.
@@ -71,21 +67,10 @@ impl WordRange {
         (self.min..=self.max).contains(&words)
     }
 
-    /// Même plage, dont `fixed` mots viennent de zones fixes (bornés par la
-    /// cible).
-    pub fn with_fixed(self, fixed: usize) -> Self {
-        Self { fixed: fixed.min(self.target), ..self }
-    }
-
-    /// Plage réduite d'un facteur (ex. `0.85`), bornes comprises : seuls
-    /// les mots au-delà de `fixed` sont réduits.
+    /// Plage réduite d'un facteur (ex. `0.85`), bornes comprises.
     pub fn scaled(&self, factor: f64) -> Self {
-        let fixed = self.fixed;
-        let scale = |n: usize| match n.checked_sub(fixed) {
-            Some(free) => fixed + ((free as f64) * factor).round() as usize,
-            None => n,
-        };
-        Self { target: scale(self.target), min: scale(self.min), max: scale(self.max).max(1), fixed }
+        let scale = |n: usize| ((n as f64) * factor).round() as usize;
+        Self { target: scale(self.target), min: scale(self.min), max: scale(self.max).max(1) }
     }
 }
 
@@ -104,21 +89,6 @@ pub struct CvBudget {
 }
 
 impl CvBudget {
-    /// Même budget, avec les mots des zones fixes du résumé (voir
-    /// `WordRange::with_fixed`).
-    ///
-    /// # Arguments
-    ///
-    /// * `guidance` - Consignes de la référence.
-    ///
-    /// # Returns
-    ///
-    /// Budget dont les zones fixes ne seront jamais réduites.
-    pub fn with_fixed_words(mut self, guidance: &ProseGuidance) -> Self {
-        self.summary_words = self.summary_words.with_fixed(fixed_words(guidance, "summary"));
-        self
-    }
-
     /// Budget réduit d'un facteur (ex. `0.85`) quand le document dépasse son
     /// nombre de pages : seul le résumé raccourcit, le nombre de groupes de
     /// compétences ne change pas.
@@ -152,24 +122,6 @@ impl LmBudget {
         self.paragraph_words.len()
     }
 
-    /// Même budget, avec les mots des zones fixes de l'objet et de chaque
-    /// paragraphe (voir `WordRange::with_fixed`).
-    ///
-    /// # Arguments
-    ///
-    /// * `guidance` - Consignes de la référence.
-    ///
-    /// # Returns
-    ///
-    /// Budget dont les zones fixes ne seront jamais réduites.
-    pub fn with_fixed_words(mut self, guidance: &ProseGuidance) -> Self {
-        self.subject_words = self.subject_words.with_fixed(fixed_words(guidance, "subject"));
-        for (i, range) in self.paragraph_words.iter_mut().enumerate() {
-            *range = range.with_fixed(fixed_words(guidance, &format!("paragraphs[{i}]")));
-        }
-        self
-    }
-
     /// Budget réduit d'un facteur (ex. `0.85`) : les mots diminuent, le
     /// nombre de paragraphes ne change pas.
     pub fn scaled(&self, factor: f64) -> Self {
@@ -181,16 +133,11 @@ impl LmBudget {
     }
 }
 
-/// Nombre de mots des zones fixes d'un champ de prose.
-fn fixed_words(guidance: &ProseGuidance, field: &str) -> usize {
-    guidance.fixed_texts(field).map(count_words).sum()
-}
-
 /// Calcule le budget d'un CV depuis le contenu de sa référence.
 ///
 /// # Arguments
 ///
-/// * `example` - Contenu de la référence (`example_data.json`).
+/// * `example` - Valeurs d'exemple de la référence (`contract.json`).
 /// * `page_count` - Nombre de pages du template rendu avec cet exemple.
 ///
 /// # Returns
@@ -208,7 +155,7 @@ pub fn cv_budget(example: &CvData, page_count: usize) -> CvBudget {
 ///
 /// # Arguments
 ///
-/// * `example` - Contenu de la référence (`example_data.json`).
+/// * `example` - Valeurs d'exemple de la référence (`contract.json`).
 /// * `page_count` - Nombre de pages du template rendu avec cet exemple.
 ///
 /// # Returns

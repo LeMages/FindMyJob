@@ -7,5 +7,6 @@ pub mod font_fixtures;
 pub mod no_dashes;
 pub mod offer_server;
 pub mod seed;
+pub mod tagged_references;
 pub mod temp_dir;
 pub mod test_state;

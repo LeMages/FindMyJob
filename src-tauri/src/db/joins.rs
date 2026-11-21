@@ -2,12 +2,43 @@
 //! `sessions`, interlocuteurs des entretiens d'une session).
 
 // Importation des crates externes
-use sqlx::{Row, SqlitePool};
+use sqlx::{Row, SqliteExecutor, SqlitePool};
 
 // Importation des modules internes
 use crate::db::common::map_db_err;
+use crate::db::sessions;
 use crate::error::AppError;
 use crate::models::{DuplicateCandidatureView, InterviewContactView};
+
+/// Vérifie que la session d'une candidature autorise les modifications
+/// (session `active`). Appelée dans la transaction d'écriture de chaque
+/// modification d'une candidature (champs, timeline, contacts, postulation,
+/// suppression).
+///
+/// # Arguments
+///
+/// * `executor` - Pool de connexions ou transaction active.
+/// * `candidature_id` - Identifiant de la candidature.
+///
+/// # Returns
+///
+/// Identifiant de la session de la candidature, `AppError::NotFound` si la
+/// candidature n'existe pas, ou `AppError::SessionLocked`.
+pub async fn ensure_candidature_session_active<'e, E: SqliteExecutor<'e>>(
+    executor: E,
+    candidature_id: i64,
+) -> Result<i64, AppError> {
+    let (session_id, statut): (i64, String) = sqlx::query_as(
+        "SELECT c.session_id, s.statut FROM candidatures c JOIN sessions s ON s.id = c.session_id WHERE c.id = $1",
+    )
+    .bind(candidature_id)
+    .fetch_optional(executor)
+    .await
+    .map_err(map_db_err)?
+    .ok_or_else(|| AppError::NotFound("Candidature introuvable.".to_string()))?;
+    sessions::check_active(&statut)?;
+    Ok(session_id)
+}
 
 /// Liste toutes les candidatures qui ont une URL d'offre, toutes sessions
 /// confondues, avec le nom de leur session.

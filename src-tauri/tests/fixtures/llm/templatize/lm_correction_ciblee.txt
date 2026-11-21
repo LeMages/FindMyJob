@@ -1,6 +1,0 @@
-La ligne 68 écrit un # en mode code ; correction :
-<<<<<<< AVANT
-  #if data.recipient.company != "" { lines.push(text(weight: "bold", data.recipient.company)) }
-=======
-  if data.recipient.company != "" { lines.push(text(weight: "bold", data.recipient.company)) }
->>>>>>> APRÈS

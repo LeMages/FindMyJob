@@ -1,12 +1,18 @@
 name: Build check
 
 # Build Tauri complet sur chaque plateforme de release, avant la fusion vers
-# staging ou main : même matrice et même préparation que release.yml, sans
-# version injectée, sans publication et sans upload.
+# staging : même matrice, même profil et même préparation que release.yml,
+# sans version injectée, sans publication et sans upload.
+#
+# Le run sur push vers dev sert à sauvegarder les caches Cargo : dev est la
+# branche par défaut, donc ses caches sont restaurables par les PR vers
+# staging et par la Release sur main. Les autres runs ne font que restaurer.
 
 on:
   pull_request:
-    branches: [staging, main]
+    branches: [staging]
+  push:
+    branches: [dev]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,15 +27,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # cache-key : une clé de cache par cible, identique dans release.yml.
           - platform: macos-latest
             args: --target aarch64-apple-darwin
+            cache-key: macos-aarch64
           - platform: macos-latest
             args: --target x86_64-apple-darwin
+            cache-key: macos-x86_64
           - platform: ubuntu-22.04
             args: ""
+            cache-key: ubuntu
           - platform: windows-latest
             args: ""
+            cache-key: windows
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,11 +58,13 @@ jobs:
       - name: Setup Rust
         run: rustup toolchain install
 
+      # Clé partagée avec release.yml ; sauvegarde seulement sur push vers dev.
       - name: Cache Cargo
         uses: swatinem/rust-cache@v2
         with:
           workspaces: . -> target
-          key: ${{ matrix.platform }}-${{ matrix.args }}
+          shared-key: tauri-build-${{ matrix.cache-key }}
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
 
       - name: Install system dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'

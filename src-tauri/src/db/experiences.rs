@@ -6,14 +6,14 @@ use sqlx::{Row, SqlitePool};
 
 // Importation des modules internes
 use crate::clock::format_date;
-use crate::db::common::{delete_by_id, map_db_err, normalize};
+use crate::db::common::{delete_by_id, map_db_err, normalize, normalize_contexte};
 use crate::error::AppError;
 use crate::models::{CreateExperienceInput, ExperienceView};
 
 const TYPES_CONTRAT_VALIDES: [&str; 5] = ["stage", "alternance", "interim", "cdd", "cdi"];
 
 /// Colonnes lues pour reconstruire un `ExperienceView`.
-const COLUMNS: &str = "id, poste, entreprise, lieu, description, date_debut, date_fin, type_contrat";
+const COLUMNS: &str = "id, poste, entreprise, lieu, description, date_debut, date_fin, type_contrat, contexte";
 
 /// Valide et normalise le type de contrat d'une expérience.
 ///
@@ -70,6 +70,7 @@ fn row_to_view(row: &SqliteRow) -> Result<ExperienceView, sqlx::Error> {
         date_debut: row.try_get("date_debut")?,
         date_fin: row.try_get("date_fin")?,
         type_contrat: row.try_get("type_contrat")?,
+        contexte: row.try_get("contexte")?,
     })
 }
 
@@ -110,11 +111,12 @@ pub async fn list_all(pool: &SqlitePool) -> Result<Vec<ExperienceView>, AppError
 pub async fn insert(pool: &SqlitePool, input: CreateExperienceInput, now: &str) -> Result<ExperienceView, AppError> {
     let poste = validate_poste(&input)?;
     let type_contrat = validate_type_contrat(input.type_contrat)?;
+    let contexte = normalize_contexte(input.contexte)?;
 
     let row = sqlx::query(&format!(
         "INSERT INTO experiences \
-           (poste, entreprise, lieu, description, date_debut, date_fin, type_contrat, created_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+           (poste, entreprise, lieu, description, date_debut, date_fin, type_contrat, contexte, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
          RETURNING {COLUMNS}"
     ))
     .bind(&poste)
@@ -124,6 +126,7 @@ pub async fn insert(pool: &SqlitePool, input: CreateExperienceInput, now: &str) 
     .bind(input.date_debut.map(format_date))
     .bind(input.date_fin.map(format_date))
     .bind(&type_contrat)
+    .bind(&contexte)
     .bind(now)
     .fetch_one(pool)
     .await
@@ -146,12 +149,13 @@ pub async fn insert(pool: &SqlitePool, input: CreateExperienceInput, now: &str) 
 pub async fn update(pool: &SqlitePool, id: i64, input: CreateExperienceInput) -> Result<ExperienceView, AppError> {
     let poste = validate_poste(&input)?;
     let type_contrat = validate_type_contrat(input.type_contrat)?;
+    let contexte = normalize_contexte(input.contexte)?;
 
     let row = sqlx::query(&format!(
         "UPDATE experiences \
          SET poste = $1, entreprise = $2, lieu = $3, description = $4, \
-             date_debut = $5, date_fin = $6, type_contrat = $7 \
-         WHERE id = $8 \
+             date_debut = $5, date_fin = $6, type_contrat = $7, contexte = $8 \
+         WHERE id = $9 \
          RETURNING {COLUMNS}"
     ))
     .bind(&poste)
@@ -161,6 +165,7 @@ pub async fn update(pool: &SqlitePool, id: i64, input: CreateExperienceInput) ->
     .bind(input.date_debut.map(format_date))
     .bind(input.date_fin.map(format_date))
     .bind(&type_contrat)
+    .bind(&contexte)
     .bind(id)
     .fetch_optional(pool)
     .await

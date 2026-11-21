@@ -13,20 +13,24 @@ Aucune fixture ne contient de script exécutable, de traceur ni de donnée perso
 
 ## `references/` : références CV et lettre
 
-`cv_template.typ` et `lm_template.typ` sont des templates écrits pour les tests. Ils lisent `data.json`, et une valeur vide fait disparaître sa ligne sans séparateur orphelin. `cv_example_data.json` et `lm_example_data.json` sont leurs données d'exemple fictives : toutes les valeurs contiennent « Exemple », ce qui permet de vérifier que la génération ne les recopie jamais.
+Toutes les références suivent le contrat FindMyJob (`docs/reference-contract/`) : un `.typ` autonome qui déclare ses valeurs d'exemple dans `example`, lit `data` dans `sys.inputs.data` (l'exemple quand il est absent) et décrit sa forme dans une métadonnée `<findmyjob>` (contrat, langues, consignes, emplacements rédigés, format des périodes pour le CV). Les tests les importent avec `documents::save_reference`, sans aucun appel LLM.
 
-La référence déposée par les tests (`test_state::reference_source`) est le template lui-même, avec ses données d'exemple écrites dans le document à la place de `json("data.json")`. Rendue, elle affiche exactement le texte attendu, si bien que la validation de la templatisation passe dès le premier essai.
+`cv_reference.typ` et `lm_reference.typ` sont des références écrites pour les tests. Une valeur vide fait disparaître sa ligne sans séparateur orphelin, et toutes les valeurs d'exemple contiennent « Exemple », ce qui permet de vérifier que la génération ne les recopie jamais. Elles sont importées par `test_state::seed_references` et compilées par les tests unitaires de `src/docgen/tests.rs`.
 
-`cv_template.typ` à la racine de `fixtures/` est un autre template, utilisé par les tests unitaires de `src/docgen/tests.rs`.
+Le symbole de chaque élément de description du CV vient de `data.list_marker` (« • » dans les valeurs d'exemple, celui de la session à la génération), y compris pour les formations, et l'`intro` d'une description s'affiche avant ses éléments, sans symbole. Les titres de section sont des `heading` Typst : un titre dont la section est vide est détecté à l'import.
 
-### `references/tagged/` : références fictives balisées
+### `references/tagged/` : références fictives au contrat
 
 | Fichier | Source | Réduction |
 |---|---|---|
-| `cv_balise.typ` | Référence fictive d'Antoine Dupont, dérivée de `docs/cv_exemple.typ` | Identité, parcours, compétences, projets et intérêts fictifs, repris de `docs/cv_exemple.typ` (`Antoine Dupont`, `antoine.dupont@exemple.fr`, `+33 6 00 00 00 00`, `Lyon, 69003`…), disponibilité « mars 2027 ». Balisé au format de `docs/reference-markup.md` : `[CONSIGNES]`, `[VARIABLE]` sur le titre, `[FIXE]` puis `[ADAPTABLE]` dans le résumé |
-| `lm_balisee.typ` | Référence fictive d'Antoine Dupont, dérivée de `docs/lm_exemple.typ` | Mêmes valeurs fictives que le CV, date « 13 octobre 2026 ». Balisée au même format (consignes générales, zones dans l'objet et les paragraphes) ; lieu et date sur une ligne, nom en plusieurs morceaux, texte hors schéma ajouté (« P.J. : Curriculum vitae ») |
+| `cv_balise.typ` | Référence fictive d'Antoine Dupont, même personnage que `docs/reference-contract/cv_exemple.typ` | Identité, parcours, compétences, projets et ligne « Intérêts » fictifs (texte fixe de la référence, en français et en anglais : le profil n'a pas d'intérêts), disponibilité « mars 2027 ». Emplacements `variable` sur le titre, `adaptable` sur le résumé ; périodes au format numérique (« 09.2025 ») ; tirets « - » à la place des « – » |
+| `lm_balisee.typ` | Référence fictive d'Antoine Dupont, même personnage que `docs/reference-contract/lm_exemple.typ` | Mêmes valeurs fictives que le CV, date « 13 octobre 2026 ». Textes fixes en français et en anglais autour des paragraphes rédigés (`paragraphs[0]` et `[2]` variables, `[1]` adaptable), objet = préfixe fixe + `subject` + suffixe fixe ; destinataire dans un `box` calé à droite, texte hors données (« P.J. : Curriculum vitae ») |
 
-`*_example_data.json` sont les données d'exemple correctes (sortie de l'étape A, sans `texts`), `*_template.typ` le template correct (étape B), écrits à la main : les textes en dur sont lus dans `data.texts` (`t1`, `t2`…). `lm_balisee_expected_zones.json` est le découpage attendu des zones de la lettre. Les tests de `templatize_validation.rs` les passent dans `check_example` et `check_template` : si l'un d'eux est refusé, la validation est devenue trop stricte. Les références demandent la police `Arimo`, absente des machines et des polices embarquées de Typst : une famille introuvable étant une erreur de compilation, les tests la fournissent comme une police importée, en copiant `fonts/arimo_reference/` dans le dossier de polices propre au test (`shared/font_fixtures.rs::install_reference_font`, appelé par `test_state::app`, `templatize_validation.rs` et `templatize_retries.rs`). Avec elle, le CV et la lettre tiennent chacun sur 1 page.
+Les tests de `recipient_check.rs` compilent aussi `lm_balisee.typ` avec son bloc destinataire remplacé par un `block(width: 7cm)`, pour vérifier la détection du bloc de largeur fixe. Les références demandent la police `Arimo`, absente des machines et des polices embarquées de Typst : une famille introuvable étant une erreur de compilation, les tests la fournissent comme une police importée, en copiant `fonts/arimo_reference/` dans le dossier de polices propre au test (`shared/font_fixtures.rs::install_reference_font`, appelé par `test_state::app` et `recipient_check.rs`). Avec elle, le CV et la lettre tiennent chacun sur 1 page.
+
+## `description_list_cases.json` : découpage des descriptions
+
+Table de cas écrite à la main (aucune donnée réelle) : pour chaque description saisie (`input`), l'intro et les éléments attendus. Elle est lue à la fois par le parseur Rust (`src/docgen/description_list.rs`) et par son miroir TS (`src/composables/parseDescriptionList.test.ts`), pour que les deux appliquent exactement la même règle. Un cas ajouté ici est testé des deux côtés.
 
 ## `fonts/` : polices de fixture
 
@@ -34,7 +38,7 @@ Sous-ensembles générés avec fontTools (`subset`, `varLib.instancer`) à parti
 
 | Dossier | Contenu | Utilisé pour |
 |---|---|---|
-| `arimo_reference/Arimo-{Regular,Bold,Italic,BoldItalic}.ttf` | Arimo 4 styles (TTF statiques de Google Fonts, `static/`), environ 17 à 19 Ko chacun | Police des références balisées (`references/tagged/`) : installée dans le dossier de polices de chaque app de test et des tests de templatisation ; `typst_fonts.rs` vérifie que les deux références se rendent sans avertissement ni glyphe de repli |
+| `arimo_reference/Arimo-{Regular,Bold,Italic,BoldItalic}.ttf` | Arimo 4 styles (TTF statiques de Google Fonts, `static/`), environ 17 à 19 Ko chacun | Police des références balisées (`references/tagged/`) : installée dans le dossier de polices de chaque app de test ; `typst_fonts.rs` vérifie que les deux références se rendent, en français et en anglais, sans avertissement ni glyphe de repli |
 | `arimo/static/Arimo-Regular.ttf` | Instance statique 400 d'Arimo (police variable de Google Fonts), sous un sous-dossier comme dans une archive | Police importée utilisée sans avertissement et présente dans le PDF ; import récursif, nom de famille « Arimo » |
 | `collection/Arimo.ttc` | Collection : Arimo Regular et Italic (instances 400) | Import d'une collection `.ttc` |
 | `libertinus/LibertinusSerif-Regular.ttf` | Libertinus Serif Regular, homonyme d'une police embarquée par Typst | Avertissement d'homonyme ; dossier `Libertinus_Serif` vs famille `Libertinus Serif` |
@@ -54,8 +58,9 @@ Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l
 
 | Fichier | Étape | Particularité |
 |---|---|---|
-| `offer_analysis.json` | Analyse de l'offre | Langue `fr` (pas de traduction des libellés ni du profil) |
-| `offer_analysis_en.json` | Analyse de l'offre | Langue `en` : déclenche la traduction des libellés et du profil |
+| `offer_analysis.json` | Analyse de l'offre | Langue `fr` (pas de traduction du profil) |
+| `offer_analysis_en.json` | Analyse de l'offre | Langue `en` : variante anglaise des références et traduction du profil |
+| `profile_translation_structure.json` | Traduction du profil | Expérience à intro + élément avec une suite de ligne + élément (4 lignes à plat), pour vérifier la reconstruction de la structure |
 | `matching.json` | Matching | Projet 1, celui de `test_state::seed_profile` |
 | `matching_id_inconnu.json` | Matching | Projet 99, absent du profil, pour déclencher les relances puis l'échec |
 | `cv_content.json` | Rédaction du CV | Titre, résumé et compétences seulement ; un tiret cadratin volontaire, que `strip_dashes` doit retirer |
@@ -64,14 +69,7 @@ Une réponse par étape, renvoyée par `tests/integration/shared/fake_llm.rs` (l
 | `profile_translation_lignes.json` | Traduction du profil | Deux lignes pour une description d'une ligne, pour déclencher les relances puis l'échec |
 | `lm_content.json` | Rédaction de la lettre | Un tiret cadratin volontaire |
 | `lm_content_double_tiret.json` | Rédaction de la lettre | « --- » dans l'objet et « -- » dans un paragraphe (tirets ASCII), que la normalisation doit remplacer |
-| `cv_labels.json`, `lm_labels.json` | Traduction des libellés | Utilisées seulement si la langue de l'offre diffère de celle de la référence |
+| `lm_content_recopie_contexte.json` | Rédaction de la lettre | Le paragraphe 2 recopie plus de 8 mots du contexte détaillé de l'expérience 1 posé par `generation_detailed_context.rs`, pour déclencher la relance (puis l'avertissement si elle persiste) |
+| `lm_content_contexte_reformule.json` | Rédaction de la lettre | Même lettre, fait du contexte reformulé et sans tiret : essai corrigé après la recopie |
+| `lm_prompt_sans_contexte.txt` | Rédaction de la lettre (message envoyé) | Message utilisateur de la lettre capturé sans contexte détaillé, avec le profil de `test_state::seed_profile` : sans contexte, le prompt doit lui rester identique. À régénérer si le prompt de la lettre change volontairement (`FINDMYJOB_UPDATE_SNAPSHOTS=1 cargo test`) |
 | `scraped_offer.json` | Extraction d'offre (étape LLM) | Balises HTML, emojis, contrat en majuscules et `mailto:`, que `finalize_fields` doit nettoyer |
-
-Les réponses de templatisation par défaut sont construites à partir de `references/` : données d'exemple (étape A) et template entouré d'un bloc ```typst``` (étape B). `Reply::Files` renvoie des fichiers de `fixtures/` tels quels pour rejouer d'autres sorties :
-
-| Fichier | Particularité |
-|---|---|
-| `llm/templatize/real_failures/*.typ` | Templates refusés **réels**, repris de `dev-data/…/templatize_debug` (anonymisés comme les références) ; le `.txt` voisin garde les problèmes relevés à l'époque. `cv_hash_en_mode_code` : `#` en mode code ; `cv_code_rendu_en_texte` : code écrit en markup ; `lm_valeur_ajoutee` : « 69003, » ajouté à la ligne de date ; `lm_methode_inexistante` : `.filter` sur une chaîne |
-| `llm/templatize/lm_diese_en_mode_code.typ`, `lm_correction_ciblee.txt` | Un `#` en trop puis sa correction sous forme de remplacement ciblé |
-| `llm/templatize/cv_separateur_orphelin.typ` | Template dont le seul défaut est un séparateur orphelin (non bloquant) |
-| `llm/templatize/lm_exemple_ville_inventee.json` | Données d'exemple avec une ville absente de l'original |
