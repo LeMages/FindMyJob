@@ -21,7 +21,7 @@ import { backendErrorMessage } from '@/composables/backend_error_message'
 import type { DocumentReferenceView, SessionListFormat, SessionStatut } from '@/types'
 import DocumentReferenceCard from '@/components/DocumentReferenceCard.vue'
 import EditableField from '@/components/EditableField.vue'
-import ReferenceMarkupHelp from '@/components/ReferenceMarkupHelp.vue'
+import ReferencePreparationHelp from '@/components/ReferencePreparationHelp.vue'
 import SettingsRow from '@/components/SettingsRow.vue'
 import SettingsSection from '@/components/SettingsSection.vue'
 
@@ -224,7 +224,7 @@ watch(sessionId, loadDocumentReferences, { immediate: true })
         />
       </div>
       <div class="mt-3 px-5 py-3 border border-neutral-200 rounded-xl bg-white">
-        <ReferenceMarkupHelp :summary="t('session.params.markup_summary')" />
+        <ReferencePreparationHelp />
       </div>
     </section>
   </div>

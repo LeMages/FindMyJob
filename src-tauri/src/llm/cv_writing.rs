@@ -2,15 +2,15 @@
 //! compétences) via l'API Claude, avec revue et retry
 //! (`llm::writing_loop`). Tout le reste du CV est rempli par Rust, dont les
 //! expériences, projets et formations, repris du profil sans reformulation. Les
-//! consignes de la référence (zones `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`
-//! du titre et du résumé) sont transmises au LLM et vérifiées.
+//! consignes de la référence (consignes générales, emplacements
+//! `[VARIABLE]` / `[ADAPTABLE]` du titre et du résumé) et son rendu complet
+//! sont transmis au LLM.
 
 // Importation des crates externes
 use serde_json::{json, Value};
 
 // Importation des modules internes
 use crate::docgen::budgets::CvBudget;
-use crate::docgen::example_facts::cv_information_values;
 use crate::docgen::lint::{lint_cv_budget, Violation};
 use crate::docgen::entry_texts::CvEntryTexts;
 use crate::docgen::selection::Selection;
@@ -21,7 +21,8 @@ use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::prose_checks::ProseChecks;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
 use crate::llm::writing_rules::{
-    guidance_block, language_reminder, language_rule, style_model_block, with_feedback, COMMON_RULES,
+    guidance_block, language_reminder, language_rule, reference_document_block, style_model_block, with_feedback,
+    COMMON_RULES,
 };
 use crate::models::{CvContent, CvData, MatchingResult, ProfileDto, ProseGuidance};
 use crate::llm::target::ClaudeTarget;
@@ -35,7 +36,8 @@ use crate::llm::target::ClaudeTarget;
 /// * `selection` - Entrées du profil retenues.
 /// * `profile` - Profil complet du candidat.
 /// * `entry_texts` - Descriptions des entrées, dans la langue du document.
-/// * `example` - Contenu de la référence (modèle de style).
+/// * `example` - Valeurs d'exemple de la référence (modèle de style).
+/// * `reference_text` - Texte rendu de la référence avec son exemple.
 /// * `guidance` - Consignes de la référence (champs aux chemins de
 ///   `CvData` : `identity.title`, `summary`).
 /// * `budget` - Budget de longueur.
@@ -48,6 +50,7 @@ pub struct CvWritingInput<'a> {
     pub profile: &'a ProfileDto,
     pub entry_texts: &'a CvEntryTexts,
     pub example: &'a CvData,
+    pub reference_text: &'a str,
     pub guidance: &'a ProseGuidance,
     pub budget: CvBudget,
     pub target_lang: &'a str,
@@ -144,6 +147,7 @@ fn user_message(input: &CvWritingInput<'_>) -> String {
         profile_facts_block(input.profile, input.selection, input.matching, input.entry_texts),
         style_model_block(&example_prose(input.example)),
     ];
+    blocks.extend(reference_document_block(input.reference_text));
     blocks.extend(guidance_block(&content_guidance(input.guidance)));
     blocks.push(budget_block(input));
     blocks.join("\n\n")
@@ -252,18 +256,14 @@ async fn call_once(
 ///
 /// `WritingOutcome<CvContent>`.
 pub async fn write_cv(input: &CvWritingInput<'_>, target: &ClaudeTarget) -> Result<WritingOutcome<CvContent>, AppError> {
-    let checks = ProseChecks {
-        example_prose: example_prose(input.example),
-        guidance: content_guidance(input.guidance),
-        information: cv_information_values(input.example),
-    };
+    let checks = ProseChecks { example_prose: example_prose(input.example) };
     write_with_retries(
         "CV",
         &language_reminder(input.target_lang),
         |feedback| call_once(input, feedback, target),
         |content| review(content, input, &checks),
         |content| {
-            content.map_prose(|path, text| checks.clean(path, text));
+            content.map_prose(|_, text| checks.clean(text));
             retain_profile_skills(content, input.profile);
         },
     )

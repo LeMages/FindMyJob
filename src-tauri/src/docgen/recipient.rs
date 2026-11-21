@@ -34,8 +34,8 @@ pub fn split_location(localisation: &str) -> (Vec<String>, String) {
 ///
 /// # Returns
 ///
-/// `Recipient`, champs absents en chaîne vide (`contact_*` toujours vides).
+/// `Recipient`, champs absents en chaîne vide.
 pub fn build_recipient(candidature: &CandidatureDetail) -> Recipient {
     let (extra_lines, location) = split_location(&text(candidature.localisation.as_ref()));
-    Recipient { company: text(candidature.entreprise.as_ref()), location, extra_lines, ..Default::default() }
+    Recipient { company: text(candidature.entreprise.as_ref()), location, extra_lines }
 }

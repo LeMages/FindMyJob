@@ -2,14 +2,12 @@
 //! fichier, sans Typst) : construction des données (`cv_data`, `lm_data`)
 //! depuis le profil et l'offre, budgets de longueur, sélection des entrées
 //! du profil, textes des entrées et validation de leur traduction,
-//! traduction des textes de la référence (découpage et validation),
-//! linter de la prose et zones [FIXE], contrôle de recopie du contexte
-//! détaillé dans la lettre, normalisation des tirets du texte
-//! rendu, données sentinelles, formatage des périodes et des dates,
-//! comparaison de textes rendus.
+//! linter de la prose, contrôle de recopie du contexte détaillé dans la
+//! lettre, normalisation des tirets, marqueurs du rendu sentinelle,
+//! formatage des périodes et des dates, mots des textes rendus.
 //!
 //! Ce qui lit la base, écrit des fichiers, appelle le LLM ou compile du
-//! Typst (références, caches de traduction, ajustement aux pages, trace)
+//! Typst (références et leur validation, ajustement aux pages, trace)
 //! vit dans `documents`. `docgen` ne dépend pas de `llm` : la dépendance va
 //! dans un seul sens (`llm` → `docgen`).
 
@@ -23,17 +21,16 @@ pub mod data_normalization;
 pub mod date_format;
 pub mod entry_texts;
 pub mod example_facts;
-pub mod fixed_zones;
 pub mod forbidden_phrases;
 pub mod identity;
 pub mod lint;
+pub mod month_names;
 pub mod period_format;
 pub mod profile_categories;
 pub mod recipient;
-pub mod reference_texts_translation;
 pub mod selection;
 pub mod sentinel_data;
-pub mod text_diff;
+pub mod rendered_words;
 pub mod title_match;
 pub mod translation_check;
 pub mod verbatim_check;

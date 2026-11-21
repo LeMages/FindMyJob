@@ -57,8 +57,8 @@ pub async fn get_lettre_motivation_reference(
     documents::get_reference(&state.pool, &state.data_dir, session_id, "lettre_motivation").await
 }
 
-/// Importe un CV de référence `.typ` : compilation, templatisation par
-/// l'IA, puis enregistrement comme nouvelle version courante.
+/// Importe un CV de référence `.typ` : validation au contrat FindMyJob
+/// (sans appel LLM), puis enregistrement comme nouvelle version courante.
 ///
 /// # Arguments
 ///
@@ -135,7 +135,7 @@ pub async fn compile_lettre_motivation(ctx: tauri::State<'_, AppContext>, sessio
         .await
 }
 
-/// Indique si les références d'une session sont prêtes (templatisées).
+/// Indique si les références d'une session sont prêtes (validées au contrat).
 ///
 /// # Arguments
 ///

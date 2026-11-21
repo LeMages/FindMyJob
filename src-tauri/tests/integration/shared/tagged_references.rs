@@ -1,6 +1,6 @@
-//! Application de test avec les références balisées (`references/tagged/`)
-//! templatisées par le LLM factice, et lecture de ce qu'une génération
-//! produit : `data.json` et rendu Typst réel avec le template de la version.
+//! Application de test avec les références balisées (`references/tagged/`,
+//! au contrat FindMyJob), et lecture de ce qu'une génération produit :
+//! `data.json` et rendu Typst réel avec la référence de la version.
 
 // Importation des modules standard
 use std::path::PathBuf;
@@ -9,12 +9,12 @@ use std::path::PathBuf;
 use serde_json::Value;
 
 // Importation des modules internes
-use crate::shared::fake_llm::{read_reference, Reply, Step};
+use crate::shared::fake_llm::read_reference;
 use crate::shared::seed;
 use crate::shared::test_state::{self, artefact, candidature_input, wait_generation, TestApp};
 use findmyjob_lib::db;
 use findmyjob_lib::documents;
-use findmyjob_lib::documents::typst::compile_template;
+use findmyjob_lib::documents::typst::compile_contract;
 use findmyjob_lib::models::GenerationStatus;
 use findmyjob_lib::services::candidatures;
 use findmyjob_lib::storage_paths;
@@ -32,11 +32,6 @@ pub async fn app_with_tagged_references(name: &str) -> (TestApp, i64) {
     let app = test_state::app(name).await;
     test_state::seed_profile(&app.state.pool).await;
     let sid = seed::session(&app.state.pool).await;
-    let llm = &app.llm;
-    llm.respond_with(Step::ExampleCv, Reply::Files(&["references/tagged/cv_balise_example_data.json"]));
-    llm.respond_with(Step::TemplateCv, Reply::Files(&["references/tagged/cv_balise_template.typ"]));
-    llm.respond_with(Step::ExampleLm, Reply::Files(&["references/tagged/lm_balisee_example_data.json"]));
-    llm.respond_with(Step::TemplateLm, Reply::Files(&["references/tagged/lm_balisee_template.typ"]));
     let cv = read_reference("tagged/cv_balise.typ");
     documents::save_reference(&app.state, sid, "cv", "cv.typ".into(), cv).await.expect("référence CV");
     let lm = read_reference("tagged/lm_balisee.typ");
@@ -94,8 +89,8 @@ pub async fn version_dir(app: &TestApp, sid: i64, doc_type: &str) -> PathBuf {
     storage_paths::to_absolute(&app.state.data_dir, &storage_paths::version_dir(sid, doc_type, doc.current_version_id))
 }
 
-/// Texte rendu d'un document généré : son `data.json` compilé avec le
-/// template de la version courante.
+/// Texte rendu d'un document généré : son `data.json` compilé avec la
+/// référence de la version courante.
 ///
 /// # Arguments
 ///
@@ -108,7 +103,8 @@ pub async fn version_dir(app: &TestApp, sid: i64, doc_type: &str) -> PathBuf {
 /// Le document compilé.
 pub async fn render(app: &TestApp, sid: i64, doc_type: &str, generated: &Value) -> documents::typst::CompiledDocument {
     let dir = version_dir(app, sid, doc_type).await;
-    let template = std::fs::read_to_string(dir.join("template.typ")).expect("template");
-    let raw = serde_json::to_vec(generated).expect("data.json");
-    compile_template(template, raw, dir, app.state.fonts_dir.clone()).expect("compilation")
+    let template = std::fs::read_to_string(dir.join("reference.typ")).expect("référence");
+    let raw = serde_json::to_string(generated).expect("data.json");
+    compile_contract(&template, Some(&raw), &app.state.fonts_dir)
+        .unwrap_or_else(|failure| panic!("compilation : {}", failure.message()))
 }

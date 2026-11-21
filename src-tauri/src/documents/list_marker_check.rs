@@ -6,17 +6,12 @@
 //! exactement une fois par élément, juste avant lui. Un symbole écrit en dur
 //! (« • ») ne suivrait pas le format de la session ; un séparateur de
 //! l'en-tête branché sur `list_marker` le suivrait à tort.
-//!
-//! La comparaison du rendu d'exemple avec la référence tolère, elle, un
-//! symbole ajouté devant un élément : le symbole de la session s'applique à
-//! toutes les sections de description, même celles que la référence
-//! affichait sans symbole ou avec un autre.
 
 // Importation des crates externes
 use serde_json::Value;
 
 // Importation des modules internes
-use crate::docgen::text_diff::{normalize_quotes, word_key, words, DiffHunk};
+use crate::docgen::rendered_words::{normalize_quotes, word_key, words};
 use crate::error::AppError;
 
 /// Caractères sentinelles candidats, dans l'ordre : le premier absent du
@@ -80,7 +75,23 @@ fn marker_before(rendered: &[&str], sentinel: &str, first_word: &str) -> bool {
         || rendered.iter().any(|word| glued(word))
 }
 
-/// Problèmes du rendu avec le symbole sentinelle.
+/// Écart entre le symbole de liste rendu et les éléments de description.
+///
+/// # Attributes
+///
+/// * `shown` - Nombre d'occurrences du symbole sentinelle dans le rendu.
+/// * `expected` - Nombre d'éléments de description (`bullets`, `details`).
+/// * `unmarked` - Premiers mots des éléments que le symbole ne précède pas
+///   (seulement quand les nombres coïncident).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListMarkerMismatch {
+    pub shown: usize,
+    pub expected: usize,
+    pub unmarked: Vec<String>,
+}
+
+/// Contrôle du rendu avec le symbole sentinelle : exactement une
+/// occurrence par élément de description, juste devant lui.
 ///
 /// # Arguments
 ///
@@ -90,57 +101,18 @@ fn marker_before(rendered: &[&str], sentinel: &str, first_word: &str) -> bool {
 ///
 /// # Returns
 ///
-/// Messages en français, vides si chaque élément porte le symbole des données.
-pub fn list_marker_problems(rendered_text: &str, example: &Value, sentinel: &str) -> Vec<String> {
+/// `None` si chaque élément porte le symbole des données, l'écart sinon.
+pub fn list_marker_mismatch(rendered_text: &str, example: &Value, sentinel: &str) -> Option<ListMarkerMismatch> {
     let first_words = item_first_words(example);
     let shown = rendered_text.matches(sentinel).count();
-    let mut problems = Vec::new();
     if shown != first_words.len() {
-        problems.push(format!(
-            "Rendu avec data.list_marker = « {sentinel} », le template affiche ce symbole {shown} fois pour {} \
-             élément(s) de description (bullets, details). Chaque élément de description est précédé de \
-             data.list_marker, une seule fois, jamais d'un symbole écrit en dur ; les séparateurs de l'en-tête et \
-             des coordonnées restent écrits en dur et ne lisent jamais data.list_marker.",
-            first_words.len()
-        ));
-        return problems;
+        return Some(ListMarkerMismatch { shown, expected: first_words.len(), unmarked: Vec::new() });
     }
     let rendered = normalize_quotes(rendered_text);
     let rendered_words = words(&rendered);
-    let unmarked: Vec<&String> =
-        first_words.iter().filter(|word| !marker_before(&rendered_words, sentinel, word)).collect();
-    if !unmarked.is_empty() {
-        let quoted: Vec<String> = unmarked.iter().map(|w| format!("« {w} »")).collect();
-        problems.push(format!(
-            "Rendu avec data.list_marker = « {sentinel} », le symbole ne précède pas les éléments qui commencent \
-             par {} : data.list_marker s'affiche juste avant chaque élément de bullets ou details.",
-            quoted.join(", ")
-        ));
-    }
-    problems
-}
-
-/// Vrai si un écart avec la référence ne porte que sur des symboles de
-/// liste : symbole des données ajouté (section sans symbole dans la
-/// référence), éventuellement à la place d'un autre symbole d'un caractère.
-///
-/// # Arguments
-///
-/// * `hunk` - Écart mot à mot entre la référence et le rendu d'exemple.
-/// * `marker` - Symbole des données d'exemple (`list_marker`).
-///
-/// # Returns
-///
-/// Vrai si l'écart est toléré.
-pub fn is_marker_hunk(hunk: &DiffHunk, marker: &str) -> bool {
-    let is_symbol = |word: &String| {
-        let mut chars = word.chars();
-        matches!((chars.next(), chars.next()), (Some(c), None) if !c.is_alphanumeric())
-    };
-    !marker.is_empty()
-        && !hunk.extra.is_empty()
-        && hunk.extra.iter().all(|word| word == marker)
-        && hunk.missing.iter().all(is_symbol)
+    let unmarked: Vec<String> =
+        first_words.iter().filter(|word| !marker_before(&rendered_words, sentinel, word)).cloned().collect();
+    (!unmarked.is_empty()).then_some(ListMarkerMismatch { shown, expected: first_words.len(), unmarked })
 }
 
 #[cfg(test)]
@@ -165,46 +137,31 @@ mod tests {
     #[test]
     fn un_symbole_par_element_accepte() {
         let text = "Nom • email ¤ Pipeline de données ¤ Tests ¤ Application web ¤ Spécialité data";
-        assert!(list_marker_problems(text, &example(), "¤").is_empty());
+        assert_eq!(list_marker_mismatch(text, &example(), "¤"), None);
         // Collé à l'élément : toujours devant lui.
         let glued = "¤Pipeline de données ¤ Tests ¤ Application web ¤ Spécialité data";
-        assert!(list_marker_problems(glued, &example(), "¤").is_empty());
+        assert_eq!(list_marker_mismatch(glued, &example(), "¤"), None);
     }
 
     #[test]
     fn symbole_en_dur_refuse() {
         let text = "• Pipeline de données • Tests • Application web • Spécialité data";
-        let problems = list_marker_problems(text, &example(), "¤");
-        assert_eq!(problems.len(), 1, "{problems:?}");
-        assert!(problems[0].contains("0 fois pour 4"), "{problems:?}");
+        let mismatch = list_marker_mismatch(text, &example(), "¤").expect("écart attendu");
+        assert_eq!((mismatch.shown, mismatch.expected), (0, 4));
     }
 
     #[test]
     fn separateur_branche_sur_le_symbole_refuse() {
         let text = "Nom ¤ email ¤ Pipeline de données ¤ Tests ¤ Application web ¤ Spécialité data";
-        assert!(list_marker_problems(text, &example(), "¤")[0].contains("5 fois pour 4"));
+        let mismatch = list_marker_mismatch(text, &example(), "¤").expect("écart attendu");
+        assert_eq!((mismatch.shown, mismatch.expected), (5, 4));
     }
 
     #[test]
     fn symbole_mal_place_refuse() {
         let text = "¤ ¤ ¤ ¤ Pipeline de données Tests Application web Spécialité data";
-        let problems = list_marker_problems(text, &example(), "¤");
+        let mismatch = list_marker_mismatch(text, &example(), "¤").expect("écart attendu");
         // Seul le premier élément suit un symbole : les trois autres sont signalés.
-        assert!(problems[0].contains("« Tests », « Application », « Spécialité »"), "{problems:?}");
-        assert!(!problems[0].contains("« Pipeline »"), "{problems:?}");
-    }
-
-    #[test]
-    fn ecart_de_symbole_tolere() {
-        let hunk = |missing: &[&str], extra: &[&str]| DiffHunk {
-            expected_start: 0,
-            missing: missing.iter().map(|w| w.to_string()).collect(),
-            extra: extra.iter().map(|w| w.to_string()).collect(),
-        };
-        assert!(is_marker_hunk(&hunk(&[], &["•"]), "•"), "symbole ajouté");
-        assert!(is_marker_hunk(&hunk(&["▸"], &["•"]), "•"), "autre symbole remplacé");
-        assert!(!is_marker_hunk(&hunk(&["•"], &[]), "•"), "symbole retiré : écart réel");
-        assert!(!is_marker_hunk(&hunk(&["Texte"], &["•"]), "•"), "mot remplacé : écart réel");
-        assert!(!is_marker_hunk(&hunk(&[], &["•"]), ""), "pas de symbole dans les données");
+        assert_eq!(mismatch.unmarked, ["Tests", "Application", "Spécialité"]);
     }
 }

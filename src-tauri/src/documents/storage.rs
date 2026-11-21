@@ -6,8 +6,10 @@
 //! motivation : tout est stocké sous `documents/sessions/<session_id>/` dans
 //! le dossier de données (chemins construits par `crate::storage_paths`).
 //! Chaque upload de référence crée une version immuable sous
-//! `<doc_type>/versions/<version_id>/` ; la ligne `documents` de la session
-//! pointe vers la version courante (voir `db::documents`).
+//! `<doc_type>/versions/<version_id>/` (`reference.typ`, `reference.pdf`,
+//! `contract.json`) ; la ligne `documents` de la session pointe vers la
+//! version courante (voir `db::documents`). Une référence est validée par
+//! le contrat FindMyJob avant toute écriture, sans aucun appel LLM.
 
 // Importation des modules standard
 use std::path::{Path, PathBuf};
@@ -22,13 +24,11 @@ use crate::clock;
 use crate::db;
 use crate::db::document_versions::NewVersion;
 use crate::db::transaction::begin_write;
-use crate::documents::templatize::{templatize, template_artifacts, write_template_files, TemplatizeInput, ValidatedTemplate};
-use crate::documents::typst::{compile_document, compile_to_pdf};
-use crate::startup::run_mode::RunMode;
-use crate::storage_paths;
+use crate::documents::reference_contract::{validate_reference, ValidatedReference};
+use crate::documents::typst::compile_contract;
 use crate::error::AppError;
-use crate::services::user_errors;
-use crate::models::{DocumentFileInfo, DocumentReferenceView};
+use crate::models::{DocumentFileInfo, DocumentReferenceView, TemplateArtifacts, CONTRACT_FILE};
+use crate::storage_paths;
 use crate::trace_log;
 
 /// Nom du source Typst d'une version de référence.
@@ -36,23 +36,21 @@ const REFERENCE_TYP: &str = "reference.typ";
 /// Nom du PDF d'une version de référence.
 const REFERENCE_PDF: &str = "reference.pdf";
 
-/// Contenu d'une nouvelle version de référence, validé et templatisé.
+/// Contenu d'une nouvelle version de référence, validé.
 ///
 /// # Attributes
 ///
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `filename` - Nom du fichier uploadé.
-/// * `content` - Source Typst uploadé.
-/// * `pdf` - Octets du PDF compilé.
-/// * `validated` - Template validé.
+/// * `content` - Source Typst uploadé (le template lui-même).
+/// * `validated` - Référence validée : PDF de l'exemple et contrat.
 struct PendingVersion<'a> {
     session_id: i64,
     doc_type: &'a str,
     filename: &'a str,
     content: &'a str,
-    pdf: &'a [u8],
-    validated: &'a ValidatedTemplate,
+    validated: &'a ValidatedReference,
 }
 
 /// Lit un fichier du dossier de données et l'encode en base64.
@@ -95,36 +93,43 @@ pub async fn get_reference(
         .map(DocumentReferenceView::from))
 }
 
-/// Écrit `reference.typ` et `reference.pdf` d'une version.
+/// Écrit `reference.typ`, `reference.pdf` et `contract.json` d'une version.
 ///
 /// # Arguments
 ///
 /// * `data_dir` - Dossier de données de l'application.
 /// * `version_dir` - Dossier relatif de la version.
-/// * `content` - Source Typst uploadé.
-/// * `pdf` - Octets du PDF compilé.
-///
-/// # Returns
-///
-/// Chemins relatifs `(typst_path, pdf_path)`.
-fn write_version_files(
-    data_dir: &Path,
-    version_dir: &str,
-    content: &str,
-    pdf: &[u8],
-) -> Result<(String, String), AppError> {
+/// * `pending` - Version à enregistrer.
+fn write_version_files(data_dir: &Path, version_dir: &str, pending: &PendingVersion<'_>) -> Result<(), AppError> {
     let dir = storage_paths::to_absolute(data_dir, version_dir);
     std::fs::create_dir_all(&dir)
         .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier {} : {e}", dir.display())))?;
 
-    let typst_path = storage_paths::file_in(version_dir, REFERENCE_TYP);
-    let pdf_path = storage_paths::file_in(version_dir, REFERENCE_PDF);
-    for (relative, bytes) in [(&typst_path, content.as_bytes()), (&pdf_path, pdf)] {
-        let path = storage_paths::to_absolute(data_dir, relative);
+    let contract = serde_json::to_vec_pretty(&pending.validated.contract)
+        .map_err(|e| AppError::Validation(format!("Contrat de la référence non sérialisable : {e}")))?;
+    let files: [(&str, &[u8]); 3] = [
+        (REFERENCE_TYP, pending.content.as_bytes()),
+        (REFERENCE_PDF, &pending.validated.pdf),
+        (CONTRACT_FILE, &contract),
+    ];
+    for (name, bytes) in files {
+        let path = storage_paths::to_absolute(data_dir, &storage_paths::file_in(version_dir, name));
         std::fs::write(&path, bytes)
             .map_err(|e| AppError::Validation(format!("Écriture de {} impossible : {e}", path.display())))?;
     }
-    Ok((typst_path, pdf_path))
+    Ok(())
+}
+
+/// Fichiers de génération d'une version : le template est la source de la
+/// référence, ses données d'exemple sont dans `contract.json`.
+fn template_artifacts(version_dir: &str, validated: &ValidatedReference) -> Result<TemplateArtifacts, AppError> {
+    let page_count = i32::try_from(validated.contract.page_count)
+        .map_err(|_| AppError::Validation(format!("Nombre de pages invalide : {}", validated.contract.page_count)))?;
+    Ok(TemplateArtifacts {
+        template_path: storage_paths::file_in(version_dir, REFERENCE_TYP),
+        example_data_path: storage_paths::file_in(version_dir, CONTRACT_FILE),
+        page_count,
+    })
 }
 
 /// Supprime le dossier d'une version qui n'a pas pu être enregistrée, pour
@@ -169,7 +174,7 @@ async fn persist_version(
     let now = clock::now_utc();
     let mut tx = begin_write(pool).await?;
     // Re-vérifié ici : la session a pu passer en pause pendant la
-    // templatisation (appel LLM hors transaction).
+    // validation (compilations hors transaction).
     db::sessions::ensure_active(&mut *tx, pending.session_id).await?;
 
     // ------------------------------------------------------------------
@@ -195,16 +200,17 @@ async fn persist_version(
     // 2. Fichiers, pointeur, validation — tout ou rien
     // ------------------------------------------------------------------
     let absolute_dir = storage_paths::to_absolute(data_dir, &version_dir);
-    let (version_dir, template, now) = (version_dir.as_str(), &template, now.as_str());
+    let (version_dir, now) = (version_dir.as_str(), now.as_str());
     let written = async move {
-        write_version_files(data_dir, version_dir, pending.content, pending.pdf)?;
-        write_template_files(data_dir, version_dir, template, pending.validated)?;
+        write_version_files(data_dir, version_dir, pending)?;
         db::documents::set_current(&mut tx, pending.session_id, pending.doc_type, version_id, now).await?;
         let doc = db::documents::get_current(&mut *tx, pending.session_id, pending.doc_type)
             .await?
             .ok_or_else(|| AppError::Database("Référence courante absente après enregistrement.".to_string()))?;
         tx.commit().await.map_err(db::common::map_db_err)?;
-        Ok(DocumentReferenceView::from(doc))
+        let mut view = DocumentReferenceView::from(doc);
+        view.warnings = pending.validated.warnings.clone();
+        Ok(view)
     }
     .await;
 
@@ -213,18 +219,17 @@ async fn persist_version(
     written.inspect_err(|_| discard_version_dir(&absolute_dir))
 }
 
-/// Compile le document, le convertit en template (appel LLM validé par
-/// compilation, voir `documents::templatize`), puis l'enregistre comme
-/// nouvelle version de référence et en fait la référence courante de la
-/// session. Les versions précédentes sont conservées.
+/// Valide une référence par le contrat FindMyJob (sans appel LLM), puis
+/// l'enregistre comme nouvelle version et en fait la référence courante de
+/// la session. Les versions précédentes sont conservées.
 ///
-/// La compilation et la templatisation ont lieu en mémoire, avant toute
-/// écriture : si l'une échoue, rien n'est modifié (ni fichier, ni base).
+/// La validation a lieu en mémoire, avant toute écriture : si elle échoue,
+/// rien n'est modifié (ni fichier, ni base) et tous les problèmes sont
+/// remontés ensemble (`AppError::InvalidReference`).
 ///
 /// # Arguments
 ///
-/// * `state` - État de l'application (base, dossiers de données et de
-///   polices, clé API pour la templatisation).
+/// * `state` - État de l'application (base, dossiers de données et de polices).
 /// * `session_id` - Identifiant de la session propriétaire.
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `filename` - Nom du fichier fourni par l'utilisateur (doit finir par `.typ`).
@@ -232,8 +237,8 @@ async fn persist_version(
 ///
 /// # Returns
 ///
-/// `DocumentReferenceView` pointant vers les fichiers `.typ` et `.pdf`
-/// sauvegardés, ou `AppError::SessionLocked` si la session n'est pas active.
+/// `DocumentReferenceView` de la nouvelle référence, avec ses
+/// avertissements, ou `AppError::SessionLocked` si la session n'est pas active.
 pub async fn save_reference(
     state: &AppState,
     session_id: i64,
@@ -241,64 +246,17 @@ pub async fn save_reference(
     filename: String,
     content: String,
 ) -> Result<DocumentReferenceView, AppError> {
-    // ------------------------------------------------------------------
-    // 1. Validation
-    // ------------------------------------------------------------------
-    if !filename.to_lowercase().ends_with(".typ") {
-        return Err(AppError::Validation("Seuls les fichiers .typ sont acceptés.".to_string()));
-    }
-    let (pool, data_dir, fonts_dir) = (&state.pool, state.data_dir.as_path(), state.fonts_dir.as_path());
-    // Refus avant la compilation et l'appel LLM, plutôt qu'après.
+    let (pool, data_dir) = (&state.pool, state.data_dir.as_path());
+    // Refus avant les compilations de la validation, plutôt qu'après.
     db::sessions::ensure_active(pool, session_id).await?;
 
-    // ------------------------------------------------------------------
-    // 2. Compilation en PDF, en mémoire (racine = dossier du type de
-    //    document, comme avant le versioning)
-    // ------------------------------------------------------------------
-    let doc_dir = storage_paths::to_absolute(data_dir, &storage_paths::doc_type_dir(session_id, doc_type));
-    std::fs::create_dir_all(&doc_dir)
-        .map_err(|e| AppError::Validation(format!("Impossible de créer le dossier {} : {e}", doc_dir.display())))?;
-
-    let reference = {
-        let (to_compile, root, fonts) = (content.clone(), doc_dir.clone(), fonts_dir.to_path_buf());
-        tokio::task::spawn_blocking(move || compile_document(to_compile, root, fonts))
-            .await
-            .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
-            .map_err(AppError::Validation)?
-    };
-
-    // ------------------------------------------------------------------
-    // 3. Conversion en template via l'API Claude, validée par compilation
-    //    — hors transaction : les appels LLM ne bloquent pas les écritures
-    // ------------------------------------------------------------------
-    let target = state.claude().resolve().await?;
-    // En DEV seulement, les sorties rejetées sont conservées pour le debug.
-    let debug_dir = (state.run_mode == RunMode::Dev).then(|| {
-        storage_paths::to_absolute(
-            data_dir,
-            &storage_paths::templatize_debug_dir(session_id, doc_type, &clock::file_stamp()),
-        )
-    });
-    let input = TemplatizeInput { source: &content, rendered: &reference, doc_type, root: &doc_dir, fonts_dir };
-    let validated = templatize(&input, &target, debug_dir.as_deref())
-        .await
-        .map_err(|e| user_errors::readable(e, "L'import de la référence"))?;
-
-    // ------------------------------------------------------------------
-    // 4. Version en base, fichiers et référence courante, atomiquement
-    // ------------------------------------------------------------------
-    let pending = PendingVersion {
-        session_id,
-        doc_type,
-        filename: &filename,
-        content: &content,
-        pdf: &reference.pdf,
-        validated: &validated,
-    };
+    let validated = validate_reference(&filename, &content, doc_type, &state.fonts_dir).await?;
+    let pending = PendingVersion { session_id, doc_type, filename: &filename, content: &content, validated: &validated };
     persist_version(pool, data_dir, &pending).await
 }
 
-/// Compile la référence courante d'un type de document et retourne le PDF encodé en base64.
+/// Compile la référence courante d'un type de document avec ses valeurs
+/// d'exemple et retourne le PDF encodé en base64.
 ///
 /// # Arguments
 ///
@@ -322,21 +280,16 @@ pub async fn compile_reference(
         .await?
         .ok_or_else(|| AppError::NotFound("Aucun fichier de référence trouvé.".to_string()))?;
     let typ_path = storage_paths::to_absolute(data_dir, &reference.file_path);
-
     let content = std::fs::read_to_string(&typ_path)
         .map_err(|e| AppError::Validation(format!("Impossible de lire le fichier : {}", e)))?;
-    let root = typ_path
-        .parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| AppError::Validation(format!("Chemin de référence invalide : {}", reference.file_path)))?;
     let fonts_dir = fonts_dir.to_path_buf();
 
-    let pdf_bytes = tokio::task::spawn_blocking(move || compile_to_pdf(content, root, fonts_dir))
+    let compiled = tokio::task::spawn_blocking(move || compile_contract(&content, None, &fonts_dir))
         .await
         .map_err(|e| AppError::Validation(format!("Erreur interne : {}", e)))?
-        .map_err(AppError::Validation)?;
+        .map_err(|failure| AppError::Validation(failure.message()))?;
 
-    Ok(base64::engine::general_purpose::STANDARD.encode(&pdf_bytes))
+    Ok(base64::engine::general_purpose::STANDARD.encode(&compiled.pdf))
 }
 
 /// Inspecte l'état sur disque d'un document joint à une candidature (CV ou
@@ -413,7 +366,7 @@ pub fn read_document_bytes(data_dir: &Path, path: &str) -> Result<Vec<u8>, AppEr
 /// * `doc_type` - `"cv"` ou `"lettre_motivation"`.
 /// * `candidature_id` - Identifiant de la candidature.
 /// * `pdf` - Octets du PDF compilé.
-/// * `data_json` - Données passées au template.
+/// * `data_json` - Données passées au template (`sys.inputs.data`).
 ///
 /// # Returns
 ///

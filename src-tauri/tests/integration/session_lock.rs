@@ -4,6 +4,7 @@
 //! repasser « active » rouvre les modifications.
 
 // Importation des modules internes
+use crate::shared::fake_llm::read_reference;
 use crate::shared::seed;
 use crate::shared::test_state;
 use findmyjob_lib::app_state::AppState;
@@ -136,7 +137,7 @@ async fn assert_every_write_refused(state: &AppState, f: &Fixture) {
     assert_locked(contacts::unlink(pool, f.postulee, f.linked_contact).await, "retirer un contact");
 
     // Références : import et restauration
-    let source = test_state::reference_source("cv_template.typ", "cv_example_data.json");
+    let source = read_reference("cv_reference.typ");
     assert_locked(documents::save_reference(state, f.sid, "cv", "cv.typ".into(), source).await, "importer une référence");
     assert_locked(documents::restore_version(pool, &state.data_dir, f.sid, "cv", 1).await, "restaurer une version");
 }

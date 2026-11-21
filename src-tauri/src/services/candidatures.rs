@@ -20,7 +20,7 @@ use crate::models::{CandidatureView, CreateCandidatureInput, DuplicateCandidatur
 use crate::trace_log;
 
 /// Indique si les deux références (CV et lettre) d'une session sont
-/// templatisées — seule condition sous laquelle une candidature peut être
+/// validées — seule condition sous laquelle une candidature peut être
 /// créée et sa génération réussir.
 ///
 /// # Arguments

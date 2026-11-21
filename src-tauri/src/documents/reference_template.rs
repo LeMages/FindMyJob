@@ -1,8 +1,14 @@
-//! Chargement d'une référence templatisée (template, données d'exemple,
-//! nombre de pages) pour la génération d'une candidature.
+//! Chargement d'une référence validée (template et contrat enregistré)
+//! pour la génération d'une candidature.
+//!
+//! Une version importée avant le contrat FindMyJob (sans `contract.json`,
+//! ou avec un autre `template.typ` que sa source) ou d'une autre version du
+//! contrat doit être réimportée : `AppError::OutdatedReference`. Un
+//! `contract.json` présent mais illisible est un fichier corrompu, pas une
+//! référence obsolète : `AppError::Validation`.
 
 // Importation des modules standard
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // Importation des crates externes
 use serde::de::DeserializeOwned;
@@ -10,30 +16,26 @@ use sqlx::SqlitePool;
 
 // Importation des modules internes
 use crate::db;
-use crate::storage_paths;
 use crate::error::AppError;
-use crate::models::{expected_format_version, ReferenceTexts, REFERENCE_TEXTS_FILE};
+use crate::models::{StoredContract, TemplateArtifacts, CONTRACT_FILE, CONTRACT_VERSION};
+use crate::storage_paths;
 
 /// Référence prête pour la génération.
 ///
 /// # Attributes
 ///
-/// * `template` - Source du `template.typ`.
-/// * `example` - Contenu de `example_data.json`, typé.
-/// * `texts` - Textes en dur et consignes de la référence (`reference_texts.json`).
-/// * `dir` - Dossier de la version (racine de compilation, cache des libellés).
+/// * `template` - Source Typst de la référence (le template lui-même).
+/// * `contract` - Contrat enregistré à l'import, exemple typé.
 /// * `page_count` - Nombre de pages maximal des documents générés.
 /// * `version_id` - Version de référence utilisée (`document_versions.id`).
 pub struct ReferenceTemplate<E> {
     pub template: String,
-    pub example: E,
-    pub texts: ReferenceTexts,
-    pub dir: PathBuf,
+    pub contract: StoredContract<E>,
     pub page_count: usize,
     pub version_id: i64,
 }
 
-/// Charge la référence templatisée d'un type de document pour une session.
+/// Charge la référence d'un type de document pour une session.
 ///
 /// # Arguments
 ///
@@ -45,8 +47,9 @@ pub struct ReferenceTemplate<E> {
 ///
 /// # Returns
 ///
-/// `ReferenceTemplate`, ou `AppError::Validation` si la référence est
-/// absente ou pas encore templatisée.
+/// `ReferenceTemplate`, `AppError::Validation` si la référence est absente
+/// ou son contrat corrompu, `AppError::OutdatedReference` si elle doit être
+/// réimportée.
 pub async fn load_reference<E: DeserializeOwned>(
     pool: &SqlitePool,
     data_dir: &Path,
@@ -55,55 +58,72 @@ pub async fn load_reference<E: DeserializeOwned>(
     label: &str,
 ) -> Result<ReferenceTemplate<E>, AppError> {
     let doc = db::documents::get_current(pool, session_id, doc_type).await?;
-    let (doc, artifacts) = doc
-        .and_then(|d| d.template().map(|t| (d, t)))
-        .ok_or_else(|| {
-            AppError::Validation(format!(
-                "Veuillez d'abord importer votre {label} de référence dans les paramètres de session."
-            ))
-        })?;
+    let (doc, artifacts) = doc.and_then(|d| d.template().map(|t| (d, t))).ok_or_else(|| {
+        AppError::Validation(format!(
+            "Veuillez d'abord importer votre {label} de référence dans les paramètres de session."
+        ))
+    })?;
+    if !is_contract_version(&artifacts, &doc.file_path) {
+        return Err(outdated(label));
+    }
 
-    let template_file = storage_paths::to_absolute(data_dir, &artifacts.template_path);
-    let dir = template_file
-        .parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| AppError::Validation(format!("Chemin de template invalide : {}", artifacts.template_path)))?;
-    let texts = load_texts(&dir.join(REFERENCE_TEXTS_FILE), doc_type, label)?;
-    let template = read(&template_file)?;
-    let example_json = read(&storage_paths::to_absolute(data_dir, &artifacts.example_data_path))?;
-    let example = serde_json::from_str(&example_json).map_err(|_| outdated(label))?;
+    let contract = load_contract(&storage_paths::to_absolute(data_dir, &artifacts.example_data_path), label)?;
+    let template = read(&storage_paths::to_absolute(data_dir, &artifacts.template_path))?;
     let page_count = usize::try_from(artifacts.page_count)
         .map_err(|_| AppError::Validation(format!("Nombre de pages invalide : {}", artifacts.page_count)))?;
 
-    Ok(ReferenceTemplate { template, example, texts, dir, page_count, version_id: doc.current_version_id })
+    Ok(ReferenceTemplate { template, contract, page_count, version_id: doc.current_version_id })
 }
 
-/// Charge les textes de la référence. Une version sans ce fichier, ou d'un
-/// autre format, a été convertie par une version précédente de
-/// l'application : elle doit être réimportée.
+/// Vrai si une version a été importée par le contrat : son template est sa
+/// source et ses données sont un `contract.json`.
+fn is_contract_version(artifacts: &TemplateArtifacts, typst_path: &str) -> bool {
+    artifacts.template_path == typst_path && artifacts.example_data_path.ends_with(CONTRACT_FILE)
+}
+
+/// Lit le contrat enregistré d'une version.
 ///
 /// # Arguments
 ///
-/// * `path` - Chemin de `reference_texts.json`.
-/// * `doc_type` - `"cv"` ou `"lettre_motivation"` : chaque type a sa version de format.
-/// * `label` - Libellé lisible du document, pour le message.
+/// * `path` - Chemin absolu de `contract.json`.
+/// * `label` - Libellé lisible du document, pour les messages.
 ///
 /// # Returns
 ///
-/// `ReferenceTexts`, ou `AppError::OutdatedReference`.
-pub fn load_texts(path: &Path, doc_type: &str, label: &str) -> Result<ReferenceTexts, AppError> {
-    let content = std::fs::read_to_string(path).map_err(|_| outdated(label))?;
-    let texts: ReferenceTexts = serde_json::from_str(&content).map_err(|_| outdated(label))?;
-    if texts.format_version != expected_format_version(doc_type) {
+/// `StoredContract`, `AppError::OutdatedReference` s'il est absent ou d'une
+/// autre version du contrat, `AppError::Validation` s'il est illisible.
+pub fn load_contract<E: DeserializeOwned>(path: &Path, label: &str) -> Result<StoredContract<E>, AppError> {
+    // 1. Fichier absent : version importée avant le contrat
+    let Ok(content) = std::fs::read_to_string(path) else {
         return Err(outdated(label));
+    };
+    // 2. Version du contrat lue seule d'abord : un autre schéma ne doit pas
+    //    passer pour un fichier corrompu.
+    let version = serde_json::from_str::<serde_json::Value>(&content)
+        .ok()
+        .and_then(|value| value.get("contract_version").and_then(serde_json::Value::as_u64));
+    match version {
+        Some(v) if v == u64::from(CONTRACT_VERSION) => {}
+        Some(_) => return Err(outdated(label)),
+        None => return Err(corrupted(path, label, "version du contrat absente")),
     }
-    Ok(texts)
+    serde_json::from_str(&content).map_err(|e| corrupted(path, label, &e.to_string()))
 }
 
-/// Erreur d'une référence convertie par une version précédente.
+/// Erreur d'une référence importée par une version précédente.
 fn outdated(label: &str) -> AppError {
     AppError::OutdatedReference(format!(
-        "Votre {label} de référence a été importé avec une version précédente de l'application et n'est plus          compatible. Réimportez-le dans les paramètres de session."
+        "Votre {label} de référence a été importé avec une version précédente de l'application et n'est plus \
+         compatible. Réimportez-le dans les paramètres de session."
+    ))
+}
+
+/// Erreur d'un contrat enregistré illisible.
+fn corrupted(path: &Path, label: &str, detail: &str) -> AppError {
+    AppError::Validation(format!(
+        "Le fichier de votre {label} de référence est corrompu ({}) : {detail}. Réimportez-le dans les paramètres \
+         de session.",
+        path.display()
     ))
 }
 

@@ -51,11 +51,11 @@ pub async fn session(pool: &SqlitePool) -> i64 {
     sessions::insert(pool, &session_input("Stage M2", Some("Lyon"), None), NOW).await.expect("session").id
 }
 
-/// Fichiers de templatisation factices.
+/// Fichiers de contrat factices.
 pub fn template() -> TemplateArtifacts {
     TemplateArtifacts {
-        template_path: "documents/x/template.typ".into(),
-        example_data_path: "documents/x/example_data.json".into(),
+        template_path: "documents/x/reference.typ".into(),
+        example_data_path: "documents/x/contract.json".into(),
         page_count: 1,
     }
 }

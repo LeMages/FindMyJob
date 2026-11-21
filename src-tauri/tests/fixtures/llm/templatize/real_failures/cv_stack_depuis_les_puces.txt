@@ -1,3 +1,0 @@
-projects[0].stack vaut « Python, XGBoost, PostgreSQL, Airflow », qui n'apparaît pas tel quel dans l'original : recopie la valeur affichée, ou laisse la chaîne vide si l'original ne l'affiche pas dans un champ distinct.
-projects[1].stack vaut « TypeScript, FastAPI, Azure, Terraform », qui n'apparaît pas tel quel dans l'original : recopie la valeur affichée, ou laisse la chaîne vide si l'original ne l'affiche pas dans un champ distinct.
-projects[2].stack vaut « OpenCV, Flask », qui n'apparaît pas tel quel dans l'original : recopie la valeur affichée, ou laisse la chaîne vide si l'original ne l'affiche pas dans un champ distinct.

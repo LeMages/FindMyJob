@@ -131,23 +131,12 @@ pub async fn seed_profile(pool: &SqlitePool) {
     db::langues::insert(pool, langue, seed::NOW).await.expect("langue");
 }
 
-/// Source Typst d'une référence de test : le template de test, avec ses
-/// données d'exemple écrites dans le document au lieu d'être lues depuis
-/// `data.json`. Rendu, elle affiche donc exactement le texte attendu de la
-/// templatisation.
-pub fn reference_source(template: &str, example_data: &str) -> String {
-    let template = read_reference(template);
-    let example: serde_json::Value = serde_json::from_str(&read_reference(example_data)).expect("JSON d'exemple");
-    let data = example.to_string().replace('\\', "\\\\").replace('"', "\\\"");
-    template.replacen("#let data = json(\"data.json\")", &format!("#let data = json(bytes(\"{data}\"))"), 1)
-}
-
-/// Dépose et templatise les références CV et lettre d'une session (le faux
-/// exécutant fournit la templatisation).
+/// Importe les références CV et lettre de test d'une session (contrat
+/// FindMyJob, validées sans appel LLM).
 pub async fn seed_references(state: &AppState, session_id: i64) {
-    let cv = reference_source("cv_template.typ", "cv_example_data.json");
+    let cv = read_reference("cv_reference.typ");
     documents::save_reference(state, session_id, "cv", "cv.typ".into(), cv).await.expect("référence CV");
-    let lm = reference_source("lm_template.typ", "lm_example_data.json");
+    let lm = read_reference("lm_reference.typ");
     documents::save_reference(state, session_id, "lettre_motivation", "lettre.typ".into(), lm)
         .await
         .expect("référence lettre");

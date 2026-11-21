@@ -89,7 +89,8 @@ fn reference_block_is_on_the_right(rendered: &CompiledDocument, example: &Value)
     block.iter().map(|l| l.left).fold(f64::MAX, f64::min) > (left_margin + right_edge) / 2.0
 }
 
-/// Problèmes du bloc destinataire clairsemé (vide si conforme ou sans objet).
+/// Décalage du bloc destinataire réduit à l'entreprise et la ville, quand
+/// celui de l'exemple est dans la moitié droite de la page.
 ///
 /// # Arguments
 ///
@@ -99,36 +100,16 @@ fn reference_block_is_on_the_right(rendered: &CompiledDocument, example: &Value)
 ///
 /// # Returns
 ///
-/// Problèmes à renvoyer en feedback.
-pub fn recipient_problems(
-    with_example: &CompiledDocument,
-    example: &Value,
-    sparse: &Result<CompiledDocument, String>,
-) -> Vec<String> {
-    // 1. Sans objet : rendu illisible (signalé ailleurs) ou bloc de la référence pas à droite
-    let Ok(sparse) = sparse else {
-        return Vec::new();
-    };
+/// `Some((bord droit du bloc, marge droite))` en pt si le bloc réduit n'est
+/// plus calé contre la marge droite, `None` sinon ou sans objet.
+pub fn recipient_misalignment(with_example: &CompiledDocument, example: &Value, sparse: &CompiledDocument) -> Option<(f64, f64)> {
     if !reference_block_is_on_the_right(with_example, example) {
-        return Vec::new();
+        return None;
     }
-    // ------------------------------------------------------------------
-    // 2. Bord droit du bloc clairsemé contre la marge droite
-    // ------------------------------------------------------------------
     let markers = [SPARSE_COMPANY.to_string(), SPARSE_LOCATION.to_string()];
     let block = lines_showing(&sparse.lines, &markers);
-    let Some(first) = block.first() else {
-        return Vec::new();
-    };
+    let first = block.first()?;
     let block_right = block.iter().map(|l| l.right).fold(f64::MIN, f64::max);
     let margin = page_right_edge(&sparse.lines, first.page);
-    if (margin - block_right).abs() <= RIGHT_EDGE_TOLERANCE_PT {
-        return Vec::new();
-    }
-    vec![format!(
-        "Quand le destinataire n'a que l'entreprise et la ville, son bloc n'est plus calé contre la marge droite \
-         (il finit à {block_right:.0} pt, la marge droite est à {margin:.0} pt). Le bloc destinataire a la largeur de \
-         son contenu : remplace toute largeur fixe par `#align(right, box({{ set align(left); … }}))`, en gardant \
-         le `set par(...)` de l'original."
-    )]
+    ((margin - block_right).abs() > RIGHT_EDGE_TOLERANCE_PT).then_some((block_right, margin))
 }

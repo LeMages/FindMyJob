@@ -120,9 +120,9 @@ Table document_versions {
   original_filename text [not null]
   typst_path text [not null]
   pdf_path text [not null]
-  template_path text
-  example_data_path text
-  page_count integer
+  template_path text      // reference.typ lui-même pour une version au contrat FindMyJob
+  example_data_path text  // contract.json (exemple, consignes, emplacements, périodes)
+  page_count integer      // pages du rendu de l'exemple
   created_at timestamp [not null]
 
   indexes {

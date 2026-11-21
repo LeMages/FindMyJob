@@ -1,10 +1,10 @@
 //! Tests de l'assemblage déterministe (sans LLM ni base) : construction de
 //! `cv_data` / `lm_data` depuis un profil fictif, destinataire, et
-//! compilation d'un template de fixture avec données complètes puis avec
+//! compilation des références de test avec données complètes puis avec
 //! champs optionnels absents.
 
 // Importation des modules standard
-use std::path::PathBuf;
+use std::path::Path;
 
 // Importation des crates externes
 use chrono::{NaiveDate, Utc};
@@ -16,12 +16,13 @@ use crate::docgen::contact_fields::{missing_contacts, ContactField};
 use crate::docgen::entry_texts::source_texts;
 use crate::docgen::identity::{display_url, validate_sender_name, SenderLocation};
 use crate::docgen::recipient::{build_recipient, split_location};
-use crate::documents::typst::compile_template;
+use crate::docgen::period_format::PeriodFormat;
 use crate::docgen::selection::{select, Selection};
+use crate::documents::typst::{compile_contract, CompiledDocument};
 use crate::models::{
-    CandidatureDetail, CvContent, CvData, CvLabels, ExperienceView,
-    FormationView, Identity, LmContent, LmLabels, PeriodGranularity, PeriodStyle, ProfileDto, ProjetView,
-    Recipient, SkillsGroup, UserView,
+    CandidatureDetail, CvContent, CvData, ExperienceView, FormationView, Identity, LmContent, MonthStyle,
+    PeriodGranularity, PeriodGranularityBySection, PeriodSpec, ProfileDto, ProjetView, Recipient, SkillsGroup,
+    UserView,
 };
 
 /// Localisation de l'expéditeur des tests (celle d'une session).
@@ -29,11 +30,8 @@ fn sender() -> SenderLocation {
     SenderLocation { ville: "Lyon".to_string(), zip_code: "69000".to_string() }
 }
 
-/// Aucun texte en dur de la référence.
-static NO_TEXTS: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
-
-/// Template de CV de test.
-const CV_TEMPLATE: &str = include_str!("../../tests/fixtures/cv_template.typ");
+/// Référence de CV de test, au contrat FindMyJob.
+const CV_TEMPLATE: &str = include_str!("../../tests/fixtures/references/cv_reference.typ");
 
 // ======================================================================
 // Fixtures anonymisées
@@ -115,40 +113,30 @@ fn profile() -> ProfileDto {
 
 /// Assemble le CV d'un profil, textes des entrées tirés du profil.
 fn cv_data(profile: &ProfileDto, selection: &Selection) -> CvData {
-    let (labels, style) = (cv_labels(), period_style());
-    let location = sender();
+    let (spec, location) = (period_spec(), sender());
+    let format = PeriodFormat::new(&spec, "fr");
     let layout = CvLayout {
         location: &location,
-        labels: &labels,
-        period_style: &style,
-        separator: " - ",
+        granularity: &spec.granularity,
+        period_format: &format,
         lang: "fr",
-        texts: &NO_TEXTS,
         list_marker: "•",
     };
     build_cv_data(profile, selection, &source_texts(profile, selection), &cv_content(), &layout)
 }
 
-fn cv_labels() -> CvLabels {
-    CvLabels {
-        section_profile: "Profil".to_string(),
-        section_experiences: "Expérience".to_string(),
-        section_projects: "Projets".to_string(),
-        permis: "Permis B".to_string(),
-        present: "aujourd'hui".to_string(),
-        months_short: ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."]
-            .iter()
-            .map(|m| m.to_string())
-            .collect(),
-        ..Default::default()
-    }
-}
-
-fn period_style() -> PeriodStyle {
-    PeriodStyle {
-        experiences: PeriodGranularity::Month,
-        projects: PeriodGranularity::Year,
-        formations: PeriodGranularity::Year,
+/// Format des périodes de la référence de test : mois abrégé pour les
+/// expériences, année ailleurs.
+fn period_spec() -> PeriodSpec {
+    PeriodSpec {
+        granularity: PeriodGranularityBySection {
+            experiences: PeriodGranularity::Month,
+            projects: PeriodGranularity::Year,
+            formations: PeriodGranularity::Year,
+        },
+        separator: " – ".to_string(),
+        month_style: MonthStyle::Short,
+        numeric_separator: "/".to_string(),
     }
 }
 
@@ -160,12 +148,16 @@ fn cv_content() -> CvContent {
     }
 }
 
-/// Compile le template de fixture avec des données.
-fn compile_cv(data: &impl serde::Serialize) -> crate::documents::typst::CompiledDocument {
-    let json = serde_json::to_vec(data).expect("données sérialisables");
-    let root = std::env::temp_dir();
-    let fonts = PathBuf::from("introuvable");
-    compile_template(CV_TEMPLATE.to_string(), json, root, fonts).expect("le template de fixture compile")
+/// Compile une référence de test avec des données.
+fn compile_with(template: &str, data: &impl serde::Serialize) -> CompiledDocument {
+    let json = serde_json::to_string(data).expect("données sérialisables");
+    compile_contract(template, Some(&json), Path::new("introuvable"))
+        .unwrap_or_else(|failure| panic!("la référence de test compile : {}", failure.message()))
+}
+
+/// Compile la référence de CV de test avec des données.
+fn compile_cv(data: &impl serde::Serialize) -> CompiledDocument {
+    compile_with(CV_TEMPLATE, data)
 }
 
 // ======================================================================
@@ -194,8 +186,7 @@ fn destinataire_depuis_la_candidature_sans_contact() {
     let recipient = build_recipient(&candidature);
     assert_eq!(recipient.company, "Société Exemple");
     assert_eq!(recipient.location, "Lyon");
-    assert_eq!(recipient.contact_name, "");
-    assert_eq!(recipient.contact_role, "");
+    assert!(recipient.extra_lines.is_empty());
 }
 
 #[test]
@@ -225,7 +216,7 @@ fn destinataire_adresse_decoupee_et_localisation_absente_sans_ligne_vide() {
 // ======================================================================
 
 #[test]
-fn cv_data_fusionne_profil_contenu_et_libelles() {
+fn cv_data_fusionne_profil_et_contenu() {
     let profile = profile();
     let selection = select(&profile, &[20]);
 
@@ -234,7 +225,7 @@ fn cv_data_fusionne_profil_contenu_et_libelles() {
     assert_eq!(data.identity.linkedin, "linkedin.com/in/camille-martin");
     assert_eq!(data.experiences[0].poste, "Stage data");
     assert_eq!(data.experiences[0].entreprise, "Société Exemple");
-    assert_eq!(data.experiences[0].period, "Nov. 2025 - Avr. 2026");
+    assert_eq!(data.experiences[0].period, "Nov. 2025 - Avr. 2026", "séparateur déclaré, tiret normalisé");
     assert_eq!(data.experiences[0].intro, "A conçu un pipeline.", "ligne sans tiret avant la liste = intro");
     assert_eq!(
         data.experiences[0].bullets,
@@ -273,10 +264,9 @@ fn localisation_decoupee_en_lignes_d_adresse() {
 fn lm_data_date_et_destinataire() {
     let recipient = Recipient { company: "Société Exemple".to_string(), ..Default::default() };
     let content = LmContent { subject: "Candidature".to_string(), paragraphs: vec!["Paragraphe.".to_string()] };
-    let labels = LmLabels { date_prefix: "le ".to_string(), ..Default::default() };
 
     let location = sender();
-    let data = build_lm_data(&profile(), &recipient, &content, &lm_layout(&location, &labels));
+    let data = build_lm_data(&profile(), &recipient, &content, &lm_layout(&location));
 
     assert_eq!(data.date, "9 octobre 2026");
     assert_eq!(data.recipient.company, "Société Exemple");
@@ -287,11 +277,8 @@ fn lm_data_date_et_destinataire() {
 }
 
 /// Mise en page de la lettre de test : sous-titre du CV, 9 octobre 2026.
-fn lm_layout<'a>(
-    location: &'a SenderLocation,
-    labels: &'a LmLabels,
-) -> LmLayout<'a> {
-    LmLayout { location, labels, title: "Ingénieure data", date: date(2026, 10, 9), lang: "fr", texts: &NO_TEXTS }
+fn lm_layout(location: &SenderLocation) -> LmLayout<'_> {
+    LmLayout { location, title: "Ingénieure data", date: date(2026, 10, 9), lang: "fr" }
 }
 
 // ======================================================================
@@ -319,10 +306,9 @@ fn les_coordonnees_vides_du_profil_restent_vides_dans_le_cv_et_la_lettre() {
     profile.user.email = None;
 
     let cv = cv_data(&profile, &select(&profile, &[]));
-    let labels = LmLabels::default();
     let content = LmContent { subject: "Objet".to_string(), paragraphs: vec!["P.".to_string()] };
     let location = sender();
-    let lm = build_lm_data(&profile, &Recipient::default(), &content, &lm_layout(&location, &labels));
+    let lm = build_lm_data(&profile, &Recipient::default(), &content, &lm_layout(&location));
 
     for identity in [&cv.identity, &lm.identity] {
         assert_eq!(identity.prenom, "Camille", "le profil fournit le prénom");
@@ -389,15 +375,14 @@ fn permis_non_renseigne_retire_sans_repli_et_faux_retire_en_silence() {
 #[test]
 fn le_lieu_vient_de_la_session() {
     let profile = profile();
-    let (labels, style) = (cv_labels(), period_style());
+    let spec = period_spec();
+    let format = PeriodFormat::new(&spec, "fr");
     let build = |location: &SenderLocation| {
         let layout = CvLayout {
             location,
-            labels: &labels,
-            period_style: &style,
-            separator: " - ",
+            granularity: &spec.granularity,
+            period_format: &format,
             lang: "fr",
-            texts: &NO_TEXTS,
             list_marker: "•",
         };
         build_cv_data(&profile, &select(&profile, &[]), &source_texts(&profile, &select(&profile, &[])), &cv_content(), &layout)
@@ -459,15 +444,13 @@ fn textes_traduits_injectes_sans_toucher_aux_noms() {
     texts.projects[0].lines = vec!["Did 20.".to_string()];
     texts.projects[0].pour_qui = "School".to_string();
     texts.formations[0].lines = vec!["Data major".to_string(), "Exchange abroad".to_string()];
-    let (labels, style) = (cv_labels(), period_style());
-    let location = sender();
+    let (spec, location) = (period_spec(), sender());
+    let format = PeriodFormat::new(&spec, "en");
     let layout = CvLayout {
         location: &location,
-        labels: &labels,
-        period_style: &style,
-        separator: " - ",
+        granularity: &spec.granularity,
+        period_format: &format,
         lang: "en",
-        texts: &NO_TEXTS,
         list_marker: "-",
     };
 
@@ -481,6 +464,7 @@ fn textes_traduits_injectes_sans_toucher_aux_noms() {
     assert_eq!(data.formations[0].intro, "Data major");
     assert_eq!(data.formations[0].details, vec!["Exchange abroad".to_string()]);
     assert_eq!(data.list_marker, "-");
+    assert_eq!(data.experiences[0].period, "Nov 2025 - Apr 2026", "mois dans la langue du document");
     assert_eq!(data.experiences[0].poste, "Stage data", "poste jamais traduit");
     assert_eq!(data.experiences[0].entreprise, "Société Exemple");
     assert_eq!(data.projects[0].titre, "Projet A", "titre de projet jamais traduit");
@@ -490,7 +474,7 @@ fn textes_traduits_injectes_sans_toucher_aux_noms() {
 }
 
 // ======================================================================
-// Compilation d'un template de fixture
+// Compilation de la référence de test
 // ======================================================================
 
 #[test]
@@ -509,22 +493,15 @@ fn template_compile_avec_donnees_completes() {
 }
 
 #[test]
-fn stack_et_url_affiches_seulement_si_le_template_les_lit() {
+fn stack_et_url_affiches_seulement_s_ils_sont_renseignes() {
     let profile = profile();
-    let data = cv_data(&profile, &select(&profile, &[20]));
-
-    // Le template de fixture ne lit ni stack ni url : rien n'est ajouté.
-    let without = compile_cv(&data);
-    assert!(!without.text.contains("Typst"), "{}", without.text);
-    assert!(!without.text.contains("github.com"), "{}", without.text);
-
-    // Un template dont la référence affichait ces informations les lit.
-    let template = "#let data = json(\"data.json\")\n#for p in data.projects [#p.titre (#p.stack) #p.url]";
-    let json = serde_json::to_vec(&data).expect("données sérialisables");
-    let with = compile_template(template.to_string(), json, std::env::temp_dir(), PathBuf::from("introuvable"))
-        .expect("le template de test compile");
+    let with = compile_cv(&cv_data(&profile, &select(&profile, &[20])));
     assert!(with.text.contains("Rust, Typst"), "{}", with.text);
     assert!(with.text.contains("github.com/camille/projet-a"), "{}", with.text);
+
+    let without = compile_cv(&cv_data(&profile, &select(&profile, &[21])));
+    assert!(!without.text.contains("Typst"), "{}", without.text);
+    assert!(!without.text.contains("github.com"), "{}", without.text);
 }
 
 #[test]
@@ -547,8 +524,8 @@ fn template_compile_sans_champs_optionnels() {
 // Lieu de la lettre : en-tête et ligne de date
 // ======================================================================
 
-/// Template de lettre de test.
-const LM_TEMPLATE: &str = include_str!("../../tests/fixtures/references/lm_template.typ");
+/// Référence de lettre de test, au contrat FindMyJob.
+const LM_TEMPLATE: &str = include_str!("../../tests/fixtures/references/lm_reference.typ");
 
 /// Compile la lettre de fixture pour un lieu donné, texte rendu aux espaces
 /// normalisés.
@@ -557,13 +534,9 @@ fn lm_text(ville: &str, zip_code: &str) -> String {
     let location = SenderLocation { ville: ville.to_string(), zip_code: zip_code.to_string() };
     let recipient = Recipient { company: "Société Exemple".to_string(), ..Default::default() };
     let content = LmContent { subject: "Candidature".to_string(), paragraphs: vec!["Paragraphe.".to_string()] };
-    let labels = LmLabels { date_prefix: "le".to_string(), ..Default::default() };
-    let data = build_lm_data(&profile, &recipient, &content, &lm_layout(&location, &labels));
+    let data = build_lm_data(&profile, &recipient, &content, &lm_layout(&location));
 
-    let json = serde_json::to_vec(&data).expect("données sérialisables");
-    let doc = compile_template(LM_TEMPLATE.to_string(), json, std::env::temp_dir(), PathBuf::from("introuvable"))
-        .expect("le template de fixture compile");
-    doc.text.split_whitespace().collect::<Vec<_>>().join(" ")
+    compile_with(LM_TEMPLATE, &data).text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[test]
@@ -584,40 +557,34 @@ fn lettre_sans_ville_ni_separateur_orphelin() {
 
 #[test]
 fn reference_d_une_version_precedente_a_reimporter() {
-    use crate::documents::reference_template::load_texts;
+    use crate::documents::reference_template::load_contract;
     use crate::error::AppError;
 
-    let dir = std::env::temp_dir().join(format!("findmyjob-reference-texts-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("findmyjob-contract-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("dossier temporaire");
-    let missing = dir.join("absent.json");
-    assert!(matches!(load_texts(&missing, "cv", "CV"), Err(AppError::OutdatedReference(_))), "fichier absent : à réimporter");
+    let load = |path: &Path| load_contract::<serde_json::Value>(path, "CV");
 
-    let old = dir.join("ancien.json");
-    std::fs::write(&old, r#"{"format_version": 1, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
-        .expect("écriture");
-    assert!(matches!(load_texts(&old, "cv", "CV"), Err(AppError::OutdatedReference(_))), "autre format : à réimporter");
+    assert!(matches!(load(&dir.join("absent.json")), Err(AppError::OutdatedReference(_))), "fichier absent : à réimporter");
+
+    let other = dir.join("autre_version.json");
+    std::fs::write(&other, r#"{"contract_version": 99}"#).expect("écriture");
+    assert!(matches!(load(&other), Err(AppError::OutdatedReference(_))), "autre version du contrat : à réimporter");
+
+    let corrupted = dir.join("corrompu.json");
+    std::fs::write(&corrupted, "{ pas du json").expect("écriture");
+    assert!(matches!(load(&corrupted), Err(AppError::Validation(_))), "JSON illisible : corrompu, pas obsolète");
+
+    let truncated = dir.join("incomplet.json");
+    std::fs::write(&truncated, r#"{"contract_version": 1}"#).expect("écriture");
+    assert!(matches!(load(&truncated), Err(AppError::Validation(_))), "champs manquants : corrompu");
 
     let current = dir.join("courant.json");
-    std::fs::write(&current, r#"{"format_version": 4, "lang": "fr", "texts": {"t1": "P.J."}, "guidance": {"general": "", "zones": []}}"#)
-        .expect("écriture");
-    assert_eq!(load_texts(&current, "cv", "CV").expect("format courant").texts["t1"], "P.J.");
-    // Un CV au format 3 (symbole des listes écrit en dur) est à réimporter.
-    let cv_format_3 = dir.join("cv_format_3.json");
-    std::fs::write(&cv_format_3, r#"{"format_version": 3, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
-        .expect("écriture");
-    assert!(matches!(load_texts(&cv_format_3, "cv", "CV"), Err(AppError::OutdatedReference(_))), "CV au format 3 refusé");
-    // Une lettre au format 3 reste valide ; une lettre au format 2 est refusée (bloc destinataire).
-    let letter_format = dir.join("lettre.json");
-    std::fs::write(&letter_format, r#"{"format_version": 3, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
-        .expect("écriture");
-    assert!(load_texts(&letter_format, "lettre_motivation", "lettre de motivation").is_ok(), "lettre au format courant");
-    let old_letter = dir.join("ancienne_lettre.json");
-    std::fs::write(&old_letter, r#"{"format_version": 2, "lang": "fr", "texts": {}, "guidance": {"general": "", "zones": []}}"#)
-        .expect("écriture");
-    assert!(
-        matches!(load_texts(&old_letter, "lettre_motivation", "lettre de motivation"), Err(AppError::OutdatedReference(_))),
-        "ancienne lettre refusée"
-    );
-    assert!(matches!(load_texts(&old_letter, "cv", "CV"), Err(AppError::OutdatedReference(_))), "format 2 refusé pour un CV");
+    std::fs::write(
+        &current,
+        r#"{"contract_version": 1, "languages": ["fr", "en"], "example": {}, "guidance": "", "slots": [],
+            "period": null, "page_count": 1, "example_text": {"fr": "Texte"}}"#,
+    )
+    .expect("écriture");
+    assert_eq!(load(&current).expect("version courante").example_text["fr"], "Texte");
     std::fs::remove_dir_all(&dir).expect("nettoyage");
 }
