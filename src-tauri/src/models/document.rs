@@ -1,13 +1,28 @@
 //! DTO représentant un document de référence (CV ou lettre de motivation)
 //! stocké sur le disque au format Typst (.typ) et compilé en PDF.
 
+// Importation des crates externes
 use chrono::{DateTime, Utc};
 
+// Importation des modules internes
+use crate::models::ReferenceIssue;
+
+/// Référence courante vue par le frontend.
+///
+/// # Attributes
+///
+/// * `file_path` - Chemin relatif du `.typ` importé.
+/// * `pdf_path` - Chemin relatif du PDF de l'exemple.
+/// * `updated_at` - Date du dernier upload ou de la dernière restauration.
+/// * `warnings` - Avertissements non bloquants de la validation, remplis
+///   seulement au retour d'un import (vides à la lecture).
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct DocumentReferenceView {
     pub file_path: String,
     pub pdf_path: String,
     pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub warnings: Vec<ReferenceIssue>,
 }
 
 /// État sur disque d'un document joint à une candidature (CV / lettre de
@@ -29,15 +44,17 @@ pub struct DocumentsStatus {
     pub all_ready: bool,
 }
 
-/// Fichiers produits par la templatisation d'une référence (voir
-/// `llm::templatize`), rangés à côté de son `reference.typ`.
+/// Fichiers de génération d'une référence validée par le contrat
+/// FindMyJob, rangés dans le dossier de sa version.
 ///
 /// # Attributes
 ///
-/// * `template_path` - Chemin du `template.typ` (lit `data.json`), relatif au dossier de données.
-/// * `example_data_path` - Chemin de `example_data.json`, relatif au dossier de données (contenu de
-///   la référence au schéma canonique, avec la langue détectée).
-/// * `page_count` - Nombre de pages du PDF de la référence.
+/// * `template_path` - Chemin du template, relatif au dossier de données : le
+///   `reference.typ` lui-même (une version antérieure au contrat pointe vers
+///   un ancien `template.typ` et doit être réimportée).
+/// * `example_data_path` - Chemin de `contract.json` (contrat extrait à
+///   l'import : exemple, consignes, emplacements, format des périodes).
+/// * `page_count` - Nombre de pages du rendu de l'exemple.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TemplateArtifacts {
     pub template_path: String,
@@ -47,7 +64,7 @@ pub struct TemplateArtifacts {
 
 /// Référence courante (CV ou lettre de motivation) d'une session : la ligne
 /// `documents` n'est qu'un pointeur vers une version de `document_versions`,
-/// ce modèle en est la reconstruction par jointure (fichiers et templatisation
+/// ce modèle en est la reconstruction par jointure (fichiers et contrat
 /// lus sur la version pointée).
 ///
 /// # Attributes
@@ -58,9 +75,9 @@ pub struct TemplateArtifacts {
 /// * `original_filename` - Nom du fichier tel qu'uploadé par l'utilisateur.
 /// * `file_path` - Chemin de `reference.typ`, relatif au dossier de données.
 /// * `pdf_path` - Chemin de `reference.pdf`, relatif au dossier de données.
-/// * `template_path` - Chemin du `template.typ`, `None` si la version n'est pas templatisée.
-/// * `example_data_path` - Chemin de `example_data.json`, `None` si la version n'est pas templatisée.
-/// * `page_count` - Nombre de pages du PDF de la référence, `None` si la version n'est pas templatisée.
+/// * `template_path` - Chemin du template (voir `TemplateArtifacts`), `None` pour une version ancienne.
+/// * `example_data_path` - Chemin de `contract.json`, `None` pour une version ancienne.
+/// * `page_count` - Nombre de pages du rendu de l'exemple, `None` pour une version ancienne.
 /// * `updated_at` - Date du dernier changement de version courante (upload ou restauration).
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct Document {
@@ -77,11 +94,11 @@ pub struct Document {
 }
 
 impl Document {
-    /// Fichiers de templatisation de la référence, s'ils existent tous.
+    /// Fichiers de génération de la référence, s'ils existent tous.
     ///
     /// # Returns
     ///
-    /// `Some(TemplateArtifacts)` si la référence est templatisée, `None` sinon.
+    /// `Some(TemplateArtifacts)` si la version les a tous, `None` sinon.
     pub fn template(&self) -> Option<TemplateArtifacts> {
         Some(TemplateArtifacts {
             template_path: self.template_path.clone()?,
@@ -99,6 +116,7 @@ impl From<Document> for DocumentReferenceView {
             file_path: doc.file_path,
             pdf_path: doc.pdf_path,
             updated_at: doc.updated_at,
+            warnings: Vec::new(),
         }
     }
 }

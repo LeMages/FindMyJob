@@ -50,6 +50,20 @@ async fn le_tri_des_chaines_est_le_tri_chronologique() {
 }
 
 #[tokio::test]
+async fn la_date_d_envoi_vient_de_l_evenement_candidature_envoyee() {
+    let pool = seed::pool().await;
+    let sid = seed::session(&pool).await;
+    let envoyee = seed::candidature(&pool, sid, "2026-09-20T08:00:00.000Z").await;
+    let a_postuler = seed::candidature(&pool, sid, "2026-09-21T08:00:00.000Z").await;
+    candidatures::mark_postule(&pool, envoyee, None, "2026-10-02T10:30:00.000Z").await.unwrap();
+
+    let liste = candidatures::list_for_session(&pool, sid).await.unwrap();
+    let envoi = |id: i64| liste.iter().find(|c| c.id == id).unwrap().date_envoi;
+    assert_eq!(envoi(envoyee).map(|d| d.to_rfc3339()), Some("2026-10-02T10:30:00+00:00".to_string()));
+    assert_eq!(envoi(a_postuler), None, "pas de date d'envoi avant l'envoi");
+}
+
+#[tokio::test]
 async fn regles_de_statut_a_postuler() {
     let pool = seed::pool().await;
     let sid = seed::session(&pool).await;

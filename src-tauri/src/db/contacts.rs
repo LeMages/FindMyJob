@@ -15,6 +15,7 @@ use sqlx::{Row, SqliteConnection, SqliteExecutor, SqlitePool};
 use crate::db::candidatures;
 use crate::db::common::{map_db_err, normalize};
 use crate::db::interviews;
+use crate::db::joins::ensure_candidature_session_active;
 use crate::db::transaction::begin_write;
 use crate::error::AppError;
 use crate::models::{CandidatureContactInput, ContactInput, ContactView};
@@ -211,8 +212,9 @@ pub async fn insert_in(conn: &mut SqliteConnection, contact: &ValidContact, now:
 ///
 /// # Returns
 ///
-/// Le contact créé, `AppError::Validation` ou `AppError::NotFound` si la
-/// candidature n'existe pas.
+/// Le contact créé, `AppError::Validation`, `AppError::NotFound` si la
+/// candidature n'existe pas, ou `AppError::SessionLocked` si sa session
+/// n'est pas active.
 pub async fn create(
     pool: &SqlitePool,
     input: &ContactInput,
@@ -221,6 +223,9 @@ pub async fn create(
 ) -> Result<ContactView, AppError> {
     let contact = validate(input)?;
     let mut tx = begin_write(pool).await?;
+    if let Some(candidature_id) = candidature_id {
+        ensure_candidature_session_active(&mut *tx, candidature_id).await?;
+    }
     let id = insert_in(&mut tx, &contact, now).await?;
     if let Some(candidature_id) = candidature_id {
         link_in(&mut tx, candidature_id, id, now).await?;
@@ -317,9 +322,11 @@ pub async fn is_linked_to_candidature<'e, E: SqliteExecutor<'e>>(
 ///
 /// # Returns
 ///
-/// `Ok(())`, `AppError::NotFound` ou `AppError::Conflict` si déjà lié.
+/// `Ok(())`, `AppError::NotFound`, `AppError::SessionLocked` si la session
+/// de la candidature n'est pas active, ou `AppError::Conflict` si déjà lié.
 pub async fn link(pool: &SqlitePool, candidature_id: i64, contact_id: i64, now: &str) -> Result<(), AppError> {
     let mut tx = begin_write(pool).await?;
+    ensure_candidature_session_active(&mut *tx, candidature_id).await?;
     link_in(&mut tx, candidature_id, contact_id, now).await?;
     tx.commit().await.map_err(map_db_err)
 }
@@ -394,9 +401,11 @@ pub async fn link_all_in(
 ///
 /// # Returns
 ///
-/// `Ok(())`, ou `AppError::NotFound` si le contact n'était pas lié.
+/// `Ok(())`, `AppError::NotFound` si le contact n'était pas lié, ou
+/// `AppError::SessionLocked` si la session de la candidature n'est pas active.
 pub async fn unlink(pool: &SqlitePool, candidature_id: i64, contact_id: i64) -> Result<(), AppError> {
     let mut tx = begin_write(pool).await?;
+    ensure_candidature_session_active(&mut *tx, candidature_id).await?;
     interviews::remove_contact_for_candidature(&mut tx, contact_id, candidature_id).await?;
     let result = sqlx::query("DELETE FROM candidature_contacts WHERE candidature_id = $1 AND contact_id = $2")
         .bind(candidature_id)

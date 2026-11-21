@@ -21,7 +21,7 @@ import DeleteSessionPopup from '@/components/DeleteSessionPopup.vue'
 import CreateSessionPopup from '@/components/CreateSessionPopup.vue'
 import AppToast from '@/components/AppToast.vue'
 import OnboardingWizard from '@/views/onboarding/OnboardingWizard.vue'
-import { state, setUserInfo, loadSessions } from '@/stores/app'
+import { state, setUserInfo, refreshSessions } from '@/stores/app'
 import { backendErrorMessage } from '@/composables/backend_error_message'
 import type { UserView } from '@/types/index'
 
@@ -47,7 +47,7 @@ onMounted(async () => {
     if (exists) {
       const user = await invoke<UserView>('get_user')
       applyUserInfo(user)
-      await loadSessions()
+      await refreshSessions()
     }
     needsOnboarding.value = !exists
   } catch (e: unknown) {
@@ -63,7 +63,7 @@ onMounted(async () => {
  */
 async function handleOnboardingCompleted(user: UserView) {
   applyUserInfo(user)
-  await loadSessions()
+  await refreshSessions()
   needsOnboarding.value = false
 }
 </script>

@@ -234,6 +234,27 @@ fn normalisation_de_toutes_les_chaines_du_data_json() {
 }
 
 #[test]
+fn normalisation_ligne_par_ligne_des_descriptions_et_symbole_intact() {
+    let mut data = json!({
+        "list_marker": "-",
+        "experiences": [{
+            "intro": "Équipe de 5 — en agile\n– détail d'intro",
+            "bullets": ["Un pipeline\n– déployé chaque semaine", "Seul — élément"]
+        }],
+        "formations": [{ "intro": "", "details": ["Échange\n— Lisbonne"] }]
+    });
+    normalize_document_data(&mut data);
+    assert_eq!(data["list_marker"], "-", "le symbole de la session n'est jamais modifié");
+    // Une suite qui commence par un tiret reste sur sa propre ligne : elle ne
+    // fusionne pas avec la ligne précédente (« Un pipeline, déployé… »).
+    // Comme toute phrase, la ligne perd son tiret typographique de tête.
+    assert_eq!(data["experiences"][0]["bullets"][0], "Un pipeline\ndéployé chaque semaine");
+    assert_eq!(data["experiences"][0]["bullets"][1], "Seul, élément");
+    assert_eq!(data["experiences"][0]["intro"], "Équipe de 5, en agile\ndétail d'intro");
+    assert_eq!(data["formations"][0]["details"][0], "Échange\nLisbonne");
+}
+
+#[test]
 fn normalisation_du_message_de_candidature() {
     let message = "Objet : Candidature stage AI Engineer — Antoine Dupont\n\nMadame, Monsieur,\nMon stage — en production — a duré six mois.";
     assert_eq!(

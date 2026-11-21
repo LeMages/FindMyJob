@@ -12,6 +12,9 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
+// Importation des composants
+import AppModal from '@/components/AppModal.vue'
+
 // Importation des modules internes
 import { backendErrorMessage } from '@/composables/backend_error_message'
 import { formatDateTime } from '@/composables/date_time_format'
@@ -29,9 +32,11 @@ interface Props {
   loadError: string | null
   /** Autorise la restauration (mode édition des paramètres de session). */
   editMode: boolean
+  /** Raison pour laquelle la restauration est bloquée (session en lecture seule), sinon `null`. */
+  lockedHint?: string | null
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { lockedHint: null })
 
 const emit = defineEmits<{
   /** Demande de fermeture (croix, Échap, clic sur le fond). */
@@ -82,23 +87,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
-  <div class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]" @click="emit('close')">
-    <div
-      class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[560px] max-w-[calc(100vw-48px)] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="title"
-      @click.stop
-    >
-      <div class="flex items-center justify-between mb-5">
-        <div class="text-[17px] font-semibold">{{ title }}</div>
-        <button
-          class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950"
-          type="button"
-          :aria-label="t('common.close')"
-          @click="emit('close')"
-        >×</button>
-      </div>
+  <AppModal :title="title" :width="560" backdrop-close @close="emit('close')">
 
       <div v-if="loadError" class="text-[12px] text-red-600">{{ loadError }}</div>
       <div v-else-if="sortedVersions.length === 0" class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('documents.versions.empty') }}</div>
@@ -137,14 +126,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
               v-if="editMode"
               class="h-[30px] px-3 rounded-7 border border-neutral-300 bg-surface-2 text-[12px] font-medium text-neutral-900 cursor-pointer whitespace-nowrap hover:bg-surface-3 disabled:opacity-60 disabled:cursor-default"
               type="button"
-              :title="t('documents.versions.restore_hint')"
-              :disabled="v.is_current || restoringVersion !== null"
+              :title="lockedHint ?? t('documents.versions.restore_hint')"
+              :disabled="v.is_current || restoringVersion !== null || lockedHint !== null"
               @click="restore(v)"
             >{{ restoringVersion === v.version ? t('documents.versions.restoring') : t('documents.versions.restore') }}</button>
           </div>
         </div>
       </div>
-      <div v-if="restoreError" class="mt-[6px] text-[12px] text-red-600">{{ restoreError }}</div>
-    </div>
-  </div>
+      <div v-if="restoreError" class="mt-[6px] mb-2 text-[12px] text-red-600">{{ restoreError }}</div>
+  </AppModal>
 </template>

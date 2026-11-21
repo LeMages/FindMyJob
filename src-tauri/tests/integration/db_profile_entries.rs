@@ -23,6 +23,7 @@ fn experience(poste: &str, debut: Option<NaiveDate>, fin: Option<NaiveDate>) -> 
         date_debut: debut,
         date_fin: fin,
         type_contrat: Some("stage".into()),
+        contexte: None,
     }
 }
 
@@ -61,6 +62,74 @@ async fn experience_refuse_un_type_de_contrat_inconnu() {
     assert!(matches!(experiences::insert(&pool, input, seed::NOW).await, Err(AppError::Validation(_))));
 }
 
+/// Projet minimal avec un contexte détaillé donné.
+fn projet_avec_contexte(contexte: Option<&str>) -> CreateProjetInput {
+    CreateProjetInput {
+        titre: "FindMyJob".into(),
+        description: None,
+        stack: None,
+        url: None,
+        pour_qui: None,
+        date_debut: None,
+        date_fin: None,
+        contexte: contexte.map(str::to_string),
+    }
+}
+
+/// Vérifie qu'une écriture est refusée pour un contexte trop long, avec le
+/// message français attendu.
+fn assert_contexte_trop_long<T: std::fmt::Debug>(result: Result<T, AppError>) {
+    match result {
+        Err(AppError::Validation(m)) => {
+            assert_eq!(m, "Le contexte détaillé ne doit pas dépasser 2000 caractères (2001 saisis).")
+        }
+        other => panic!("validation attendue, obtenu {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn contexte_detaille_conserve_normalise_et_borne() {
+    let pool = seed::pool().await;
+    let au_plafond = "é".repeat(2000);
+    let trop_long = "é".repeat(2001);
+
+    // ------------------------------------------------------------------
+    // 1. Expériences : insertion, relecture, mise à jour, vide → NULL
+    // ------------------------------------------------------------------
+    let mut input = experience("Poste", None, None);
+    input.contexte = Some("  Migration de 40 rapports vers dbt.  ".into());
+    let exp = experiences::insert(&pool, input, seed::NOW).await.unwrap();
+    assert_eq!(exp.contexte.as_deref(), Some("Migration de 40 rapports vers dbt."));
+    assert_eq!(experiences::list_all(&pool).await.unwrap()[0].contexte, exp.contexte);
+    let mut input = experience("Poste", None, None);
+    input.contexte = Some(au_plafond.clone());
+    let maj = experiences::update(&pool, exp.id, input).await.unwrap();
+    assert_eq!(maj.contexte.as_deref(), Some(au_plafond.as_str()), "2 000 caractères acceptés");
+    let mut input = experience("Poste", None, None);
+    input.contexte = Some(" \n\t ".into());
+    assert_eq!(experiences::update(&pool, exp.id, input).await.unwrap().contexte, None, "blanc → NULL");
+    let mut input = experience("Poste", None, None);
+    input.contexte = Some(trop_long.clone());
+    assert_contexte_trop_long(experiences::update(&pool, exp.id, input).await);
+    let mut input = experience("Autre", None, None);
+    input.contexte = Some(trop_long.clone());
+    assert_contexte_trop_long(experiences::insert(&pool, input, seed::NOW).await);
+    assert_eq!(experiences::list_all(&pool).await.unwrap().len(), 1, "rien n'est écrit au-delà de la limite");
+
+    // ------------------------------------------------------------------
+    // 2. Projets : mêmes règles
+    // ------------------------------------------------------------------
+    let projet = projets::insert(&pool, projet_avec_contexte(Some("Né d'un besoin du club.")), seed::NOW).await.unwrap();
+    assert_eq!(projet.contexte.as_deref(), Some("Né d'un besoin du club."));
+    assert_eq!(projets::list_all(&pool).await.unwrap()[0].contexte, projet.contexte);
+    let maj = projets::update(&pool, projet.id, projet_avec_contexte(Some(&au_plafond))).await.unwrap();
+    assert_eq!(maj.contexte.as_deref(), Some(au_plafond.as_str()));
+    assert_eq!(projets::update(&pool, projet.id, projet_avec_contexte(Some(""))).await.unwrap().contexte, None);
+    assert_contexte_trop_long(projets::update(&pool, projet.id, projet_avec_contexte(Some(&trop_long))).await);
+    assert_contexte_trop_long(projets::insert(&pool, projet_avec_contexte(Some(&trop_long)), seed::NOW).await);
+    assert_eq!(projets::list_all(&pool).await.unwrap().len(), 1);
+}
+
 #[tokio::test]
 async fn formations_et_projets_crud() {
     let pool = seed::pool().await;
@@ -91,6 +160,7 @@ async fn formations_et_projets_crud() {
             pour_qui: None,
             date_debut: None,
             date_fin: None,
+            contexte: None,
         },
         seed::NOW,
     )

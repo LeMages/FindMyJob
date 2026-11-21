@@ -1,34 +1,41 @@
 //! Rédaction des champs de prose de la lettre de motivation (objet,
 //! paragraphes) via l'API Claude, avec revue et retry
 //! (`llm::writing_loop`). Expéditeur, destinataire, date, formule d'appel
-//! et formule de politesse sont remplis par Rust. Les consignes de la
-//! référence (zones `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]` de l'objet et des
-//! paragraphes) sont transmises au LLM et vérifiées.
+//! et phrases fixes sont du texte du template. Les consignes de la
+//! référence (consignes générales, emplacements `[VARIABLE]` /
+//! `[ADAPTABLE]` de l'objet et des paragraphes) et son rendu complet sont
+//! transmis au LLM. Le contexte détaillé des
+//! entrées retenues est fourni comme matière de fond, et sa recopie mot pour
+//! mot est relevée à la revue (`docgen::verbatim_check`).
 
 // Importation des crates externes
 use serde_json::{json, Value};
 
 // Importation des modules internes
 use crate::docgen::budgets::LmBudget;
-use crate::docgen::example_facts::lm_information_values;
 use crate::docgen::lint::lint_lm_budget;
 use crate::docgen::entry_texts::CvEntryTexts;
 use crate::docgen::selection::Selection;
+use crate::docgen::title_match::contains_title;
+use crate::docgen::verbatim_check::verbatim_violations;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
+use crate::llm::detailed_context_block::{detailed_context_block, letter_contexts};
 use crate::llm::doc_data_schema::object;
 use crate::llm::profile_facts::profile_facts_block;
 use crate::llm::prose_checks::ProseChecks;
 use crate::llm::writing_loop::{write_with_retries, Review, WritingFeedback, WritingOutcome};
 use crate::llm::writing_rules::{
-    guidance_block, language_reminder, language_rule, style_model_block, with_feedback, COMMON_RULES,
+    guidance_block, language_reminder, language_rule, reference_document_block, style_model_block, with_feedback,
+    COMMON_RULES,
 };
 use crate::models::{LmContent, LmData, MatchingResult, ProfileDto, ProseGuidance};
 use crate::llm::target::ClaudeTarget;
 
 /// Consignes propres à la lettre.
 const LM_RULES: &str = "Un paragraphe ne commence pas par une phrase nominale qui annonce son argument : il entre directement dans le propos, comme le paragraphe de même rang du modèle.
-Les paragraphes ne contiennent ni la formule d'appel ni la formule de politesse finale : elles sont ajoutées à part.";
+Les paragraphes ne contiennent ni la formule d'appel ni la formule de politesse finale : elles sont ajoutées à part.
+L'objet contient l'intitulé exact du poste (ligne « INTITULÉ EXACT DU POSTE »), recopié sans le modifier, sans le reformuler ni le traduire.";
 
 /// Entrées de la rédaction de la lettre.
 ///
@@ -39,10 +46,12 @@ Les paragraphes ne contiennent ni la formule d'appel ni la formule de politesse 
 /// * `selection` - Entrées du profil retenues.
 /// * `profile` - Profil complet du candidat.
 /// * `entry_texts` - Descriptions des entrées, dans la langue du document.
-/// * `example` - Contenu de la référence (modèle de style).
+/// * `example` - Valeurs d'exemple de la référence (modèle de style).
+/// * `reference_text` - Texte rendu de la référence avec son exemple.
 /// * `guidance` - Consignes de la référence (`subject`, `paragraphs[i]`).
 /// * `budget` - Budget de longueur.
 /// * `company` - Entreprise destinataire (vide si inconnue).
+/// * `job_title` - Intitulé exact du poste (`candidatures.poste`).
 /// * `target_lang` - Langue de la lettre (celle de l'offre).
 /// * `example_lang` - Langue de la référence.
 pub struct LmWritingInput<'a> {
@@ -52,9 +61,11 @@ pub struct LmWritingInput<'a> {
     pub profile: &'a ProfileDto,
     pub entry_texts: &'a CvEntryTexts,
     pub example: &'a LmData,
+    pub reference_text: &'a str,
     pub guidance: &'a ProseGuidance,
     pub budget: LmBudget,
     pub company: &'a str,
+    pub job_title: &'a str,
     pub target_lang: &'a str,
     pub example_lang: &'a str,
 }
@@ -113,21 +124,51 @@ fn user_message(input: &LmWritingInput<'_>) -> String {
     let company = if input.company.trim().is_empty() { "non renseignée" } else { input.company };
     let mut blocks = vec![
         format!("ENTREPRISE DESTINATAIRE : {company}"),
+        format!("INTITULÉ EXACT DU POSTE : {} (cite-le tel quel dans l'objet, sans le modifier)", input.job_title.trim()),
         format!("ANALYSE DE L'OFFRE :\n{}", input.offer_analysis),
         profile_facts_block(input.profile, input.selection, input.matching, input.entry_texts),
-        style_model_block(&example_prose(input.example)),
     ];
+    // Absent sans contexte renseigné : le message reste alors celui d'avant le contexte détaillé.
+    blocks.extend(detailed_context_block(&letter_contexts(input.selection), input.target_lang));
+    blocks.push(style_model_block(&example_prose(input.example)));
+    blocks.extend(reference_document_block(input.reference_text));
     blocks.extend(guidance_block(input.guidance));
     blocks.push(budget_block(&input.budget));
     blocks.join("\n\n")
 }
 
+/// Ce qu'une revue de lettre vérifie, au-delà du contenu.
+///
+/// # Attributes
+///
+/// * `budget` - Budget de longueur.
+/// * `checks` - Contrôles de prose partagés avec le CV.
+/// * `job_title` - Intitulé exact du poste.
+/// * `contexts` - Contextes détaillés transmis, à ne pas recopier.
+struct LmReview<'a> {
+    budget: &'a LmBudget,
+    checks: &'a ProseChecks,
+    job_title: &'a str,
+    contexts: &'a [String],
+}
+
 /// Revue complète d'un contenu de lettre.
-fn review(content: &LmContent, budget: &LmBudget, checks: &ProseChecks) -> Review {
+fn review(content: &LmContent, rules: &LmReview<'_>) -> Review {
+    let (budget, checks, job_title) = (rules.budget, rules.checks, rules.job_title);
     let fields = content.prose_fields();
-    let blocking = fields.iter().filter(|f| f.text.trim().is_empty()).map(|f| format!("{} est vide.", f.path)).collect();
+    let mut blocking: Vec<String> =
+        fields.iter().filter(|f| f.text.trim().is_empty()).map(|f| format!("{} est vide.", f.path)).collect();
+    // L'objet doit citer l'intitulé exact de l'offre, pas une reformulation.
+    if !content.subject.trim().is_empty() && !contains_title(&content.subject, job_title) {
+        blocking.push(format!(
+            "subject doit contenir l'intitulé exact du poste « {} », sans le modifier.",
+            job_title.trim()
+        ));
+    }
     let mut violations = checks.violations(&fields);
     violations.extend(lint_lm_budget(content, budget));
+    // Recopie du contexte : relance, mais jamais bloquante après le dernier essai.
+    violations.extend(verbatim_violations(&content.paragraphs, rules.contexts));
     Review { blocking, violations }
 }
 
@@ -156,17 +197,15 @@ async fn call_once(
 ///
 /// `WritingOutcome<LmContent>`.
 pub async fn write_lm(input: &LmWritingInput<'_>, target: &ClaudeTarget) -> Result<WritingOutcome<LmContent>, AppError> {
-    let checks = ProseChecks {
-        example_prose: example_prose(input.example),
-        guidance: input.guidance.clone(),
-        information: lm_information_values(input.example),
-    };
+    let checks = ProseChecks { example_prose: example_prose(input.example) };
+    let contexts: Vec<String> = letter_contexts(input.selection).into_iter().map(|c| c.text).collect();
+    let rules = LmReview { budget: &input.budget, checks: &checks, job_title: input.job_title, contexts: &contexts };
     write_with_retries(
         "lettre",
         &language_reminder(input.target_lang),
         |feedback| call_once(input, feedback, target),
-        |content| review(content, &input.budget, &checks),
-        |content| content.map_prose(|path, text| checks.clean(path, text)),
+        |content| review(content, &rules),
+        |content| content.map_prose(|_, text| checks.clean(text)),
     )
     .await
 }

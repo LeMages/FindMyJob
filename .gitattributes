@@ -2,3 +2,7 @@
 # CRLF (core.autocrlf sous Windows) changerait l'empreinte et bloquerait le
 # démarrage de l'application (VersionMismatch). On force donc LF.
 db/migrations/**/*.sql text eol=lf
+
+# Les fichiers du contrat sont embarqués par include_str! et comparés tels
+# quels par les tests : un checkout CRLF (runner Windows) les ferait diverger.
+docs/reference-contract/** text eol=lf

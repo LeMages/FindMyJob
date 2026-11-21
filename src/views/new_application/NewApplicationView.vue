@@ -2,7 +2,8 @@
 /**
  * Vue « Nouvelle candidature » : import de l'offre (lien, capture de la
  * page, texte collé ou saisie manuelle), puis formulaire de création
- * (détails du poste, contacts recruteur, notes).
+ * (détails du poste, contenu de l'offre, liste de vérification « Prêt à
+ * générer ? », contacts recruteur, notes) et popup de génération.
  */
 
 // Importation des modules Vue / framework
@@ -11,7 +12,14 @@ import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 
 // Importation des composants
+import InfoBanner from '@/components/InfoBanner.vue'
+import SectionCard from '@/components/SectionCard.vue'
+import SessionLockedBanner from '@/components/SessionLockedBanner.vue'
+import ApplicationStepper from './components/ApplicationStepper.vue'
+import BackToLinkButton from './components/BackToLinkButton.vue'
 import GenerationProgressModal from './components/GenerationProgressModal.vue'
+import GenerationReadyCard from './components/GenerationReadyCard.vue'
+import JobFieldsCard from './components/JobFieldsCard.vue'
 import OfferLinkStep from './components/OfferLinkStep.vue'
 import ExtractionChoiceStep from './components/ExtractionChoiceStep.vue'
 import CaptureStep from './components/CaptureStep.vue'
@@ -24,16 +32,18 @@ import type { CandidatureView, CreateCandidatureInput, OfferExtraction } from '@
 import {
   state,
   currentSession,
+  currentSessionLocked,
   navigate,
+  refreshSessions,
   addContactDraft,
   removeContactDraft,
   resetContactDrafts,
 } from '@/stores/app'
 import { backendErrorMessage } from '@/composables/backend_error_message'
-import { sourceOptions, typeContratOptions } from '@/composables/candidature_display'
 import { draftFromScraped, draftToCandidatureContact } from '@/composables/contact_draft'
 import { useDocumentsStatus } from '@/composables/useDocumentsStatus'
 import { useGenerationProgress } from '@/composables/useGenerationProgress'
+import { buildGenerationChecklist } from './generation_checklist'
 import { useOfferImport } from './useOfferImport'
 import { useDuplicateOffers } from './useDuplicateOffers'
 
@@ -51,6 +61,8 @@ const notesRef = ref('')
 // Ligne de contact pré-remplie par la dernière extraction, remplacée par la
 // suivante pour ne pas mélanger deux offres.
 const extractedContactKey = ref<number | null>(null)
+// Le formulaire vient-il d'une analyse (sous-titre de la carte « Le poste ») ?
+const prefilled = ref(false)
 
 const offerImport = useOfferImport(urlOffreRef, onOfferExtracted)
 const { step, busy, urlError, urlUnavailable, choice, captureError, pasteError, pasteText } = offerImport
@@ -73,13 +85,16 @@ const { progress, pollError, start: startProgressPolling } = useGenerationProgre
 
 /**
  * Réagit à la fin de la génération des documents (voir `GenerationProgressModal`) :
- * en cas de succès, réinitialise le formulaire et retourne au suivi comme
- * avant le passage en asynchrone ; en cas d'échec, la modale reste ouverte
- * avec l'erreur et le formulaire est conservé (l'utilisateur ne perd pas sa saisie).
+ * recharge les sessions dans les deux cas (une génération échouée supprime
+ * la candidature, le compteur change) ; en cas de succès, réinitialise le
+ * formulaire et retourne au suivi comme avant le passage en asynchrone ; en
+ * cas d'échec, la modale reste ouverte avec l'erreur et le formulaire est
+ * conservé (l'utilisateur ne perd pas sa saisie).
  */
 watch(
   () => progress.value?.status,
   (status) => {
+    if (status === 'completed' || status === 'failed') void refreshSessions()
     if (status === 'completed') {
       showProgressModal.value = false
       resetForm()
@@ -106,14 +121,28 @@ function resetForm() {
   notesRef.value = ''
   resetContactDrafts()
   extractedContactKey.value = null
+  prefilled.value = false
   saveError.value = null
   offerImport.reset()
   clearDuplicates()
 }
 
-const { documentsBlocking, missingDocumentsMessage, loadDocumentsStatus } = useDocumentsStatus()
+const { documentsBlocking, loadDocumentsStatus } = useDocumentsStatus()
 onMounted(loadDocumentsStatus)
 watch(() => currentSession.value?.id, loadDocumentsStatus)
+
+/** Infobulle du bouton de création quand la session est en pause ou terminée, sinon `null`. */
+const lockedHint = computed(() => (currentSessionLocked.value ? t('session.locked.hint') : null))
+
+/** Liste « Prêt à générer ? » : tous ses points conditionnent la création. */
+const checklist = computed(() =>
+  buildGenerationChecklist({
+    fieldsValid: isValid.value,
+    documentsReady: !documentsBlocking.value,
+    sessionCity: currentSession.value?.ville ?? null,
+    sessionLocked: currentSessionLocked.value,
+  }),
+)
 
 // La fenêtre de capture n'a plus de sens hors de cet écran.
 onBeforeUnmount(offerImport.closeCapture)
@@ -121,7 +150,7 @@ onBeforeUnmount(offerImport.closeCapture)
 /** Valide et envoie le formulaire de nouvelle candidature au backend. */
 async function submit() {
   const session = currentSession.value
-  if (!isValid.value || documentsBlocking.value || !session) return
+  if (!checklist.value.canGenerate || !session) return
   saving.value = true
   saveError.value = null
   try {
@@ -144,6 +173,7 @@ async function submit() {
     // 2. Création de la candidature côté backend, puis suivi de la génération
     //    des documents lancée en tâche de fond (modale bloquante)
     const candidature = await invoke<CandidatureView>('create_candidature', { input })
+    void refreshSessions()
     showProgressModal.value = true
     startProgressPolling(candidature.id)
   } catch (e: unknown) {
@@ -218,6 +248,7 @@ function applyExtractedContact(extraction: OfferExtraction) {
 /** Pré-remplit le formulaire après une extraction réussie et vérifie les doublons. */
 function onOfferExtracted(extraction: OfferExtraction) {
   applyFields(extraction)
+  prefilled.value = true
   if (urlOffreRef.value.trim()) {
     autoDetectSource(urlOffreRef.value)
     void checkDuplicates(urlOffreRef.value)
@@ -226,31 +257,38 @@ function onOfferExtracted(extraction: OfferExtraction) {
 
 /** Passe à la saisie manuelle en vérifiant les doublons du lien déjà saisi. */
 async function goToManual() {
+  prefilled.value = false
   await offerImport.goToManual()
   void checkDuplicates(urlOffreRef.value)
 }
 </script>
 
 <template>
-  <div class="px-9 pt-[26px] pb-11">
-    <button class="bg-transparent border-none font-mono text-[12px] text-neutral-500 cursor-pointer py-1 mb-[14px] inline-block hover:text-neutral-950" @click="navigate('tracking')">{{ t('detail.back_to_tracking') }}</button>
-
-    <div class="flex items-center justify-between mb-5">
-      <div>
+  <div class="px-5 sm:px-[30px] pt-[26px] pb-12">
+    <div class="flex flex-wrap min-[1100px]:flex-nowrap items-center gap-x-6 gap-y-3 mb-6">
+      <div class="flex-1 min-w-[200px]">
         <h1 class="text-2xl font-semibold leading-tight">{{ t('new_application.title') }}</h1>
-        <div class="text-[13px] text-neutral-500 mt-[5px] font-mono">{{ currentSession?.nom }}</div>
+        <div class="text-[13px] text-neutral-500 mt-[5px]">{{ currentSession?.nom }}</div>
       </div>
+      <ApplicationStepper :active="step === 'form' ? 1 : 0" />
       <button
+        type="button"
         class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
         @click="navigate('tracking')"
       >{{ t('common.cancel') }}</button>
     </div>
 
+    <SessionLockedBanner v-if="currentSession" :statut="currentSession.statut" class="mb-4" />
+
     <!-- Sans session courante, aucune candidature ne peut être créée -->
-    <div v-if="!currentSession" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[18px] text-[13px] text-amber-700 flex items-center justify-between gap-3">
-      <span>{{ t('new_application.no_session') }}</span>
-      <button class="underline font-medium whitespace-nowrap" @click="navigate('tracking')">{{ t('new_application.go_to_tracking') }}</button>
-    </div>
+    <InfoBanner v-if="!currentSession" tone="warn">
+      {{ t('new_application.no_session') }}
+      <button
+        type="button"
+        class="border-0 bg-transparent p-0 text-[12.5px] font-sans text-neutral-500 cursor-pointer underline underline-offset-[3px] hover:text-neutral-950"
+        @click="navigate('tracking')"
+      >{{ t('new_application.go_to_tracking') }}</button>
+    </InfoBanner>
 
     <OfferLinkStep
       v-if="step === 'url'"
@@ -295,88 +333,52 @@ async function goToManual() {
     />
 
     <template v-if="step === 'form'">
-    <button class="bg-transparent border-none font-mono text-[12px] text-neutral-500 cursor-pointer py-1 mb-[10px] hover:text-neutral-950" @click="offerImport.backToUrl">{{ t('new_application.back_to_offer_link') }}</button>
-    <DuplicateOfferWarning :duplicates="duplicates" :check-error="checkError" />
-    <!-- Détails du poste -->
-    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('detail.job.section') }}</div>
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.title') }} <span class="text-red-500 font-semibold">*</span></label>
-        <input v-model="roleRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('detail.job.title_placeholder')" />
-      </div>
-      <div class="flex gap-[14px]">
-        <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.company') }} <span class="text-red-500 font-semibold">*</span></label>
-          <input v-model="companyRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('detail.job.company_placeholder')" />
+      <BackToLinkButton class="mb-[14px]" @back="offerImport.backToUrl" />
+      <DuplicateOfferWarning :duplicates="duplicates" :check-error="checkError" />
+
+      <div class="grid grid-cols-1 min-[1100px]:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start">
+        <div class="min-w-0 flex flex-col gap-4">
+          <JobFieldsCard
+            v-model:role="roleRef"
+            v-model:company="companyRef"
+            v-model:location="locationRef"
+            v-model:contract="typeRef"
+            v-model:salary="remunerationRef"
+            v-model:source="sourceRef"
+            v-model:url="urlOffreRef"
+            :prefilled="prefilled"
+            @url-change="checkDuplicates(urlOffreRef)"
+          />
+          <SectionCard :hint="t('new_application.form.offer_hint')">
+            <template #title>{{ t('detail.offer.title') }} <span class="text-red-500 font-semibold">*</span></template>
+            <textarea
+              v-model="descriptionOffreRef"
+              class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-[320px] focus:outline-none focus:border-neutral-400"
+              :placeholder="t('new_application.form.offer_placeholder')"
+              :aria-label="t('detail.offer.title')"
+            />
+          </SectionCard>
         </div>
-        <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.location') }} <span class="text-red-500 font-semibold">*</span></label>
-          <input v-model="locationRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('new_application.form.location_placeholder')" />
-        </div>
-      </div>
-      <div class="flex gap-[14px]">
-        <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.contract') }} <span class="text-red-500 font-semibold">*</span></label>
-          <select
-            v-model="typeRef"
-            class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
-          >
-            <option value="">{{ t('common.select_placeholder') }}</option>
-            <option v-for="opt in typeContratOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
-        </div>
-        <div class="flex-1 mb-[14px]">
-          <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.salary') }}</label>
-          <input v-model="remunerationRef" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('detail.job.salary_placeholder')" />
-        </div>
-      </div>
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.platform') }} <span class="text-red-500 font-semibold">*</span></label>
-        <select
-          v-model="sourceRef"
-          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
-        >
-          <option value="">{{ t('common.select_placeholder') }}</option>
-          <option v-for="opt in sourceOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
-      </div>
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.job.link') }}</label>
-        <input v-model="urlOffreRef" @change="checkDuplicates(urlOffreRef)" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" placeholder="https://..." />
-      </div>
-      <div class="mb-0">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('detail.offer.title') }} <span class="text-red-500 font-semibold">*</span></label>
-        <textarea v-model="descriptionOffreRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-40" :placeholder="t('new_application.form.offer_placeholder')" />
-      </div>
-    </div>
 
-    <!-- Contacts recruteur -->
-    <ContactsSection />
-
-    <!-- Notes -->
-    <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-      <div class="text-[11px] font-semibold mb-[14px] font-mono tracking-[.06em] text-neutral-500">{{ t('detail.notes.section') }}</div>
-      <textarea v-model="notesRef" class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-20" :placeholder="t('new_application.form.notes_placeholder')" />
-    </div>
-
-    <!-- Documents de référence manquants -->
-    <div v-if="documentsBlocking" class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-[14px] text-[13px] text-amber-700 flex items-center justify-between gap-3">
-      <span>{{ missingDocumentsMessage }}</span>
-      <button class="underline font-medium whitespace-nowrap" @click="navigate('settings')">{{ t('new_application.go_to_settings') }}</button>
-    </div>
-
-    <!-- Error -->
-    <div v-if="saveError" class="text-red-500 text-[13px] mb-2">{{ saveError }}</div>
-
-    <!-- Submit -->
-    <button
-      class="w-full justify-center h-12 text-[15px] rounded-10 mt-1 px-4 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap font-medium border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-      :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': saving || !isValid || documentsBlocking || !currentSession }"
-      :disabled="saving || !isValid || documentsBlocking || !currentSession"
-      @click="submit"
-    >
-      {{ saving ? t('common.saving') : t('new_application.submit') }}
-    </button>
+        <aside class="flex flex-col gap-4 min-[1100px]:sticky min-[1100px]:top-5">
+          <GenerationReadyCard
+            :checklist="checklist"
+            :saving="saving"
+            :error="saveError"
+            :locked-hint="lockedHint"
+            @submit="submit"
+          />
+          <ContactsSection />
+          <SectionCard :title="t('new_application.form.notes_title')" :hint="t('new_application.form.notes_hint')">
+            <textarea
+              v-model="notesRef"
+              class="w-full border border-neutral-300 rounded-lg px-3 py-[10px] text-[13.5px] font-sans bg-surface-2 text-neutral-950 block resize-none leading-[1.5] h-24 focus:outline-none focus:border-neutral-400"
+              :placeholder="t('new_application.form.notes_placeholder')"
+              :aria-label="t('new_application.form.notes_title')"
+            />
+          </SectionCard>
+        </aside>
+      </div>
     </template>
 
     <GenerationProgressModal

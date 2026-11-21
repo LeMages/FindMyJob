@@ -25,7 +25,7 @@ use serde::Serialize;
 // Importation des modules internes
 use crate::docgen::dash_normalization::dash_marks;
 use crate::docgen::data_normalization::normalize_document_data;
-use crate::documents::typst::compile_template;
+use crate::documents::typst::compile_contract;
 use crate::error::AppError;
 use crate::llm::writing_loop::{AttemptReport, WritingOutcome};
 use crate::trace_log;
@@ -40,7 +40,7 @@ const BUDGET_REDUCTION: f64 = 0.85;
 /// # Attributes
 ///
 /// * `pdf` - Octets du PDF.
-/// * `data_json` - Données passées au template (`data.json`).
+/// * `data_json` - Données passées au template (`sys.inputs.data`).
 /// * `page_count` - Nombre de pages du PDF.
 /// * `page_retries` - Nombre de relances dues au dépassement de pages.
 /// * `warning` - Avertissement pour l'utilisateur si le document dépasse
@@ -77,13 +77,11 @@ struct Compiled {
 ///
 /// * `label` - Nom du document, pour les messages.
 /// * `template` - Source du template.
-/// * `root` - Dossier racine de compilation.
 /// * `fonts_dir` - Dossier des polices importées.
 /// * `max_pages` - Nombre de pages à ne pas dépasser.
 pub struct CompileTarget<'a> {
     pub label: &'a str,
     pub template: &'a str,
-    pub root: &'a Path,
     pub fonts_dir: &'a Path,
     pub max_pages: usize,
 }
@@ -149,12 +147,12 @@ fn rendered_dash_marks(target: &CompileTarget<'_>, text: &str) -> Vec<String> {
 
 /// Compile des données avec le template (hors du runtime async).
 async fn compile(target: &CompileTarget<'_>, data_json: &str) -> Result<Compiled, AppError> {
-    let (template, data) = (target.template.to_string(), data_json.as_bytes().to_vec());
-    let (root, fonts) = (target.root.to_path_buf(), target.fonts_dir.to_path_buf());
-    let compiled = tokio::task::spawn_blocking(move || compile_template(template, data, root, fonts))
+    let (template, data) = (target.template.to_string(), data_json.to_string());
+    let fonts = target.fonts_dir.to_path_buf();
+    let compiled = tokio::task::spawn_blocking(move || compile_contract(&template, Some(&data), &fonts))
         .await
         .map_err(|e| AppError::Validation(format!("Erreur interne de compilation Typst : {e}")))?
-        .map_err(|e| AppError::Validation(format!("Compilation du {} impossible : {e}", target.label)))?;
+        .map_err(|e| AppError::Validation(format!("Compilation du {} impossible : {}", target.label, e.message())))?;
     Ok(Compiled { pdf: compiled.pdf, page_count: compiled.page_count, text: compiled.text, warnings: compiled.warnings })
 }
 
@@ -162,7 +160,7 @@ async fn compile(target: &CompileTarget<'_>, data_json: &str) -> Result<Compiled
 ///
 /// # Arguments
 ///
-/// * `target` - Template, racine, polices et plafond de pages.
+/// * `target` - Template, polices et plafond de pages.
 /// * `initial` - Rédaction initiale.
 /// * `build` - Construit les données du template depuis un contenu rédigé.
 /// * `rewrite` - Relance la rédaction avec un facteur de réduction des budgets.

@@ -12,11 +12,15 @@ FindMyJob helps students organize their search for an internship, apprenticeship
 
 ## Features
 
-- **Application tracking** — company, position, contract type (internship / apprenticeship / permanent / fixed-term / temp / freelance), contacts, notes, full status timeline (applied, follow-ups, interviews, offer, outcome).
-- **AI-tailored CV and cover letter** — generated from your profile and the offer's text, in your own document's style, entirely in the offer's language (French or English). Writing instructions are comments in your reference document, in a documented format ([`docs/reference-markup.md`](docs/reference-markup.md)).
-- **AI-drafted application message** — a short email or message adapted to the offer when you apply.
-- **Offer import** — paste a job listing's URL and the form is prefilled automatically (title, company, location, contract type, pay, full description) for you to review. The page's structured data (JSON-LD) is used when available, otherwise its text is analyzed by the AI. If a site refuses automatic reading, you can open the page inside FindMyJob (accept cookies, log in), capture it, paste its text, or fill the form by hand. An existing application for the same offer is flagged.
-- **Interview planning** — week/month views across all your applications.
+- **Application tracking** — company, position, contract type (internship / apprenticeship / temp / fixed-term / permanent), offer platform, recruiter contacts, notes, and a full timeline (applied, follow-ups, messages, calls, interviews, offer, outcome). A progress bar shows where each application stands (to apply → sent → interviews → offer → accepted), and where a closed one stopped.
+- **Filters and closed applications** — quick filters (all, to apply, in progress, offers, closed) on each session's table. Rejected, withdrawn, ghosted and declined-offer applications are gathered in a collapsible « Closed » group, with a count per outcome.
+- **Sessions** — each search (for example "Internship 2027") has its own applications, reference documents, sender city and status: active, paused or finished. A paused or finished session stays readable but is read-only (only its status can still change); accepting an offer sets the session to finished automatically.
+- **AI-tailored CV and cover letter** — generated from your profile and the offer's text, in your own document's style, entirely in the offer's language (French or English). Your reference documents follow a documented contract ([`docs/reference-contract/contract.en.md`](docs/reference-contract/contract.en.md)), checked instantly at import without any AI call. The list symbol of the generated CV (bullet « • » or dash « - ») is a setting of the session.
+- **AI-drafted application message** — a short email or platform message adapted to the offer when you apply, addressed to the recruiter contact when there is one. The CV, cover letter and message are exported to your downloads folder.
+- **Offer import** — paste a job listing's URL and the form is prefilled automatically (title, company, location, contract type, pay, full description, contact) for you to review. The page's structured data (JSON-LD) is used when available, otherwise its text is analyzed by the AI. If a site refuses automatic reading, you can open the page inside FindMyJob (accept cookies, log in), capture it, paste its text, or fill the form by hand. An existing application for the same offer is flagged.
+- **Session statistics** — key figures (applications sent, response rate, interview rate, delay to the first response), funnel (sent → response → interview → offer), outcomes, activity per week over the last 9 weeks, interviews, durations and follow-ups, and a « What works » comparison by CV template, cover-letter template, offer platform and recruiter contact (with / without). Rows with too few applications are greyed out.
+- **Interview planning** — week and month views of the session's interviews.
+- **Interface** — collapsible sidebar (remembered, folded automatically when the window is narrower than 1100 px), layouts that adapt to the window's width, light / dark / system theme, French or English interface (independent of the documents' language).
 
 Every offer enters the app through its link (or its pasted text): FindMyJob never collects offers on its own.
 
@@ -26,48 +30,79 @@ The typical path, from first launch to your first tailored application.
 
 ### 1. Fill in your basic information
 
-On first launch, a short wizard asks for the interface language (English or French, changeable later in **Settings**), then your identity, contact details, location, a short description and your links (LinkedIn, GitHub, portfolio). Only your first name, last name and email are required; everything can be edited later.
+On first launch, a six-step wizard asks for the interface language (English or French, changeable later in **Settings**), then your identity, contact details, driving licence, a short description and your links (LinkedIn, GitHub, portfolio). Only your first name, last name and email are required; everything can be edited later.
 
 ![First-launch wizard, Identity step](docs/screenshots/01_onboarding.png)
 
 ### 2. Add your Anthropic API key
 
-The AI features (offer import, CV and cover letter tailoring, application messages) need an [Anthropic API key](https://console.anthropic.com/). Open **Settings → Artificial intelligence**, paste your key and save it (see [Anthropic API key](#anthropic-api-key)).
+The AI features (offer import, CV and cover letter tailoring, application messages) need an [Anthropic API key](https://console.anthropic.com/). Open **Settings → Artificial intelligence** and choose the model (Claude Sonnet 4.6, recommended, or Claude Haiku 4.5, faster and cheaper). Then click **Replace**, paste your key and save it: the connection test runs right after, and **Test** runs it again (see [Anthropic API key](#anthropic-api-key)). Only the key's last 4 characters are shown.
 
 ![Settings, Artificial intelligence block](docs/screenshots/02_api_key.png)
 
 ### 3. Complete your profile in detail
 
-Open your profile from the bottom of the sidebar (**View profile**) and fill in your experiences, education, projects, skills and languages, and set the language your profile is written in. The more detail you give, the better the generated documents: the AI only uses what your profile says and never invents facts.
+Open your profile with **Profile** at the bottom of the sidebar. Your identity, contact details, skills and languages are on the left; the description, experiences, education and projects on the right. Each section is edited on its own, with its pencil icon. Also set the language your profile is written in.
+
+- **Descriptions** (experiences, projects, education): a line that starts with `-` becomes a list item; text without a dash stays a block (an introduction before the items, or the continuation of the previous item).
+- **Detailed context** (experiences and projects, up to 2,000 characters): background the AI reads to write the cover letter and choose the projects. It is never shown on the CV.
+
+The more detail you give, the better the generated documents: the AI only uses what your profile says and never invents facts.
 
 ![Profile page](docs/screenshots/03_profile.png)
 
-### 4. Write your CV and cover letter in Typst with Claude
+### 4. Prepare your CV and cover letter with Claude
 
-FindMyJob tailors *your own* documents, so it needs a reference CV and cover letter written in [Typst](https://typst.app/) (`.typ` files). If you don't have them yet, ask [Claude](https://claude.ai/) to convert your current CV and cover letter (PDF or Word) to Typst, then check the result compiles and looks right.
+FindMyJob tailors *your own* documents, so it needs a reference CV and cover letter written in [Typst](https://typst.app/) (`.typ` files) that follow the **FindMyJob contract**: your example values, the data FindMyJob fills in, a `<findmyjob>` metadata (writing instructions, rewritten parts, period format) and fixed texts in French and English. The full contract is in [`docs/reference-contract/contract.en.md`](docs/reference-contract/contract.en.md).
 
-You can add writing instructions as `//` comments in the file (`[CONSIGNES]`, `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) to say which parts stay word for word and which are rewritten for each offer. See [`docs/reference-markup.md`](docs/reference-markup.md).
+You don't need to write it by hand:
 
-Two complete examples for a fictional student are in the repository: [`docs/cv_exemple.typ`](docs/cv_exemple.typ) and [`docs/lm_exemple.typ`](docs/lm_exemple.typ) (in French, using the Arimo font). You can import them as they are to try the app, or use them as a model for your own documents.
+1. In the session's **Settings** tab (step 6), click **Copy the prompt for Claude (CV)** or **(letter)**. The prompt, in the interface language, contains the conversion rules (layout kept, ATS-friendly, no em dash), the full contract and a compliant example.
+2. Paste it into [Claude](https://claude.ai/) together with your current CV or cover letter, whatever its format (PDF, Word, Canva, `.typ`…).
+3. Import the `.typ` file Claude gives back. The check is instant: if the file does not follow the contract, the import is refused and every problem is listed with its line or field (for example a value written in the file instead of read from the data, a missing English text, a section title that stays when its section is empty). Send that list back to Claude to fix the file. Some problems are only warnings (an orphan separator, a recipient block not flush right, em dashes): the import succeeds and they are shown on the card.
+
+Two complete examples for a fictional student are in the repository: [`docs/reference-contract/cv_exemple.typ`](docs/reference-contract/cv_exemple.typ) and [`docs/reference-contract/lm_exemple.typ`](docs/reference-contract/lm_exemple.typ) (French and English, using the Arimo font). You can import them as they are to try the app.
+
+**References imported before the contract** (with `[CONSIGNES]`, `[FIXE]`… comments) are no longer accepted: generation asks you to re-import them. Convert them with the prompt above.
 
 ### 5. Import the fonts used by your documents
 
-If your CV or cover letter uses fonts that are not built in, import them before importing the documents, so the generated PDFs match your originals: download the font (for example from [Google Fonts](https://fonts.google.com/)), unzip it, then select its folder in **Settings → Fonts**. Write in `font:` the exact family name shown there. A document that uses a missing font is refused at import instead of silently falling back to another font.
+If your CV or cover letter uses fonts that are not built in, import them before importing the documents, so the generated PDFs match your originals: download the font (for example from [Google Fonts](https://fonts.google.com/)), unzip it, then select its folder in **Settings → Fonts** (**+ Add a font**). Write in `font:` the exact family name shown there. A document that uses a missing font is refused at import instead of silently falling back to another font.
 
-![Settings, Fonts block with an imported family](docs/screenshots/05_fonts.png)
+![Settings, Fonts block with imported families](docs/screenshots/05_fonts.png)
 
 ### 6. Create a session and import your documents
 
-A session groups the applications of one search (for example "Internship 2027"). Click **+ New session** in the sidebar and name it. Then open its **Settings** tab and, in the **Documents** card, import your CV and cover letter `.typ` files. Each session has its own reference documents, and they are analyzed once at import.
+A session groups the applications of one search (for example "Internship 2027"). Click **New session** in the sidebar and name it (you can also enter your city and postal code now). Then open the session's **Settings** tab:
 
-![Session Settings tab, Documents card with both references imported](docs/screenshots/06_session_documents.png)
+- **Session** — name, city and postal code, status and CV list symbol. The city is the sender's location on your CV and cover letters: it belongs to the session and is required to create an application; the postal code is optional. The status is **Active**, **Paused** or **Finished**: a paused or finished session is read-only until you set it back to active. **CV lists** chooses the symbol in front of each list item of the generated CVs (**• Bullet** or **- Dash**); the app itself always shows bullets.
+- **Document templates** — one card for the CV, one for the cover letter: import your `.typ` file, preview it, replace it, or restore an earlier version from its history. Each session has its own reference documents, checked against the contract at import. Below the cards, **Preparing your templates** copies the Claude prompts and links to the contract and the examples.
+
+![Session Settings tab, Session section and Document templates cards](docs/screenshots/06_session_documents.png)
 
 ### 7. Add offers and apply
 
-In your session, click **+ New application** and paste the offer's link: the form is filled in automatically for you to review. If the site can't be read, open the page inside FindMyJob, paste its text, or fill the form by hand. On creation, FindMyJob generates a CV and cover letter tailored to the offer, in the offer's language. You then follow the application from the tracking view (status timeline, follow-ups, interviews in the **Planning** tab).
+In your session, click **+ New application**. Creation has three steps:
+
+1. **Offer** — paste the offer's link and click **Analyse**: the form is filled in automatically. If the site can't be read, open the page inside FindMyJob, paste its text, or fill the form by hand.
+2. **Details** — review the position, the offer's content, the recruiter contacts and your notes. The **Ready to generate?** card checks that the required fields are filled in, that the CV and cover-letter templates are imported, that the session has a city and that it is active.
+3. **Generation** — **Create and generate the documents** writes a CV and a cover letter tailored to the offer, in the offer's language.
 
 ![New application, offer link step](docs/screenshots/07_new_application.png)
-![Application detail with the generated documents](docs/screenshots/07_application_detail.png)
+![New application, Details step with the Ready to generate? card](docs/screenshots/10_new_application_form.png)
+
+From the application's page, you then:
+
+- **Apply** — by email or by a message on the offer's platform (drafted by the AI), or **Already applied, no message**. The application moves to « Application sent », its information is frozen, and the CV, cover letter and message are saved in `Downloads/FindMyJob/`.
+- **Add an event** — messages, calls, interviews (with their interviewers), follow-ups, notes, offer, rejection, ghosting, withdrawal. Only the events allowed in the current status are offered.
+- Follow its progress, view or download the generated documents, and manage its recruiter contacts.
+
+![Application detail with its progress, timeline and generated documents](docs/screenshots/07_application_detail.png)
+
+The session's **Planning** tab shows its interviews by week or by month, and the **Statistics** tab its figures once at least 3 applications have been sent.
+
+![Planning tab, week view](docs/screenshots/09_planning.png)
+![Statistics tab of a session](docs/screenshots/08_statistics.png)
 
 ## Architecture
 
@@ -133,7 +168,8 @@ The installer is generated under `target/release/bundle/` at the repo root.
 ### Tests
 
 ```bash
-cargo test --workspace
+cargo test --workspace   # Rust: business rules, database, offer import, documents pipeline
+npm test                 # frontend (Vitest): display logic of the views
 ```
 
 Run from the repository root.
@@ -155,7 +191,7 @@ Run from the repository root.
 
 ## Project status
 
-Active early-stage development. Application tracking (including a global recruiter-contact book shared across applications), AI document tailoring, and offer import by link are implemented end to end — see [`docs/project.md`](docs/project.md#11-features--implemented-partial-and-planned) for the full picture.
+Active early-stage development. Application tracking (with a recruiter-contact book shared across applications, progress, closed-application grouping and session statuses), AI document tailoring, application messages, offer import by link, interview planning and session statistics are implemented end to end, in French and English — see [`docs/project.md`](docs/project.md#11-features--implemented-partial-and-planned) for the full picture.
 
 ## History
 
@@ -183,11 +219,15 @@ FindMyJob aide les étudiants à organiser leur recherche de stage, d'alternance
 
 ## Fonctionnalités
 
-- **Suivi des candidatures** — entreprise, poste, type de contrat (stage / alternance / CDI / CDD / intérim / freelance), contacts, notes, historique complet des statuts (candidature, relances, entretiens, offre, issue).
-- **CV et lettre de motivation adaptés par l'IA** — générés à partir de votre profil et du texte de l'offre, dans le style de votre propre document, entièrement dans la langue de l'offre (français ou anglais). Les consignes de rédaction sont des commentaires dans votre document de référence, selon un format documenté ([`docs/reference-markup.md`](docs/reference-markup.md)).
-- **Message de candidature rédigé par l'IA** — un court email ou message adapté à l'offre au moment de postuler.
-- **Import d'offre** — collez le lien d'une offre et le formulaire est prérempli automatiquement (intitulé, entreprise, lieu, type de contrat, rémunération, description complète) pour que vous le vérifiiez. Les données structurées de la page (JSON-LD) sont utilisées quand elles existent, sinon son texte est analysé par l'IA. Si un site refuse la lecture automatique, vous pouvez ouvrir la page dans FindMyJob (accepter les cookies, vous connecter) et la capturer, coller son texte, ou remplir le formulaire à la main. Une candidature existante pour la même offre est signalée.
-- **Planning des entretiens** — vues semaine et mois sur toutes vos candidatures.
+- **Suivi des candidatures** — entreprise, poste, type de contrat (stage / alternance / intérim / CDD / CDI), plateforme de l'offre, contacts recruteur, notes et historique complet (envoi, relances, messages, appels, entretiens, offre, issue). Une barre de progression montre où en est chaque candidature (à postuler → envoyée → entretiens → offre → acceptée), et où une candidature clôturée s'est arrêtée.
+- **Filtres et candidatures clôturées** — filtres rapides (toutes, à postuler, en cours, offres, clôturées) sur le tableau de chaque session. Les candidatures refusées, abandonnées, ghostées ou dont l'offre a été déclinée sont regroupées dans un bloc « Clôturées » repliable, avec le nombre par issue.
+- **Sessions** — chaque recherche (par exemple « Stage 2027 ») a ses propres candidatures, documents de référence, ville d'expédition et statut : active, en pause ou terminée. Une session en pause ou terminée reste consultable mais en lecture seule (seul son statut reste modifiable) ; accepter une offre passe automatiquement la session en « terminée ».
+- **CV et lettre de motivation adaptés par l'IA** — générés à partir de votre profil et du texte de l'offre, dans le style de votre propre document, entièrement dans la langue de l'offre (français ou anglais). Vos documents de référence suivent un contrat documenté ([`docs/reference-contract/contract.fr.md`](docs/reference-contract/contract.fr.md)), vérifié instantanément à l'import, sans aucun appel à l'IA. Le symbole des listes du CV généré (puce « • » ou tiret « - ») est un réglage de la session.
+- **Message de candidature rédigé par l'IA** — un court email ou message sur la plateforme, adapté à l'offre au moment de postuler, adressé au contact recruteur s'il y en a un. Le CV, la lettre et le message sont exportés dans votre dossier de téléchargements.
+- **Import d'offre** — collez le lien d'une offre et le formulaire est prérempli automatiquement (intitulé, entreprise, lieu, type de contrat, rémunération, description complète, contact) pour que vous le vérifiiez. Les données structurées de la page (JSON-LD) sont utilisées quand elles existent, sinon son texte est analysé par l'IA. Si un site refuse la lecture automatique, vous pouvez ouvrir la page dans FindMyJob (accepter les cookies, vous connecter) et la capturer, coller son texte, ou remplir le formulaire à la main. Une candidature existante pour la même offre est signalée.
+- **Statistiques par session** — chiffres clés (candidatures envoyées, taux de réponse, taux d'entretien, délai avant la première réponse), entonnoir (envoyées → réponse → entretien → offre), issues, activité par semaine sur les 9 dernières semaines, entretiens, durées et relances, et une comparaison « Ce qui marche » par template de CV, template de lettre, plateforme d'origine et contact recruteur (avec / sans). Les lignes qui comptent trop peu de candidatures sont grisées.
+- **Planning des entretiens** — vues semaine et mois des entretiens de la session.
+- **Interface** — barre latérale repliable (état mémorisé, repliée automatiquement quand la fenêtre fait moins de 1100 px de large), mise en page qui s'adapte à la largeur de la fenêtre, thème clair / sombre / système, interface en français ou en anglais (indépendante de la langue des documents).
 
 Chaque offre entre dans l'application par son lien (ou son texte collé) : FindMyJob ne collecte jamais d'offres de lui-même.
 
@@ -197,48 +237,79 @@ Le parcours type, du premier lancement à votre première candidature adaptée.
 
 ### 1. Renseigner vos informations de base
 
-Au premier lancement, un court assistant demande la langue de l'interface (français ou anglais, modifiable ensuite dans les **Paramètres**), puis votre identité, vos coordonnées, votre localisation, une courte description et vos liens (LinkedIn, GitHub, portfolio). Seuls le prénom, le nom et l'email sont obligatoires ; tout reste modifiable par la suite.
+Au premier lancement, un assistant en six étapes demande la langue de l'interface (français ou anglais, modifiable ensuite dans les **Paramètres**), puis votre identité, vos coordonnées, votre permis de conduire, une courte description et vos liens (LinkedIn, GitHub, portfolio). Seuls le prénom, le nom et l'email sont obligatoires ; tout reste modifiable par la suite.
 
 ![Assistant de premier lancement, étape Identité](docs/screenshots/01_onboarding.png)
 
 ### 2. Ajouter votre clé API Anthropic
 
-Les fonctions d'IA (import d'offre, adaptation du CV et de la lettre, messages de candidature) nécessitent une [clé API Anthropic](https://console.anthropic.com/). Ouvrez **Paramètres → Intelligence artificielle**, collez votre clé et enregistrez-la (voir [Clé API Anthropic](#clé-api-anthropic)).
+Les fonctions d'IA (import d'offre, adaptation du CV et de la lettre, messages de candidature) nécessitent une [clé API Anthropic](https://console.anthropic.com/). Ouvrez **Paramètres → Intelligence artificielle** et choisissez le modèle (Claude Sonnet 4.6, recommandé, ou Claude Haiku 4.5, plus rapide et plus économique). Cliquez ensuite sur **Remplacer**, collez votre clé et enregistrez-la : le test de connexion se lance juste après, et **Tester** le relance (voir [Clé API Anthropic](#clé-api-anthropic)). Seuls les 4 derniers caractères de la clé sont affichés.
 
 ![Paramètres, bloc Intelligence artificielle](docs/screenshots/02_api_key.png)
 
 ### 3. Compléter votre profil en détail
 
-Ouvrez votre profil depuis le bas de la barre latérale (**Voir le profil**) et renseignez vos expériences, formations, projets, compétences et langues, ainsi que la langue dans laquelle votre profil est rédigé. Plus vous donnez de détails, meilleurs sont les documents générés : l'IA n'utilise que ce que dit votre profil et n'invente jamais de faits.
+Ouvrez votre profil avec **Profil** en bas de la barre latérale. Votre identité, vos coordonnées, compétences et langues sont à gauche ; la description, les expériences, formations et projets à droite. Chaque section se modifie séparément, avec son icône crayon. Indiquez aussi la langue dans laquelle votre profil est rédigé.
+
+- **Descriptions** (expériences, projets, formations) : une ligne qui commence par `-` devient un élément de liste ; un texte sans tiret reste un bloc (une introduction avant les éléments, ou la suite de l'élément précédent).
+- **Contexte détaillé** (expériences et projets, 2 000 caractères au plus) : des informations de fond que l'IA lit pour rédiger la lettre et choisir les projets. Il n'est jamais affiché sur le CV.
+
+Plus vous donnez de détails, meilleurs sont les documents générés : l'IA n'utilise que ce que dit votre profil et n'invente jamais de faits.
 
 ![Page du profil](docs/screenshots/03_profile.png)
 
-### 4. Rédiger votre CV et votre lettre en Typst avec Claude
+### 4. Préparer votre CV et votre lettre avec Claude
 
-FindMyJob adapte *vos propres* documents : il lui faut donc un CV et une lettre de motivation de référence rédigés en [Typst](https://typst.app/) (fichiers `.typ`). Si vous n'en avez pas encore, demandez à [Claude](https://claude.ai/) de convertir votre CV et votre lettre actuels (PDF ou Word) en Typst, puis vérifiez que le résultat compile et s'affiche correctement.
+FindMyJob adapte *vos propres* documents : il lui faut donc un CV et une lettre de motivation de référence rédigés en [Typst](https://typst.app/) (fichiers `.typ`) qui respectent le **contrat FindMyJob** : vos valeurs d'exemple, les données que FindMyJob remplit, une métadonnée `<findmyjob>` (consignes de rédaction, parties réécrites, format des périodes) et les textes fixes en français et en anglais. Le contrat complet est dans [`docs/reference-contract/contract.fr.md`](docs/reference-contract/contract.fr.md).
 
-Vous pouvez ajouter des consignes de rédaction en commentaires `//` dans le fichier (`[CONSIGNES]`, `[FIXE]`, `[VARIABLE]`, `[ADAPTABLE]`) pour indiquer quelles parties restent mot pour mot et lesquelles sont réécrites pour chaque offre. Voir [`docs/reference-markup.md`](docs/reference-markup.md).
+Inutile de l'écrire à la main :
 
-Deux exemples complets, pour un étudiant fictif, sont disponibles dans le dépôt : [`docs/cv_exemple.typ`](docs/cv_exemple.typ) et [`docs/lm_exemple.typ`](docs/lm_exemple.typ) (en français, avec la police Arimo). Vous pouvez les importer tels quels pour essayer l'application, ou vous en servir de modèle pour vos propres documents.
+1. Dans l'onglet **Paramètres** de la session (étape 6), cliquez sur **Copier le prompt pour Claude (CV)** ou **(lettre)**. Le prompt, dans la langue de l'interface, contient les règles de conversion (mise en page conservée, compatible ATS, sans tiret cadratin), le contrat complet et un exemple conforme.
+2. Collez-le dans [Claude](https://claude.ai/) avec votre CV ou votre lettre actuels, quel que soit leur format (PDF, Word, Canva, `.typ`…).
+3. Importez le fichier `.typ` rendu par Claude. La vérification est instantanée : si le fichier ne respecte pas le contrat, l'import est refusé et chaque problème est listé avec sa ligne ou son champ (par exemple une valeur écrite dans le fichier au lieu d'être lue dans les données, un texte anglais manquant, un titre de section qui reste quand sa section est vide). Renvoyez cette liste à Claude pour qu'il corrige le fichier. Certains problèmes ne sont que des avertissements (séparateur orphelin, bloc destinataire non calé à droite, tirets cadratins) : l'import réussit et ils sont affichés sur la carte.
+
+Deux exemples complets, pour un étudiant fictif, sont disponibles dans le dépôt : [`docs/reference-contract/cv_exemple.typ`](docs/reference-contract/cv_exemple.typ) et [`docs/reference-contract/lm_exemple.typ`](docs/reference-contract/lm_exemple.typ) (en français et en anglais, avec la police Arimo). Vous pouvez les importer tels quels pour essayer l'application.
+
+**Les références importées avant le contrat** (avec des commentaires `[CONSIGNES]`, `[FIXE]`…) ne sont plus acceptées : la génération demande de les réimporter. Convertissez-les avec le prompt ci-dessus.
 
 ### 5. Importer les polices utilisées par vos documents
 
-Si votre CV ou votre lettre utilise des polices non intégrées, importez-les avant d'importer les documents, pour que les PDF générés correspondent à vos originaux : téléchargez la police (par exemple sur [Google Fonts](https://fonts.google.com/)), décompressez-la, puis sélectionnez son dossier dans **Paramètres → Polices**. Écrivez dans `font:` le nom exact de la famille affiché à cet endroit. Un document qui utilise une police manquante est refusé à l'import au lieu de basculer silencieusement sur une autre police.
+Si votre CV ou votre lettre utilise des polices non intégrées, importez-les avant d'importer les documents, pour que les PDF générés correspondent à vos originaux : téléchargez la police (par exemple sur [Google Fonts](https://fonts.google.com/)), décompressez-la, puis sélectionnez son dossier dans **Paramètres → Polices** (**+ Ajouter une police**). Écrivez dans `font:` le nom exact de la famille affiché à cet endroit. Un document qui utilise une police manquante est refusé à l'import au lieu de basculer silencieusement sur une autre police.
 
-![Paramètres, bloc Polices avec une famille importée](docs/screenshots/05_fonts.png)
+![Paramètres, bloc Polices avec des familles importées](docs/screenshots/05_fonts.png)
 
 ### 6. Créer une session et importer vos documents
 
-Une session regroupe les candidatures d'une même recherche (par exemple « Stage 2027 »). Cliquez sur **+ Nouvelle session** dans la barre latérale et donnez-lui un nom. Ouvrez ensuite son onglet **Paramètres** et, dans la carte **Documents**, importez les fichiers `.typ` de votre CV et de votre lettre. Chaque session a ses propres documents de référence, analysés une seule fois à l'import.
+Une session regroupe les candidatures d'une même recherche (par exemple « Stage 2027 »). Cliquez sur **Nouvelle session** dans la barre latérale et donnez-lui un nom (vous pouvez aussi saisir dès maintenant votre ville et votre code postal). Ouvrez ensuite l'onglet **Paramètres** de la session :
 
-![Onglet Paramètres de la session, carte Documents avec les deux références importées](docs/screenshots/06_session_documents.png)
+- **Session** — nom, ville et code postal, statut et symbole des listes du CV. La ville est le lieu d'expédition de vos CV et lettres : elle appartient à la session et est requise pour créer une candidature ; le code postal est facultatif. Le statut est **Active**, **En pause** ou **Terminée** : une session en pause ou terminée est en lecture seule jusqu'à ce que vous la repassiez en active. **Listes du CV** choisit le symbole placé devant chaque élément de liste des CV générés (**• Puce** ou **- Tiret**) ; l'application, elle, affiche toujours des puces.
+- **Modèles de documents** — une carte pour le CV, une pour la lettre : importez votre fichier `.typ`, prévisualisez-le, remplacez-le, ou restaurez une version précédente depuis son historique. Chaque session a ses propres documents de référence, vérifiés selon le contrat à l'import. Sous les cartes, **Préparer vos modèles** copie les prompts pour Claude et donne les liens vers le contrat et les exemples.
+
+![Onglet Paramètres de la session, section Session et cartes Modèles de documents](docs/screenshots/06_session_documents.png)
 
 ### 7. Ajouter des offres et postuler
 
-Dans votre session, cliquez sur **+ Nouvelle candidature** et collez le lien de l'offre : le formulaire est rempli automatiquement pour que vous le vérifiiez. Si le site ne peut pas être lu, ouvrez la page dans FindMyJob, collez son texte, ou remplissez le formulaire à la main. À la création, FindMyJob génère un CV et une lettre adaptés à l'offre, dans la langue de l'offre. Vous suivez ensuite la candidature depuis la vue de suivi (historique des statuts, relances, entretiens dans l'onglet **Planning**).
+Dans votre session, cliquez sur **+ Nouvelle candidature**. La création se fait en trois étapes :
+
+1. **Offre** — collez le lien de l'offre et cliquez sur **Analyser** : le formulaire est rempli automatiquement. Si le site ne peut pas être lu, ouvrez la page dans FindMyJob, collez son texte, ou remplissez le formulaire à la main.
+2. **Détails** — vérifiez le poste, le contenu de l'offre, les contacts recruteur et vos notes. La carte **Prêt à générer ?** vérifie que les champs obligatoires sont remplis, que les modèles de CV et de lettre sont importés, que la session a une ville et qu'elle est active.
+3. **Génération** — **Créer et générer les documents** rédige un CV et une lettre adaptés à l'offre, dans la langue de l'offre.
 
 ![Nouvelle candidature, étape du lien de l'offre](docs/screenshots/07_new_application.png)
-![Détail d'une candidature avec les documents générés](docs/screenshots/07_application_detail.png)
+![Nouvelle candidature, étape Détails avec la carte Prêt à générer ?](docs/screenshots/10_new_application_form.png)
+
+Depuis la page de la candidature, vous pouvez ensuite :
+
+- **Postuler** — par mail ou par message sur la plateforme de l'offre (rédigés par l'IA), ou **Déjà postulé, sans message**. La candidature passe au statut « Candidature envoyée », ses informations sont figées, et le CV, la lettre et le message sont enregistrés dans `Téléchargements/FindMyJob/`.
+- **Ajouter un événement** — messages, appels, entretiens (avec leurs interlocuteurs), relances, notes, offre, refus, ghosting, désistement. Seuls les événements possibles dans le statut actuel sont proposés.
+- Suivre sa progression, visualiser ou télécharger les documents générés et gérer ses contacts recruteur.
+
+![Détail d'une candidature avec sa progression, son suivi et les documents générés](docs/screenshots/07_application_detail.png)
+
+L'onglet **Planning** de la session affiche ses entretiens par semaine ou par mois, et l'onglet **Statistiques** ses chiffres dès que 3 candidatures au moins ont été envoyées.
+
+![Onglet Planning, vue semaine](docs/screenshots/09_planning.png)
+![Onglet Statistiques d'une session](docs/screenshots/08_statistics.png)
 
 ## Architecture technique
 
@@ -304,7 +375,8 @@ L'installateur est généré dans `target/release/bundle/` à la racine du dép�
 ### Tests
 
 ```bash
-cargo test --workspace
+cargo test --workspace   # Rust : règles métier, base de données, import d'offre, pipeline des documents
+npm test                 # frontend (Vitest) : logique d'affichage des vues
 ```
 
 À lancer depuis la racine du dépôt.
@@ -326,7 +398,7 @@ cargo test --workspace
 
 ## État du projet
 
-Développement actif, à un stade précoce. Le suivi des candidatures (avec un carnet de contacts recruteurs partagé entre les candidatures), l'adaptation des documents par l'IA et l'import d'offre par lien fonctionnent de bout en bout — voir [`docs/project.md`](docs/project.md#11-features--implemented-partial-and-planned) pour la vue d'ensemble.
+Développement actif, à un stade précoce. Le suivi des candidatures (avec un carnet de contacts recruteurs partagé entre les candidatures, la progression, le regroupement des candidatures clôturées et le statut des sessions), l'adaptation des documents par l'IA, les messages de candidature, l'import d'offre par lien, le planning des entretiens et les statistiques par session fonctionnent de bout en bout, en français et en anglais — voir [`docs/project.md`](docs/project.md#11-features--implemented-partial-and-planned) pour la vue d'ensemble.
 
 ## Historique
 

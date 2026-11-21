@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * Section « Langues » du profil : affichage, ajout, modification et
- * suppression des langues. Les changements sont tenus en local (via
- * useEditableList) jusqu'à l'appel de `save()` par le parent.
+ * suppression des langues, éditable dans sa propre carte. Les changements
+ * sont tenus en local (via useEditableList) jusqu'à l'appel de `save()` par le
+ * parent (bouton Valider de la carte).
  */
 
 // Importation des modules Vue / framework
@@ -10,13 +11,30 @@ import { computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useI18n } from 'vue-i18n'
 
-// Importation des modules internes
+// Importation des composants
+import AppModal from '@/components/AppModal.vue'
+import PendingBadge from './PendingBadge.vue'
+import ProfileCard from './ProfileCard.vue'
+import RowEditButtons from './RowEditButtons.vue'
+
+// Importation des composables
 import { useEditableList } from '@/composables/useEditableList'
+
+// Importation des types
 import type { LangView, CreateLangInput } from '@/types/index'
+import type { ProfileCardMode } from './profile_sections'
 
 const props = defineProps<{
   items: LangView[]
-  editMode: boolean
+  mode: ProfileCardMode
+  saving: boolean
+  error: string | null
+}>()
+
+const emit = defineEmits<{
+  edit: []
+  cancel: []
+  save: []
 }>()
 
 interface LangDraft {
@@ -131,101 +149,72 @@ defineExpose({ hasChanges, reset, save })
 </script>
 
 <template>
-  <div class="bg-surface-1 border border-neutral-200 rounded-xl px-[22px] py-5 mb-[18px]">
-    <div :class="editMode ? 'flex items-center justify-between mb-[14px]' : ''">
-      <div class="text-[11px] font-semibold font-mono tracking-[.06em] text-neutral-500" :class="editMode ? '' : 'mb-[14px]'">{{ t('profile.languages.section') }}</div>
-      <button
-        v-if="editMode"
-        class="h-[30px] px-3 text-[12px] rounded-lg border border-neutral-300 bg-surface-2 font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-        type="button"
-        @click="openAddModal"
-      >
-        {{ t('common.add') }}
-      </button>
-    </div>
-    <template v-if="allItems.length">
-      <div
-        v-for="(lang, i) in allItems"
-        :key="lang.id"
-        class="flex items-center justify-between gap-5 py-[14px] border-b border-neutral-100"
-        :class="[lang.isPending ? 'opacity-[0.72]' : '', i === allItems.length - 1 ? 'border-b-0' : '']"
-      >
-        <span class="text-[14px] font-medium">{{ lang.nom ?? '—' }}</span>
-        <span class="font-mono text-[11px] text-neutral-500 flex-1 text-right">{{ levelLabel(lang.level) }}</span>
-        <span v-if="lang.isPending" class="inline-block font-mono text-[10.5px] rounded-5 px-[7px] py-0.5 border border-amber-300 text-amber-700 bg-amber-50 flex-none">
-          {{ lang.pendingKind === 'edited' ? t('profile.pending.edited') : t('profile.pending.new') }}
-        </span>
-        <div v-if="editMode" class="flex flex-row gap-[5px] flex-none self-center ml-2">
-          <button
-            class="w-[30px] h-[30px] rounded-7 border border-neutral-200 bg-surface-2 flex items-center justify-center cursor-pointer flex-none text-neutral-600 hover:bg-surface-3 hover:text-neutral-950 hover:border-neutral-300"
-            type="button"
-            :title="t('common.edit')"
-            @click="openEditModal(lang)"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-          </button>
-          <button
-            class="w-[30px] h-[30px] rounded-7 flex items-center justify-center cursor-pointer flex-none text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
-            type="button"
-            :title="t('common.delete')"
-            @click="deleteItem(lang)"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <path d="M10 11v6M14 11v6"/>
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-            </svg>
-          </button>
+  <ProfileCard
+    :title="t('profile.languages.section')"
+    :mode="mode"
+    list
+    :dirty="hasChanges"
+    :saving="saving"
+    :error="error"
+    @edit="emit('edit')"
+    @add="openAddModal"
+    @cancel="emit('cancel')"
+    @save="emit('save')"
+  >
+    <div class="mt-2">
+      <template v-if="allItems.length">
+        <div
+          v-for="lang in allItems"
+          :key="lang.id"
+          class="flex items-center gap-3 py-2 border-b border-neutral-100 last:border-b-0"
+          :class="{ 'opacity-[0.72]': lang.isPending }"
+        >
+          <span class="text-[13.5px] font-medium flex-1 min-w-0">{{ lang.nom ?? '—' }}</span>
+          <span class="font-mono text-[11px] text-neutral-500 text-right">{{ levelLabel(lang.level) }}</span>
+          <PendingBadge v-if="lang.pendingKind" :kind="lang.pendingKind" />
+          <RowEditButtons v-if="mode === 'editing'" @edit="openEditModal(lang)" @remove="deleteItem(lang)" />
         </div>
-      </div>
-    </template>
-    <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('profile.languages.empty') }}</div>
-  </div>
+      </template>
+      <div v-else class="text-[12px] text-neutral-400 text-center py-6 font-mono">{{ t('profile.languages.empty') }}</div>
+    </div>
+  </ProfileCard>
 
   <!-- Popup ajout/modification de langue -->
-  <div v-if="modalOpen" class="fixed inset-0 bg-[rgba(15,15,10,.48)] flex items-center justify-center z-[100]">
-    <div class="bg-surface-3 rounded-14 shadow-[0_20px_64px_rgba(0,0,0,.24)] w-[420px] max-h-[80vh] overflow-y-auto px-7 pt-[26px] pb-6">
-      <div class="flex items-center justify-between mb-5">
-        <div class="text-[17px] font-semibold">
-          {{ editTarget.kind === 'new' ? t('profile.languages.add_title') : t('profile.languages.edit_title') }}
-        </div>
-        <button class="bg-transparent border-none text-[22px] text-neutral-400 cursor-pointer leading-none p-0 hover:text-neutral-950" type="button" @click="closeModal">×</button>
-      </div>
-
-      <div class="mb-[14px]">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.languages.name') }}</label>
-        <input v-model="draft.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.languages.name_placeholder')" />
-      </div>
-
-      <div class="mb-0">
-        <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.languages.level_label') }}</label>
-        <select
-          v-model="draft.level"
-          class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
-        >
-          <option value="">{{ t('common.select_placeholder') }}</option>
-          <option v-for="lvl in levelOptions" :key="lvl.value" :value="lvl.value">{{ lvl.label }}</option>
-        </select>
-      </div>
-
-      <div class="flex justify-end gap-[10px] mt-5 pt-4 border-t border-neutral-100">
-        <button
-          class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
-          type="button"
-          @click="closeModal"
-        >{{ t('common.cancel') }}</button>
-        <button
-          class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600"
-          :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !draft.nom.trim() }"
-          type="button"
-          :disabled="!draft.nom.trim()"
-          @click="saveModal"
-        >{{ t('common.validate') }}</button>
-      </div>
+  <AppModal
+    v-if="modalOpen"
+    :title="editTarget.kind === 'new' ? t('profile.languages.add_title') : t('profile.languages.edit_title')"
+    :width="500"
+    @close="closeModal"
+  >
+    <div class="mb-[14px]">
+      <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.languages.name') }}</label>
+      <input v-model="draft.nom" class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400" :placeholder="t('profile.languages.name_placeholder')" />
     </div>
-  </div>
+
+    <div class="mb-[14px]">
+      <label class="text-[12px] text-neutral-600 mb-[5px] block">{{ t('profile.languages.level_label') }}</label>
+      <select
+        v-model="draft.level"
+        class="w-full h-[38px] border border-neutral-300 rounded-lg px-3 text-[13.5px] font-sans bg-surface-2 text-neutral-950 block focus:outline-none focus:border-neutral-400 appearance-none bg-no-repeat bg-[right_12px_center] pr-8 cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2712%27%20height=%278%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20d=%27M1%201l5%205%205-5%27%20stroke=%27%239b9b95%27%20stroke-width=%271.5%27%20fill=%27none%27%20stroke-linecap=%27round%27/%3E%3C/svg%3E')]"
+      >
+        <option value="">{{ t('common.select_placeholder') }}</option>
+        <option v-for="lvl in levelOptions" :key="lvl.value" :value="lvl.value">{{ lvl.label }}</option>
+      </select>
+    </div>
+
+    <template #footer>
+      <button
+        class="h-9 px-4 rounded-lg border border-neutral-300 bg-surface-2 text-[13px] font-medium text-neutral-900 inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap hover:bg-surface-3"
+        type="button"
+        @click="closeModal"
+      >{{ t('common.cancel') }}</button>
+      <button
+        class="h-9 px-4 rounded-lg text-[13px] font-medium inline-flex items-center gap-[7px] cursor-pointer font-sans whitespace-nowrap border bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600"
+        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': !draft.nom.trim() }"
+        type="button"
+        :disabled="!draft.nom.trim()"
+        @click="saveModal"
+      >{{ t('common.validate') }}</button>
+    </template>
+  </AppModal>
 </template>

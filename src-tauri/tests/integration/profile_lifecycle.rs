@@ -41,29 +41,21 @@ fn no_change() -> UpdateUserInfoInput {
         nom: None,
         email: None,
         telephone: None,
-        ville: None,
-        zip_code: None,
         permis: None,
         linkedin: None,
         github: None,
         portfolio: None,
-        interets: None,
     }
 }
 
 #[tokio::test]
-async fn identite_et_lieu() {
+async fn identite_et_coordonnees() {
     let pool = pool_with_user().await;
-    assert_eq!(read(&pool).await.user.ville.as_deref(), Some("Lyon"));
-
-    // Modification : identité, coordonnées, ville et code postal.
+    // Modification : identité et coordonnées.
     let input = UpdateUserInfoInput {
         prenom: Some("Alexandra".into()),
         email: Some("alexandra@example.com".into()),
         telephone: Some("06 00 00 00 01".into()),
-        ville: Some("Lyon".into()),
-        zip_code: Some("69003".into()),
-        interets: Some("Escalade\nPhotographie".into()),
         ..no_change()
     };
     users::update_user_info(&pool, input).await.expect("mise à jour");
@@ -73,23 +65,16 @@ async fn identite_et_lieu() {
     assert_eq!(user.nom.as_deref(), Some("Martin"));
     assert_eq!(user.email.as_deref(), Some("alexandra@example.com"));
     assert_eq!(user.telephone.as_deref(), Some("06 00 00 00 01"));
-    assert_eq!(user.ville.as_deref(), Some("Lyon"));
-    assert_eq!(user.zip_code.as_deref(), Some("69003"));
-    assert_eq!(user.interets.as_deref(), Some("Escalade\nPhotographie"));
     assert_eq!(user.description.as_deref(), Some("Étudiante en data."));
 
     // Suppression des champs facultatifs.
     let input = UpdateUserInfoInput {
         telephone: Some(String::new()),
-        ville: Some(String::new()),
-        zip_code: Some(String::new()),
         ..no_change()
     };
     users::update_user_info(&pool, input).await.expect("effacement");
     users::update_description(&pool, None).await.expect("effacement de la description");
     let user = read(&pool).await.user;
-    assert_eq!(user.ville, None);
-    assert_eq!(user.zip_code, None);
     assert_eq!(user.telephone, None);
     assert_eq!(user.description, None);
 
@@ -103,6 +88,22 @@ async fn identite_et_lieu() {
 }
 
 #[tokio::test]
+async fn prenom_ou_nom_vide_refuse_a_l_enregistrement() {
+    let pool = pool_with_user().await;
+    for (input, message) in [
+        (UpdateUserInfoInput { prenom: Some("  ".into()), ..no_change() }, "Le prénom est requis."),
+        (UpdateUserInfoInput { nom: Some(String::new()), ..no_change() }, "Le nom est requis."),
+    ] {
+        match users::update_user_info(&pool, input).await {
+            Err(AppError::Validation(m)) => assert_eq!(m, message),
+            other => panic!("validation attendue, obtenu {:?}", other.map(|u| u.nom)),
+        }
+    }
+    let user = read(&pool).await.user;
+    assert_eq!((user.prenom.as_deref(), user.nom.as_deref()), (Some("Alex"), Some("Martin")), "rien modifié");
+}
+
+#[tokio::test]
 async fn experiences_relues_par_le_profil() {
     let pool = pool_with_user().await;
     let input = |poste: &str| CreateExperienceInput {
@@ -113,6 +114,7 @@ async fn experiences_relues_par_le_profil() {
         date_debut: date(2024, 9, 1),
         date_fin: None,
         type_contrat: Some("alternance".into()),
+        contexte: None,
     };
 
     let id = experiences::insert(&pool, input("Alternant data"), seed::NOW).await.unwrap().id;
@@ -169,6 +171,7 @@ async fn projets_ajout_modification_suppression() {
         pour_qui: Some("Association".into()),
         date_debut: date(2023, 1, 1),
         date_fin: date(2023, 6, 30),
+        contexte: None,
     };
 
     let id = projets::insert(&pool, input("Tableau de bord", "Python"), seed::NOW).await.unwrap().id;
@@ -183,6 +186,37 @@ async fn projets_ajout_modification_suppression() {
 
     projets::delete(&pool, id).await.unwrap();
     assert!(read(&pool).await.projets.is_empty());
+}
+
+#[tokio::test]
+async fn contexte_detaille_remonte_dans_le_profil() {
+    let pool = pool_with_user().await;
+    let experience = CreateExperienceInput {
+        poste: "Alternant data engineer".into(),
+        entreprise: None,
+        lieu: None,
+        description: None,
+        date_debut: None,
+        date_fin: None,
+        type_contrat: None,
+        contexte: Some("Équipe de quatre personnes.".into()),
+    };
+    let projet = CreateProjetInput {
+        titre: "Tableau de bord".into(),
+        description: None,
+        stack: None,
+        url: None,
+        pour_qui: None,
+        date_debut: None,
+        date_fin: None,
+        contexte: Some("Demandé par le bureau du club.".into()),
+    };
+    experiences::insert(&pool, experience, seed::NOW).await.unwrap();
+    projets::insert(&pool, projet, seed::NOW).await.unwrap();
+
+    let profil = read(&pool).await;
+    assert_eq!(profil.experiences[0].contexte.as_deref(), Some("Équipe de quatre personnes."));
+    assert_eq!(profil.projets[0].contexte.as_deref(), Some("Demandé par le bureau du club."));
 }
 
 #[tokio::test]

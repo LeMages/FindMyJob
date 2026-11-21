@@ -15,8 +15,8 @@ use crate::models::{CreateUserInput, UpdateUserInfoInput, UserView};
 const USER_ID: i64 = 1;
 
 /// Colonnes lues pour reconstruire un `UserView`.
-const USER_COLUMNS: &str = "id, nom, prenom, email, telephone, ville, zip_code, permis, \
-     description, linkedin, github, portfolio, interets, langue_profil, created_at";
+const USER_COLUMNS: &str = "id, nom, prenom, email, telephone, permis, \
+     description, linkedin, github, portfolio, langue_profil, created_at";
 
 /// Construit un `UserView` à partir d'une ligne SQL brute.
 ///
@@ -34,14 +34,11 @@ fn row_to_user(row: &SqliteRow) -> Result<UserView, sqlx::Error> {
         prenom: row.try_get("prenom")?,
         email: row.try_get("email")?,
         telephone: row.try_get("telephone")?,
-        ville: row.try_get("ville")?,
-        zip_code: row.try_get("zip_code")?,
         permis: row.try_get("permis")?,
         description: row.try_get("description")?,
         linkedin: row.try_get("linkedin")?,
         github: row.try_get("github")?,
         portfolio: row.try_get("portfolio")?,
-        interets: row.try_get("interets")?,
         langue_profil: row.try_get("langue_profil")?,
         created_at: row.try_get("created_at")?,
     })
@@ -136,17 +133,15 @@ pub async fn insert_user(pool: &SqlitePool, input: CreateUserInput, now: &str) -
 
     sqlx::query(
         "INSERT INTO users \
-           (id, nom, prenom, email, telephone, ville, zip_code, permis, description, linkedin, github, \
+           (id, nom, prenom, email, telephone, permis, description, linkedin, github, \
             portfolio, created_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
     )
     .bind(USER_ID)
     .bind(&nom)
     .bind(&prenom)
     .bind(&email)
     .bind(normalize(input.telephone))
-    .bind(normalize(input.ville))
-    .bind(normalize(input.zip_code))
     .bind(input.permis)
     .bind(normalize(input.description))
     .bind(normalize(input.linkedin))
@@ -208,13 +203,28 @@ pub async fn update_profile_language(pool: &SqlitePool, lang: &str) -> Result<Us
     Ok(user)
 }
 
+/// Refuse une valeur fournie mais blanche.
+///
+/// # Arguments
+///
+/// * `value` - Valeur reçue (`None` = champ inchangé).
+/// * `message` - Message d'erreur français.
+///
+/// # Returns
+///
+/// `Ok(())`, ou `AppError::Validation(message)`.
+fn reject_blank(value: Option<&str>, message: &str) -> Result<(), AppError> {
+    match value {
+        Some(v) if v.trim().is_empty() => Err(AppError::Validation(message.to_string())),
+        _ => Ok(()),
+    }
+}
+
 /// Met à jour les informations de contact du profil.
 ///
 /// Les champs `None` conservent leur valeur existante (`COALESCE`), à
-/// l'exception de `telephone`, `ville`, `zip_code`, `interets` et `permis`
-/// qui sont toujours remplacés (y compris par `None`). `ville` et `zip_code`
-/// sont seulement nettoyés (trim, chaîne vide → NULL), jamais validés ni
-/// formatés.
+/// l'exception de `telephone` et `permis` qui sont toujours
+/// remplacés (y compris par `None`).
 /// `linkedin`, `github` et `portfolio` suivent le même comportement
 /// `COALESCE` que `prenom`/`nom`/`email` : un champ vidé côté client
 /// (`None`) ne l'efface pas en base.
@@ -228,6 +238,9 @@ pub async fn update_profile_language(pool: &SqlitePool, lang: &str) -> Result<Us
 ///
 /// `UserView` mis à jour, ou `AppError::NotFound` si le profil n'existe pas.
 pub async fn update_user_info(pool: &SqlitePool, input: UpdateUserInfoInput) -> Result<UserView, AppError> {
+    // Un prénom ou un nom blanc est refusé : `COALESCE` l'ignorerait en silence.
+    reject_blank(input.prenom.as_deref(), "Le prénom est requis.")?;
+    reject_blank(input.nom.as_deref(), "Le nom est requis.")?;
     let email = normalize(input.email);
     if let Some(ref e) = email {
         if !e.contains('@') {
@@ -245,11 +258,8 @@ pub async fn update_user_info(pool: &SqlitePool, input: UpdateUserInfoInput) -> 
            permis    = $5, \
            linkedin  = COALESCE($6, linkedin), \
            github    = COALESCE($7, github), \
-           portfolio = COALESCE($8, portfolio), \
-           ville     = $9, \
-           zip_code  = $10, \
-           interets  = $11 \
-         WHERE id = $12",
+           portfolio = COALESCE($8, portfolio) \
+         WHERE id = $9",
     )
     .bind(normalize(input.prenom))
     .bind(normalize(input.nom))
@@ -259,9 +269,6 @@ pub async fn update_user_info(pool: &SqlitePool, input: UpdateUserInfoInput) -> 
     .bind(normalize(input.linkedin))
     .bind(normalize(input.github))
     .bind(normalize(input.portfolio))
-    .bind(normalize(input.ville))
-    .bind(normalize(input.zip_code))
-    .bind(normalize(input.interets))
     .bind(USER_ID)
     .execute(&mut *tx)
     .await

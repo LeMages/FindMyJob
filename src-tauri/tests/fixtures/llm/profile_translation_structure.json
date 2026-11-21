@@ -1,0 +1,37 @@
+{
+  "experiences": [
+    {
+      "id": 1,
+      "lines": [
+        "Team of 5 people.",
+        "SQL pipelines for reporting",
+        "deployed every week",
+        "Automated tests"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "id": 1,
+      "pour_qui": "Escalade Lyon club",
+      "lines": [
+        "Membership tracking in Python."
+      ]
+    }
+  ],
+  "formations": [
+    {
+      "id": 1,
+      "lines": [
+        "Data major"
+      ]
+    }
+  ],
+  "langues": [
+    {
+      "id": 1,
+      "nom": "English",
+      "level": "B2"
+    }
+  ]
+}

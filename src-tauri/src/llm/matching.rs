@@ -2,7 +2,8 @@
 //! l'API Claude (étape 2 du pipeline de génération de documents). Choisit
 //! les N projets les plus pertinents (par identifiant, validés en Rust) et
 //! les compétences qui répondent à l'offre. Le matching ne rédige aucun
-//! texte repris dans les documents.
+//! texte repris dans les documents. Il reçoit le contexte détaillé des
+//! projets (aide au choix), jamais celui des expériences.
 
 // Importation des crates externes
 use serde_json::{json, Value};
@@ -12,6 +13,7 @@ use crate::docgen::selection::project_id_problems;
 use crate::error::AppError;
 use crate::llm::client::call_claude;
 use crate::llm::doc_data_schema::object;
+use crate::llm::profile_prompt::{profile_prompt_json, ProjectContexts};
 use crate::llm::target::ClaudeTarget;
 use crate::llm::validated_call::call_until_valid;
 use crate::llm::writing_loop::WritingFeedback;
@@ -57,8 +59,9 @@ fn system_prompt(expected: usize) -> String {
 Description des champs à renseigner :\n\
 {projects}\
 - relevant_skills : les compétences du profil qui répondent à l'offre, avec le type de correspondance (exact pour une compétence identique, related pour une compétence proche, transferable pour une compétence transférable).\n\
-- summary_strategy : en deux ou trois phrases, l'angle à donner au résumé et à l'accroche pour cette offre.\n\
+- summary_strategy : en deux ou trois phrases, l'angle à donner au résumé et à l'accroche pour cette offre. Il ne cite aucun fait qui n'apparaît que dans le contexte détaillé d'un projet.\n\
 - gaps : les compétences demandées par l'offre que le profil n'a pas. Elles servent à savoir quoi ne jamais affirmer.\n\n\
+Le champ contexte d'un projet, quand il existe, est une note du candidat sur ce projet : elle t'aide à juger sa pertinence pour l'offre.\n\
 Tout ce que tu retiens vient du profil : n'invente rien."
     )
 }
@@ -100,8 +103,8 @@ pub async fn match_profile(
     expected: usize,
     target: &ClaudeTarget,
 ) -> Result<MatchingResult, AppError> {
-    let profile_json = serde_json::to_string(profile)
-        .map_err(|e| AppError::Llm(format!("Erreur de sérialisation du profil : {e}")))?;
+    // Contexte des projets seulement : le matching ne choisit que des projets.
+    let profile_json = profile_prompt_json(profile, ProjectContexts::Include)?;
     let user_message = format!("Analyse d'offre :\n{offer_analysis}\n\nProfil du candidat :\n{profile_json}");
     let (system_prompt, schema) = (system_prompt(expected), matching_schema(profile, expected));
 
@@ -129,6 +132,7 @@ mod tests {
             pour_qui: None,
             date_debut: None,
             date_fin: None,
+            contexte: None,
         };
         ProfileDto {
             user: UserView {
@@ -137,14 +141,11 @@ mod tests {
                 prenom: None,
                 email: None,
                 telephone: None,
-                ville: None,
-                zip_code: None,
                 permis: None,
                 description: None,
                 linkedin: None,
                 github: None,
                 portfolio: None,
-                interets: None,
                 langue_profil: "fr".to_string(),
                 created_at: chrono::Utc::now(),
             },

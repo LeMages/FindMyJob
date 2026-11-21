@@ -2,8 +2,8 @@
 //!
 //! L'API refuse un schéma dont la grammaire compilée est trop grande, sans
 //! documenter la limite. Ces tests cassent dès qu'un schéma envoyé dépasse
-//! la limite mesurée (`llm::schema_size`), au lieu de le découvrir à l'import
-//! d'une référence (fragilité F1 de l'audit).
+//! la limite mesurée (`llm::schema_size`), au lieu de le découvrir pendant
+//! une génération.
 
 // Importation des crates externes
 use serde_json::Value;
@@ -11,15 +11,12 @@ use serde_json::Value;
 // Importation des modules internes
 use crate::common;
 use findmyjob_lib::llm::cv_writing::cv_content_schema;
-use findmyjob_lib::llm::doc_data_schema::{cv_labels_schema, lm_labels_schema};
 use findmyjob_lib::llm::lm_writing::lm_content_schema;
 use findmyjob_lib::llm::matching::matching_schema;
 use findmyjob_lib::llm::offer::offer_analysis_schema;
 use findmyjob_lib::llm::profile_translation::translation_schema;
-use findmyjob_lib::llm::reference_translation::reference_translation_schema;
 use findmyjob_lib::llm::schema_size::{schema_size, SchemaSize};
 use findmyjob_lib::llm::scraping_extract::scraped_offer_schema;
-use findmyjob_lib::llm::templatize_example::example_output_schema;
 
 /// Nombre de projets du profil de test : la liste des identifiants de
 /// projets fait partie du schéma du matching.
@@ -32,15 +29,10 @@ fn sent_schemas() -> Vec<(&'static str, Value)> {
     vec![
         ("analyse d'offre", offer_analysis_schema()),
         ("matching", matching_schema(&profile, 3)),
-        ("libellés CV", cv_labels_schema()),
-        ("libellés lettre", lm_labels_schema()),
         ("traduction du profil", translation_schema()),
-        ("traduction de la référence", reference_translation_schema()),
         ("rédaction CV", cv_content_schema()),
         ("rédaction lettre", lm_content_schema()),
         ("extraction d'offre", scraped_offer_schema()),
-        ("templatisation, données CV", example_output_schema("cv").expect("type connu")),
-        ("templatisation, données lettre", example_output_schema("lettre_motivation").expect("type connu")),
     ]
 }
 

@@ -115,17 +115,6 @@ pub fn translation_problems(original: &CvEntryTexts, translated: &CvEntryTexts) 
         problems.extend(lines_problems(&path, &source.lines, &project.lines));
     }
     problems.extend(language_problems(&original.langues, &translated.langues));
-    if original.interets.len() == translated.interets.len() {
-        for (i, (o, t)) in original.interets.iter().zip(&translated.interets).enumerate() {
-            problems.extend(text_problem(&format!("interets[{i}]"), o, t));
-        }
-    } else {
-        problems.push(format!(
-            "interets contient {} éléments, attendu exactement {}.",
-            translated.interets.len(),
-            original.interets.len()
-        ));
-    }
     problems
 }
 

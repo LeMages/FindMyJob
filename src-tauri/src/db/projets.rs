@@ -6,12 +6,12 @@ use sqlx::{Row, SqlitePool};
 
 // Importation des modules internes
 use crate::clock::format_date;
-use crate::db::common::{delete_by_id, map_db_err, normalize};
+use crate::db::common::{delete_by_id, map_db_err, normalize, normalize_contexte};
 use crate::error::AppError;
 use crate::models::{CreateProjetInput, ProjetView};
 
 /// Colonnes lues pour reconstruire un `ProjetView`.
-const COLUMNS: &str = "id, titre, description, stack, url, pour_qui, date_debut, date_fin";
+const COLUMNS: &str = "id, titre, description, stack, url, pour_qui, date_debut, date_fin, contexte";
 
 /// Valide le titre d'un projet.
 ///
@@ -49,6 +49,7 @@ fn row_to_view(row: &SqliteRow) -> Result<ProjetView, sqlx::Error> {
         pour_qui: row.try_get("pour_qui")?,
         date_debut: row.try_get("date_debut")?,
         date_fin: row.try_get("date_fin")?,
+        contexte: row.try_get("contexte")?,
     })
 }
 
@@ -88,10 +89,11 @@ pub async fn list_all(pool: &SqlitePool) -> Result<Vec<ProjetView>, AppError> {
 /// `ProjetView` fraîchement créé.
 pub async fn insert(pool: &SqlitePool, input: CreateProjetInput, now: &str) -> Result<ProjetView, AppError> {
     let titre = validate_titre(&input)?;
+    let contexte = normalize_contexte(input.contexte)?;
 
     let row = sqlx::query(&format!(
-        "INSERT INTO projets (titre, description, stack, url, pour_qui, date_debut, date_fin, created_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+        "INSERT INTO projets (titre, description, stack, url, pour_qui, date_debut, date_fin, contexte, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
          RETURNING {COLUMNS}"
     ))
     .bind(&titre)
@@ -101,6 +103,7 @@ pub async fn insert(pool: &SqlitePool, input: CreateProjetInput, now: &str) -> R
     .bind(normalize(input.pour_qui))
     .bind(input.date_debut.map(format_date))
     .bind(input.date_fin.map(format_date))
+    .bind(&contexte)
     .bind(now)
     .fetch_one(pool)
     .await
@@ -122,12 +125,13 @@ pub async fn insert(pool: &SqlitePool, input: CreateProjetInput, now: &str) -> R
 /// `ProjetView` mis à jour, ou `AppError::NotFound` si absent.
 pub async fn update(pool: &SqlitePool, id: i64, input: CreateProjetInput) -> Result<ProjetView, AppError> {
     let titre = validate_titre(&input)?;
+    let contexte = normalize_contexte(input.contexte)?;
 
     let row = sqlx::query(&format!(
         "UPDATE projets \
          SET titre = $1, description = $2, stack = $3, url = $4, pour_qui = $5, \
-             date_debut = $6, date_fin = $7 \
-         WHERE id = $8 \
+             date_debut = $6, date_fin = $7, contexte = $8 \
+         WHERE id = $9 \
          RETURNING {COLUMNS}"
     ))
     .bind(&titre)
@@ -137,6 +141,7 @@ pub async fn update(pool: &SqlitePool, id: i64, input: CreateProjetInput) -> Res
     .bind(normalize(input.pour_qui))
     .bind(input.date_debut.map(format_date))
     .bind(input.date_fin.map(format_date))
+    .bind(&contexte)
     .bind(id)
     .fetch_optional(pool)
     .await
